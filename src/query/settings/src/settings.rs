@@ -23,6 +23,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
 use itertools::Itertools;
+use serde::Deserializer;
+use serde::Serializer;
 
 use crate::settings_default::DefaultSettingValue;
 use crate::settings_default::DefaultSettings;
@@ -67,6 +69,48 @@ pub struct Settings {
     pub(crate) tenant: Tenant,
     pub(crate) changes: Arc<DashMap<String, ChangeValue>>,
     pub(crate) configs: HashMap<String, UserSettingValue>,
+}
+
+impl serde::Serialize for Settings {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        #[derive(serde::Serialize)]
+        struct SerializeSettings<'a> {
+            tenant: &'a String,
+            changes: &'a DashMap<String, ChangeValue>,
+        }
+
+        let serialize_settings = SerializeSettings {
+            tenant: &self.tenant.tenant,
+            changes: &self.changes,
+        };
+
+        serialize_settings.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Settings {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        #[derive(serde::Deserialize)]
+        struct DeserializeSettings {
+            tenant: String,
+            changes: DashMap<String, ChangeValue>,
+        }
+
+        let deserialize_settings =
+            <DeserializeSettings as serde::Deserialize>::deserialize(deserializer)?;
+        let configs = match GlobalConfig::try_get_instance() {
+            None => HashMap::new(),
+            Some(config) => config.query.settings.clone(),
+        };
+
+        Ok(Settings {
+            configs,
+            tenant: Tenant::new_literal(&deserialize_settings.tenant),
+            changes: Arc::new(deserialize_settings.changes),
+        })
+    }
 }
 
 impl Settings {
@@ -206,5 +250,42 @@ impl<'a> IntoIterator for &'a Settings {
 
     fn into_iter(self) -> Self::IntoIter {
         SettingsIter::<'a>::create(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use dashmap::DashMap;
+    use databend_common_exception::Result;
+    use databend_common_meta_app::principal::UserSettingValue;
+    use databend_common_meta_app::tenant::Tenant;
+
+    use crate::ChangeValue;
+    use crate::ScopeLevel;
+    use crate::Settings;
+
+    #[test]
+    fn test_serialize_and_deserialize_settings() -> Result<()> {
+        let changes = DashMap::new();
+        changes.insert("test_key_1".to_string(), ChangeValue {
+            level: ScopeLevel::Default,
+            value: UserSettingValue::String("test_value".to_string()),
+        });
+
+        let settings = Settings {
+            tenant: Tenant::new_literal("test_tenant"),
+            changes: Arc::new(changes),
+            configs: HashMap::new(),
+        };
+
+        let settings =
+            serde_json::from_str::<Settings>(&serde_json::to_string(&settings).unwrap()).unwrap();
+
+        assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
+        assert_eq!(settings.changes.len(), 1);
+        Ok(())
     }
 }
