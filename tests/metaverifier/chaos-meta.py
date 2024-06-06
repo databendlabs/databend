@@ -103,17 +103,6 @@ class MetaChaos:
     content = os.popen(cmd).read()
     print("kubectl logs databend-metaverifier -n databend:\n", content)
     content = self.exec_cat_meta_verifier()
-    if content != "END" and content != "START" and content != "ERROR":
-      print("cat /tmp/meta-verifier return " + str(content) + ", exit")
-      cmd = "kubectl get pods -n databend -o wide"
-      content = os.popen(cmd).read()
-      print("kubectl get pods -n databend -o wide:\n", content)
-
-      cmd = "kubectl logs databend-metaverifier -n databend | tail -100"
-      content = os.popen(cmd).read()
-      print("kubectl logs databend-metaverifier -n databend:\n", content)
-      sys.exit(-1)
-
     if content == "ERROR":
       print("databend-metaverifier return error")
       sys.exit(-1)

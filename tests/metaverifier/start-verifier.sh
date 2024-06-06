@@ -8,13 +8,8 @@ echo "start databend-metaverifier with params client:${CLIENT}, number:${NUMBER}
 echo "START" > /tmp/meta-verifier
 # wait for chao-meta.py
 sleep 3
-/databend-metaverifier --client ${CLIENT} --time 1800 --remove-percent 10 --number ${NUMBER} --grpc-api-address ${GRPC_ADDRESS} 
+/databend-metaverifier --client ${CLIENT} --time 1800 --remove-percent 10 --number ${NUMBER} --grpc-api-address ${GRPC_ADDRESS} || true
 
-echo "/databend-metaverifier exec result: $?"
-if [ $? -eq 0 ]; then
-    echo "END" > /tmp/meta-verifier
-else
-    echo "ERROR" > /tmp/meta-verifier
-fi
-
-sleep 120
+while true; do
+  sleep 5
+done

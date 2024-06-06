@@ -44,6 +44,8 @@ use rand::SeedableRng;
 use serde::Deserialize;
 use serde::Serialize;
 
+pub static VERIFIER_RESULT_FILE: &str = "/tmp/meta-verifier";
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
 struct Config {
@@ -115,8 +117,7 @@ async fn main() -> Result<()> {
     let mut handles = Vec::new();
 
     // write a file as start
-    let file = "/tmp/meta-verifier".to_string();
-    fs::write(&file, "START")?;
+    fs::write(VERIFIER_RESULT_FILE, "START")?;
 
     while client_num < config.client {
         client_num += 1;
@@ -133,6 +134,7 @@ async fn main() -> Result<()> {
             let client = match client {
                 Ok(client) => client,
                 Err(e) => {
+                    fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
                     eprintln!("Failed to create client: {}", e);
                     return Err(ErrorCode::MetaServiceError(e.to_string()));
                 }
@@ -163,6 +165,7 @@ async fn main() -> Result<()> {
                     "verifier did not complete within the timeout: {:?}s, error: {:?}",
                     config.time, e
                 );
+                let _ = fs::write(VERIFIER_RESULT_FILE, "ERROR");
                 panic!("verifier did not complete within the timeout.")
             }
         }
@@ -172,6 +175,8 @@ async fn main() -> Result<()> {
         for handle in handles {
             let ret = handle.await.unwrap();
             if let Err(e) = ret {
+                fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
+                println!("verifier return error: {:?}", e);
                 return Err(e);
             }
         }
@@ -188,6 +193,7 @@ async fn main() -> Result<()> {
             e,
             end.duration_since(start).as_millis()
         );
+        fs::write(VERIFIER_RESULT_FILE, "ERROR")?;
         return Err(ErrorCode::MetaServiceError(e.to_string()));
     }
 
@@ -200,7 +206,7 @@ async fn main() -> Result<()> {
     );
 
     // write a file as end
-    fs::write(&file, "END")?;
+    fs::write(VERIFIER_RESULT_FILE, "END")?;
 
     Ok(())
 }
