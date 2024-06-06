@@ -56,6 +56,7 @@ fn test_decode_v66_stage() -> anyhow::Result<()> {
         file_format_params: mt::principal::FileFormatParams::Parquet(
             mt::principal::ParquetFileFormatParams {
                 missing_field_as: Default::default(),
+                null_if: vec![],
             },
         ),
         copy_options: mt::principal::CopyOptions {
