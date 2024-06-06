@@ -11,7 +11,7 @@ runs:
       shell: bash
       run: |
         mkdir -p target
-        for name in "test-databend-meta-0" "test-databend-meta-1" "test-databend-meta-2"
+        for name in "test-databend-meta-0" "test-databend-meta-1" "test-databend-meta-2" "databend-metaverifier"
         do
           echo "cat logs of $name"
           kubectl exec -i $name -n databend -- /cat-logs.sh > target/$name.log

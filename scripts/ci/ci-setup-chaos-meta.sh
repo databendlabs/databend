@@ -44,6 +44,7 @@ echo "make databend-metaverifier image"
 rm -rf temp/distro/amd64/*
 cp ./target/"${BUILD_PROFILE}"/databend-metaverifier ./temp/distro/amd64
 cp tests/metaverifier/start-verifier.sh ./temp/distro/amd64
+cp tests/metaverifier/cat-logs.sh ./temp/distro/amd64
 docker build -t databend-metaverifier:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/service/verifier.Dockerfile temp
 docker tag databend-metaverifier:meta-chaos k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
 docker push k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
