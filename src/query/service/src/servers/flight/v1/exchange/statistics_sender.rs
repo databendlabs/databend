@@ -57,17 +57,21 @@ impl StatisticsSender {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
+                info!("statistics sender started");
                 let mut query_profiles = vec![];
                 loop {
                     match futures::future::select(sleep_future, notified).await {
                         Either::Right((Err(_), _)) => {
+                            info!("statistics sender notified error");
                             break;
                         }
                         Either::Right((Ok((None, profiles)), _)) => {
+                            info!("statistics sender notified ok");
                             query_profiles = profiles;
                             break;
                         }
                         Either::Right((Ok((Some(error_code), _profiles)), _recv)) => {
+                            info!("statistics sender notified error code {:?}", error_code);
                             let data = DataPacket::ErrorCode(error_code);
                             if let Err(error_code) = tx.send(data).await {
                                 warn!(
@@ -79,30 +83,38 @@ impl StatisticsSender {
                             return;
                         }
                         Either::Left((_, right)) => {
+                            info!("statistics sender interval trigger");
                             notified = right;
                             sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
+                            info!("statistics sender before send_statistics");
                             if let Err(_cause) = Self::send_statistics(&ctx, &tx).await {
                                 warn!("send statistics failure {:?}", _cause);
                                 ctx.get_exchange_manager().shutdown_query(&query_id);
                                 return;
                             }
+
+                            info!("statistics sender after send_statistics");
                         }
                     }
                 }
 
+                info!("statistics sender before send profile");
                 if let Err(error) = Self::send_profile(query_profiles, &tx).await {
                     warn!("Profiles send has error, cause: {:?}.", error);
                 }
 
+                info!("statistics sender before copy status");
                 if let Err(error) = Self::send_copy_status(&ctx, &tx).await {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
                 }
 
+                info!("statistics sender before merge status");
                 if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
                     warn!("MergeStatus send has error, cause: {:?}.", error);
                 }
 
+                info!("statistics sender before send statistics");
                 if let Err(error) = Self::send_statistics(&ctx, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
