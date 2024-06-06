@@ -19,6 +19,7 @@ use std::ops::Deref;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_channel::Receiver;
 use databend_common_arrow::arrow_format::flight::data::FlightData;
@@ -200,17 +201,16 @@ impl DataExchangeManager {
                     };
                 }
 
-                let query_info = Self::create_info(ctx)?;
+                let mut query_info = Self::create_info(ctx)?;
 
-                // let query_id = env.query_id.clone();
-                // query_info.remove_leak_query_worker =
-                //     Some(GlobalIORuntime::instance().spawn(async move {
-                //         let _ = databend_common_base::base::tokio::time::sleep(
-                //             Duration::from_secs(180),
-                //         )
-                //         .await;
-                //         DataExchangeManager::instance().remove_if_leak_query(query_id);
-                //     }));
+                if let Some(query_info) = query_info.as_mut() {
+                    let query_id = env.query_id.clone();
+                    query_info.remove_leak_query_worker =
+                        Some(GlobalIORuntime::instance().spawn(async move {
+                            let _ = tokio::time::sleep(Duration::from_secs(180)).await;
+                            DataExchangeManager::instance().remove_if_leak_query(query_id);
+                        }));
+                }
 
                 let queries_coordinator_guard = self.queries_coordinator.lock();
                 let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -238,7 +238,6 @@ impl DataExchangeManager {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn remove_if_leak_query(&self, query_id: String) {
         let leak_query_id = {
             let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -272,12 +271,12 @@ impl DataExchangeManager {
                 let query_id = query_ctx.get_id();
 
                 Ok(Some(QueryInfo {
-                    query_id,
                     query_ctx,
                     query_executor: None,
-                    remove_leak_query_worker: None,
+                    query_id: query_id.clone(),
                     started: AtomicBool::new(false),
                     current_executor: GlobalConfig::instance().query.node_id.clone(),
+                    remove_leak_query_worker: None,
                 }))
             }
         }
@@ -443,12 +442,12 @@ impl DataExchangeManager {
 
         let local_fragments = query_fragments.remove(&conf.query.node_id);
 
-        let _ = cluster
-            .do_action::<_, ()>(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
+        let _: HashMap<String, ()> = cluster
+            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
             .await?;
 
+        self.set_ctx(&ctx.get_id(), ctx.clone())?;
         if let Some(query_fragments) = local_fragments {
-            self.set_ctx(&query_fragments.query_id, ctx.clone())?;
             init_query_fragments(query_fragments).await?;
         }
 
@@ -456,9 +455,10 @@ impl DataExchangeManager {
         let build_res = self.get_root_pipeline(ctx, root_actions)?;
 
         let prepared_query = actions.prepared_query()?;
-        let _ = cluster
-            .do_action::<_, ()>(START_PREPARED_QUERY, prepared_query, timeout)
+        let _: HashMap<String, ()> = cluster
+            .do_action(START_PREPARED_QUERY, prepared_query, timeout)
             .await?;
+
         Ok(build_res)
     }
 
