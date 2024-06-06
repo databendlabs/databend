@@ -6,7 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
@@ -15,38 +14,35 @@ test = true
 ignored = ["xorfilter-rs", "match-template"]
 
 [dependencies]
-databend-common-arrow = { path = "../../../../common/arrow" }
-databend-common-ast = { path = "../../../ast" }
-databend-common-exception = { path = "../../../../common/exception" }
-databend-common-expression = { path = "../../../expression" }
-databend-common-functions = { path = "../../../functions" }
-
-databend-storages-common-table-meta = { path = "../table_meta" }
-
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }
 crc32fast = "1.3.2"
+databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 minitrace = { workspace = true }
+parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = "0.7.0"
 thiserror = { workspace = true }
-
-xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", features = [
-    "cbordata",
-], tag = "databend-alpha.4" }
-
-parquet = { workspace = true }
+xorfilter-rs = { workspace = true, features = ["cbordata"] }
 
 [dev-dependencies]
 criterion = { workspace = true }
-databend-common-arrow = { path = "../../../../common/arrow" }
+databend-common-arrow = { workspace = true }
 rand = { workspace = true }
 
 [[bench]]
 name = "build_from_block"
 harness = false
+
+[lints]
+workspace = true

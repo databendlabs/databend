@@ -14,7 +14,7 @@ async-compression = { git = "https://github.com/everpcpc/async-compression", rev
 ] }
 brotli = { version = "3.3.0", features = ["std"] }
 bytes = { workspace = true }
-databend-common-exception = { path = "../exception" }
+databend-common-exception = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 pin-project = "1"
@@ -24,3 +24,6 @@ serde = { workspace = true }
 env_logger = "0.10"
 rand = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

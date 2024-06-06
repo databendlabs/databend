@@ -14,8 +14,8 @@ doctest = false
 [package.metadata.cargo-machete]
 ignored = ["geos"]
 
-[dependencies] # In alphabetical order
-# Crates.io dependencies
+[dependencies]
+codespan-reporting = { workspace = true }
 derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
@@ -39,12 +39,6 @@ strum_macros = "0.24"
 unindent = "0.2.3"
 url = "2.3.1"
 
-# TODO: Use the version from crates.io once
-# https://github.com/brendanzab/codespan/pull/331 is released.
-[dependencies.codespan-reporting]
-git = "https://github.com/brendanzab/codespan"
-rev = "c84116f5"
-
 [dev-dependencies]
 criterion = { workspace = true }
 goldenfile = "1.4"
@@ -54,3 +48,6 @@ regex = { workspace = true }
 [[bench]]
 name = "bench"
 harness = false
+
+[lints]
+workspace = true

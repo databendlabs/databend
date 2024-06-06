@@ -9,19 +9,7 @@ edition = { workspace = true }
 [lib]
 doctest = false
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-base = { path = "../../common/base" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-hashtable = { path = "../../common/hashtable" }
-databend-common-io = { path = "../../common/io" }
-databend-common-openai = { path = "../../common/openai" }
-databend-common-vector = { path = "../../common/vector" }
-jsonb = { workspace = true }
-
-# Crates.io dependencies
+[dependencies]
 base64 = "0.21.0"
 blake3 = "1.3.1"
 borsh = { workspace = true, features = ["derive"] }
@@ -32,6 +20,14 @@ chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = { workspace = true }
 ctor = "0.1.26"
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-hashtable = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-openai = { workspace = true }
+databend-common-vector = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geo-types = "0.7.13"
@@ -41,6 +37,7 @@ geozero = { workspace = true }
 h3o = "0.4.0"
 hex = "0.4.3"
 itertools = { workspace = true }
+jsonb = { workspace = true }
 lexical-core = "0.8.5"
 libm = "0.2.6"
 match-template = { workspace = true }
@@ -53,7 +50,6 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
-#proj = { version = "0.27.2", features = ["geo-types", "bundled_proj"] }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
@@ -70,12 +66,15 @@ twox-hash = "1.6.3"
 
 [dev-dependencies]
 comfy-table = "6"
-databend-common-ast = { path = "../ast" }
+databend-common-ast = { workspace = true }
 goldenfile = "1.4"
 
 [[bench]]
 name = "bench"
 harness = false
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["md-5"]

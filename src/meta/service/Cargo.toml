@@ -22,30 +22,24 @@ io-uring = [
 ]
 
 [dependencies]
-# Workspace dependencies
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-base = { path = "../../common/base" }
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-http = { path = "../../common/http" }
-databend-common-meta-api = { path = "../api" }
-databend-common-meta-client = { path = "../client" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-raft-store = { path = "../raft-store" }
-databend-common-meta-sled-store = { path = "../sled-store" }
-databend-common-meta-stoerr = { path = "../stoerr" }
-databend-common-meta-types = { path = "../types" }
-databend-common-metrics = { path = "../../common/metrics" }
-databend-common-tracing = { path = "../../common/tracing" }
-
-# GitHub dependencies
-sled = { workspace = true }
-
-# Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 backon = "0.4"
 clap = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-http = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-client = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-stoerr = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
 feature-set = { workspace = true }
 futures = { workspace = true }
@@ -63,6 +57,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
+sled = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
@@ -78,4 +73,7 @@ tempfile = "3.4.0"
 test-harness = "0.1.1"
 
 [build-dependencies]
-databend-common-building = { path = "../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true

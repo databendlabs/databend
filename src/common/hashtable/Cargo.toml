@@ -10,13 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-arrow = { path = "../arrow" }
-databend-common-base = { path = "../base" }
-
-# Crates.io dependencies
-
+[dependencies]
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
 ## Must disable feature "runtime-rng", it will make the hash results unstable in cluster
 ahash = { version = "0.8.2", features = ["no-rng"] }
 bumpalo = { workspace = true }
@@ -26,3 +22,6 @@ ordered-float = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 rand = { workspace = true }
+
+[lints]
+workspace = true
