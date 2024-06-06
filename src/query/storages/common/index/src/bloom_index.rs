@@ -181,7 +181,7 @@ impl BloomIndex {
     /// All input blocks should belong to a Parquet file, e.g. the block array represents the parquet file in memory.
     pub fn try_create(
         func_ctx: FunctionContext,
-        version: u64,
+        version: u64, // TODO we can only create bloom index of current version
         data_blocks_tobe_indexed: &[&DataBlock],
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {

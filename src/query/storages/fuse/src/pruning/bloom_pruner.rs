@@ -236,8 +236,10 @@ impl BloomPrunerCreator {
             for (idx, field) in indexed_fields.iter().enumerate() {
                 for column_name in &column_needed {
                     if &field.name == *column_name {
-                        new_filter_schema_fields.push(field.clone());
-                        filters.push(bloom_index.filters.get(idx).unwrap().clone()) // TODO
+                        if let Some(filter) = bloom_index.filters.get(idx) {
+                            new_filter_schema_fields.push(field.clone());
+                            filters.push(filter.clone())
+                        }
                     }
                 }
             }

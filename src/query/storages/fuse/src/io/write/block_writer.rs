@@ -448,7 +448,6 @@ impl BlockWriter {
             let start = Instant::now();
 
             let location = &index_state.location.0;
-            eprintln!("writing bloom stat to {}", location);
             write_data(index_state.data, dal, location).await?;
 
             metrics_inc_block_index_write_nums(1);
