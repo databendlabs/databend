@@ -15,6 +15,9 @@ module.exports = async ({ context, core }) => {
   if (statuses.includes("failure")) {
     releaseStatus = "failure";
     icon = "🔥";
+  } else if (statuses.includes("skipped")) {
+    releaseStatus = "skipped";
+    icon = "🚫";
   } else if (statuses.includes("cancelled")) {
     releaseStatus = "cancelled";
     icon = "🚫";
