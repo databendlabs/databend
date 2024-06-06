@@ -148,7 +148,7 @@ impl BlockCompactMutator {
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
-                    self.generate_part(segments, &mut parts, &mut checker);
+                    checker.generate_part(segments, &mut parts);
                 }
 
                 let residual_segment_cnt = checker.segments.len();
@@ -181,11 +181,7 @@ impl BlockCompactMutator {
         }
 
         // finalize the compaction.
-        self.generate_part(
-            std::mem::take(&mut checker.segments),
-            &mut parts,
-            &mut checker,
-        );
+        checker.finalize(&mut parts);
 
         // Status.
         let elapsed_time = start.elapsed();
@@ -298,28 +294,9 @@ impl BlockCompactMutator {
             }
         }
     }
-
-    fn generate_part(
-        &mut self,
-        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
-        parts: &mut Vec<PartInfoPtr>,
-        checker: &mut SegmentCompactChecker,
-    ) {
-        if !segments.is_empty() && checker.check_for_compact(&segments) {
-            let mut segment_indices = Vec::with_capacity(segments.len());
-            let mut compact_segments = Vec::with_capacity(segments.len());
-            for (idx, segment) in segments.into_iter() {
-                segment_indices.push(idx);
-                compact_segments.push(segment);
-            }
-
-            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
-            parts.push(lazy_part);
-        }
-    }
 }
 
-struct SegmentCompactChecker {
+pub struct SegmentCompactChecker {
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
     block_threshold: u64,
@@ -330,7 +307,7 @@ struct SegmentCompactChecker {
 }
 
 impl SegmentCompactChecker {
-    fn new(block_threshold: u64, cluster_key_id: Option<u32>) -> Self {
+    pub fn new(block_threshold: u64, cluster_key_id: Option<u32>) -> Self {
         Self {
             segments: vec![],
             total_block_count: 0,
@@ -364,7 +341,7 @@ impl SegmentCompactChecker {
         true
     }
 
-    fn add(
+    pub fn add(
         &mut self,
         idx: SegmentIndex,
         segment: Arc<CompactSegmentInfo>,
@@ -388,6 +365,29 @@ impl SegmentCompactChecker {
         self.total_block_count = 0;
         self.segments.push((idx, segment));
         vec![std::mem::take(&mut self.segments)]
+    }
+
+    pub fn generate_part(
+        &mut self,
+        segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
+        parts: &mut Vec<PartInfoPtr>,
+    ) {
+        if !segments.is_empty() && self.check_for_compact(&segments) {
+            let mut segment_indices = Vec::with_capacity(segments.len());
+            let mut compact_segments = Vec::with_capacity(segments.len());
+            for (idx, segment) in segments.into_iter() {
+                segment_indices.push(idx);
+                compact_segments.push(segment);
+            }
+
+            let lazy_part = CompactLazyPartInfo::create(segment_indices, compact_segments);
+            parts.push(lazy_part);
+        }
+    }
+
+    pub fn finalize(&mut self, parts: &mut Vec<PartInfoPtr>) {
+        let final_segments = std::mem::take(&mut self.segments);
+        self.generate_part(final_segments, parts);
     }
 }
 

@@ -319,7 +319,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
@@ -327,7 +327,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/linux/arm64
       - name: Set up QEMU
@@ -483,7 +483,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/bin
       - name: Build Packages
@@ -541,7 +541,7 @@ jobs:
       - name: Notify Release
         uses: actions/github-script@v7
         env:
-          JOBS_STATUS: ${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}
+          JOBS_STATUS: ${{ join(needs.*.result, ',') }}
           REPORT_WEBHOOK: ${{ secrets.RELEASE_REPORT_WEBHOOK }}
           VERSION: ${{ needs.create_release.outputs.version }}
         with:
@@ -612,6 +612,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
+          category: default
           artifacts: meta,query,sqlsmith
       - name: Run sqlsmith
         timeout-minutes: 60

@@ -106,7 +106,7 @@ SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as
 NULL NULL NULL NULL 1
 Кирилл Müller 我是谁 ASCII 2
 
-query TTFI
+query TT?I
 SELECT 'Кирилл' as a, 'Müller' as b, 1.0 as c, 2 as id UNION SELECT NULL as a, NULL as b, 1 as c,  1 as id order by id
 ----
 NULL NULL 1.0 1
@@ -236,3 +236,45 @@ select t1.a from t1, t2 where t1.a = t2.a
 ) t
 ----
 90
+
+statement ok
+CREATE OR REPLACE TABLE `test3` (
+  `user_id` BIGINT NOT NULL,
+  `parent` BIGINT NOT NULL
+);
+
+
+query II
+SELECT * FROM (SELECT 3,
+          user_id AS r_uid,
+          user_id AS w_uid
+   FROM test3) t
+UNION ALL
+SELECT 3 AS id,
+       10086 AS r_uid,
+       1111 AS w_uid;
+----
+3 10086 1111
+
+statement ok
+drop table test3;
+
+statement ok
+CREATE OR REPLACE TABLE `test4` (
+  `user_id` BIGINT NOT NULL,
+  `parent` BIGINT NULL
+);
+
+query II
+SELECT * FROM (SELECT
+          user_id AS root_uid
+   FROM test4 where parent is not null limit 2) t
+UNION ALL
+SELECT
+       10086 AS root_uid
+       limit 200;
+----
+10086
+
+statement ok
+drop table test4;

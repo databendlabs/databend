@@ -92,6 +92,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
+use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
@@ -375,6 +376,7 @@ impl TableContext for QueryContext {
             ),
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
+            DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
         }
     }
 
@@ -824,8 +826,10 @@ impl TableContext for QueryContext {
         None
     }
 
-    // Get the storage data accessor operator from the session manager.
-    fn get_data_operator(&self) -> Result<DataOperator> {
+    /// Get the storage data accessor operator from the session manager.
+    /// Note that this is the application level data accessor, which may be different from
+    /// the table level data accessor (e.g., table with customized storage parameters).
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
 

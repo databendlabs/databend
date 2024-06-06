@@ -27,7 +27,20 @@ pub(crate) fn by_key_seq<K>(r1: &KVResult<K>, r2: &KVResult<K>) -> bool
 where K: MapKey + Ord + fmt::Debug {
     match (r1, r2) {
         (Ok((k1, v1)), Ok((k2, v2))) => {
-            assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
+            let iseq1 = v1.internal_seq();
+            let iseq2 = v2.internal_seq();
+
+            // Same (key, seq) is only allowed if they are both tombstone:
+            // `MapApi::set(None)` when there is already a tombstone produces
+            // another tombstone with the same internal_seq.
+            assert!(
+                (k1, iseq1) != (k2, iseq2) || (iseq1.is_tombstone() && iseq2.is_tombstone()),
+                "by_key_seq: same (key, internal_seq) and not all tombstone: k1:{:?} v1.internal_seq:{:?} k2:{:?} v2.internal_seq:{:?}",
+                k1,
+                iseq1,
+                k2,
+                iseq2,
+            );
 
             // Put entries with the same key together, smaller internal-seq first
             // Tombstone is always greater.

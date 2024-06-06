@@ -137,6 +137,7 @@ impl Display for CopyIntoTableStmt {
         write!(f, " FORCE = {}", self.force)?;
         write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = {}", self.on_error)?;
+        write!(f, " RETURN_FAILED_ONLY = {}", self.return_failed_only)?;
 
         Ok(())
     }
