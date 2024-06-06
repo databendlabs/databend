@@ -15,25 +15,24 @@ name = "databend"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Workspace dependencies
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
-
-databend-common-config = { path = "../query/config" }
-databend-common-exception = { path = "../common/exception" }
-databend-common-expression = { path = "../query/expression" }
-databend-common-license = { path = "../common/license" }
-databend-common-meta-app = { path = "../meta/app" }
-databend-common-meta-embedded = { path = "../meta/embedded" }
-databend-common-users = { path = "../query/users" }
-databend-query = { path = "../query/service", features = [
+ctor = "0.2.5"
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-embedded = { workspace = true }
+databend-common-users = { workspace = true }
+databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ], default-features = false }
-
-# # Crates.io dependencies
-ctor = "0.2.5"
 pyo3 = { version = "0.20", features = ["extension-module", "abi3", "abi3-py37"] }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 uuid = { workspace = true }
+
+[lints]
+workspace = true

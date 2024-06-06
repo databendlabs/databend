@@ -15,23 +15,19 @@ test = true
 io-uring = ["databend-common-meta-sled-store/io-uring"]
 
 [dependencies]
-databend-common-base = { path = "../../common/base" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-meta-api = { path = "../api" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-sled-store = { path = "../sled-store" }
-databend-common-meta-stoerr = { path = "../stoerr" }
-databend-common-meta-types = { path = "../types" }
-databend-common-tracing = { path = "../../common/tracing" }
-
-openraft = { workspace = true }
-
-# crates.io deps
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 byteorder = { workspace = true }
 chrono = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-stoerr = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
@@ -42,6 +38,7 @@ log = { workspace = true }
 maplit = "1.0.2"
 minitrace = { workspace = true }
 num = "0.4.0"
+openraft = { workspace = true }
 ordq = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -51,8 +48,11 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
-databend-common-base = { path = "../../common/base" }
+databend-common-base = { workspace = true }
 pretty_assertions = "1.3.0"
 tempfile = "3.4.0"
 test-harness = "0.1.1"
 tokio = { workspace = true }
+
+[lints]
+workspace = true
