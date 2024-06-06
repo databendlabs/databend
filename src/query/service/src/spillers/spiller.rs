@@ -228,5 +228,4 @@ impl Spiller {
     pub(crate) fn spilled_files(&self) -> Vec<String> {
         self.columns_layout.keys().cloned().collect()
     }
-
 }

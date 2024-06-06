@@ -33,7 +33,7 @@ use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
-/// The HashJoinSpiller is used to spill/restore DataBlocks of HashJoin,
+/// The HashJoinSpiller is used to spill/restore data blocks of HashJoin,
 /// it is used for both build side and probe side.
 pub struct HashJoinSpiller {
     spiller: Spiller,
