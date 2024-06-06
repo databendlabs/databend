@@ -26,7 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
@@ -82,7 +81,7 @@ impl TransformMergeBlock {
 
     fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
         let num_rows = block.num_rows();
-        let mut evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let columns = self
             .left_outputs
             .iter()

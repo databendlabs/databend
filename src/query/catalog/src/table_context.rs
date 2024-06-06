@@ -303,6 +303,8 @@ pub trait TableContext: Send + Sync {
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
 
+    fn clear_runtime_filter(&self);
+
     fn set_merge_into_join(&self, join: MergeIntoJoin);
 
     fn get_merge_into_join(&self) -> MergeIntoJoin;

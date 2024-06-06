@@ -134,6 +134,18 @@ pub fn shrink_scalar(scalar: Scalar) -> Scalar {
     }
 }
 
+pub fn expand_scalar(scalar: Scalar) -> Scalar {
+    match scalar {
+        Scalar::Number(NumberScalar::UInt8(n)) => Scalar::Number(NumberScalar::UInt64(n as u64)),
+        Scalar::Number(NumberScalar::UInt16(n)) => Scalar::Number(NumberScalar::UInt64(n as u64)),
+        Scalar::Number(NumberScalar::UInt32(n)) => Scalar::Number(NumberScalar::UInt64(n as u64)),
+        Scalar::Number(NumberScalar::Int8(n)) => Scalar::Number(NumberScalar::Int64(n as i64)),
+        Scalar::Number(NumberScalar::Int16(n)) => Scalar::Number(NumberScalar::Int64(n as i64)),
+        Scalar::Number(NumberScalar::Int32(n)) => Scalar::Number(NumberScalar::Int64(n as i64)),
+        _ => scalar, // Handle other types if any
+    }
+}
+
 fn shrink_u64(num: u64) -> Scalar {
     if num <= u8::MAX as u64 {
         Scalar::Number(NumberScalar::UInt8(num as u8))
