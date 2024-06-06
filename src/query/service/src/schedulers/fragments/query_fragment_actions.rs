@@ -18,6 +18,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -183,7 +184,9 @@ impl QueryFragmentsActions {
             query_id: self.ctx.get_id(),
             cluster: self.ctx.get_cluster(),
             settings: self.ctx.get_settings(),
+
             dataflow_diagram: Arc::new(builder.build()),
+            request_server_id: GlobalConfig::instance().query.node_id.clone(),
             create_rpc_clint_with_current_rt: self
                 .ctx
                 .get_settings()

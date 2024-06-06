@@ -33,7 +33,6 @@ use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
-use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -133,6 +132,7 @@ pub struct QueryEnv {
     pub cluster: Arc<Cluster>,
     pub settings: Arc<Settings>,
     pub dataflow_diagram: Arc<DataflowDiagram>,
+    pub request_server_id: String,
     pub create_rpc_clint_with_current_rt: bool,
 }
 
@@ -142,18 +142,8 @@ impl QueryEnv {
 
         let cluster = ctx.get_cluster();
         let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
+
         for node in self.dataflow_diagram.node_weights() {
-            // if node.id == GlobalConfig::instance().query.node_id {
-            //     if let Err(cause) = DataExchangeManager::instance()
-            //         .init_query_env(self, ctx.clone())
-            //         .await
-            //     {
-            //         DataExchangeManager::instance().on_finished_query(&self.query_id);
-            //         return Err(cause);
-            //     }
-            //
-            //     continue;
-            // }
             message.insert(node.id.clone(), self.clone());
         }
 
@@ -161,7 +151,6 @@ impl QueryEnv {
             .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
             .await?;
 
-        DataExchangeManager::instance().set_ctx(&self.query_id, ctx.clone())?;
         Ok(())
     }
 

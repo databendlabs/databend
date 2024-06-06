@@ -127,7 +127,11 @@ impl DataExchangeManager {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn init_query_env(&self, env: &QueryEnv, ctx: Arc<QueryContext>) -> Result<()> {
+    pub async fn init_query_env(
+        &self,
+        env: &QueryEnv,
+        ctx: Option<Arc<QueryContext>>,
+    ) -> Result<()> {
         enum QueryExchange {
             Fragment {
                 source: String,
@@ -214,13 +218,13 @@ impl DataExchangeManager {
                 match queries_coordinator.entry(env.query_id.clone()) {
                     Entry::Occupied(mut v) => {
                         let query_coordinator = v.get_mut();
-                        query_coordinator.info = Some(query_info);
+                        query_coordinator.info = query_info;
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
                     Entry::Vacant(v) => {
                         let query_coordinator = v.insert(QueryCoordinator::create());
-                        query_coordinator.info = Some(query_info);
+                        query_coordinator.info = query_info;
                         query_coordinator.add_fragment_exchanges(targets_exchanges)?;
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
                     }
@@ -261,17 +265,22 @@ impl DataExchangeManager {
         }
     }
 
-    fn create_info(query_ctx: Arc<QueryContext>) -> Result<QueryInfo> {
-        let query_id = query_ctx.get_id();
+    fn create_info(query_ctx: Option<Arc<QueryContext>>) -> Result<Option<QueryInfo>> {
+        match query_ctx {
+            None => Ok(None),
+            Some(query_ctx) => {
+                let query_id = query_ctx.get_id();
 
-        Ok(QueryInfo {
-            query_id,
-            query_ctx,
-            query_executor: None,
-            remove_leak_query_worker: None,
-            started: AtomicBool::new(false),
-            current_executor: GlobalConfig::instance().query.node_id.clone(),
-        })
+                Ok(Some(QueryInfo {
+                    query_id,
+                    query_ctx,
+                    query_executor: None,
+                    remove_leak_query_worker: None,
+                    started: AtomicBool::new(false),
+                    current_executor: GlobalConfig::instance().query.node_id.clone(),
+                }))
+            }
+        }
     }
 
     #[async_backtrace::framed]
@@ -317,7 +326,7 @@ impl DataExchangeManager {
                     return Ok(());
                 }
 
-                coordinator.info = Some(Self::create_info(ctx)?);
+                coordinator.info = Self::create_info(Some(ctx))?;
                 Ok(())
             }
         }
@@ -439,6 +448,7 @@ impl DataExchangeManager {
             .await?;
 
         if let Some(query_fragments) = local_fragments {
+            self.set_ctx(&query_fragments.query_id, ctx.clone())?;
             init_query_fragments(query_fragments).await?;
         }
 

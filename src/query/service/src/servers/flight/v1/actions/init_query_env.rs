@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use log::debug;
 
@@ -28,13 +29,17 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
 
     ThreadTracker::tracking_future(async move {
         debug!("init query env with {:?}", env);
-        let ctx = env.create_query_ctx().await?;
-        if let Err(cause) = DataExchangeManager::instance()
+        let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
+            true => None,
+            false => Some(env.create_query_ctx().await?),
+        };
+
+        if let Err(e) = DataExchangeManager::instance()
             .init_query_env(&env, ctx)
             .await
         {
             DataExchangeManager::instance().on_finished_query(&env.query_id);
-            return Err(cause);
+            return Err(e);
         }
 
         Ok(())
