@@ -166,6 +166,15 @@ impl Runtime {
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
+        Self::with_worker_threads_stack_size(workers, thread_name, None)
+    }
+
+    #[allow(unused_mut)]
+    pub fn with_worker_threads_stack_size(
+        workers: usize,
+        mut thread_name: Option<String>,
+        thread_stack_size: Option<usize>,
+    ) -> Result<Self> {
         let mut mem_stat_name = String::from("UnnamedRuntime");
 
         if let Some(thread_name) = thread_name.as_ref() {
@@ -189,6 +198,22 @@ impl Runtime {
 
         if let Some(thread_name) = &thread_name {
             runtime_builder.thread_name(thread_name);
+        }
+
+        if let Some(thread_stack_size) = thread_stack_size {
+            runtime_builder.thread_stack_size(thread_stack_size);
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            // We need to pass the thread name in the unit test, because the thread name is the test name
+            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
+                if let Some(thread_name) = std::thread::current().name() {
+                    runtime_builder.thread_name(thread_name);
+                }
+            }
+
+            runtime_builder.thread_stack_size(20 * 1024 * 1024);
         }
 
         Self::create(

@@ -51,8 +51,14 @@ impl GlobalQueryRuntime {
     pub fn init(num_cpus: usize) -> Result<()> {
         let thread_num = std::cmp::max(num_cpus, num_cpus::get() / 2);
         let thread_num = std::cmp::max(2, thread_num);
+        let thread_stack_size = 200 * 1024 * 1024;
 
-        let rt = Runtime::with_worker_threads(thread_num, Some("g-query-worker".to_owned()))?;
+        let rt = Runtime::with_worker_threads_stack_size(
+            thread_num,
+            Some("g-query-worker".to_owned()),
+            Some(thread_stack_size),
+        )?;
+
         GlobalInstance::set(Arc::new(GlobalQueryRuntime(rt)));
         Ok(())
     }
