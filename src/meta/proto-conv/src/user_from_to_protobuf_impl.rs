@@ -153,36 +153,40 @@ impl FromToProto for mt::principal::GrantObject {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        match p.object {
-            Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
+        let Some(object) = p.object else {
+            return Err(Incompatible {
+                reason: "GrantObject cannot be None".to_string(),
+            });
+        };
+
+        match object {
+            pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {}) => {
                 Ok(mt::principal::GrantObject::Global)
             }
-            Some(pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
+            pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
                 catalog,
                 db,
-            })) => Ok(mt::principal::GrantObject::Database(catalog, db)),
-            Some(pb::grant_object::Object::Databasebyid(
-                pb::grant_object::GrantDatabaseIdObject { catalog, db },
-            )) => Ok(mt::principal::GrantObject::DatabaseById(catalog, db)),
-            Some(pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
+            }) => Ok(mt::principal::GrantObject::Database(catalog, db)),
+            pb::grant_object::Object::Databasebyid(pb::grant_object::GrantDatabaseIdObject {
                 catalog,
                 db,
-                table,
-            })) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
-            Some(pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+            }) => Ok(mt::principal::GrantObject::DatabaseById(catalog, db)),
+            pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                 catalog,
                 db,
                 table,
-            })) => Ok(mt::principal::GrantObject::TableById(catalog, db, table)),
-            Some(pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf })) => {
+            }) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
+            pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+                catalog,
+                db,
+                table,
+            }) => Ok(mt::principal::GrantObject::TableById(catalog, db, table)),
+            pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf }) => {
                 Ok(mt::principal::GrantObject::UDF(udf))
             }
-            Some(pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage })) => {
+            pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage }) => {
                 Ok(mt::principal::GrantObject::Stage(stage))
             }
-            _ => Err(Incompatible {
-                reason: "GrantObject cannot be None".to_string(),
-            }),
         }
     }
 

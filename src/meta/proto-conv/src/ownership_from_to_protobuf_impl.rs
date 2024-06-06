@@ -62,29 +62,34 @@ impl FromToProto for mt::principal::OwnershipObject {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        match p.object {
-            Some(pb::ownership_object::Object::Database(
+        let Some(object) = p.object else {
+            return Err(Incompatible {
+                reason: "OwnershipObject cannot be None".to_string(),
+            });
+        };
+
+        match object {
+            pb::ownership_object::Object::Database(
                 pb::ownership_object::OwnershipDatabaseObject { catalog, db },
-            )) => Ok(mt::principal::OwnershipObject::Database {
+            ) => Ok(mt::principal::OwnershipObject::Database {
                 catalog_name: catalog,
                 db_id: db,
             }),
-            Some(pb::ownership_object::Object::Table(
-                pb::ownership_object::OwnershipTableObject { catalog, db, table },
-            )) => Ok(mt::principal::OwnershipObject::Table {
+            pb::ownership_object::Object::Table(pb::ownership_object::OwnershipTableObject {
+                catalog,
+                db,
+                table,
+            }) => Ok(mt::principal::OwnershipObject::Table {
                 catalog_name: catalog,
                 db_id: db,
                 table_id: table,
             }),
-            Some(pb::ownership_object::Object::Udf(pb::ownership_object::OwnershipUdfObject {
-                udf,
-            })) => Ok(mt::principal::OwnershipObject::UDF { name: udf }),
-            Some(pb::ownership_object::Object::Stage(
-                pb::ownership_object::OwnershipStageObject { stage },
-            )) => Ok(mt::principal::OwnershipObject::Stage { name: stage }),
-            _ => Err(Incompatible {
-                reason: "OwnershipObject cannot be None".to_string(),
-            }),
+            pb::ownership_object::Object::Udf(pb::ownership_object::OwnershipUdfObject { udf }) => {
+                Ok(mt::principal::OwnershipObject::UDF { name: udf })
+            }
+            pb::ownership_object::Object::Stage(pb::ownership_object::OwnershipStageObject {
+                stage,
+            }) => Ok(mt::principal::OwnershipObject::Stage { name: stage }),
         }
     }
 
