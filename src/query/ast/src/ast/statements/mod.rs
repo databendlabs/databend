@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod backtrace_switch;
 mod call;
 mod catalog;
 mod columns;
@@ -54,6 +55,7 @@ mod user;
 mod view;
 mod virtual_column;
 
+pub use backtrace_switch::*;
 pub use call::*;
 pub use catalog::*;
 pub use columns::*;

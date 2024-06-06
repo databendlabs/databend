@@ -1069,7 +1069,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false)
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) => {
+            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::SetBacktrace(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }

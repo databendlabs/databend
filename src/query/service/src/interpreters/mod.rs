@@ -78,6 +78,7 @@ mod interpreter_role_show;
 mod interpreter_select;
 mod interpreter_sequence_create;
 mod interpreter_sequence_drop;
+mod interpreter_set_backtrace;
 mod interpreter_set_priority;
 mod interpreter_setting;
 mod interpreter_share_alter_tenants;
