@@ -10,13 +10,13 @@ runs:
     - name: pack failure artifacts
       shell: bash
       run: |
-        mkdir -p target
+        mkdir -p logs
         for name in "test-databend-meta-0" "test-databend-meta-1" "test-databend-meta-2" "databend-metaverifier"
         do
           echo "cat logs of $name"
-          kubectl exec -i $name -n databend -- /cat-logs.sh > target/$name.log
+          kubectl exec -i $name -n databend -- /cat-logs.sh > logs/$name.log
         done
-        tar -zcf target/failure-${{ inputs.name }}.tar.gz target/*
+        tar -zcf logs/failure-${{ inputs.name }}.tar.gz logs/*
     - uses: actions/upload-artifact@v4
       with:
         name: ${{ inputs.name }}

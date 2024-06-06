@@ -6,3 +6,4 @@ persistence:
 config:
   logDir: /.databend/logs
   logPrefixFilter: ""
+  logLevel: "DEBUG"
