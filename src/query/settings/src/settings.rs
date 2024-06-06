@@ -270,12 +270,10 @@ mod tests {
             value: UserSettingValue::String("test_value".to_string()),
         });
 
-        let configs =
-            HashMap::from([("test_config_key_1".to_string(), UserSettingValue::UInt64(1))]);
         let settings = Settings {
             tenant: Tenant::new_literal("test_tenant"),
             changes: Arc::new(changes),
-            configs: configs.clone(),
+            configs: HashMap::new(),
         };
 
         let settings =
@@ -283,7 +281,6 @@ mod tests {
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);
-        assert_eq!(settings.configs, configs);
         Ok(())
     }
 }

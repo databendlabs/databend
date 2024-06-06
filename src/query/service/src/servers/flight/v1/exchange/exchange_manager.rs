@@ -432,13 +432,15 @@ impl DataExchangeManager {
         let cluster = ctx.get_cluster();
         let mut query_fragments = actions.get_query_fragments()?;
 
-        if let Some(query_fragments) = query_fragments.remove(&conf.query.node_id) {
-            init_query_fragments(query_fragments).await?;
-        }
+        let local_fragments = query_fragments.remove(&conf.query.node_id);
 
         let _ = cluster
             .do_action::<_, ()>(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
             .await?;
+
+        if let Some(query_fragments) = local_fragments {
+            init_query_fragments(query_fragments).await?;
+        }
 
         // Get local pipeline of local task
         let build_res = self.get_root_pipeline(ctx, root_actions)?;
