@@ -184,6 +184,7 @@ impl QueryFragmentsActions {
             query_id: self.ctx.get_id(),
             cluster: self.ctx.get_cluster(),
             settings: self.ctx.get_settings(),
+            query_kind: self.ctx.get_query_kind(),
 
             dataflow_diagram: Arc::new(builder.build()),
             request_server_id: GlobalConfig::instance().query.node_id.clone(),

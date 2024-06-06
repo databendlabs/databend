@@ -19,7 +19,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
@@ -131,6 +133,7 @@ pub struct QueryEnv {
     pub query_id: String,
     pub cluster: Arc<Cluster>,
     pub settings: Arc<Settings>,
+    pub query_kind: QueryKind,
     pub dataflow_diagram: Arc<DataflowDiagram>,
     pub request_server_id: String,
     pub create_rpc_clint_with_current_rt: bool,
@@ -161,13 +164,13 @@ impl QueryEnv {
             session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
         )?;
 
-        let query_ctx = session.create_query_context().await?;
-        // let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
-        //     nodes: self.cluster.nodes.clone(),
-        //     local_id: GlobalConfig::instance().query.node_id.clone(),
-        // }))?;
+        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            nodes: self.cluster.nodes.clone(),
+            local_id: GlobalConfig::instance().query.node_id.clone(),
+        }))?;
 
         query_ctx.set_id(self.query_id.clone());
+        query_ctx.attach_query_str(self.query_kind, "".to_string());
 
         Ok(query_ctx)
     }
