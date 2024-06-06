@@ -307,4 +307,5 @@ arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0"
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
+opendal = { git = "https://github.com/apache/opendal", rev = "2034a26" }
 # proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }

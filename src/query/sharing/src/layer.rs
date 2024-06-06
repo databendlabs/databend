@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use databend_common_auth::RefreshableToken;
 use databend_common_exception::ErrorCode;
@@ -27,13 +26,12 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::raw::new_request_build_error;
-use opendal::raw::oio;
 use opendal::raw::parse_content_length;
 use opendal::raw::parse_etag;
 use opendal::raw::parse_last_modified;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
-use opendal::raw::BytesRange;
+use opendal::raw::HttpBody;
 use opendal::raw::HttpClient;
 use opendal::raw::OpRead;
 use opendal::raw::OpStat;
@@ -129,7 +127,7 @@ struct SharedAccessor {
 }
 
 impl Access for SharedAccessor {
-    type Reader = SharedReader;
+    type Reader = HttpBody;
     type BlockingReader = ();
     type Writer = ();
     type BlockingWriter = ();
@@ -150,12 +148,34 @@ impl Access for SharedAccessor {
     }
 
     #[async_backtrace::framed]
-    async fn read(&self, path: &str, _args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        Ok((RpRead::default(), SharedReader {
-            signer: self.signer.clone(),
-            client: self.client.clone(),
-            path: Arc::new(path.to_string()),
-        }))
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
+        let mut req: Request<Buffer> = self
+            .signer
+            .fetch(&path, Operation::Read)
+            .await
+            .map_err(|err| {
+                Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
+            })?
+            .into();
+
+        req.headers_mut().insert(
+            RANGE,
+            args.range().to_header().parse().map_err(|err| {
+                Error::new(ErrorKind::Unexpected, "header value is invalid").set_source(err)
+            })?,
+        );
+
+        let resp = self.client.fetch(req).await?;
+
+        let res = if resp.status().is_success() {
+            resp.into_body()
+        } else {
+            let (part, mut body) = resp.into_parts();
+            let buf = body.to_buffer().await?;
+            return Err(parse_error(Response::from_parts(part, buf)).await);
+        };
+
+        Ok((RpRead::default(), res))
     }
 
     #[async_backtrace::framed]
@@ -226,39 +246,4 @@ pub async fn parse_error(er: Response<Buffer>) -> Error {
     }
 
     err
-}
-
-pub struct SharedReader {
-    signer: SharedSigner,
-    client: HttpClient,
-    path: Arc<String>,
-}
-
-impl oio::Read for SharedReader {
-    async fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
-        let req: PresignedRequest = self
-            .signer
-            .fetch(&self.path, Operation::Read)
-            .await
-            .map_err(|err| {
-                Error::new(ErrorKind::Unexpected, "fetch presigned url failed").set_source(err)
-            })?;
-
-        let br = BytesRange::from(offset..offset + limit as u64);
-        let mut req: Request<Buffer> = req.into();
-        req.headers_mut().insert(
-            RANGE,
-            br.to_header().parse().map_err(|err| {
-                Error::new(ErrorKind::Unexpected, "header value is invalid").set_source(err)
-            })?,
-        );
-
-        let resp = self.client.send(req).await?;
-
-        if resp.status().is_success() {
-            Ok(resp.into_body())
-        } else {
-            Err(parse_error(resp).await)
-        }
-    }
 }
