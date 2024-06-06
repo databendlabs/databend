@@ -231,7 +231,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_inlist_to_or", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(16),
+                    value: UserSettingValue::UInt64(3),
                     desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
