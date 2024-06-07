@@ -87,6 +87,8 @@ impl Operator for Sort {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+
         if self.window_partition.is_empty() {
             return Ok(required);
         }
@@ -94,7 +96,6 @@ impl Operator for Sort {
         let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         // Can't merge to shuffle
         if child_physical_prop.distribution == Distribution::Serial {
-            required.distribution = Distribution::Serial;
             return Ok(required);
         }
 
@@ -115,6 +116,8 @@ impl Operator for Sort {
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+
         if self.window_partition.is_empty() {
             return Ok(vec![vec![required]]);
         }
@@ -122,7 +125,6 @@ impl Operator for Sort {
         // Can't merge to shuffle
         let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
         if child_physical_prop.distribution == Distribution::Serial {
-            required.distribution = Distribution::Serial;
             return Ok(vec![vec![required]]);
         }
 
