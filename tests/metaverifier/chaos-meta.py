@@ -121,7 +121,7 @@ class MetaChaos:
     return content == "END"
 
   def run(self, apply_second, recover_second):
-    logging.info("run with apply_second: " + str(apply_second) + ", recover_second" + str(recover_second))
+    logging.info("run with apply_second: " + str(apply_second) + ", recover_second: " + str(recover_second))
 
     mode = self.mode.split("/")
     #print("mode: ", mode)
@@ -150,7 +150,7 @@ class MetaChaos:
       # random select node mode, leader or follower
       node_mode = random.sample(node_modes, 1)[0]
       node = self.get_inject_chaos_node(node_mode)
-      logging.debug("loop " + str(count) + " inject chaos rule to  node: " + str(node))
+      logging.debug("loop " + str(count) + " inject chaos rule to node: " + str(node))
 
       # generate chaos yaml
       chaos_yaml = self.chaos_params.generate(node)
