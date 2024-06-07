@@ -33,7 +33,11 @@ impl AggIndexReader {
         let op = self.reader.operator.blocking();
         match op.stat(loc) {
             Ok(meta) => {
-                let mut reader = op.reader(loc).ok()?.into_std_read(0..meta.content_length());
+                let mut reader = op
+                    .reader(loc)
+                    .ok()?
+                    .into_std_read(0..meta.content_length())
+                    .ok()?;
                 let metadata = pread::read_metadata(&mut reader)
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")

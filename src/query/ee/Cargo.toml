@@ -12,52 +12,50 @@ doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-async-backtrace = { workspace = true }
-databend-common-ast = { path = "../ast" }
-databend-common-base = { path = "../../common/base" }
-databend-common-catalog = { path = "../catalog" }
-databend-common-config = { path = "../config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-functions = { path = "../functions" }
-databend-common-io = { path = "../../common/io" }
-databend-common-license = { path = "../../common/license" }
-databend-common-meta-api = { path = "../../meta/api" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-store = { path = "../../meta/store" }
-databend-common-meta-types = { path = "../../meta/types" }
-databend-common-sql = { path = "../sql" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-storages-fuse = { path = "../storages/fuse" }
-databend-common-storages-stream = { path = "../storages/stream" }
-databend-common-tracing = { path = "../../common/tracing" }
-databend-common-users = { path = "../users" }
-databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
-databend-enterprise-background-service = { path = "../ee_features/background_service" }
-databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
-databend-enterprise-inverted-index = { path = "../ee_features/inverted_index" }
-databend-enterprise-storage-encryption = { path = "../ee_features/storage_encryption" }
-databend-enterprise-storage-quota = { path = "../ee_features/storage_quota" }
-databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
-databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
-databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
-databend-query = { path = "../service" }
-databend-storages-common-cache = { path = "../storages/common/cache" }
-databend-storages-common-pruner = { path = "../storages/common/pruner" }
-databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
-opendal = { workspace = true }
-
 arrow-array = { workspace = true }
+async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-sql = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-fuse = { workspace = true }
+databend-common-storages-stream = { workspace = true }
+databend-common-tracing = { workspace = true }
+databend-common-users = { workspace = true }
+databend-enterprise-aggregating-index = { workspace = true }
+databend-enterprise-background-service = { workspace = true }
+databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-storage-encryption = { workspace = true }
+databend-enterprise-storage-quota = { workspace = true }
+databend-enterprise-stream-handler = { workspace = true }
+databend-enterprise-vacuum-handler = { workspace = true }
+databend-enterprise-virtual-column = { workspace = true }
+databend-query = { workspace = true }
+databend-storages-common-cache = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 jwt-simple = "0.11.0"
 log = { workspace = true }
+opendal = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
@@ -66,3 +64,6 @@ tantivy = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }
+
+[lints]
+workspace = true

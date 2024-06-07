@@ -8,9 +8,7 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
-    # Binaries
     "src/binaries",
-    # Common
     "src/common/arrow",
     "src/common/auth",
     "src/common/base",
@@ -30,7 +28,6 @@ members = [
     "src/common/vector",
     "src/common/license",
     "src/common/parquet2",
-    # Query
     "src/query/ast",
     "src/query/async_functions",
     "src/query/codegen",
@@ -56,6 +53,7 @@ members = [
     "src/query/storages/common/index",
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
+    "src/query/storages/common/txn",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
     "src/query/storages/factory",
@@ -82,13 +80,13 @@ members = [
     "src/query/ee_features/storage_encryption",
     "src/query/ee_features/stream_handler",
     "src/query/ee_features/storage_quota",
-    # databend-query
+    "src/query/ee_features/inverted_index",
+    "src/query/ee_features/virtual_column",
     "src/query/service",
-    # enterprise
     "src/query/ee",
-    # Meta
     "src/meta/api",
     "src/meta/app",
+    "src/meta/client",
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
@@ -98,22 +96,166 @@ members = [
     "src/meta/store",
     "src/meta/types",
     "src/meta/ee",
-    # meta proto
     "src/meta/proto-conv",
     "src/meta/protos",
-    # databend-meta
     "src/meta/service",
-    # sqllogictest
     "tests/sqllogictests",
-    # "src/bendpy",
-    # sqlsmith
     "src/tests/sqlsmith",
 ]
 
 [workspace.dependencies]
-# databend maintains
-jsonb = { version = "0.4.0" }
+# Workspace dependencies
+databend-common-arrow = { path = "src/common/arrow" }
+databend-common-ast = { path = "src/query/ast" }
+databend-common-async-functions = { path = "src/query/async_functions" }
+databend-common-auth = { path = "src/common/auth" }
+databend-common-base = { path = "src/common/base" }
+databend-common-binaries = { path = "src/binaries" }
+databend-common-building = { path = "src/common/building" }
+databend-common-cache = { path = "src/common/cache" }
+databend-common-catalog = { path = "src/query/catalog" }
+databend-common-cloud-control = { path = "src/common/cloud_control" }
+databend-common-codegen = { path = "src/query/codegen" }
+databend-common-compress = { path = "src/common/compress" }
+databend-common-config = { path = "src/query/config" }
+databend-common-datavalues = { path = "src/query/datavalues" }
+databend-common-exception = { path = "src/common/exception" }
+databend-common-expression = { path = "src/query/expression" }
+databend-common-formats = { path = "src/query/formats" }
+databend-common-functions = { path = "src/query/functions" }
+databend-common-grpc = { path = "src/common/grpc" }
+databend-common-hashtable = { path = "src/common/hashtable" }
+databend-common-http = { path = "src/common/http" }
+databend-common-io = { path = "src/common/io" }
+databend-common-license = { path = "src/common/license" }
+databend-common-management = { path = "src/query/management" }
+databend-common-meta-api = { path = "src/meta/api" }
+databend-common-meta-app = { path = "src/meta/app" }
+databend-common-meta-client = { path = "src/meta/client" }
+databend-common-meta-embedded = { path = "src/meta/embedded" }
+databend-common-meta-kvapi = { path = "src/meta/kvapi" }
+databend-common-meta-process = { path = "src/meta/process" }
+databend-common-meta-raft-store = { path = "src/meta/raft-store" }
+databend-common-meta-sled-store = { path = "src/meta/sled-store" }
+databend-common-meta-stoerr = { path = "src/meta/stoerr" }
+databend-common-meta-store = { path = "src/meta/store" }
+databend-common-meta-types = { path = "src/meta/types" }
+databend-common-metrics = { path = "src/common/metrics" }
+databend-common-openai = { path = "src/common/openai" }
+databend-common-parquet2 = { path = "src/common/parquet2" }
+databend-common-pipeline-core = { path = "src/query/pipeline/core" }
+databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
+databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
+databend-common-pipeline-transforms = { path = "src/query/pipeline/transforms" }
+databend-common-proto-conv = { path = "src/meta/proto-conv" }
+databend-common-protos = { path = "src/meta/protos" }
+databend-common-script = { path = "src/query/script" }
+databend-common-settings = { path = "src/query/settings" }
+databend-common-sharing = { path = "src/query/sharing" }
+databend-common-sql = { path = "src/query/sql" }
+databend-common-sqlsmith = { path = "src/tests/sqlsmith" }
+databend-common-storage = { path = "src/common/storage" }
+databend-common-storages-delta = { path = "src/query/storages/delta" }
+databend-common-storages-factory = { path = "src/query/storages/factory" }
+databend-common-storages-fuse = { path = "src/query/storages/fuse" }
+databend-common-storages-hive = { path = "src/query/storages/hive/hive" }
+databend-common-storages-iceberg = { path = "src/query/storages/iceberg" }
+databend-common-storages-information-schema = { path = "src/query/storages/information_schema" }
+databend-common-storages-memory = { path = "src/query/storages/memory" }
+databend-common-storages-null = { path = "src/query/storages/null" }
+databend-common-storages-orc = { path = "src/query/storages/orc" }
+databend-common-storages-parquet = { path = "src/query/storages/parquet" }
+databend-common-storages-random = { path = "src/query/storages/random" }
+databend-common-storages-result-cache = { path = "src/query/storages/result_cache" }
+databend-common-storages-share = { path = "src/query/storages/share" }
+databend-common-storages-stage = { path = "src/query/storages/stage" }
+databend-common-storages-stream = { path = "src/query/storages/stream" }
+databend-common-storages-system = { path = "src/query/storages/system" }
+databend-common-storages-view = { path = "src/query/storages/view" }
+databend-common-tracing = { path = "src/common/tracing" }
+databend-common-users = { path = "src/query/users" }
+databend-common-vector = { path = "src/common/vector" }
+databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
+databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
+databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
+databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
+databend-enterprise-meta = { path = "src/meta/ee" }
+databend-enterprise-query = { path = "src/query/ee" }
+databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
+databend-enterprise-storage-quota = { path = "src/query/ee_features/storage_quota" }
+databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
+databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_handler" }
+databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
+databend-meta = { path = "src/meta/service" }
+databend-query = { path = "src/query/service" }
+databend-sharing-endpoint = { path = "src/query/sharing_endpoint" }
+databend-sqllogictests = { path = "tests/sqllogictests" }
+databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
+databend-storages-common-cache = { path = "src/query/storages/common/cache" }
+databend-storages-common-cache-manager = { path = "src/query/storages/common/cache_manager" }
+databend-storages-common-index = { path = "src/query/storages/common/index" }
+databend-storages-common-io = { path = "src/query/storages/common/io" }
+databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
+databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
+databend-storages-common-txn = { path = "src/query/storages/common/txn" }
 
+# Crates.io dependencies
+anyerror = { version = "=0.1.10" }
+anyhow = { version = "1.0.65" }
+arrow = { version = "51" }
+arrow-array = { version = "51" }
+arrow-buffer = { version = "51" }
+arrow-cast = { version = "51", features = ["prettyprint"] }
+arrow-data = { version = "51" }
+arrow-flight = { version = "51", features = ["flight-sql-experimental", "tls"] }
+arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
+arrow-ipc = { version = "51" }
+arrow-ord = { version = "51" }
+arrow-schema = { version = "51", features = ["serde"] }
+arrow-select = { version = "51" }
+arrow-udf-js = "0.2"
+arrow-udf-python = "0.1"
+arrow-udf-wasm = "0.2"
+async-backtrace = "0.2"
+async-trait = { version = "0.1.77", package = "async-trait-fn" }
+backtrace = "0.3"
+base64 = "0.22"
+bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
+borsh = { version = "1.2.1", features = ["derive"] }
+bumpalo = "3.12.0"
+byteorder = "1.4.3"
+bytes = "1.5.0"
+chrono = { version = "0.4.31", features = ["serde"] }
+chrono-tz = { version = "0.8", features = ["serde"] }
+clap = { version = "4.4.2", features = ["derive"] }
+codespan-reporting = "0.11"
+criterion = "0.5"
+dashmap = "5.4.0"
+deltalake = "0.17"
+derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
+derive_more = "0.99.17"
+enumflags2 = { version = "0.7.7", features = ["serde"] }
+ethnum = { version = "1.5.0" }
+feature-set = { version = "0.1.1" }
+flatbuffers = "23" # Must use the same version with arrow-ipc
+futures = "0.3.24"
+futures-async-stream = { version = "0.2.7" }
+futures-util = "0.3.24"
+geo = { version = "0.27.0", features = ["use-serde"] }
+geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
+geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
+hashbrown = { version = "0.14.3", default-features = false }
+http = "1"
+itertools = "0.10.5"
+jsonb = "0.4.0"
+log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+logcall = "0.1.5"
+match-template = "0.0.1"
+minitrace = { version = "0.6.5", features = ["enable"] }
+minitrace-opentelemetry = "0.6.5"
+mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+once_cell = "1.15.0"
+openai_api_rust = "0.1"
 opendal = { version = "0.46.0", features = [
     "layers-minitrace",
     "layers-prometheus-client",
@@ -132,43 +274,25 @@ opendal = { version = "0.46.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-
-# openraft for debugging
-#openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.9", features = [
-    "serde",
-    "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
-    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
+opentelemetry = { version = "0.22", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.15", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
 ] }
-
-# Core crates and utilities
-base64 = "0.22"
-async-backtrace = "0.2"
-async-trait = { version = "0.1.77", package = "async-trait-fn" }
-bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
-borsh = { version = "1.2.1", features = ["derive"] }
-bytes = "1.5.0"
-hashbrown = { version = "0.14.3", default-features = false }
-byteorder = "1.4.3"
-chrono = { version = "0.4.31", features = ["serde"] }
-chrono-tz = { version = "0.8", features = ["serde"] }
-clap = { version = "4.4.2", features = ["derive"] }
-derive_more = "0.99.17"
-enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { version = "1.5.0" }
-feature-set = { version = "0.1.1" }
-geo = { version = "0.27.0", features = ["use-serde"] }
-geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
-geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
-itertools = "0.10.5"
-match-template = "0.0.1"
-mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
+orc-rust = "0.3"
 ordered-float = { version = "4.1.0", default-features = false }
+ordq = "0.2.0"
+parking_lot = "0.12.1"
+parquet = { version = "51", features = ["async"] }
+parquet_rs = { package = "parquet", version = "51" }
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
+prost = { version = "0.12.1" }
+prost-build = { version = "0.12.1" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 regex = "1.8.1"
 reqwest = { version = "0.12", default-features = false, features = [
@@ -179,87 +303,43 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 reqwest-hickory-resolver = "0.1"
 semver = "1.0.14"
+serde = { version = "1.0.164", features = ["derive", "rc"] }
+serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
+serde_stacker = { version = "0.1" }
+serde_with = { version = "3.8.1" }
 serfig = "0.1.0"
+sled = { version = "0.34", default-features = false }
+stream-more = "0.1.3"
 tantivy = "0.22.0"
+thiserror = { version = "1" }
+tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
 tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
-tonic-reflection = { version = "0.11.0" }
-typetag = "0.2.3"
-uuid = { version = "1.1.2", features = ["serde", "v4"] }
-walkdir = "2.3.2"
-derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
-http = "1"
-criterion = "0.5"
-
-# Synchronization
-dashmap = "5.4.0"
-once_cell = "1.15.0"
-ordq = "0.2.0"
-parking_lot = "0.12.1"
-
-# Future and async
-futures = "0.3.24"
-futures-async-stream = { version = "0.2.7" }
-futures-util = "0.3.24"
-stream-more = "0.1.3"
-
-# Error handling
-anyerror = { version = "=0.1.10" }
-anyhow = { version = "1.0.65" }
-thiserror = { version = "1" }
-
-# Crates from arrow-rs
-arrow = { version = "51" }
-arrow-array = { version = "51" }
-arrow-buffer = { version = "51" }
-arrow-cast = { version = "51", features = ["prettyprint"] }
-arrow-data = { version = "51" }
-arrow-flight = { version = "51", features = ["flight-sql-experimental", "tls"] }
-arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-arrow-ipc = { version = "51" }
-arrow-ord = { version = "51" }
-arrow-schema = { version = "51", features = ["serde"] }
-arrow-select = { version = "51" }
-parquet = { version = "51", features = ["async"] }
-parquet_rs = { package = "parquet", version = "51" }
-# Must use the same version with arrow-ipc
-flatbuffers = { version = "23" }
-
-# Crates from risingwavelabs
-arrow-udf-js = { package = "arrow-udf-js", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
-arrow-udf-wasm = { package = "arrow-udf-wasm", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
-
-# Serialization
-prost = { version = "0.12.1" }
-prost-build = { version = "0.12.1" }
-serde = { version = "1.0.164", features = ["derive", "rc"] }
-serde_stacker = { version = "0.1" }
-serde_with = { version = "3.8.1" }
-serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
 tonic-build = { version = "0.11" }
-
-# Memory management
-bumpalo = "3.12.0"
-tikv-jemalloc-ctl = { version = "0.5.0", features = ["use_std"] }
-
-# Observability
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.5"
-minitrace = { version = "0.6.5", features = ["enable"] }
-minitrace-opentelemetry = "0.6.5"
-opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = [
-    "trace",
-    "logs",
-    "grpc-tonic",
-    "http-proto",
-    "reqwest-client",
-] }
-opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
+tonic-reflection = { version = "0.11.0" }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
+typetag = "0.2.3"
+uuid = { version = "1.1.2", features = ["serde", "v4"] }
+walkdir = "2.3.2"
+xorfilter-rs = "0.5"
+# openraft for debugging
+# openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
+openraft = { version = "0.9.9", features = [
+    "serde",
+    "tracing-log",
+    "generic-snapshot-data",
+    "storage-v2",
+    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
+] }
+
+[workspace.lints.rust]
+async_fn_in_trait = "allow"
+
+[workspace.lints.clippy]
+useless_format = "allow"
 
 [profile.release]
 debug = 1
@@ -304,7 +384,19 @@ rpath = false
 
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
-icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
+arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
+arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
-# proj = { git = "https://github.com/ariesdevil/proj", rev = "51e1c60" }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
+deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
+ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
+openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+opendal = { git = "https://github.com/apache/opendal", rev = "2034a26" }
+orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
+sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
+xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+# TODO: Use the version from crates.io once
+# https://github.com/brendanzab/codespan/pull/331 is released.
+codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }

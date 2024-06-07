@@ -11,10 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-
-# Crates.io dependencies
+databend-common-base = { workspace = true }
 prometheus-client = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -27,3 +24,6 @@ anyhow = { workspace = true }
 default-features = false
 features = ["io-util", "net", "sync", "rt-multi-thread", "macros"]
 version = "1.26.0"
+
+[lints]
+workspace = true

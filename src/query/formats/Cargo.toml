@@ -10,15 +10,24 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
+[dependencies]
 aho-corasick = { version = "1.0.1" }
 async-trait = { workspace = true }
 base64 = "0.21.0"
 bstr = "1.0.1"
 chrono-tz = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-storages-common-blocks = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 hex = "0.4.3"
+jsonb = { workspace = true }
 lexical-core = "0.8.5"
 match-template = { workspace = true }
 micromarshal = "0.4.0"
@@ -28,21 +37,13 @@ ordered-float = { workspace = true }
 roaring = { version = "0.10.1", features = ["serde"] }
 serde_json = { workspace = true }
 
-# Workspace dependencies
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-settings = { path = "../settings" }
-databend-storages-common-blocks = { path = "../storages/common/blocks" }
-databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
-jsonb = { workspace = true }
-
 [dev-dependencies]
-databend-common-arrow = { path = "../../common/arrow" }
+databend-common-arrow = { workspace = true }
 pretty_assertions = "1.3.0"
 tokio = { workspace = true }
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["geos", "match-template"]
