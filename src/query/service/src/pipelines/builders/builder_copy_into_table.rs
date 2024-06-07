@@ -20,11 +20,13 @@ use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -90,6 +92,18 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn need_null_if_processor(plan: &CopyIntoTable, source_schema: &Arc<DataSchema>) -> bool {
+        matches!(
+            plan.stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(_)
+        ) && plan.is_transform
+            && source_schema.fields.iter().any(|f| match f.data_type() {
+                DataType::String => true,
+                DataType::Nullable(b) if matches!(**b, DataType::String) => true,
+                _ => false,
+            })
+    }
+
     fn build_append_data_pipeline(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
@@ -101,6 +115,9 @@ impl PipelineBuilder {
         let plan_values_consts = &plan.values_consts;
         let plan_required_values_schema = &plan.required_values_schema;
         let plan_write_mode = &plan.write_mode;
+
+        if Self::need_null_if_processor(plan, &source_schema) {}
+
         if &source_schema != plan_required_source_schema {
             // only parquet need cast
             let func_ctx = ctx.get_function_context()?;

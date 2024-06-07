@@ -31,6 +31,7 @@ mod transform_filter;
 mod transform_limit;
 mod transform_materialized_cte;
 mod transform_merge_block;
+mod transform_null_if;
 mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
 mod transform_runtime_cast_schema;
