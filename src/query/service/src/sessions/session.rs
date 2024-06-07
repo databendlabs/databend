@@ -262,7 +262,9 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(&self) -> Result<()> {
-        self.privilege_mgr().set_current_role(None).await
+        self.privilege_mgr()
+            .set_current_role(Some("public".to_string()))
+            .await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
@@ -274,13 +276,8 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_all_effective_roles(
-        &self,
-        check_current_role_only: bool,
-    ) -> Result<Vec<RoleInfo>> {
-        self.privilege_mgr()
-            .get_all_effective_roles(check_current_role_only)
-            .await
+    pub async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.privilege_mgr().get_all_effective_roles().await
     }
 
     #[async_backtrace::framed]

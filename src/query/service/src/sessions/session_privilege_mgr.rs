@@ -54,8 +54,7 @@ pub trait SessionPrivilegeManager {
 
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()>;
 
-    async fn get_all_effective_roles(&self, check_current_role_only: bool)
-    -> Result<Vec<RoleInfo>>;
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
@@ -189,21 +188,7 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_all_effective_roles(
-        &self,
-        check_current_role_only: bool,
-    ) -> Result<Vec<RoleInfo>> {
-        // the current role is always included in the effective roles.
-        self.ensure_current_role().await?;
-        // if ensure_current_role success, the current role can not be None.
-        let current_role = self.get_current_role().unwrap();
-        // Note that authorization to execute CREATE <object> statements to create objects is provided by the current role.
-        // E.g.: current role is public role, secondary role is admin,
-        // If not check create object, the object's owner role is public.
-        if check_current_role_only {
-            return Ok(vec![current_role]);
-        }
-
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         let secondary_roles = self.session_ctx.get_secondary_roles();
 
         // if secondary_roles is not set, return all the available roles
@@ -212,7 +197,12 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
             return Ok(available_roles);
         }
 
-        let mut role_names = vec![current_role.name];
+        // the current role is always included in the effective roles.
+        self.ensure_current_role().await?;
+        let mut role_names = self
+            .get_current_role()
+            .map(|r| vec![r.name])
+            .unwrap_or_default();
 
         // if secondary_roles is set to be Some([]), only return the current role and its related roles.
         // if the secondary_roles is set to be non-empty, return both current_role and the secondary_roles
@@ -268,9 +258,19 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
 
         // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
-        let effective_roles = self
-            .get_all_effective_roles(check_current_role_only)
-            .await?;
+        let effective_roles = if check_current_role_only {
+            if let Some(role) = self.get_current_role() {
+                vec![role]
+            } else {
+                return Err(ErrorCode::InvalidRole(format!(
+                    "Validate object {} privilege {} failed. Current role is None for current session.",
+                    object, privilege
+                )));
+            }
+        } else {
+            self.get_all_effective_roles().await?
+        };
+
         let role_verified = &effective_roles
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege));
@@ -294,9 +294,18 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
             .await?
             .unwrap_or_else(|| BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
 
-        let effective_roles = self
-            .get_all_effective_roles(check_current_role_only)
-            .await?;
+        let effective_roles = if check_current_role_only {
+            if let Some(role) = self.get_current_role() {
+                vec![role]
+            } else {
+                return Err(ErrorCode::InvalidRole(format!(
+                    "Validate object {} ownership. Current role is None for current session.",
+                    object
+                )));
+            }
+        } else {
+            self.get_all_effective_roles().await?
+        };
         let exists = effective_roles.iter().any(|r| r.name == owner_role_name);
         return Ok(exists);
     }
@@ -329,7 +338,7 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
             .role_api(&self.session_ctx.get_current_tenant())
             .get_ownerships()
             .await?;
-        let roles = self.get_all_effective_roles(false).await?;
+        let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
         let ownership_objects = if roles_name.contains(&"account_admin".to_string()) {

@@ -196,13 +196,22 @@ impl PrivilegeAccess {
                             }
                             let current_user = self.ctx.get_current_user()?;
                             let session = self.ctx.get_current_session();
-                            let roles_name = session
-                                .get_all_effective_roles(check_current_role_only)
-                                .await?
-                                .iter()
-                                .map(|r| r.name.clone())
-                                .collect::<Vec<_>>()
-                                .join(",");
+                            let roles_name = if check_current_role_only {
+                                // Roles name use to return err msg. If None no need to return Err
+                                session
+                                    .get_current_role()
+                                    .map(|r| r.name)
+                                    .unwrap_or_default()
+                            } else {
+                                session
+                                    .get_all_effective_roles()
+                                    .await?
+                                    .iter()
+                                    .map(|r| r.name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                            };
+
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
                                 Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
@@ -298,7 +307,7 @@ impl PrivilegeAccess {
                                     let current_user = self.ctx.get_current_user()?;
                                     let session = self.ctx.get_current_session();
                                     let roles_name = session
-                                        .get_all_effective_roles(false)
+                                        .get_all_effective_roles()
                                         .await?
                                         .iter()
                                         .map(|r| r.name.clone())
@@ -426,13 +435,22 @@ impl PrivilegeAccess {
                 }
                 let current_user = self.ctx.get_current_user()?;
 
-                let roles_name = session
-                    .get_all_effective_roles(check_current_role_only)
-                    .await?
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(",");
+                let roles_name = if check_current_role_only {
+                    // Roles name use to return err msg. If None no need to return Err
+                    session
+                        .get_current_role()
+                        .map(|r| r.name)
+                        .unwrap_or_default()
+                } else {
+                    session
+                        .get_all_effective_roles()
+                        .await?
+                        .iter()
+                        .map(|r| r.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+
                 match grant_object {
                     GrantObject::TableById(_, _, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
@@ -591,7 +609,7 @@ impl AccessChecker for PrivilegeAccess {
                             .role_api(&tenant)
                             .get_ownerships()
                             .await?;
-                        let roles = self.ctx.get_all_effective_roles(false).await?;
+                        let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
                         check_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
                     }
@@ -609,7 +627,7 @@ impl AccessChecker for PrivilegeAccess {
                             .role_api(&tenant)
                             .get_ownerships()
                             .await?;
-                        let roles = self.ctx.get_all_effective_roles(false).await?;
+                        let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
                         check_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
@@ -760,7 +778,7 @@ impl AccessChecker for PrivilegeAccess {
                     .role_api(&tenant)
                     .get_ownerships()
                     .await?;
-                let roles = self.ctx.get_all_effective_roles(false).await?;
+                let roles = self.ctx.get_all_effective_roles().await?;
                 let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
                 check_ownership_access(&identity, &ctl_name, &plan.database, show_db_id, &ownerships, &roles_name)?;
             }
