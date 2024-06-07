@@ -10,11 +10,13 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-# Crates.io dependencies
+[dependencies]
 enum-as-inner = "0.5"
 enum_dispatch = "0.3.8"
 serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+
+[lints]
+workspace = true

@@ -12,17 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
-pub static INIT_QUERY_ENV: &str = "/actions/new_init_query_env";
+
+pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
 pub async fn init_query_env(env: QueryEnv) -> Result<()> {
-    if let Err(cause) = DataExchangeManager::instance().init_query_env(&env).await {
-        DataExchangeManager::instance().on_finished_query(&env.query_id);
-        return Err(cause);
-    }
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(env.query_id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
 
-    Ok(())
+    ThreadTracker::tracking_future(async move {
+        debug!("init query env with {:?}", env);
+        let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
+            true => None,
+            false => Some(env.create_query_ctx().await?),
+        };
+
+        if let Err(e) = DataExchangeManager::instance()
+            .init_query_env(&env, ctx)
+            .await
+        {
+            DataExchangeManager::instance().on_finished_query(&env.query_id);
+            return Err(e);
+        }
+
+        Ok(())
+    })
+    .await
 }

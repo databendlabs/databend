@@ -39,6 +39,7 @@ use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
+use crate::table_functions::cloud::TaskHistoryTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -222,6 +223,11 @@ impl TableFunctionFactory {
         creators.insert(
             "show_grants".to_string(),
             (next_id(), Arc::new(ShowGrants::create)),
+        );
+
+        creators.insert(
+            "task_history".to_string(),
+            (next_id(), Arc::new(TaskHistoryTable::create)),
         );
 
         TableFunctionFactory {

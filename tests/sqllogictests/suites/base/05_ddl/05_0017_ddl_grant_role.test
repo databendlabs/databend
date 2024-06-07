@@ -161,6 +161,7 @@ show grants on udf isnotempty;
 ----
 USAGE isnotempty NULL ROLE role2 (empty)
 USAGE isnotempty NULL ROLE role3 (empty)
+OWNERSHIP isnotempty NULL ROLE account_admin (empty)
 
 query TT
 show grants on udf isnotempty where name!='role2' limit 1;
@@ -171,17 +172,20 @@ query TT
 show grants on stage s1;
 ----
 Read s1 NULL ROLE role2 (empty)
+OWNERSHIP s1 NULL ROLE account_admin (empty)
 
 query TT
 select * EXCLUDE(object_id) from show_grants('database', 'db1', 'default');
 ----
 CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role2 (empty)
 CREATE,SELECT,INSERT,UPDATE,DELETE,DROP,ALTER,GRANT db1 ROLE role3 (empty)
+OWNERSHIP db1 ROLE account_admin (empty)
 
 query TT
 select * EXCLUDE(object_id) from show_grants('table', 't', 'default', 'default');
 ----
 SELECT t ROLE role3 (empty)
+OWNERSHIP t ROLE account_admin (empty)
 
 statement ok
 DROP ROLE role1

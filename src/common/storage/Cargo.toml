@@ -10,19 +10,18 @@ edition = { workspace = true }
 storage-hdfs = ["databend-common-meta-app/storage-hdfs"]
 
 [dependencies]
-databend-common-arrow = { path = "../arrow" }
-databend-common-auth = { path = "../auth" }
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
-databend-common-expression = { path = "../../query/expression" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-enterprise-storage-encryption = { path = "../../query/ee_features/storage_encryption" }
-
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
+databend-common-arrow = { workspace = true }
+databend-common-auth = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-enterprise-storage-encryption = { workspace = true }
 flagset = "0.4"
 futures = { workspace = true }
 log = { workspace = true }
@@ -37,3 +36,6 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+
+[lints]
+workspace = true

@@ -94,3 +94,4 @@ mod v088_sequence_meta;
 mod v089_geometry_output_format;
 mod v090_role_info;
 mod v091_role_user_create_time_info;
+mod v092_orc_format_params;

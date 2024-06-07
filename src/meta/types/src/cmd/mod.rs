@@ -145,7 +145,7 @@ impl UpsertKV {
     pub fn delete(key: impl ToString) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::GE(0),
+            seq: MatchSeq::GE(1),
             value: Operation::Delete,
             value_meta: None,
         }

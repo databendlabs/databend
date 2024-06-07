@@ -14,10 +14,13 @@ module.exports = async ({ context, core }) => {
   const statuses = JOBS_STATUS.split(",");
   if (statuses.includes("failure")) {
     releaseStatus = "failure";
-    icon = "🔥";
+    releaseIcon = "🔥";
+  } else if (statuses.includes("skipped")) {
+    releaseStatus = "skipped";
+    releaseIcon = "🚫";
   } else if (statuses.includes("cancelled")) {
     releaseStatus = "cancelled";
-    icon = "🚫";
+    releaseIcon = "🚫";
   }
 
   const reportData = {
@@ -25,7 +28,7 @@ module.exports = async ({ context, core }) => {
     content: {
       post: {
         en_us: {
-          title: `${releaseIcon} [Release] ${VERSION} (${releaseStatus})`,
+          title: `${releaseIcon}(${releaseStatus}) [Release] ${VERSION}`,
           content: [
             [
               {

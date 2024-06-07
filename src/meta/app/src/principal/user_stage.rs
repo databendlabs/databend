@@ -193,11 +193,12 @@ impl FromStr for StageFileFormatType {
             "PARQUET" => Ok(StageFileFormatType::Parquet),
             "XML" => Ok(StageFileFormatType::Xml),
             "JSON" => Ok(StageFileFormatType::Json),
-            "ORC" | "AVRO" => Err(format!(
-                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET)"
+            "ORC" => Ok(StageFileFormatType::Orc),
+            "AVRO" => Err(format!(
+                "File format type '{s}' not implemented yet', must be one of ( CSV | TSV | NDJSON | PARQUET | ORC)"
             )),
             _ => Err(format!(
-                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET)"
+                "Unknown file format type '{s}', must be one of ( CSV | TSV | NDJSON | PARQUET | ORC)"
             )),
         }
     }

@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::EscapedString;
+use crate::ast::quote::QuotedString;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -39,17 +39,13 @@ pub struct UserIdentity {
     pub hostname: String,
 }
 
-impl UserIdentity {
-    const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
-}
-
 impl Display for UserIdentity {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "'{}'@'{}'",
-            EscapedString(&self.username, &Self::ESCAPE_CHARS),
-            EscapedString(&self.hostname, &Self::ESCAPE_CHARS),
+            "{}@{}",
+            QuotedString(&self.username, '\''),
+            QuotedString(&self.hostname, '\''),
         )
     }
 }

@@ -10,14 +10,16 @@ edition = { workspace = true }
 
 [dependencies]
 arrow = { workspace = true }
-databend-common-arrow = { path = "../../../../common/arrow" }
-databend-common-base = { path = "../../../../common/base" }
-databend-common-cache = { path = "../../../../common/cache" }
-databend-common-catalog = { path = "../../../catalog" }
-databend-common-config = { path = "../../../config" }
-databend-common-exception = { path = "../../../../common/exception" }
-databend-storages-common-cache = { path = "../../common/cache" }
-databend-storages-common-index = { path = "../../common/index" }
-databend-storages-common-table-meta = { path = "../table_meta" }
-
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-cache = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-storages-common-cache = { workspace = true }
+databend-storages-common-index = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 log = { workspace = true }
+
+[lints]
+workspace = true

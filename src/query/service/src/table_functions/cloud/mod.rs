@@ -14,6 +14,8 @@
 
 mod task_dependents;
 mod task_dependents_enable;
+mod task_history;
 
 pub use task_dependents::TaskDependentsTable;
 pub use task_dependents_enable::TaskDependentsEnableTable;
+pub use task_history::TaskHistoryTable;
