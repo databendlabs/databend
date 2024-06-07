@@ -17,8 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
-// use databend_common_arrow::parquet::metadata::FileMetaData;
-// use databend_common_arrow::parquet::metadata::ThriftFileMetaData;
 use databend_common_base::base::tokio;
 use databend_common_cache::Cache;
 use databend_common_expression::types::Int32Type;
@@ -38,7 +36,6 @@ use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
-// use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -340,6 +337,7 @@ fn build_test_segment_info(
         location: block_location,
         bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
         bloom_filter_index_size: 0,
+        inverted_index_size: None,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
     };
