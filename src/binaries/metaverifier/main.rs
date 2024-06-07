@@ -124,7 +124,7 @@ async fn main() -> Result<()> {
         let prefix = config.prefix;
         let addrs: Vec<_> = config
             .grpc_api_address
-            .split(",")
+            .split(',')
             .map(|addr| addr.to_string())
             .collect();
 
@@ -246,7 +246,7 @@ async fn verifier(
     }
 
     for node_key in kv.iter() {
-        let res = client.get_kv(&node_key).await?;
+        let res = client.get_kv(node_key).await?;
         assert_eq!(res.unwrap().data, node_key.as_bytes().to_vec());
     }
 
