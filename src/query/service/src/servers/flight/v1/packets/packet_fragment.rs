@@ -19,19 +19,19 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sql::executor::PhysicalPlan;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct FragmentPlanPacket {
+pub struct QueryFragment {
     pub physical_plan: PhysicalPlan,
     pub fragment_id: usize,
     pub data_exchange: Option<DataExchange>,
 }
 
-impl FragmentPlanPacket {
+impl QueryFragment {
     pub fn create(
         fragment_id: usize,
         physical_plan: PhysicalPlan,
         data_exchange: Option<DataExchange>,
-    ) -> FragmentPlanPacket {
-        FragmentPlanPacket {
+    ) -> QueryFragment {
+        QueryFragment {
             physical_plan,
             fragment_id,
             data_exchange,
@@ -39,9 +39,9 @@ impl FragmentPlanPacket {
     }
 }
 
-impl Debug for FragmentPlanPacket {
+impl Debug for QueryFragment {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("FragmentPacket")
+        f.debug_struct("QueryFragment")
             .field("physical_plan", &self.physical_plan)
             .field("fragment_id", &self.fragment_id)
             .field("exchange", &self.data_exchange)

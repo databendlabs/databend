@@ -6,41 +6,11 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../../../common/arrow" }
-databend-common-base = { path = "../../../common/base" }
-databend-common-cache = { path = "../../../common/cache" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-functions = { path = "../../functions" }
-databend-common-hashtable = { path = "../../../common/hashtable" }
-databend-common-io = { path = "../../../common/io" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-meta-types = { path = "../../../meta/types" }
-databend-common-metrics = { path = "../../../common/metrics" }
-databend-common-pipeline-core = { path = "../../pipeline/core" }
-databend-common-pipeline-sinks = { path = "../../pipeline/sinks" }
-databend-common-pipeline-sources = { path = "../../pipeline/sources" }
-databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-databend-common-sharing = { path = "../../sharing" }
-databend-common-sql = { path = "../../sql" }
-databend-common-storage = { path = "../../../common/storage" }
-jsonb = { workspace = true }
-
-databend-storages-common-blocks = { path = "../common/blocks" }
-databend-storages-common-cache = { path = "../common/cache" }
-databend-storages-common-cache-manager = { path = "../common/cache_manager" }
-databend-storages-common-index = { path = "../common/index" }
-databend-storages-common-io = { path = "../common/io" }
-databend-storages-common-pruner = { path = "../common/pruner" }
-databend-storages-common-table-meta = { path = "../common/table_meta" }
-
 ahash = "0.8.3"
 arrow = { workspace = true }
 arrow-array = { workspace = true }
@@ -49,11 +19,38 @@ async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }
 chrono = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-cache = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-hashtable = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sinks = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
+databend-common-sharing = { workspace = true }
+databend-common-sql = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-storages-common-blocks = { workspace = true }
+databend-storages-common-cache = { workspace = true }
+databend-storages-common-cache-manager = { workspace = true }
+databend-storages-common-index = { workspace = true }
+databend-storages-common-io = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = "0.5"
 futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = { workspace = true }
+jsonb = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
@@ -73,3 +70,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 
 [dev-dependencies]
 criterion = { workspace = true }
+
+[lints]
+workspace = true

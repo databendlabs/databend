@@ -10,14 +10,13 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
+[dependencies]
 databend-common-arrow = { path = "../arrow" }
 databend-common-ast = { path = "../../query/ast" }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6bac65c38375f1216a565a6cc7deb89a2d" }
-#backtrace = "0.3.69"
+backtrace = { workspace = true }
 bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
@@ -34,3 +33,6 @@ tonic = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]
+
+[lints]
+workspace = true

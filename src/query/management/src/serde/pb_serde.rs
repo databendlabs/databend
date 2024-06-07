@@ -71,7 +71,7 @@ where
 /// it will just convert the data but do not write to backend storage.
 pub async fn check_and_upgrade_to_pb<T>(
     quota: &mut Quota,
-    key: String,
+    key: &String,
     seq_value: &SeqV,
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
 ) -> std::result::Result<SeqV<T>, MetaError>
@@ -103,7 +103,7 @@ where
 
     let res = kv_api
         .upsert_kv(UpsertKVReq::new(
-            &key,
+            key,
             MatchSeq::Exact(seq_value.seq),
             Operation::Update(value),
             None,
