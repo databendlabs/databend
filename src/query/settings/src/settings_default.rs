@@ -735,7 +735,7 @@ impl DefaultSettings {
                 }),
 
                 ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables auto fix missing bloom index",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
