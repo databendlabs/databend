@@ -2260,9 +2260,9 @@ dependencies = [
 
 [[package]]
 name = "crc32c"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89254598aa9b9fa608de44b3ae54c810f0f06d755e24c50177f1f8f31ff50ce2"
+checksum = "0227b9f93e535d49bc7ce914c066243424ce85ed90864cebd0874b184e9b6947"
 dependencies = [
  "rustc_version",
 ]
@@ -10375,8 +10375,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "328c4992328e8965e6a6ef102d38438b5fdc7d9b9107eda2377ba05379d9d544"
+source = "git+https://github.com/apache/opendal?rev=2034a26#2034a266b8560054b28ad1417c92d7f1f0772bfb"
 dependencies = [
  "anyhow",
  "async-backtrace",
