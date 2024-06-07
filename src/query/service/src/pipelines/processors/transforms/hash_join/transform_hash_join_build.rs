@@ -298,13 +298,12 @@ impl Processor for TransformHashJoinBuild {
                         .add_spilled_partitions(&spilled_partitions);
                     self.is_spilled_partitions_added = true;
                 }
-                self.build_state.barrier.wait().await;
                 if self.has_unrestored_data() {
                     self.set_need_next_round()
                 }
+                self.build_state.barrier.wait().await;
             }
             Step::Async(AsyncStep::Spill) => {
-                // dbg!("build spill, build key: {:?}, partition_id: {:?}, self.data_blocks = {:?}", &self.build_state.hash_join_state.hash_join_desc.build_keys, self.partition_id_to_restore, &self.data_blocks);
                 self.spiller.spill(&self.data_blocks, None).await?;
                 self.build_state
                     .hash_join_state
@@ -319,7 +318,6 @@ impl Processor for TransformHashJoinBuild {
             Step::Async(AsyncStep::Restore) => {
                 let partition_id_to_restore = self.partition_to_restore();
                 self.data_blocks = self.spiller.restore(partition_id_to_restore).await?;
-                // dbg!("build restore, build key: {:?}, partition_id: {:?}, self.data_blocks = {:?}", &self.build_state.hash_join_state.hash_join_desc.build_keys, self.partition_id_to_restore, &self.data_blocks);
             }
             Step::Async(AsyncStep::NextRound) => {
                 self.reset_build_state()?;

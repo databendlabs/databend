@@ -119,11 +119,6 @@ impl HashJoinSpiller {
                 .enumerate()
             {
                 if !data_block.is_empty() {
-                    // dbg!(
-                    //     "spill partition_id: {}, data_block: {:?}",
-                    //     partition_id,
-                    //     &data_block
-                    // );
                     if let Some(partition_need_to_spill) = partition_need_to_spill
                         && !partition_need_to_spill.contains(&(partition_id as u8))
                     {

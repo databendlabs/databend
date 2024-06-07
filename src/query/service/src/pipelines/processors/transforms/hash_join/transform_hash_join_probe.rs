@@ -477,9 +477,7 @@ impl TransformHashJoinProbe {
     // Probe with hashtable
     pub(crate) fn probe_hash_table(&mut self, block: DataBlock) -> Result<()> {
         self.probe_state.clear();
-        // dbg!("probe block: {:?}", &block);
         let data_blocks = self.join_probe_state.probe(block, &mut self.probe_state)?;
-        // dbg!("output: {:?}", &data_blocks);
         if !data_blocks.is_empty() {
             self.output_data_blocks.extend(data_blocks);
         }
