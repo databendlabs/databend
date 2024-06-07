@@ -28,6 +28,7 @@ use crate::servers::flight::v1::actions::init_query_env::init_query_env;
 use crate::servers::flight::v1::actions::init_query_env::INIT_QUERY_ENV;
 use crate::servers::flight::v1::actions::init_query_fragments::init_query_fragments;
 use crate::servers::flight::v1::actions::kill_query::kill_query;
+use crate::servers::flight::v1::actions::set_backtrace::set_backtrace;
 use crate::servers::flight::v1::actions::set_priority::set_priority;
 use crate::servers::flight::v1::actions::set_priority::SET_PRIORITY;
 use crate::servers::flight::v1::actions::start_prepared_query::start_prepared_query;
@@ -35,6 +36,7 @@ use crate::servers::flight::v1::actions::truncate_table::truncate_table;
 use crate::servers::flight::v1::actions::truncate_table::TRUNCATE_TABLE;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::KILL_QUERY;
+use crate::servers::flight::v1::actions::SET_BACKTRACE;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
 
 pub struct FlightActions {
@@ -124,4 +126,5 @@ pub fn flight_actions() -> FlightActions {
         .action(TRUNCATE_TABLE, truncate_table)
         .action(KILL_QUERY, kill_query)
         .action(SET_PRIORITY, set_priority)
+        .action(SET_BACKTRACE, set_backtrace)
 }
