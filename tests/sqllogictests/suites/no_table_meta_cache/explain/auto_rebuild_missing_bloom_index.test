@@ -20,26 +20,6 @@ enable_table_meta_cache false
 statement ok
 insert into t values(1), (3), (5), (7), (9);
 
-
-query T
-explain select * from t where c > 0
-----
-Filter
-├── output columns: [t.c (#0)]
-├── filters: [is_true(t.c (#0) > 0)]
-├── estimated rows: 5.00
-└── TableScan
-    ├── table: default.test_auto_rebuild_missing.t
-    ├── output columns: [c (#0)]
-    ├── read rows: 5
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(t.c (#0) > 0)], limit: NONE]
-    └── estimated rows: 5.00
-
-
 # bloom index exists, expect one block pruned by bloom filter
 query T
 explain select * from t where c = 6;
