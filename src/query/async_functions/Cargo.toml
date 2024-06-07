@@ -9,15 +9,15 @@ edition = { workspace = true }
 [lib]
 doctest = false
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-ast = { path = "../ast" }
-databend-common-catalog = { path = "../catalog" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-meta-app = { path = "../../meta/app" }
-
-# Crates.io dependencies
+[dependencies]
+databend-common-ast = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-meta-app = { workspace = true }
 educe = "0.4"
 
 [dev-dependencies]
+
+[lints]
+workspace = true

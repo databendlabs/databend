@@ -9,17 +9,18 @@ module.exports = async ({ context, core }) => {
     return;
   }
 
-  let icon = "";
-  switch (JOBS_STATUS) {
-    case "success":
-      icon = "🎉";
-      break;
-    case "failure":
-      icon = "🔥";
-      break;
-    case "cancelled":
-      icon = "🚫";
-      break;
+  let releaseIcon = "🎉";
+  let releaseStatus = "success";
+  const statuses = JOBS_STATUS.split(",");
+  if (statuses.includes("failure")) {
+    releaseStatus = "failure";
+    releaseIcon = "🔥";
+  } else if (statuses.includes("skipped")) {
+    releaseStatus = "skipped";
+    releaseIcon = "🚫";
+  } else if (statuses.includes("cancelled")) {
+    releaseStatus = "cancelled";
+    releaseIcon = "🚫";
   }
 
   const reportData = {
@@ -27,7 +28,7 @@ module.exports = async ({ context, core }) => {
     content: {
       post: {
         en_us: {
-          title: `${icon} [Release] ${VERSION} (${JOBS_STATUS})`,
+          title: `${releaseIcon}(${releaseStatus}) [Release] ${VERSION}`,
           content: [
             [
               {
@@ -57,7 +58,7 @@ module.exports = async ({ context, core }) => {
     },
     body: JSON.stringify(reportData),
   });
-  if (JOBS_STATUS !== "success") {
+  if (releaseStatus !== "success") {
     core.setFailed("Release failed");
     return;
   }

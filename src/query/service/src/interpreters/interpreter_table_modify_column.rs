@@ -44,7 +44,6 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::save_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -53,6 +52,7 @@ use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::save_share_table_info;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -126,14 +126,8 @@ impl ModifyTableColumnInterpreter {
 
         let res = catalog.set_table_column_mask_policy(req).await?;
 
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
-        }
+        save_share_table_info(&self.ctx, &res.share_table_info).await?;
+
         Ok(PipelineBuildResult::create())
     }
 
@@ -189,7 +183,7 @@ impl ModifyTableColumnInterpreter {
         for (field, comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
-            if let Some((i, _)) = schema.column_with_name(column) {
+            if let Some((i, old_field)) = schema.column_with_name(column) {
                 if data_type != &new_schema.fields[i].data_type {
                     // Check if this column is referenced by computed columns.
                     let mut data_schema: DataSchema = table_info.schema().into();
@@ -209,6 +203,20 @@ impl ModifyTableColumnInterpreter {
                             "Unsupported data type '{}' for bloom index",
                             data_type
                         )));
+                    }
+                    // If the column is inverted index column, the type can't be changed.
+                    if !table_info.meta.indexes.is_empty() {
+                        for (index_name, index) in &table_info.meta.indexes {
+                            if index.column_ids.contains(&old_field.column_id)
+                                && old_field.data_type.remove_nullable()
+                                    != field.data_type.remove_nullable()
+                            {
+                                return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
+                                    "column `{}` is referenced by inverted index, drop inverted index `{}` first",
+                                    column, index_name,
+                                )));
+                            }
+                        }
                     }
                     new_schema.fields[i].data_type = data_type.clone();
                 }
@@ -330,14 +338,7 @@ impl ModifyTableColumnInterpreter {
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
 
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
+            save_share_table_info(&self.ctx, &res.share_table_info).await?;
 
             return Ok(PipelineBuildResult::create());
         }
@@ -451,14 +452,7 @@ impl ModifyTableColumnInterpreter {
 
             let res = catalog.set_table_column_mask_policy(req).await?;
 
-            if let Some(share_table_info) = res.share_table_info {
-                save_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_data_operator()?.operator(),
-                    share_table_info,
-                )
-                .await?;
-            }
+            save_share_table_info(&self.ctx, &res.share_table_info).await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -517,14 +511,7 @@ impl ModifyTableColumnInterpreter {
 
         let res = catalog.update_table_meta(table_info, req).await?;
 
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
-        }
+        save_share_table_info(&self.ctx, &res.share_table_info).await?;
 
         Ok(PipelineBuildResult::create())
     }

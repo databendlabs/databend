@@ -13,26 +13,21 @@ test = true
 [features]
 io-uring = ["databend-common-meta-store/io-uring"]
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-ast = { path = "../ast" }
-databend-common-base = { path = "../../common/base" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-management = { path = "../management" }
-databend-common-meta-api = { path = "../../meta/api" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-kvapi = { path = "../../meta/kvapi" }
-databend-common-meta-store = { path = "../../meta/store" }
-databend-common-meta-types = { path = "../../meta/types" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+[dependencies]
 async-backtrace = { workspace = true }
 base64 = "0.21"
 chrono = { workspace = true }
 cidr = { version = "0.2.2" }
+databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-management = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
 enumflags2 = { workspace = true }
 jwt-simple = "0.11"
 log = { workspace = true }
@@ -44,6 +39,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-databend-common-expression = { path = "../expression" }
+databend-common-expression = { workspace = true }
 pretty_assertions = "1.3.0"
 wiremock = "0.5.14"
+
+[lints]
+workspace = true

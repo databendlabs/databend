@@ -23,6 +23,7 @@ mod truncate_table;
 pub use flight_actions::flight_actions;
 pub use flight_actions::FlightActions;
 pub use init_query_env::INIT_QUERY_ENV;
+pub use init_query_fragments::init_query_fragments;
 pub use init_query_fragments::INIT_QUERY_FRAGMENTS;
 pub use kill_query::KILL_QUERY;
 pub use set_priority::SET_PRIORITY;

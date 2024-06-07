@@ -13,14 +13,12 @@ doctest = false
 test = true
 
 [dependencies]
-# Workspace dependencies
-databend-common-exception = { path = "../exception" }
-databend-common-metrics = { path = "../metrics" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+databend-common-exception = { workspace = true }
+databend-common-metrics = { workspace = true }
 log = { workspace = true }
-openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+openai_api_rust = { workspace = true }
 
 [dev-dependencies]
+
+[lints]
+workspace = true

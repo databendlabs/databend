@@ -640,7 +640,7 @@ pub struct CompactSegmentTestFixture {
 impl CompactSegmentTestFixture {
     fn try_new(ctx: &Arc<QueryContext>, block_per_seg: u64) -> Result<Self> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-        let data_accessor = ctx.get_data_operator()?;
+        let data_accessor = ctx.get_application_level_data_operator()?;
         Ok(Self {
             ctx: ctx.clone(),
             threshold: block_per_seg,
@@ -681,6 +681,7 @@ impl CompactSegmentTestFixture {
             BlockThresholds::default(),
             cluster_key_id,
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();
@@ -704,9 +705,10 @@ impl CompactSegmentTestFixture {
         thresholds: BlockThresholds,
         cluster_key_id: Option<u32>,
         block_per_seg: usize,
+        unclustered: bool,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-        let data_accessor = ctx.get_data_operator()?.operator();
+        let data_accessor = ctx.get_application_level_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
         let mut tasks = vec![];
@@ -728,7 +730,7 @@ impl CompactSegmentTestFixture {
 
                     let col_stats = gen_columns_statistics(&block, None, &schema)?;
 
-                    let cluster_stats = if num_blocks % 5 == 0 {
+                    let cluster_stats = if unclustered && num_blocks % 4 == 0 {
                         None
                     } else {
                         cluster_key_id.map(|v| {
@@ -854,7 +856,7 @@ impl CompactCase {
     ) -> Result<()> {
         // setup & run
         let compact_segment_reader = MetaReaders::segment_info_reader(
-            ctx.get_data_operator()?.operator(),
+            ctx.get_application_level_data_operator()?.operator(),
             TestFixture::default_table_schema(),
         );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
@@ -964,7 +966,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-    let data_accessor = ctx.get_data_operator()?.operator();
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
 
     let settings = ctx.get_settings();
@@ -1010,6 +1012,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             BlockThresholds::default(),
             Some(cluster_key_id),
             block_per_seg as usize,
+            false,
         )
         .await?;
         let mut summary = Statistics::default();

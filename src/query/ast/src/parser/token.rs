@@ -813,6 +813,8 @@ pub enum TokenKind {
     OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
+    #[token("ORC", ignore(ascii_case))]
+    ORC,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
     #[token("OUTPUT_HEADER", ignore(ascii_case))]

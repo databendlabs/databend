@@ -35,7 +35,8 @@ impl VirtualColumnReader {
             .blocking()
             .reader(loc)
             .ok()?
-            .into_std_read(0..meta.content_length());
+            .into_std_read(0..meta.content_length())
+            .ok()?;
 
         let metadata = nread::reader::read_meta(&mut reader).ok()?;
         let schema = nread::reader::infer_schema(&mut reader).ok()?;

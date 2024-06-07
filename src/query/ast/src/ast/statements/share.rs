@@ -209,7 +209,13 @@ pub struct DropShareEndpointStmt {
 
 impl Display for DropShareEndpointStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DROP SHARE ENDPOINT {}", self.endpoint)?;
+        write!(f, "DROP SHARE ENDPOINT ")?;
+
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+
+        write!(f, "{}", self.endpoint)?;
 
         Ok(())
     }

@@ -23,12 +23,12 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
-use databend_common_storages_share::save_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::common::save_share_table_info;
 use crate::interpreters::interpreter_table_add_column::generate_new_snapshot;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -86,9 +86,10 @@ impl Interpreter for DropTableColumnInterpreter {
             )));
         }
 
-        let mut schema: DataSchema = table_info.schema().into();
-        let field = schema.field_with_name(self.plan.column.as_str())?;
+        let table_schema = table_info.schema();
+        let field = table_schema.field_with_name(self.plan.column.as_str())?;
         if field.computed_expr().is_none() {
+            let mut schema: DataSchema = table_info.schema().into();
             schema.drop_column(self.plan.column.as_str())?;
             // Check if this column is referenced by computed columns.
             check_referenced_computed_columns(
@@ -96,6 +97,17 @@ impl Interpreter for DropTableColumnInterpreter {
                 Arc::new(schema),
                 self.plan.column.as_str(),
             )?;
+        }
+        // If the column is inverted index column, the column can't be dropped.
+        if !table_info.meta.indexes.is_empty() {
+            for (index_name, index) in &table_info.meta.indexes {
+                if index.column_ids.contains(&field.column_id) {
+                    return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
+                        "column `{}` is referenced by inverted index, drop inverted index `{}` first",
+                        field.name, index_name,
+                    )));
+                }
+            }
         }
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -130,14 +142,8 @@ impl Interpreter for DropTableColumnInterpreter {
         };
 
         let res = catalog.update_table_meta(table_info, req).await?;
-        if let Some(share_table_info) = res.share_table_info {
-            save_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
-                share_table_info,
-            )
-            .await?;
-        }
+
+        save_share_table_info(&self.ctx, &res.share_table_info).await?;
 
         Ok(PipelineBuildResult::create())
     }

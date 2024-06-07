@@ -14,41 +14,7 @@ test = true
 default = []
 storage-hdfs = ["databend-common-config/storage-hdfs"]
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-ast = { path = "../ast" }
-databend-common-async-functions = { path = "../async_functions" }
-databend-common-base = { path = "../../common/base" }
-databend-common-catalog = { path = "../catalog" }
-databend-common-compress = { path = "../../common/compress" }
-databend-common-config = { path = "../config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-functions = { path = "../functions" }
-databend-common-license = { path = "../../common/license" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-types = { path = "../../meta/types" }
-databend-common-metrics = { path = "../../common/metrics" }
-
-databend-common-pipeline-core = { path = "../pipeline/core" }
-databend-common-pipeline-sources = { path = "../pipeline/sources" }
-databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
-
-databend-common-settings = { path = "../settings" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-storages-delta = { path = "../storages/delta" }
-databend-common-storages-iceberg = { path = "../storages/iceberg" }
-databend-common-storages-parquet = { path = "../storages/parquet" }
-databend-common-storages-result-cache = { path = "../storages/result_cache" }
-databend-common-storages-stage = { path = "../storages/stage" }
-databend-common-storages-view = { path = "../storages/view" }
-databend-common-users = { path = "../users" }
-databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
-databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+[dependencies]
 ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
@@ -60,6 +26,34 @@ cidr = { version = "0.2.2" }
 cron = "0.12.0"
 ctor = "0.1.26"
 dashmap = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-async-functions = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-compress = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-delta = { workspace = true }
+databend-common-storages-iceberg = { workspace = true }
+databend-common-storages-orc = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-common-storages-result-cache = { workspace = true }
+databend-common-storages-stage = { workspace = true }
+databend-common-storages-view = { workspace = true }
+databend-common-users = { workspace = true }
+databend-enterprise-data-mask-feature = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
@@ -81,3 +75,6 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
+
+[lints]
+workspace = true

@@ -6,30 +6,32 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-ast = { path = "../ast" }
-databend-common-config = { path = "../config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-types = { path = "../../meta/types" }
-databend-common-users = { path = "../users" }
-serde = { workspace = true }
-
 async-backtrace = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-users = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
+serde = { workspace = true }
 sys-info = "0.9"
 
 [dev-dependencies]
-databend-common-base = { path = "../../common/base" }
+databend-common-base = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

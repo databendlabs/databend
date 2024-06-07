@@ -20,17 +20,12 @@ memory-profiling = [
     "tikv-jemalloc-sys/unprefixed_malloc_on_supported_platforms",
 ]
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-exception = { path = "../exception" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+[dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
+databend-common-exception = { workspace = true }
 enquote = "1.1.0"
 futures = { workspace = true }
 libc = "0.2.133"
@@ -66,3 +61,6 @@ procfs = { version = "^0.16" }
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true

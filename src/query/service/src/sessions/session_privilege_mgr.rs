@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -21,6 +22,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
 
@@ -298,9 +300,30 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     #[async_backtrace::framed]
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         // TODO(liyz): is it check the visibility according onwerships?
+        let user_api = UserApiProvider::instance();
+        let ownerships = user_api
+            .role_api(&self.session_ctx.get_current_tenant())
+            .get_ownerships()
+            .await?;
+        let roles = self.get_all_effective_roles().await?;
+        let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
+
+        let ownership_objects = if roles_name.contains(&"account_admin".to_string()) {
+            vec![]
+        } else {
+            let mut ownership_objects = vec![];
+            for ownership in ownerships {
+                if roles_name.contains(&ownership.data.role) {
+                    ownership_objects.push(ownership.data.object);
+                }
+            }
+            ownership_objects
+        };
+
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,
-            &self.get_all_effective_roles().await?,
+            &roles,
+            &ownership_objects,
         ))
     }
 }

@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
+use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 
 pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 
 pub async fn start_prepared_query(id: String) -> Result<()> {
+    let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.query_id = Some(id.clone());
+    let _guard = ThreadTracker::tracking(tracking_payload);
+
+    debug!("start prepared query {}", id);
     if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&id) {
         DataExchangeManager::instance().on_finished_query(&id);
         return Err(cause);

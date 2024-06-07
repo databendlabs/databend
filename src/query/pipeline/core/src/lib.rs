@@ -19,6 +19,7 @@
 
 pub mod processors;
 
+mod finished_chain;
 mod input_error;
 mod lock_guard;
 mod pipe;
@@ -26,6 +27,10 @@ mod pipeline;
 mod pipeline_display;
 mod unsafe_cell_wrap;
 
+pub use finished_chain::always_callback;
+pub use finished_chain::Callback;
+pub use finished_chain::ExecutionInfo;
+pub use finished_chain::FinishedCallbackChain;
 pub use input_error::InputError;
 pub use lock_guard::LockGuard;
 pub use lock_guard::UnlockApi;

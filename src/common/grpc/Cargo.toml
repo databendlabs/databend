@@ -10,15 +10,10 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+[dependencies]
 anyerror = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 hickory-resolver = "0.24"
 hyper = "0.14.20"
 jwt-simple = "0.11.0"
@@ -31,3 +26,6 @@ tonic = { workspace = true }
 
 [features]
 mocks = []
+
+[lints]
+workspace = true

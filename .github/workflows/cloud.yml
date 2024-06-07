@@ -79,15 +79,17 @@ jobs:
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: x86_64-unknown-linux-gnu
-          path: ./target/x86_64-unknown-linux-gnu/release
-          artifacts: meta,query
+          path: ./distro/linux/amd64/
+          category: udf
+          artifacts: query
       - name: Download artifact for aarch64
         uses: ./.github/actions/artifact_download
         with:
           sha: ${{ needs.info.outputs.sha }}
           target: aarch64-unknown-linux-gnu
-          path: ./target/aarch64-unknown-linux-gnu/release
-          artifacts: meta,query
+          path: ./distro/linux/arm64/
+          category: udf
+          artifacts: query
       - uses: ./.github/actions/setup_docker
         id: login
         with:
@@ -96,11 +98,9 @@ jobs:
       - name: Prepare for docker
         id: prepare
         run: |
-          mkdir -p ./distro/linux/{amd64,arm64}
-          cp ./target/x86_64-unknown-linux-gnu/release/databend-query ./distro/linux/amd64/
-          cp ./target/aarch64-unknown-linux-gnu/release/databend-query ./distro/linux/arm64/
           short_sha=$(echo "${{ needs.info.outputs.sha }}" | cut -c1-7)
-          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}" >> $GITHUB_OUTPUT
+          ts=$(date +%s)
+          echo "tag=pr-${{ github.event.pull_request.number }}-${short_sha}-${ts}" >> $GITHUB_OUTPUT
       - name: push service image
         uses: docker/build-push-action@v5
         with:
@@ -108,7 +108,7 @@ jobs:
           tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/debian/query.Dockerfile
+          file: ./docker/service/query.Dockerfile
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1
         with:

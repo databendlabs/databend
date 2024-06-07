@@ -28,18 +28,17 @@ use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
-use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::LockTableOption;
+use databend_common_storages_fuse::operations::ReclusterTasks;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::error;
 use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::interpreters::OptimizeTableInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -148,16 +147,15 @@ impl Interpreter for ReclusterTableInterpreter {
             let mutator = mutator.unwrap();
             if mutator.tasks.is_empty() {
                 break;
-            };
+            }
+            let is_distributed = mutator.is_distributed();
             block_count += mutator.recluster_blocks_count;
             let physical_plan = build_recluster_physical_plan(
                 mutator.tasks,
                 table.get_table_info().clone(),
                 catalog.info(),
                 mutator.snapshot,
-                mutator.remained_blocks,
-                mutator.removed_segment_indexes,
-                mutator.removed_segment_summary,
+                is_distributed,
             )?;
 
             let mut build_res =
@@ -217,44 +215,56 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn build_recluster_physical_plan(
-    tasks: Vec<ReclusterTask>,
+    tasks: ReclusterTasks,
     table_info: TableInfo,
     catalog_info: CatalogInfo,
     snapshot: Arc<TableSnapshot>,
-    remained_blocks: Vec<Arc<BlockMeta>>,
-    removed_segment_indexes: Vec<usize>,
-    removed_segment_summary: Statistics,
+    is_distributed: bool,
 ) -> Result<PhysicalPlan> {
-    let is_distributed = tasks.len() > 1;
-    let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
-        tasks,
-        table_info: table_info.clone(),
-        catalog_info: catalog_info.clone(),
-        plan_id: u32::MAX,
-    }));
+    match tasks {
+        ReclusterTasks::Recluster {
+            tasks,
+            remained_blocks,
+            removed_segment_indexes,
+            removed_segment_summary,
+        } => {
+            let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
+                tasks,
+                table_info: table_info.clone(),
+                catalog_info: catalog_info.clone(),
+                plan_id: u32::MAX,
+            }));
 
-    if is_distributed {
-        root = PhysicalPlan::Exchange(Exchange {
-            plan_id: 0,
-            input: Box::new(root),
-            kind: FragmentKind::Merge,
-            keys: vec![],
-            allow_adjust_parallelism: true,
-            ignore_exchange: false,
-        });
+            if is_distributed {
+                root = PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(root),
+                    kind: FragmentKind::Merge,
+                    keys: vec![],
+                    allow_adjust_parallelism: true,
+                    ignore_exchange: false,
+                });
+            }
+            let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+                input: Box::new(root),
+                table_info,
+                catalog_info,
+                snapshot,
+                remained_blocks,
+                removed_segment_indexes,
+                removed_segment_summary,
+                plan_id: u32::MAX,
+            }));
+            plan.adjust_plan_id(&mut 0);
+            Ok(plan)
+        }
+        ReclusterTasks::Compact(parts) => OptimizeTableInterpreter::build_physical_plan(
+            parts,
+            table_info,
+            snapshot,
+            catalog_info,
+            is_distributed,
+        ),
     }
-    let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
-        input: Box::new(root),
-        table_info,
-        catalog_info,
-        snapshot,
-        remained_blocks,
-        removed_segment_indexes,
-        removed_segment_summary,
-        plan_id: u32::MAX,
-    }));
-    plan.adjust_plan_id(&mut 0);
-    Ok(plan)
 }
