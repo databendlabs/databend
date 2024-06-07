@@ -93,7 +93,7 @@ impl RowBasedFileWriter {
 #[async_trait]
 impl Processor for RowBasedFileWriter {
     fn name(&self) -> String {
-        "StageSink".to_string()
+        "RowBasedFileWriter".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
