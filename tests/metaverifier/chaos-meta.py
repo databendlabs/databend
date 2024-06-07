@@ -37,11 +37,10 @@ class IoDelayParams(ChaosParams):
     #self.generate('hah')
 
 class MetaChaos:
-  def __init__(self, mode, namespace,internal,nodes,total):
+  def __init__(self, mode, namespace,nodes,total):
     self.mode = mode
     self.namespace = namespace
     self.total = total
-    self.internal = int(internal)
     self.split_nodes(nodes)
 
   def split_nodes(self, nodes):
@@ -109,7 +108,7 @@ class MetaChaos:
 
     return content == "END"
 
-  def run(self):
+  def run(self, apply_second, recover_second):
     self.wait_verifier()
 
     mode = self.mode.split("/")
@@ -146,14 +145,14 @@ class MetaChaos:
       os.system(cmd)
 
       # wait some time
-      time.sleep(self.internal)
+      time.sleep(apply_second)
 
       # delete chaos
       cmd = "kubectl delete -f " + CHAOS_FILE
       os.system(cmd)
 
-      # wait some time until next loop
-      time.sleep(3)
+      # wait some time
+      time.sleep(recover_second)
 
       current = int(time.time())
       diff = current - start
@@ -166,31 +165,30 @@ class MetaChaos:
         sys.exit(-1)
       
 # mode = type/subtype/mode params
-# ex: mode = io/delay/leader/delay=300,percent=100
+# ex: mode = io/delay/delay=300,percent=100
 # nodes = node-pod-name:node-port[,node-pod-name:node-port]
-# internal: apple chaos for how long(in second)
 # namespace: databend meta k8s namespace
 # total: test total time
+# apply_second: apply chaos second
+# recover_second: recover from chaos second
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv,"h",["internal=","mode=","namespace=","nodes=","total="])
+    opts, args = getopt.getopt(argv,"h",["mode=","namespace=","nodes=","total=","apply_second=", "recover_second="])
   except getopt.GetoptError:
     print ('chaos-meta.py')
     sys.exit(-1)
 
-  internal = 10
   mode = ""
   namespace = ""
   nodes = ""
   total = 600
+  apply_second = 5
+  recover_second = 10
   for opt, arg in opts:
     arg = arg.strip()
     if opt == '-h':
       print ('chaos-meta.py --prefix --client')
       sys.exit()
-    elif opt in ("--internal"):
-      if len(arg) > 0:
-        internal = arg
     elif opt in ("--mode"):
       if len(arg) > 0:
         mode = arg
@@ -203,13 +201,19 @@ def main(argv):
     elif opt in ("--total"):
       if len(arg) > 0:
         total = int(arg)
+    elif opt in ("--apply_second"):
+      if len(arg) > 0:
+        apply_second = int(arg)
+    elif opt in ("--recover_second"):
+      if len(arg) > 0:
+        recover_second = int(arg)
 
   if len(namespace) == "" or mode == "" or nodes == "":
     print("namespace or mode or nodes is empty")
     return
 
-  chaos = MetaChaos(mode, namespace,internal,nodes,total)
-  chaos.run()
+  chaos = MetaChaos(mode, namespace,nodes,total)
+  chaos.run(apply_second, recover_second)
 
 if __name__ == "__main__":
   main(sys.argv[1:])
