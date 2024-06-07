@@ -198,6 +198,8 @@ impl FuseTable {
             v
         };
 
+        // during re-cluster, we do not rebuild missing bloom index
+        let bloom_index_builder = None;
         // Only use push_down here.
         let pruning_ctx = PruningContext::try_create(
             ctx,
@@ -208,6 +210,7 @@ impl FuseTable {
             vec![],
             BloomIndexColumns::None,
             max_concurrency,
+            bloom_index_builder,
         )?;
 
         let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;
