@@ -18,12 +18,10 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use futures::Future;
 use opendal::raw::oio;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
-use opendal::raw::MaybeSend;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;
 use opendal::raw::OpList;
@@ -179,33 +177,32 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
 }
 
 pub struct RuntimeIO<R: 'static> {
-    inner: Arc<R>,
+    inner: Option<R>,
     runtime: Arc<Runtime>,
 }
 
 impl<R> RuntimeIO<R> {
     fn new(inner: R, runtime: Arc<Runtime>) -> Self {
         Self {
-            inner: Arc::new(inner),
+            inner: Some(inner),
             runtime,
         }
     }
 }
 
 impl<R: oio::Read> oio::Read for RuntimeIO<R> {
-    fn read_at(
-        &self,
-        offset: u64,
-        limit: usize,
-    ) -> impl Future<Output = Result<Buffer>> + MaybeSend {
-        let r = self.inner.clone();
-
+    async fn read(&mut self) -> Result<Buffer> {
+        let mut r = self.inner.take().expect("reader must be valid");
         let runtime = self.runtime.clone();
-        async move {
-            runtime
-                .spawn(async move { r.read_at(offset, limit).await })
-                .await
-                .expect("join must success")
-        }
+
+        let (r, res) = runtime
+            .spawn(async move {
+                let res = r.read().await;
+                (r, res)
+            })
+            .await
+            .expect("join must success");
+        self.inner = Some(r);
+        res
     }
 }

@@ -253,7 +253,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             // TODO: use 4 concurrent for test, let's extract as a new setting.
             .concurrent(4)
             .await?
-            .into_futures_async_read(offset..offset + size as u64);
+            .into_futures_async_read(offset..offset + size as u64)
+            .await?;
         let mut total_read = 0;
 
         loop {
