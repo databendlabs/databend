@@ -286,7 +286,13 @@ impl TransformHashJoinProbe {
             match self.hash_table_type {
                 HashTableType::FirstRound => self.probe(),
                 HashTableType::Restored => self.next_step(Step::Async(AsyncStep::Restore)),
-                HashTableType::Empty => self.next_step(Step::Finish),
+                HashTableType::Empty => {
+                    if self.can_fast_return() {
+                        self.next_step(Step::Finish)
+                    } else {
+                        self.probe()
+                    }
+                }
                 HashTableType::UnFinished => {
                     unreachable!("Hash Table is finished")
                 }
@@ -336,7 +342,7 @@ impl Processor for TransformHashJoinProbe {
         match self.step {
             Step::Sync(SyncStep::Probe) => {
                 match self.hash_table_type {
-                    HashTableType::FirstRound => {
+                    HashTableType::FirstRound | HashTableType::Empty => {
                         if let Some(data_block) =
                             self.unspilled_data_blocks_need_to_probe.pop_front()
                         {
@@ -619,5 +625,24 @@ impl TransformHashJoinProbe {
         self.is_build_finished = false;
         self.is_final_scan_finished = false;
         self.reset_next_restore_file();
+    }
+
+    // Check if directly go to fast return
+    fn can_fast_return(&self) -> bool {
+        match self
+            .join_probe_state
+            .hash_join_state
+            .hash_join_desc
+            .join_type
+        {
+            JoinType::Inner
+            | JoinType::Cross
+            | JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::RightAnti
+            | JoinType::RightSemi
+            | JoinType::LeftSemi => true,
+            _ => false,
+        }
     }
 }
