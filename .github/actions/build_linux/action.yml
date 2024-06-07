@@ -67,7 +67,7 @@ runs:
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,query,sqllogictests,metaverifier"
+        artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
@@ -90,7 +90,7 @@ runs:
       if: env.BUILD_PROFILE == 'release' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,query,sqllogictests,metaverifier"
+        artifacts="meta,metactl,query,sqllogictests"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
