@@ -295,7 +295,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: return_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(|_, args_domain| {
+                    FunctionDomain::Domain(args_domain[0].clone())
+                }),
                 eval: Box::new(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
                         ValueRef::Column(col) => Some(col.len()),
@@ -319,16 +321,16 @@ pub fn register(registry: &mut FunctionRegistry) {
                             _ => unreachable!(),
                         };
 
-                        let mut filtered_kv_builder = ColumnBuilder::with_capacity(
-                            &inner_builder_type,
-                            input_length.unwrap_or(1),
-                        );
-
                         match &input_map_sref {
                             ScalarRef::Null | ScalarRef::EmptyMap => {
-                                filtered_kv_builder.push_default();
+                                output_map_builder.push_default();
                             }
                             ScalarRef::Map(_) => {
+                                let mut filtered_kv_builder = ColumnBuilder::with_capacity(
+                                    &inner_builder_type,
+                                    input_length.unwrap_or(1),
+                                );
+
                                 let input_map: KvColumn<AnyType, AnyType> =
                                     MapType::try_downcast_scalar(&input_map_sref).unwrap();
 
@@ -340,14 +342,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         ]));
                                     }
                                 });
+                                output_map_builder
+                                    .push(ScalarRef::Map(filtered_kv_builder.build()));
                             }
                             _ => unreachable!(),
-                        }
-
-                        if output_map_builder.data_type() == DataType::EmptyMap {
-                            output_map_builder.push_default();
-                        } else {
-                            output_map_builder.push(ScalarRef::Map(filtered_kv_builder.build()));
                         }
                     }
 
