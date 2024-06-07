@@ -86,9 +86,10 @@ impl Interpreter for DropTableColumnInterpreter {
             )));
         }
 
-        let mut schema: DataSchema = table_info.schema().into();
-        let field = schema.field_with_name(self.plan.column.as_str())?;
+        let table_schema = table_info.schema();
+        let field = table_schema.field_with_name(self.plan.column.as_str())?;
         if field.computed_expr().is_none() {
+            let mut schema: DataSchema = table_info.schema().into();
             schema.drop_column(self.plan.column.as_str())?;
             // Check if this column is referenced by computed columns.
             check_referenced_computed_columns(
@@ -96,6 +97,17 @@ impl Interpreter for DropTableColumnInterpreter {
                 Arc::new(schema),
                 self.plan.column.as_str(),
             )?;
+        }
+        // If the column is inverted index column, the column can't be dropped.
+        if !table_info.meta.indexes.is_empty() {
+            for (index_name, index) in &table_info.meta.indexes {
+                if index.column_ids.contains(&field.column_id) {
+                    return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
+                        "column `{}` is referenced by inverted index, drop inverted index `{}` first",
+                        field.name, index_name,
+                    )));
+                }
+            }
         }
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;

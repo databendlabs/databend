@@ -26,3 +26,6 @@ tonic-build = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "num-traits"]
+
+[lints]
+workspace = true

@@ -6,34 +6,31 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../../../../common/arrow" }
-databend-common-base = { path = "../../../../common/base" }
-databend-common-catalog = { path = "../../../catalog" }
-databend-common-exception = { path = "../../../../common/exception" }
-databend-common-expression = { path = "../../../expression" }
-databend-common-functions = { path = "../../../functions" }
-databend-common-meta-app = { path = "../../../../meta/app" }
-databend-common-meta-types = { path = "../../../../meta/types" }
-databend-common-pipeline-core = { path = "../../../pipeline/core" }
-databend-common-pipeline-sources = { path = "../../../pipeline/sources" }
-databend-common-sql = { path = "../../../sql" }
-databend-common-storage = { path = "../../../../common/storage" }
-
-databend-storages-common-cache = { path = "../../common/cache" }
-databend-storages-common-cache-manager = { path = "../../common/cache_manager" }
-databend-storages-common-index = { path = "../../common/index" }
-databend-storages-common-table-meta = { path = "../../common/table_meta" }
-
 async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { workspace = true }
 chrono = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-sql = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-storages-common-cache = { workspace = true }
+databend-storages-common-cache-manager = { workspace = true }
+databend-storages-common-index = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 faststr = "0.2"
 futures = { workspace = true }
 hive_metastore = "0.0.2"
@@ -44,3 +41,6 @@ ordered-float = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 volo-thrift = "0.9"
+
+[lints]
+workspace = true
