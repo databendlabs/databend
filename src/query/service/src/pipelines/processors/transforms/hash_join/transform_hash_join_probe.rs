@@ -629,20 +629,18 @@ impl TransformHashJoinProbe {
 
     // Check if directly go to fast return
     fn can_fast_return(&self) -> bool {
-        match self
-            .join_probe_state
-            .hash_join_state
-            .hash_join_desc
-            .join_type
-        {
+        matches!(
+            self.join_probe_state
+                .hash_join_state
+                .hash_join_desc
+                .join_type,
             JoinType::Inner
-            | JoinType::Cross
-            | JoinType::Right
-            | JoinType::RightSingle
-            | JoinType::RightAnti
-            | JoinType::RightSemi
-            | JoinType::LeftSemi => true,
-            _ => false,
-        }
+                | JoinType::Cross
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightAnti
+                | JoinType::RightSemi
+                | JoinType::LeftSemi
+        )
     }
 }
