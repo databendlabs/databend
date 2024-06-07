@@ -20,6 +20,7 @@ mod packet_executor;
 mod packet_fragment;
 mod packet_kill_query;
 mod packet_publisher;
+mod packet_set_backtrace;
 mod packet_set_priority;
 mod packet_truncate_table;
 
@@ -35,5 +36,6 @@ pub use packet_publisher::DataflowDiagram;
 pub use packet_publisher::DataflowDiagramBuilder;
 pub use packet_publisher::Edge;
 pub use packet_publisher::QueryEnv;
+pub use packet_set_backtrace::SetBacktracePacket;
 pub use packet_set_priority::SetPriorityPacket;
 pub use packet_truncate_table::TruncateTablePacket;
