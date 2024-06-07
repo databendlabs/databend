@@ -189,7 +189,7 @@ version = "1.0.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ad32ce52e4161730f7098c077cd2ed6229b5804ccf99e5366be1ab72a98b4e1"
 dependencies = [
- "backtrace 0.3.69 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backtrace",
 ]
 
 [[package]]
@@ -1001,22 +1001,7 @@ dependencies = [
 [[package]]
 name = "backtrace"
 version = "0.3.69"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2089b7e3f35b9dd2d0ed921ead4f6d318c27680d4a5bd167b3ee120edb105837"
-dependencies = [
- "addr2line",
- "cc",
- "cfg-if",
- "libc",
- "miniz_oxide",
- "object 0.32.2",
- "rustc-demangle",
-]
-
-[[package]]
-name = "backtrace"
-version = "0.3.69"
-source = "git+https://github.com/rust-lang/backtrace-rs.git?rev=6145fe6bac65c38375f1216a565a6cc7deb89a2d#6145fe6bac65c38375f1216a565a6cc7deb89a2d"
+source = "git+https://github.com/rust-lang/backtrace-rs.git?rev=6145fe6b#6145fe6bac65c38375f1216a565a6cc7deb89a2d"
 dependencies = [
  "addr2line",
  "cc",
@@ -1961,7 +1946,7 @@ version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55146f5e46f237f7423d74111267d4597b59b0dad0ffaf7303bce9945d843ad5"
 dependencies = [
- "backtrace 0.3.69 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backtrace",
  "color-spantrace",
  "eyre",
  "indenter",
@@ -2952,7 +2937,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow-schema",
- "backtrace 0.3.69 (git+https://github.com/rust-lang/backtrace-rs.git?rev=6145fe6bac65c38375f1216a565a6cc7deb89a2d)",
+ "backtrace",
  "bincode 2.0.0-rc.3",
  "databend-common-arrow",
  "databend-common-ast",
@@ -3695,6 +3680,7 @@ dependencies = [
  "num_cpus",
  "once_cell",
  "serde",
+ "serde_json",
  "sys-info",
  "tokio",
 ]
@@ -3835,7 +3821,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
- "deltalake-core",
+ "deltalake",
  "flagset",
  "futures",
  "maplit",
@@ -5328,6 +5314,14 @@ name = "deflate64"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9576c1de19747eb6f5efb6a806c3e836512bbdb17bfedc984ccb0bcc953c8390"
+
+[[package]]
+name = "deltalake"
+version = "0.17.3"
+source = "git+https://github.com/delta-io/delta-rs?rev=81593e9#81593e919497221a1a08bf8db9d20e8e4a39a8a6"
+dependencies = [
+ "deltalake-core",
+]
 
 [[package]]
 name = "deltalake-core"
@@ -11249,7 +11243,7 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "196ded5d4be535690899a4631cc9f18cdc41b7ebf24a79400f46f48e49a11059"
 dependencies = [
- "backtrace 0.3.69 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backtrace",
  "cfg-if",
  "findshlibs",
  "inferno",
@@ -14299,7 +14293,7 @@ version = "1.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61285f6515fa018fb2d1e46eb21223fff441ee8db5d0f1435e8ab4f5cdb80931"
 dependencies = [
- "backtrace 0.3.69 (registry+https://github.com/rust-lang/crates.io-index)",
+ "backtrace",
  "bytes",
  "libc",
  "mio",

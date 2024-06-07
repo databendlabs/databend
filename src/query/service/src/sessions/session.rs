@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -147,8 +148,15 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
-        let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
+        self.create_query_context_with_cluster(cluster)
+    }
+
+    pub fn create_query_context_with_cluster(
+        self: &Arc<Self>,
+        cluster: Arc<Cluster>,
+    ) -> Result<Arc<QueryContext>> {
+        let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster)?;
 
         self.session_ctx

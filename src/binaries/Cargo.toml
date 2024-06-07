@@ -26,35 +26,32 @@ io-uring = [
 ]
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../common/base" }
-databend-common-config = { path = "../query/config" }
-databend-common-exception = { path = "../common/exception" }
-databend-common-grpc = { path = "../common/grpc" }
-databend-common-license = { path = "../common/license" }
-databend-common-meta-api = { path = "../meta/api" }
-databend-common-meta-app = { path = "../meta/app" }
-databend-common-meta-client = { path = "../meta/client" }
-databend-common-meta-kvapi = { path = "../meta/kvapi" }
-databend-common-meta-raft-store = { path = "../meta/raft-store" }
-databend-common-meta-sled-store = { path = "../meta/sled-store" }
-databend-common-meta-store = { path = "../meta/store" }
-databend-common-meta-types = { path = "../meta/types" }
-databend-common-metrics = { path = "../common/metrics" }
-databend-common-storage = { path = "../common/storage" }
-databend-common-tracing = { path = "../common/tracing" }
-databend-enterprise-query = { path = "../query/ee" }
-databend-meta = { path = "../meta/service" }
-databend-query = { path = "../query/service" }
-# databend-enterprise-meta = { path = "../meta/ee" }
-databend-enterprise-background-service = { path = "../query/ee_features/background_service" }
-databend-sharing-endpoint = { path = "../query/sharing_endpoint" }
-databend-storages-common-table-meta = { path = "../query/storages/common/table_meta" }
-# Crates.io dependencies
 anyerror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-client = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-tracing = { workspace = true }
+databend-enterprise-background-service = { workspace = true }
+databend-enterprise-query = { workspace = true }
+databend-meta = { workspace = true }
+databend-query = { workspace = true }
+databend-sharing-endpoint = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 futures = { workspace = true }
 limits-rs = "0.2.0"
 log = { workspace = true }
@@ -66,7 +63,6 @@ serde_json = { workspace = true }
 serfig = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-
 url = "2.3.1"
 
 [[bin]]
@@ -116,3 +112,6 @@ name = "table-meta-inspector"
 path = "tool/table_meta_inspector.rs"
 doctest = false
 test = false
+
+[lints]
+workspace = true

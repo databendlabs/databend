@@ -32,5 +32,5 @@ allowed_blank_lines = 1
 crlf = false
 
 [[rule]]
-keys = ["dependencies", "dev-dependencies", "build-dependencies"]
+keys = ["dependencies", "dev-dependencies", "build-dependencies", "workspace.dependencies", "patch.crates-io"]
 formatting = { reorder_keys = true }

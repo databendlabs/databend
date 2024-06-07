@@ -18,10 +18,14 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use databend_common_settings::Settings;
 use log::debug;
 use petgraph::dot::Dot;
 use petgraph::graph::NodeIndex;
@@ -29,8 +33,11 @@ use petgraph::Graph;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
-use crate::servers::flight::v1::packets::packet::create_client;
+use crate::sessions::QueryContext;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {
@@ -124,29 +131,47 @@ impl DataflowDiagramBuilder {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryEnv {
     pub query_id: String,
+    pub cluster: Arc<Cluster>,
+    pub settings: Arc<Settings>,
+    pub query_kind: QueryKind,
     pub dataflow_diagram: Arc<DataflowDiagram>,
+    pub request_server_id: String,
     pub create_rpc_clint_with_current_rt: bool,
 }
 
 impl QueryEnv {
-    pub async fn init(&self, timeout: u64) -> Result<()> {
+    pub async fn init(&self, ctx: &Arc<QueryContext>, timeout: u64) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
-        let mut futures = Vec::with_capacity(self.dataflow_diagram.node_count());
-        for x in self.dataflow_diagram.node_weights() {
-            futures.push({
-                let x = x.clone();
-                let query_env = self.clone();
-                let config = GlobalConfig::instance();
-                async move {
-                    let mut conn = create_client(&config, &x.flight_address).await?;
-                    conn.do_action::<_, ()>(INIT_QUERY_ENV, query_env, timeout)
-                        .await
-                }
-            });
+        let cluster = ctx.get_cluster();
+        let mut message = HashMap::with_capacity(self.dataflow_diagram.node_count());
+
+        for node in self.dataflow_diagram.node_weights() {
+            message.insert(node.id.clone(), self.clone());
         }
 
-        let _ = futures::future::try_join_all(futures).await?;
+        let _ = cluster
+            .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
+            .await?;
+
         Ok(())
+    }
+
+    pub async fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
+        let session_manager = SessionManager::instance();
+
+        let session = session_manager.register_session(
+            session_manager.create_with_settings(SessionType::FlightRPC, self.settings.clone())?,
+        )?;
+
+        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            nodes: self.cluster.nodes.clone(),
+            local_id: GlobalConfig::instance().query.node_id.clone(),
+        }))?;
+
+        query_ctx.set_id(self.query_id.clone());
+        query_ctx.attach_query_str(self.query_kind, "".to_string());
+
+        Ok(query_ctx)
     }
 }

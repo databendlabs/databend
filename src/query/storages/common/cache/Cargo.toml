@@ -6,23 +6,21 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-bytes = { workspace = true }
-databend-common-base = { path = "../../../../common/base" }
-databend-common-cache = { path = "../../../../common/cache" }
-databend-common-config = { path = "../../../config" }
-databend-common-exception = { path = "../../../../common/exception" }
-databend-common-metrics = { path = "../../../../common/metrics" }
-
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+bytes = { workspace = true }
 crc32fast = "1.3.2"
 crossbeam-channel = "0.5.6"
+databend-common-base = { workspace = true }
+databend-common-cache = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-metrics = { workspace = true }
 hex = "0.4.3"
 log = { workspace = true }
 parking_lot = { workspace = true }
@@ -31,3 +29,6 @@ siphasher = "0.3.10"
 
 [dev-dependencies]
 tempfile = "3.4.0"
+
+[lints]
+workspace = true
