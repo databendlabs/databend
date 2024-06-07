@@ -399,7 +399,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
-        cte_name: &String,
+        cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
@@ -434,7 +434,7 @@ impl Binder {
                     expand_data_type,
                     Visibility::Visible,
                 )
-                .table_name(Some(cte_name.clone()))
+                .table_name(Some(cte_name.to_string()))
                 .build(),
             )
         }
@@ -452,7 +452,7 @@ impl Binder {
         Ok((
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
-                cte_name: cte_name.clone(),
+                cte_name: cte_name.to_string(),
             }))),
             new_bind_ctx,
         ))
@@ -463,7 +463,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
-        cte_name: &String,
+        cte_name: &str,
     ) -> Result<(SExpr, BindContext)> {
         // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
@@ -481,7 +481,7 @@ impl Binder {
                         &set_expr.right,
                         &set_expr.op,
                         &set_expr.all,
-                        Some(cte_name.clone()),
+                        Some(cte_name.to_string()),
                     )
                     .await?;
                 self.set_bind_recursive_cte(false);

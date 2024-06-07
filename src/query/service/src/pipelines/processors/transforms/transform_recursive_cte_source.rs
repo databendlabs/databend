@@ -17,12 +17,8 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -34,6 +30,7 @@ use futures_util::TryStreamExt;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
+use crate::pipelines::processors::transforms::transform_merge_block::project_block;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
@@ -91,13 +88,7 @@ impl TransformRecursiveCteSource {
     }
 
     async fn build_union(&mut self) -> Result<()> {
-        if self
-            .ctx
-            .get_settings()
-            .get_max_cte_recursive_depth()
-            .unwrap()
-            < self.recursive_step
-        {
+        if self.ctx.get_settings().get_max_cte_recursive_depth()? < self.recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
         let plan = if self.recursive_step == 0 {
@@ -113,84 +104,6 @@ impl TransformRecursiveCteSource {
         self.ctx.set_executor(pulling_executor.get_inner())?;
         self.executor = Some(pulling_executor);
         Ok(())
-    }
-
-    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        let left_schema = self.union_plan.left.output_schema()?;
-        let right_schema = self.union_plan.right.output_schema()?;
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
-        let columns = self
-            .left_outputs
-            .iter()
-            .zip(self.right_outputs.iter())
-            .map(|(left, right)| {
-                if is_left {
-                    if let Some(expr) = &left.1 {
-                        let column =
-                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                        Ok(column)
-                    } else {
-                        Ok(block
-                            .get_by_offset(left_schema.index_of(&left.0.to_string())?)
-                            .clone())
-                    }
-                } else {
-                    if let Some(expr) = &right.1 {
-                        let column =
-                            BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                        Ok(column)
-                    } else {
-                        if left.1.is_some() {
-                            Ok(block
-                                .get_by_offset(right_schema.index_of(&right.0.to_string())?)
-                                .clone())
-                        } else {
-                            self.check_type(&left.0.to_string(), &right.0.to_string(), &block)
-                        }
-                    }
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(DataBlock::new(columns, num_rows))
-    }
-
-    fn check_type(
-        &self,
-        left_name: &str,
-        right_name: &str,
-        block: &DataBlock,
-    ) -> Result<BlockEntry> {
-        let left_schema = self.union_plan.left.output_schema()?;
-        let right_schema = self.union_plan.right.output_schema()?;
-        let left_field = left_schema.field_with_name(left_name)?;
-        let left_data_type = left_field.data_type();
-
-        let right_field = right_schema.field_with_name(right_name)?;
-        let right_data_type = right_field.data_type();
-
-        let index = right_schema.index_of(right_name)?;
-
-        if left_data_type == right_data_type {
-            return Ok(block.get_by_offset(index).clone());
-        }
-
-        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
-            let origin_column = block.get_by_offset(index).clone();
-            let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-            let value = origin_column.value.as_ref();
-            for idx in 0..block.num_rows() {
-                let scalar = value.index(idx).unwrap();
-                builder.push(scalar);
-            }
-            let col = builder.build();
-            Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
-        } else {
-            Err(ErrorCode::IllegalDataType(
-                "The data type on both sides of the union does not match",
-            ))
-        }
     }
 }
 
@@ -217,7 +130,16 @@ impl AsyncSource for TransformRecursiveCteSource {
 
         let row_size = data.num_rows();
         if row_size > 0 {
-            data = self.project_block(data, self.recursive_step == 1)?;
+            let func_ctx = self.ctx.get_function_context()?;
+            data = project_block(
+                &func_ctx,
+                data,
+                &self.union_plan.left.output_schema()?,
+                &self.union_plan.right.output_schema()?,
+                &self.left_outputs,
+                &self.right_outputs,
+                self.recursive_step == 1,
+            )?;
             // Prepare the data of next round recursive.
             self.ctx
                 .update_recursive_cte_scan(&self.cte_name, vec![data.clone()])?;
