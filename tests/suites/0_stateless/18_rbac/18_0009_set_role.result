@@ -19,3 +19,9 @@ Error: APIError: ResponseError with 1063: Permission denied: privilege [Insert] 
 testrole1
 -- test 10: set default role as nonexisting_role, will fail
 Error: APIError: ResponseError with 2206: Invalid role nonexistedrole for current session, available: public,testrole1,testrole2,testrole3
+-- test 11: set secondary All | None, create object only check current role
+Error: APIError: ResponseError with 1063: Permission denied: privilege [CreateDatabase] is required on *.* for user 'test_c'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: ResponseError with 1063: Permission denied: privilege [CreateDatabase] is required on *.* for user 'test_c'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+OWNERSHIP db_c  ROLE role_c GRANT OWNERSHIP ON 'default'.'db_c'.* TO ROLE `role_c`
+OWNERSHIP db_d  ROLE role_c GRANT OWNERSHIP ON 'default'.'db_d'.* TO ROLE `role_c`
+OWNERSHIP db_e  ROLE public GRANT OWNERSHIP ON 'default'.'db_e'.* TO ROLE `public`

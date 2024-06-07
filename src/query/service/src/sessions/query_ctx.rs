@@ -629,17 +629,20 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
-        self.get_current_session().get_all_effective_roles().await
+    async fn get_all_effective_roles(&self, create_object: bool) -> Result<Vec<RoleInfo>> {
+        self.get_current_session()
+            .get_all_effective_roles(create_object)
+            .await
     }
 
     async fn validate_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        create_object: bool,
     ) -> Result<()> {
         self.get_current_session()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, create_object)
             .await
     }
 

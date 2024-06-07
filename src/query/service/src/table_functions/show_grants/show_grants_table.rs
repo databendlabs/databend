@@ -269,7 +269,7 @@ async fn show_account_grants(
     let tenant = ctx.get_tenant();
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
-        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant)
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
         .await
         .is_ok();
 
@@ -300,7 +300,7 @@ async fn show_account_grants(
             )
         }
         "role" => {
-            let current_user_roles = ctx.get_all_effective_roles().await?;
+            let current_user_roles = ctx.get_all_effective_roles(false).await?;
             let effective_roles_names: Vec<String> = current_user_roles
                 .iter()
                 .map(|role| role.name.to_string())
