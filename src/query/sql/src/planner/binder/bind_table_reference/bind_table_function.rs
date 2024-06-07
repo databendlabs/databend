@@ -105,7 +105,7 @@ impl Binder {
                 qualify: None,
             };
             let (srf_expr, mut bind_context) = self
-                .bind_select(bind_context, &select_stmt, &[], None)
+                .bind_select(bind_context, &select_stmt, &[], None, false)
                 .await?;
 
             return self
