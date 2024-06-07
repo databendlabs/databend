@@ -692,15 +692,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_recursive_cte_scan(&self, _name: &String, _data: Vec<DataBlock>) -> Result<()> {
+    fn set_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
         todo!()
     }
 
-    fn get_recursive_cte_scan(&self, _name: &String) -> Result<Option<Vec<DataBlock>>> {
+    fn get_recursive_cte_scan(&self, _name: &str) -> Result<Vec<DataBlock>> {
         todo!()
     }
 
-    fn update_recursive_cte_scan(&self, _name: &String, _data: Vec<DataBlock>) -> Result<()> {
+    fn update_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
         todo!()
     }
 

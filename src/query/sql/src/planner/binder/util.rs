@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
 use crate::optimizer::SExpr;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::Binder;
 
@@ -27,6 +29,7 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
 
 impl Binder {
     // Find all recursive cte scans and update the data type of field in cte scan
+    #[allow(clippy::only_used_in_recursion)]
     pub fn count_r_cte_scan(
         &mut self,
         expr: &SExpr,
@@ -38,15 +41,12 @@ impl Binder {
                 self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
                 self.count_r_cte_scan(expr.child(1)?, count, cte_types)?;
             }
-            RelOperator::Sort(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Window(_)
-            | RelOperator::ProjectSet(_)
+
+            RelOperator::ProjectSet(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::Udf(_)
             | RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Aggregate(_) => {
+            | RelOperator::Filter(_) => {
                 self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
             }
             RelOperator::RecursiveCteScan(plan) => {
@@ -69,6 +69,19 @@ impl Binder {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_) => {}
+            // Each recursive step in a recursive query generates new rows, and these rows are used for the next recursion.
+            // Each step depends on the results of the previous step, so it's essential to ensure that the result set is built incrementally.
+            // These operators need to operate on the entire result set,
+            // which is incompatible with the way a recursive query incrementally builds the result set.
+            RelOperator::Sort(_)
+            | RelOperator::Limit(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Window(_) => {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "{:?} is not allowed in recursive cte",
+                    expr.plan().rel_op()
+                )));
+            }
         }
         Ok(())
     }
