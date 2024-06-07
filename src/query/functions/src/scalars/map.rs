@@ -260,27 +260,24 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         };
 
-        let mut in_key_types: Option<DataType> = None;
-
-        for arg_type in args_type.iter().skip(1) {
-            match arg_type {
-                DataType::Array(box key_type) => {
-                    if map_key_type == DataType::EmptyMap {
-                        if let Some(in_key_type) = &in_key_types {
-                            if in_key_type != key_type {
-                                return None;
-                            }
-                        } else {
-                            in_key_types = Some(key_type.clone());
-                        }
-                    } else if *key_type != map_key_type {
-                        return None;
-                    }
-                }
-                DataType::Null => {
+        if map_key_type != DataType::EmptyMap {
+            for arg_type in args_type.iter().skip(1) {
+                if arg_type != &map_key_type {
                     return None;
                 }
-                _ => {
+            }
+        } else {
+            let key_type = &args_type[1];
+            if !key_type.is_boolean()
+                && !key_type.is_string()
+                && !key_type.is_numeric()
+                && !key_type.is_decimal()
+                && !key_type.is_date_or_date_time()
+            {
+                return None;
+            }
+            for arg_type in args_type.iter().skip(2) {
+                if arg_type != key_type {
                     return None;
                 }
             }
@@ -307,9 +304,30 @@ pub fn register(registry: &mut FunctionRegistry) {
                     let mut output_map_builder =
                         ColumnBuilder::with_capacity(&return_type, input_length.unwrap_or(1));
 
-                    let delete_key_list = prepare_delete_key_list(args, input_length);
-
                     for idx in 0..(input_length.unwrap_or(1)) {
+                        let mut delete_key_list = HashSet::new();
+
+                        for j in 1..args.len() {
+                            let input_key_sref = match &args[j] {
+                                ValueRef::Scalar(scalar) => scalar.clone(),
+                                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                            };
+
+                            match input_key_sref {
+                                ScalarRef::Array(array_column) => {
+                                    array_column.iter().for_each(|key| {
+                                        delete_key_list.insert(key.to_owned());
+                                    });
+                                }
+                                unsupported_dtyp => {
+                                    unreachable!(
+                                        "Unsupported scalarref type: {:#?}",
+                                        unsupported_dtyp
+                                    )
+                                }
+                            }
+                        }
+
                         let input_map_sref = match &args[0] {
                             ValueRef::Scalar(map) => map.clone(),
                             ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
@@ -373,32 +391,4 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
-}
-
-fn prepare_delete_key_list(
-    args: &[ValueRef<AnyType>],
-    input_length: Option<usize>,
-) -> HashSet<Scalar> {
-    let mut delete_key_list = HashSet::<Scalar>::new();
-
-    for arg in &args[1..] {
-        for idx in 0..(input_length.unwrap_or(1)) {
-            let input_key_sref = match arg {
-                ValueRef::Scalar(key) => key.clone(),
-                ValueRef::Column(key) => unsafe { key.index_unchecked(idx) },
-            };
-
-            match input_key_sref {
-                ScalarRef::Array(array_column) => {
-                    array_column.iter().for_each(|key| {
-                        delete_key_list.insert(key.to_owned());
-                    });
-                }
-                unsupported_dtyp => {
-                    unreachable!("Unsupported scalarref type: {:#?}", unsupported_dtyp)
-                }
-            }
-        }
-    }
-    delete_key_list
 }
