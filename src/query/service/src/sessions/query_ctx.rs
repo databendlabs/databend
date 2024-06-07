@@ -629,9 +629,12 @@ impl TableContext for QueryContext {
         self.get_current_session().get_all_available_roles().await
     }
 
-    async fn get_all_effective_roles(&self, create_object: bool) -> Result<Vec<RoleInfo>> {
+    async fn get_all_effective_roles(
+        &self,
+        check_current_role_only: bool,
+    ) -> Result<Vec<RoleInfo>> {
         self.get_current_session()
-            .get_all_effective_roles(create_object)
+            .get_all_effective_roles(check_current_role_only)
             .await
     }
 
@@ -639,10 +642,10 @@ impl TableContext for QueryContext {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<()> {
         self.get_current_session()
-            .validate_privilege(object, privilege, create_object)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 

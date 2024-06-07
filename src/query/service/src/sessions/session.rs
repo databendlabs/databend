@@ -274,9 +274,12 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_all_effective_roles(&self, create_object: bool) -> Result<Vec<RoleInfo>> {
+    pub async fn get_all_effective_roles(
+        &self,
+        check_current_role_only: bool,
+    ) -> Result<Vec<RoleInfo>> {
         self.privilege_mgr()
-            .get_all_effective_roles(create_object)
+            .get_all_effective_roles(check_current_role_only)
             .await
     }
 
@@ -285,13 +288,13 @@ impl Session {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr()
-            .validate_privilege(object, privilege, create_object)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 
@@ -299,13 +302,13 @@ impl Session {
     pub async fn has_ownership(
         &self,
         object: &OwnershipObject,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
         self.privilege_mgr()
-            .has_ownership(object, create_object)
+            .has_ownership(object, check_current_role_only)
             .await
     }
 

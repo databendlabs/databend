@@ -159,7 +159,7 @@ impl PrivilegeAccess {
         if_exists: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
-        let create_object = match privileges {
+        let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
             UserPrivilegeType::Create => true,
             _ => false,
@@ -168,7 +168,7 @@ impl PrivilegeAccess {
             .validate_access(
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
                 privileges,
-                create_object,
+                check_current_role_only,
             )
             .await
         {
@@ -187,7 +187,7 @@ impl PrivilegeAccess {
                             .validate_access(
                                 &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
                                 privileges,
-                                create_object,
+                                check_current_role_only,
                             )
                             .await
                         {
@@ -197,7 +197,7 @@ impl PrivilegeAccess {
                             let current_user = self.ctx.get_current_user()?;
                             let session = self.ctx.get_current_session();
                             let roles_name = session
-                                .get_all_effective_roles(create_object)
+                                .get_all_effective_roles(check_current_role_only)
                                 .await?
                                 .iter()
                                 .map(|r| r.name.clone())
@@ -346,7 +346,7 @@ impl PrivilegeAccess {
         &self,
         session: &Arc<Session>,
         grant_object: &GrantObject,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<bool> {
         let owner_object = self
             .convert_to_owner_object(grant_object)
@@ -369,14 +369,19 @@ impl PrivilegeAccess {
                     db_id: *db_id,
                 };
                 // If Table ownership check fails, check for Database ownership
-                if session.has_ownership(object, create_object).await?
+                if session
+                    .has_ownership(object, check_current_role_only)
+                    .await?
                     || session
-                        .has_ownership(&database_owner, create_object)
+                        .has_ownership(&database_owner, check_current_role_only)
                         .await?
                 {
                     return Ok(true);
                 }
-            } else if session.has_ownership(object, create_object).await? {
+            } else if session
+                .has_ownership(object, check_current_role_only)
+                .await?
+            {
                 return Ok(true);
             }
         }
@@ -387,7 +392,7 @@ impl PrivilegeAccess {
         &self,
         grant_object: &GrantObject,
         privilege: UserPrivilegeType,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
@@ -403,7 +408,7 @@ impl PrivilegeAccess {
 
         if verify_ownership
             && self
-                .has_ownership(&session, grant_object, create_object)
+                .has_ownership(&session, grant_object, check_current_role_only)
                 .await?
         {
             return Ok(());
@@ -411,7 +416,7 @@ impl PrivilegeAccess {
 
         // wrap an user-facing error message with table/db names on cases like TableByID / DatabaseByID
         match session
-            .validate_privilege(grant_object, privilege, create_object)
+            .validate_privilege(grant_object, privilege, check_current_role_only)
             .await
         {
             Ok(_) => Ok(()),
@@ -422,7 +427,7 @@ impl PrivilegeAccess {
                 let current_user = self.ctx.get_current_user()?;
 
                 let roles_name = session
-                    .get_all_effective_roles(create_object)
+                    .get_all_effective_roles(check_current_role_only)
                     .await?
                     .iter()
                     .map(|r| r.name.clone())

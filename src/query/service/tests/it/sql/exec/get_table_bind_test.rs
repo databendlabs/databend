@@ -626,7 +626,10 @@ impl TableContext for CtxDelegation {
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
-    async fn get_all_effective_roles(&self, _create_object: bool) -> Result<Vec<RoleInfo>> {
+    async fn get_all_effective_roles(
+        &self,
+        _check_current_role_only: bool,
+    ) -> Result<Vec<RoleInfo>> {
         todo!()
     }
 
@@ -634,7 +637,7 @@ impl TableContext for CtxDelegation {
         &self,
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
-        _create_object: bool,
+        _check_current_role_only: bool,
     ) -> Result<()> {
         todo!()
     }

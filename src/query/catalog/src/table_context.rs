@@ -203,13 +203,14 @@ pub trait TableContext: Send + Sync {
     fn get_current_session_id(&self) -> String {
         unimplemented!()
     }
-    async fn get_all_effective_roles(&self, create_object: bool) -> Result<Vec<RoleInfo>>;
+    async fn get_all_effective_roles(&self, check_current_role_only: bool)
+    -> Result<Vec<RoleInfo>>;
 
     async fn validate_privilege(
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
-        create_object: bool,
+        check_current_role_only: bool,
     ) -> Result<()>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
