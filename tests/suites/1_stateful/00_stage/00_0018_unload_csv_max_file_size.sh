@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 name="unload_csv_max_file_size"
 
 path="/tmp/$name/"
-rm -r $path/*
+# rm -r $path/*
 
 stmt "drop stage if exists ${name};"
 stmt "create stage ${name} url='fs://$path'"
