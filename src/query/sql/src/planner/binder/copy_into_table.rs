@@ -87,7 +87,7 @@ impl<'a> Binder {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, false)
                     .await?;
 
                 // for copy from location, collect files explicitly
@@ -105,7 +105,7 @@ impl<'a> Binder {
                     .set_max_column_position(max_column_position.max_pos);
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, true)
                     .await?;
 
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
@@ -119,6 +119,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
+        is_transform: bool,
     ) -> Result<CopyIntoTablePlan> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
@@ -161,6 +162,7 @@ impl<'a> Binder {
             database_name,
             table_name,
             validation_mode,
+            is_transform,
             no_file_to_copy: false,
             from_attachment: false,
             force: stmt.force,
@@ -340,6 +342,7 @@ impl<'a> Binder {
             validation_mode: ValidationMode::None,
 
             enable_distributed: false,
+            is_transform: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
