@@ -6,16 +6,17 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-exception = { path = "../../../../common/exception" }
-databend-common-expression = { path = "../../../expression" }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 parquet_rs = { workspace = true }
 
-databend-storages-common-table-meta = { path = "../table_meta" }
-
 [build-dependencies]
+
+[lints]
+workspace = true

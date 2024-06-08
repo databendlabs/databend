@@ -156,7 +156,8 @@ impl BlockReader {
             .blocking()
             .reader(loc)
             .ok()?
-            .into_std_read(0..meta.content_length());
+            .into_std_read(0..meta.content_length())
+            .ok()?;
         let metadata = read_metadata(&mut reader).ok()?;
         debug_assert_eq!(metadata.row_groups.len(), 1);
         let schema = infer_schema_with_extension(&metadata).ok()?;

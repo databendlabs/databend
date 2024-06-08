@@ -6,27 +6,27 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-catalog = { path = "../../catalog" }
-databend-common-config = { path = "../../config" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-storages-delta = { path = "../delta" }
-databend-common-storages-fuse = { path = "../fuse" }
-databend-common-storages-iceberg = { path = "../iceberg" }
-databend-common-storages-memory = { path = "../memory" }
-databend-common-storages-null = { path = "../null" }
-databend-common-storages-random = { path = "../random" }
-databend-common-storages-stream = { path = "../stream" }
-databend-common-storages-view = { path = "../view" }
-
-databend-storages-common-index = { path = "../common/index" }
-
 async-trait = { workspace = true }
 dashmap = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-storages-delta = { workspace = true }
+databend-common-storages-fuse = { workspace = true }
+databend-common-storages-iceberg = { workspace = true }
+databend-common-storages-memory = { workspace = true }
+databend-common-storages-null = { workspace = true }
+databend-common-storages-random = { workspace = true }
+databend-common-storages-stream = { workspace = true }
+databend-common-storages-view = { workspace = true }
+databend-storages-common-index = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

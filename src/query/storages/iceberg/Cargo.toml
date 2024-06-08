@@ -6,26 +6,23 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-functions = { path = "../../functions" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-meta-types = { path = "../../../meta/types" }
-databend-common-pipeline-core = { path = "../../pipeline/core" }
-databend-common-storage = { path = "../../../common/storage" }
-databend-common-storages-parquet = { path = "../parquet" }
-databend-storages-common-pruner = { path = "../common/pruner" }
-databend-storages-common-table-meta = { path = "../common/table_meta" }
-
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 futures = { workspace = true }
 icelake = "0.0.10"
 match-template = { workspace = true }
@@ -35,6 +32,9 @@ parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

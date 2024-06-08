@@ -111,6 +111,7 @@ impl<'a> FuseBlock<'a> {
         let mut row_count = Vec::with_capacity(len);
         let mut bloom_filter_location = vec![];
         let mut bloom_filter_size = Vec::with_capacity(len);
+        let mut inverted_index_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -143,6 +144,7 @@ impl<'a> FuseBlock<'a> {
                             .map(|s| s.0.clone()),
                     );
                     bloom_filter_size.push(block.bloom_filter_index_size);
+                    inverted_index_size.push(block.inverted_index_size);
 
                     row_num += 1;
                     if row_num >= limit {
@@ -188,6 +190,10 @@ impl<'a> FuseBlock<'a> {
                     DataType::Number(NumberDataType::UInt64),
                     Value::Column(UInt64Type::from_data(bloom_filter_size)),
                 ),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                    Value::Column(UInt64Type::from_opt_data(inverted_index_size)),
+                ),
             ],
             row_num,
         ))
@@ -208,6 +214,10 @@ impl<'a> FuseBlock<'a> {
             TableField::new(
                 "bloom_filter_size",
                 TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "inverted_index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])
     }

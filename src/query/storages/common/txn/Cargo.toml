@@ -7,8 +7,11 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-databend-common-meta-app = { path = "../../../../meta/app" }
-databend-common-meta-types = { path = "../../../../meta/types" }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
 parking_lot = { workspace = true }
 serde = { version = "1.0.194", features = ["derive"] }
 uuid = { workspace = true }
+
+[lints]
+workspace = true

@@ -6,45 +6,45 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-compress = { path = "../../../common/compress" }
-databend-common-config = { path = "../../config" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-formats = { path = "../../formats" }
-databend-common-io = { path = "../../../common/io" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-pipeline-core = { path = "../../pipeline/core" }
-databend-common-pipeline-sources = { path = "../../pipeline/sources" }
-databend-common-pipeline-transforms = { path = "../../pipeline/transforms" }
-databend-common-settings = { path = "../../settings" }
-databend-common-storage = { path = "../../../common/storage" }
-databend-common-storages-parquet = { path = "../parquet" }
-databend-storages-common-table-meta = { path = "../common/table_meta" }
-
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bstr = "1.9.1"
 csv-core = "0.1.11"
 dashmap = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-compress = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-formats = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = "0.6.0"
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 parquet_rs = { workspace = true }
 serde = { workspace = true }
-
 serde_json = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 
 [build-dependencies]
-databend-common-building = { path = "../../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true

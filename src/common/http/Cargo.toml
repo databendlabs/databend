@@ -6,8 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 doctest = false
 test = true
@@ -16,14 +14,9 @@ test = true
 memory-profiling = ["tempfile"]
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
 anyerror = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
@@ -34,3 +27,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = "1.3.0"
+
+[lints]
+workspace = true

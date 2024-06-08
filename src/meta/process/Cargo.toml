@@ -8,20 +8,20 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-# Workspace dependencies
-databend-common-meta-app = { path = "../app" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-raft-store = { path = "../raft-store" }
-databend-common-meta-sled-store = { path = "../sled-store" }
-databend-common-meta-types = { path = "../types" }
-databend-common-proto-conv = { path = "../proto-conv" }
-databend-common-protos = { path = "../protos" }
-databend-common-tracing = { path = "../../common/tracing" }
-
-# Crates.io dependencies
 anyhow = { workspace = true }
 clap = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-proto-conv = { workspace = true }
+databend-common-protos = { workspace = true }
+databend-common-tracing = { workspace = true }
 openraft = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

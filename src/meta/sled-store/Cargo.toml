@@ -15,26 +15,27 @@ test = true
 io-uring = ["sled/io_uring"]
 
 [dependencies]
-databend-common-meta-stoerr = { path = "../stoerr" }
-databend-common-meta-types = { path = "../types" }
-databend-common-tracing = { path = "../../common/tracing" }
-
-openraft = { workspace = true }
-sled = { workspace = true }
-
 anyerror = { workspace = true }
 byteorder = { workspace = true }
+databend-common-meta-stoerr = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-tracing = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
+openraft = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sled = { workspace = true }
 tempfile = "3.4.0"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-databend-common-base = { path = "../../common/base" }
+databend-common-base = { workspace = true }
 pretty_assertions = "1.3.0"
 test-harness = "0.1.1"
 tokio = { workspace = true }
+
+[lints]
+workspace = true
