@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::BloomIndexBuilder;
 use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
@@ -80,6 +81,7 @@ impl PruningContext {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
         max_concurrency: usize,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
@@ -131,6 +133,7 @@ impl PruningContext {
             dal.clone(),
             filter_expr.as_ref(),
             bloom_index_cols,
+            bloom_index_builder,
         )?;
 
         // Page pruner, used in native format
@@ -195,6 +198,7 @@ impl FusePruner {
         table_schema: TableSchemaRef,
         push_down: &Option<PushDownInfo>,
         bloom_index_cols: BloomIndexColumns,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Self> {
         Self::create_with_pages(
             ctx,
@@ -204,6 +208,7 @@ impl FusePruner {
             None,
             vec![],
             bloom_index_cols,
+            bloom_index_builder,
         )
     }
 
@@ -216,6 +221,7 @@ impl FusePruner {
         cluster_key_meta: Option<ClusterKey>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
+        bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -239,6 +245,7 @@ impl FusePruner {
             cluster_keys,
             bloom_index_cols,
             max_concurrency,
+            bloom_index_builder,
         )?;
 
         Ok(FusePruner {

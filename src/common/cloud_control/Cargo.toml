@@ -13,11 +13,12 @@ test = true
 [dependencies]
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
-databend-common-base = { path = "../base" }
-databend-common-exception = { path = "../exception" }
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 tonic = { workspace = true }
+
 [build-dependencies]
 lenient_semver = "0.4.2"
 prost-build = { workspace = true }
@@ -26,3 +27,6 @@ tonic-build = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.4" }
+
+[lints]
+workspace = true

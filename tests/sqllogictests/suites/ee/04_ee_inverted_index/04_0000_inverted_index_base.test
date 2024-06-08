@@ -429,6 +429,11 @@ idx INVERTED t1(body)tokenizer='chinese'
 idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
 idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer='chinese'
 
+query III
+select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_index', 't1')
+----
+10 465 3534
+
 statement ok
 use default
 

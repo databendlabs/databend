@@ -13,8 +13,11 @@ test = true
 [dependencies]
 base64 = { workspace = true }
 chrono = { workspace = true }
-databend-common-base = { path = "../../common/base" }
+databend-common-base = { workspace = true }
 http = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.4.0"
+
+[lints]
+workspace = true

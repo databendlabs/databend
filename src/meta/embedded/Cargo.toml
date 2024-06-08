@@ -15,20 +15,20 @@ test = true
 io-uring = ["databend-common-meta-sled-store/io-uring", "databend-common-meta-raft-store/io-uring"]
 
 [dependencies]
-# Workspace dependencies
-databend-common-base = { path = "../../common/base" }
-databend-common-meta-api = { path = "../api" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-raft-store = { path = "../raft-store" }
-databend-common-meta-sled-store = { path = "../sled-store" }
-databend-common-meta-stoerr = { path = "../stoerr" }
-databend-common-meta-types = { path = "../types" }
-
-# Crates.io dependencies
 async-trait = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-raft-store = { workspace = true }
+databend-common-meta-sled-store = { workspace = true }
+databend-common-meta-stoerr = { workspace = true }
+databend-common-meta-types = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }
+
+[lints]
+workspace = true

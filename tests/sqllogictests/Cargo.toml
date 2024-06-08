@@ -14,10 +14,9 @@ version = "0.1.0"
 name = "databend-sqllogictests"
 
 [dependencies]
-databend-common-exception = { path = "../../src/common/exception" }
-
 async-trait = { workspace = true }
 clap = { workspace = true }
+databend-common-exception = { workspace = true }
 env_logger = "0.10.0"
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
@@ -30,3 +29,6 @@ sqllogictest = "0.19.1"
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
+
+[lints]
+workspace = true

@@ -10,18 +10,17 @@ edition = { workspace = true }
 doctest = false
 
 [dependencies]
-databend-common-base = { path = "../../common/base" }
-databend-common-config = { path = "../../query/config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-storages-share = { path = "../storages/share" }
-
 async-backtrace = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-share = { workspace = true }
 enumflags2 = { workspace = true }
 http = { workspace = true }
 opendal = { workspace = true }
@@ -31,3 +30,6 @@ serde_json = { workspace = true }
 serfig = { workspace = true }
 time = { version = "0.3", features = ["serde"] }
 uuid = { workspace = true }
+
+[lints]
+workspace = true
