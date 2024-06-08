@@ -40,7 +40,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
@@ -307,8 +306,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     for idx in 0..(input_length.unwrap_or(1)) {
                         let mut delete_key_list = HashSet::new();
 
-                        for j in 1..args.len() {
-                            let input_key_sref = match &args[j] {
+                        for input_key_item in args.iter().skip(1) {
+                            let input_key_sref = match &input_key_item {
                                 ValueRef::Scalar(scalar) => scalar.clone(),
                                 ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
                             };
