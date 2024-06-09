@@ -16,7 +16,6 @@ use std::cmp::Ord;
 use std::ops::*;
 use std::sync::Arc;
 
-use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_2_arg;
@@ -30,6 +29,17 @@ use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use ethnum::i256;
+
+use super::convert_to_decimal;
+use super::convert_to_decimal_domain;
+
+#[inline]
+fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u32, u32) {
+    (
+        (scale_b - std::cmp::min(scale_a, scale_b)) as u32,
+        (scale_a - std::cmp::min(scale_a, scale_b)) as u32,
+    )
+}
 
 macro_rules! register_decimal_compare_op {
     ($registry: expr, $name: expr, $op: ident, $domain_op: tt) => {
@@ -46,36 +56,151 @@ macro_rules! register_decimal_compare_op {
                 return None;
             }
 
-            let common_type = common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
+            let decimal_a =
+                DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
+            let decimal_b =
+                DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
 
-            if !common_type.is_decimal() {
-                return None;
-            }
+            let sig_types = vec![DataType::Decimal(decimal_a), DataType::Decimal(decimal_b)];
 
             // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![common_type.clone(), common_type.clone()],
+                    args_type: sig_types.clone(),
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(|_, d| {
+                    calc_domain: Box::new(|ctx, d| {
+                        let (s1, s2) = (
+                            d[0].as_decimal().unwrap().decimal_size().scale,
+                            d[1].as_decimal().unwrap().decimal_size().scale,
+                        );
+                        let (m1, m2) = compare_multiplier(s1, s2);
                         let new_domain = match (&d[0], &d[1]) {
                             (
                                 Domain::Decimal(DecimalDomain::Decimal128(d1, _)),
                                 Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
-                            ) => d1.$domain_op(d2),
+                            ) => {
+                                let d1 = SimpleDomain {
+                                    min: d1.min.checked_mul(10_i128.pow(m1)).unwrap_or(i128::MIN),
+                                    max: d1.max.checked_mul(10_i128.pow(m1)).unwrap_or(i128::MAX),
+                                };
+                                let d2 = SimpleDomain {
+                                    min: d2.min.checked_mul(10_i128.pow(m2)).unwrap_or(i128::MIN),
+                                    max: d2.max.checked_mul(10_i128.pow(m2)).unwrap_or(i128::MAX),
+                                };
+                                d1.$domain_op(&d2)
+                            }
                             (
                                 Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
                                 Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
-                            ) => d1.$domain_op(d2),
-                            _ => unreachable!("Expect two same decimal domains, got {:?}", d),
+                            ) => {
+                                let d1 = SimpleDomain {
+                                    min: d1
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MIN),
+                                    max: d1
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MAX),
+                                };
+
+                                let d2 = SimpleDomain {
+                                    min: d2
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MIN),
+                                    max: d2
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MAX),
+                                };
+                                d1.$domain_op(&d2)
+                            }
+                            (
+                                Domain::Decimal(DecimalDomain::Decimal128(_, _)),
+                                Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
+                            ) => {
+                                let d1 = convert_to_decimal_domain(
+                                    ctx,
+                                    d[0].clone(),
+                                    DecimalDataType::Decimal256(DecimalSize {
+                                        precision: MAX_DECIMAL256_PRECISION,
+                                        scale: s1,
+                                    }),
+                                )
+                                .unwrap();
+
+                                let d1 = d1.as_decimal256().unwrap().0;
+                                let d1 = SimpleDomain {
+                                    min: d1
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MIN),
+                                    max: d1
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MAX),
+                                };
+
+                                let d2 = SimpleDomain {
+                                    min: d2
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MIN),
+                                    max: d2
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MAX),
+                                };
+                                d1.$domain_op(&d2)
+                            }
+                            (
+                                Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
+                                Domain::Decimal(DecimalDomain::Decimal128(_, _)),
+                            ) => {
+                                let d2 = convert_to_decimal_domain(
+                                    ctx,
+                                    d[1].clone(),
+                                    DecimalDataType::Decimal256(DecimalSize {
+                                        precision: MAX_DECIMAL256_PRECISION,
+                                        scale: s2,
+                                    }),
+                                )
+                                .unwrap();
+                                let d2 = d2.as_decimal256().unwrap().0;
+
+                                let d1 = SimpleDomain {
+                                    min: d1
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MIN),
+                                    max: d1
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m1))
+                                        .unwrap_or(i256::MAX),
+                                };
+
+                                let d2 = SimpleDomain {
+                                    min: d2
+                                        .min
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MIN),
+                                    max: d2
+                                        .max
+                                        .checked_mul(i256::from(10).pow(m2))
+                                        .unwrap_or(i256::MAX),
+                                };
+                                d1.$domain_op(&d2)
+                            }
+                            _ => unreachable!(),
                         };
                         new_domain.map(|d| Domain::Boolean(d))
                     }),
                     eval: Box::new(move |args, ctx| {
-                        op_decimal! { &args[0], &args[1], common_type, $op, ctx}
+                        op_decimal! { &args[0], &args[1], &sig_types , $op, ctx}
                     }),
                 },
             };
@@ -89,17 +214,67 @@ macro_rules! register_decimal_compare_op {
 }
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr,  $common_type: expr, $op: ident, $ctx: expr) => {
-        match $common_type {
-            DataType::Decimal(DecimalDataType::Decimal128(_)) => {
-                let f = |a: i128, b: i128, _: &mut EvalContext| -> bool { a.cmp(&b).$op() };
+    ($a: expr, $b: expr, $args_type: expr,  $op: ident, $ctx: expr) => {
+        let (dt1, dt2) = (
+            $args_type[0].as_decimal().unwrap(),
+            $args_type[1].as_decimal().unwrap(),
+        );
+
+        let (m1, m2) = compare_multiplier(dt1.scale(), dt2.scale());
+
+        match (dt1, dt2) {
+            (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
+                let f = |a: i128, b: i128, _: &mut EvalContext| -> bool {
+                    (a * 10_i128.pow(m1)).cmp(&(b * 10_i128.pow(m2))).$op()
+                };
                 compare_decimal($a, $b, f, $ctx)
             }
-            DataType::Decimal(DecimalDataType::Decimal256(_)) => {
-                let f = |a: i256, b: i256, _: &mut EvalContext| -> bool { a.cmp(&b).$op() };
+            (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
+                let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
+                    (a * i256::from(10).pow(m1))
+                        .cmp(&(b * i256::from(10).pow(m2)))
+                        .$op()
+                };
                 compare_decimal($a, $b, f, $ctx)
             }
-            _ => unreachable!(),
+            (DecimalDataType::Decimal128(s1), DecimalDataType::Decimal256(_)) => {
+                let dest_type = DecimalDataType::Decimal256(DecimalSize {
+                    precision: MAX_DECIMAL256_PRECISION,
+                    scale: s1.scale,
+                });
+                let left = convert_to_decimal(
+                    $a,
+                    $ctx,
+                    &DataType::Decimal(DecimalDataType::Decimal128(*s1)),
+                    dest_type,
+                );
+
+                let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
+                    (a * i256::from(10).pow(m1))
+                        .cmp(&(b * i256::from(10).pow(m2)))
+                        .$op()
+                };
+                compare_decimal(&left.as_ref(), $b, f, $ctx)
+            }
+            (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(s2)) => {
+                let dest_type = DecimalDataType::Decimal256(DecimalSize {
+                    precision: MAX_DECIMAL256_PRECISION,
+                    scale: s2.scale,
+                });
+                let right = convert_to_decimal(
+                    $b,
+                    $ctx,
+                    &DataType::Decimal(DecimalDataType::Decimal128(*s2)),
+                    dest_type,
+                );
+
+                let f = |a: i256, b: i256, _: &mut EvalContext| -> bool {
+                    (a * i256::from(10).pow(m1))
+                        .cmp(&(b * i256::from(10).pow(m2)))
+                        .$op()
+                };
+                compare_decimal($a, &right.as_ref(), f, $ctx)
+            }
         }
     };
 }

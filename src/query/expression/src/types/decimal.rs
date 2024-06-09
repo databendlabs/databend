@@ -292,6 +292,15 @@ pub enum DecimalDomain {
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
+impl DecimalDomain {
+    pub fn decimal_size(&self) -> DecimalSize {
+        match self {
+            DecimalDomain::Decimal128(_, size) => *size,
+            DecimalDomain::Decimal256(_, size) => *size,
+        }
+    }
+}
+
 #[derive(
     Debug,
     Clone,
