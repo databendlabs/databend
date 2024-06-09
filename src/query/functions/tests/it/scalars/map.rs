@@ -282,15 +282,15 @@ fn test_map_size(file: &mut impl Write) {
 
 fn test_map_delete(file: &mut impl Write) {
     // Deleting keys from an empty map
-    run_ast(file, "map_delete({}, [])", &[]);
+    run_ast(file, "map_delete({})", &[]);
 
-    run_ast(file, "map_delete({}, [], [])", &[]);
+    run_ast(file, "map_delete({}, NULL, NULL)", &[]);
 
     // Deleting keys from a map literal
     run_ast(file, "map_delete({}, ['k3'], ['k2'])", &[]);
     run_ast(
         file,
-        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, ['k3', 'k2'])",
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 'k3', 'k2')",
         &[],
     );
 
@@ -304,7 +304,7 @@ fn test_map_delete(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])",
+        "map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')",
         &columns,
     );
 
@@ -315,30 +315,27 @@ fn test_map_delete(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, [string_key_col])",
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, string_key_col)",
         &columns,
     );
 
     // Deleting all keys from a map
     run_ast(
         file,
-        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k2', 'k3'])",
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k2', 'k3')",
         &[],
     );
 
     // Deleting keys from a map with duplicate keys
     run_ast(
         file,
-        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k1'])",
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k1')",
         &[],
     );
 
     // Deleting non-existent keys
-    run_ast(
-        file,
-        "map_delete({'k1': 'v1', 'k2': 'v2'}, ['k3', 'k4'])",
-        &[],
-    );
+    run_ast(file, "map_delete({'k1': 'v1', 'k2': 'v2'}, 'k3', 'k4')", &[
+    ]);
 
     // Deleting keys from a nested map
     let columns = [
@@ -350,7 +347,7 @@ fn test_map_delete(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_delete(map([a_col, b_col], [d_col, e_col]), ['a_k2', 'b_k3'])",
+        "map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')",
         &columns,
     );
 
@@ -364,7 +361,7 @@ fn test_map_delete(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_delete(map([a_col, d_col], [b_col, e_col]), ['a_k2', 'aaa3'])",
+        "map_delete(map([a_col, d_col], [b_col, e_col]), 'a_k2', 'aaa3')",
         &columns,
     );
 
@@ -377,7 +374,7 @@ fn test_map_delete(file: &mut impl Write) {
 
     run_ast(
         file,
-        "map_delete(map([a_col, d_col], [b_col, e_col]), CAST([224, 444] AS Array(INT16)))",
+        "map_delete(map([a_col, d_col], [b_col, e_col]), 224, 444)",
         &columns,
     );
 }

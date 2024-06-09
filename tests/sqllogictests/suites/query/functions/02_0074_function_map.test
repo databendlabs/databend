@@ -139,10 +139,11 @@ SELECT MAP_CAT(
 query
 SELECT MAP_DELETE(
   {'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 
-  ['k3', 'k2']
+  'k3', 'k2'
 )
 ----
 {'k1':'v1','k4':'v4'}
+
 
 # Deleting keys from a nested map
 statement ok
@@ -165,7 +166,7 @@ SELECT * FROM map_delete_test LIMIT 3;
 
 query
 SELECT 
-  MAP_DELETE(src_map, ['a_k2', 'b_k3'])
+  MAP_DELETE(src_map, 'a_k2', 'b_k3')
 FROM
   map_delete_test;
 ----
@@ -175,20 +176,19 @@ FROM
 
 # Deleting all keys from a map
 query
-SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k2', 'k3'] )
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k2', 'k3' )
 ----
 {}
 
 # Deleting keys from a map with duplicate keys
 query
-SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, ['k1', 'k1'] )
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k1' )
 ----
 {'k2':'v2','k3':'v3'}
 
-
 # Deleting non-existent keys
 query
-SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2'}, ['k3', 'k4'] )
+SELECT MAP_DELETE( {'k1': 'v1', 'k2': 'v2'}, 'k3', 'k4' )
 ----
 {'k1':'v1','k2':'v2'}
 

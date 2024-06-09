@@ -307,24 +307,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         let mut delete_key_list = HashSet::new();
 
                         for input_key_item in args.iter().skip(1) {
-                            let input_key_sref = match &input_key_item {
+                            let input_key = match &input_key_item {
                                 ValueRef::Scalar(scalar) => scalar.clone(),
                                 ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
                             };
 
-                            match input_key_sref {
-                                ScalarRef::Array(array_column) => {
-                                    array_column.iter().for_each(|key| {
-                                        delete_key_list.insert(key.to_owned());
-                                    });
-                                }
-                                unsupported_dtyp => {
-                                    unreachable!(
-                                        "Unsupported scalarref type: {:#?}",
-                                        unsupported_dtyp
-                                    )
-                                }
-                            }
+                            delete_key_list.insert(input_key.to_owned());
                         }
 
                         let input_map_sref = match &args[0] {
