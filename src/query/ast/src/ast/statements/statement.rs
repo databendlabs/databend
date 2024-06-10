@@ -727,7 +727,8 @@ impl Display for Statement {
                 write!(f, " '{object_id}'")?;
             }
             Statement::SetBacktrace { switch } => {
-                write!(f, "{switch}")?;
+                write!(f, "SYSTEM")?;
+                write!(f, " {switch}")?;
                 write!(f, " EXCEPTION_BACKTRACE")?;
             }
         }
