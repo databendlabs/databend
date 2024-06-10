@@ -393,6 +393,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
+opendal = { git = "https://github.com/Xuanwo/opendal", rev = "a392106" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

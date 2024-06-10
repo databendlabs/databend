@@ -222,10 +222,10 @@ impl<R> StorageMetricsWrapper<R> {
 }
 
 impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
-    async fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
+    async fn read(&mut self) -> Result<Buffer> {
         let start = Instant::now();
 
-        self.inner.read_at(offset, limit).await.map(|buf| {
+        self.inner.read().await.map(|buf| {
             self.metrics.inc_read_bytes(buf.len());
             self.metrics
                 .inc_read_bytes_cost(start.elapsed().as_millis() as u64);
@@ -235,8 +235,8 @@ impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
 }
 
 impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
-    fn read_at(&self, offset: u64, limit: usize) -> Result<Buffer> {
-        self.inner.read_at(offset, limit)
+    fn read(&mut self) -> Result<Buffer> {
+        self.inner.read()
     }
 }
 
