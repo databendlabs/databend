@@ -2049,9 +2049,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let set_backtrace = map(
         rule! {
-            #switch ~ EXCEPTION_BACKTRACE
+            SYSTEM ~ #switch ~ EXCEPTION_BACKTRACE
         },
-        |(switch, _)| Statement::SetBacktrace { switch },
+        |(_, switch, _)| Statement::SetBacktrace { switch },
     );
 
     alt((
@@ -2071,7 +2071,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
-            | #set_backtrace: "`(ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
+            | #set_backtrace: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
         // database
         rule!(

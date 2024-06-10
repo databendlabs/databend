@@ -1061,6 +1061,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
+    #[token("SYSTEM", ignore(ascii_case))]
+    SYSTEM,
     #[token("STORAGE_TYPE", ignore(ascii_case))]
     STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]
