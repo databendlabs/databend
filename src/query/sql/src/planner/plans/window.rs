@@ -32,6 +32,7 @@ use super::AggregateFunction;
 use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
+use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -124,6 +125,10 @@ impl Operator for Window {
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
         Ok(required.clone())
     }
 
@@ -133,6 +138,10 @@ impl Operator for Window {
         _rel_expr: &RelExpr,
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
         Ok(vec![vec![required.clone()]])
     }
 

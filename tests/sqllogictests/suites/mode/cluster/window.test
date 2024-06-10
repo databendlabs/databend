@@ -168,7 +168,80 @@ Exchange
                             └── estimated rows: 50.00
 
 statement ok
+CREATE OR REPLACE TABLE sales (
+    sale_id INT UNSIGNED NOT NULL,
+    product_id INT UNSIGNED NOT NULL,
+    customer_id INT UNSIGNED NOT NULL,
+    sale_date DATE NOT NULL,
+    quantity INT NOT NULL,
+    net_paid DECIMAL(10, 2) NOT NULL
+);
+
+query 
+explain SELECT customer_id,
+    ROUND(AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS customer_avg,
+    ROUND(AVG(net_paid) OVER () - AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS diff_from_overall_avg
+FROM
+    sales
+ORDER BY
+    diff_from_overall_avg DESC, customer_id ASC
+LIMIT 10;
+----
+EvalScalar
+├── output columns: [sales.customer_id (#2), diff_from_overall_avg (#9), customer_avg (#8)]
+├── expressions: [round(3)(AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), 3)]
+├── estimated rows: 1.00
+└── Limit
+    ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
+    ├── limit: 10
+    ├── offset: 0
+    ├── estimated rows: 1.00
+    └── Sort
+        ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
+        ├── sort keys: [diff_from_overall_avg DESC NULLS LAST, customer_id ASC NULLS LAST]
+        ├── estimated rows: 1.00
+        └── EvalScalar
+            ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
+            ├── expressions: [round(3)(AVG(net_paid) OVER ( ) (#7) - AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), 3)]
+            ├── estimated rows: 1.00
+            └── Window
+                ├── output columns: [sales.customer_id (#2), sales.net_paid (#5), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), AVG(net_paid) OVER ( ) (#7)]
+                ├── aggregate function: [avg(net_paid)]
+                ├── partition by: []
+                ├── order by: []
+                ├── frame: [Range: Preceding(None) ~ Following(None)]
+                └── Exchange
+                    ├── output columns: [sales.customer_id (#2), sales.net_paid (#5), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6)]
+                    ├── exchange type: Merge
+                    └── Window
+                        ├── output columns: [sales.customer_id (#2), sales.net_paid (#5), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6)]
+                        ├── aggregate function: [avg(net_paid)]
+                        ├── partition by: [customer_id]
+                        ├── order by: []
+                        ├── frame: [Range: Preceding(None) ~ Following(None)]
+                        └── Sort
+                            ├── output columns: [sales.customer_id (#2), sales.net_paid (#5)]
+                            ├── sort keys: [customer_id ASC NULLS LAST]
+                            ├── estimated rows: 0.00
+                            └── Exchange
+                                ├── output columns: [sales.customer_id (#2), sales.net_paid (#5)]
+                                ├── exchange type: Hash(sales.customer_id (#2))
+                                └── TableScan
+                                    ├── table: default.default.sales
+                                    ├── output columns: [customer_id (#2), net_paid (#5)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    └── estimated rows: 0.00
+
+
+statement ok
 DROP TABLE employees;
 
 statement ok
 DROP TABLE departments;
+
+statement ok
+DROP TABLE sales;
