@@ -595,11 +595,15 @@ fn visit_expr_column_eq_constant(
                     ..
                 },
             ] => {
-                debug_assert_eq!(scalar_type, column_type);
+                // decimal don't respect datatyoe equal
+                // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
-                if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
-                    *expr = new_expr;
-                    return Ok(());
+                if scalar_type == column_type {
+                    if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
+                        *expr = new_expr;
+
+                        return Ok(());
+                    }
                 }
             }
             [
