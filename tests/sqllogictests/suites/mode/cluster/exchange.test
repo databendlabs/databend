@@ -360,52 +360,48 @@ select sum(t1.a) from t1, t3 where t1.a = t3.a
 ) t
 ----
 AggregateFinal
-├── output columns: [sum(a) (#6)]
+├── output columns: [sum(a) (#5)]
 ├── group by: []
-├── aggregate functions: [sum(a)]
+├── aggregate functions: [sum(number)]
 ├── estimated rows: 1.00
 └── AggregatePartial
     ├── group by: []
-    ├── aggregate functions: [sum(a)]
+    ├── aggregate functions: [sum(number)]
     ├── estimated rows: 1.00
     └── UnionAll
-        ├── output columns: [a (#5)]
+        ├── output columns: [numbers.number (#0)]
         ├── estimated rows: 10001.00
         ├── Exchange
-        │   ├── output columns: [a (#5)]
+        │   ├── output columns: [numbers.number (#0)]
         │   ├── exchange type: Merge
-        │   └── EvalScalar
-        │       ├── output columns: [a (#5)]
-        │       ├── expressions: [CAST(t1.a (#0) AS UInt64 NULL)]
+        │   └── HashJoin
+        │       ├── output columns: [numbers.number (#0)]
+        │       ├── join type: INNER
+        │       ├── build keys: [t1.a (#0)]
+        │       ├── probe keys: [t2.a (#1)]
+        │       ├── filters: []
         │       ├── estimated rows: 10000.00
-        │       └── HashJoin
-        │           ├── output columns: [numbers.number (#0)]
-        │           ├── join type: INNER
-        │           ├── build keys: [t1.a (#0)]
-        │           ├── probe keys: [t2.a (#1)]
-        │           ├── filters: []
-        │           ├── estimated rows: 10000.00
-        │           ├── Exchange(Build)
-        │           │   ├── output columns: [numbers.number (#0)]
-        │           │   ├── exchange type: Broadcast
-        │           │   └── TableScan
-        │           │       ├── table: default.system.numbers
-        │           │       ├── output columns: [number (#0)]
-        │           │       ├── read rows: 10
-        │           │       ├── read size: < 1 KiB
-        │           │       ├── partitions total: 1
-        │           │       ├── partitions scanned: 1
-        │           │       ├── push downs: [filters: [], limit: NONE]
-        │           │       └── estimated rows: 10.00
-        │           └── TableScan(Probe)
-        │               ├── table: default.system.numbers
-        │               ├── output columns: [number (#1)]
-        │               ├── read rows: 1000
-        │               ├── read size: 7.81 KiB
-        │               ├── partitions total: 1
-        │               ├── partitions scanned: 1
-        │               ├── push downs: [filters: [], limit: NONE]
-        │               └── estimated rows: 1000.00
+        │       ├── Exchange(Build)
+        │       │   ├── output columns: [numbers.number (#0)]
+        │       │   ├── exchange type: Broadcast
+        │       │   └── TableScan
+        │       │       ├── table: default.system.numbers
+        │       │       ├── output columns: [number (#0)]
+        │       │       ├── read rows: 10
+        │       │       ├── read size: < 1 KiB
+        │       │       ├── partitions total: 1
+        │       │       ├── partitions scanned: 1
+        │       │       ├── push downs: [filters: [], limit: NONE]
+        │       │       └── estimated rows: 10.00
+        │       └── TableScan(Probe)
+        │           ├── table: default.system.numbers
+        │           ├── output columns: [number (#1)]
+        │           ├── read rows: 1000
+        │           ├── read size: 7.81 KiB
+        │           ├── partitions total: 1
+        │           ├── partitions scanned: 1
+        │           ├── push downs: [filters: [], limit: NONE]
+        │           └── estimated rows: 1000.00
         └── AggregateFinal
             ├── output columns: [sum(t1.a) (#4)]
             ├── group by: []

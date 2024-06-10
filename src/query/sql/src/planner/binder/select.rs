@@ -221,7 +221,6 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
         if cte_name.is_some() {
-            // If the union is from recursive cte, find all recursive cte scans, get cte scan fields' types.
             let mut count = 0;
             self.count_r_cte_scan(&right_expr, &mut count, &mut coercion_types)?;
             if count == 0 {
@@ -405,6 +404,7 @@ impl Binder {
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
+        let mut new_bind_context = BindContext::new();
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
@@ -428,8 +428,17 @@ impl Binder {
                     left_col.index,
                     Some(ScalarExpr::CastExpr(left_coercion_expr)),
                 ));
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    left_col.index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
+                new_bind_context.add_column_binding(column_binding);
             } else {
                 left_outputs.push((left_col.index, None));
+                new_bind_context.add_column_binding(left_col.clone());
             }
             if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
@@ -452,7 +461,7 @@ impl Binder {
                 right_outputs.push((right_col.index, None));
             }
         }
-        Ok((left_bind_context, left_outputs, right_outputs))
+        Ok((new_bind_context, left_outputs, right_outputs))
     }
 
     #[allow(clippy::too_many_arguments)]
