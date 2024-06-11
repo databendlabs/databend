@@ -542,7 +542,7 @@ impl TransformHashJoinProbe {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
             // Split data to `block_size` rows per sub block.
-            self.add_splitted_data_blocks(data_blocks, data_block);
+            self.add_splitted_data_blocks(&mut self.input_data_blocks, data_block);
         }
     }
 
