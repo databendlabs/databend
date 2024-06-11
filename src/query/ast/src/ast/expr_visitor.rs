@@ -14,6 +14,9 @@
 
 use std::collections::VecDeque;
 
+use pratt::Affix;
+use pratt::Associativity;
+
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::MapAccessor;
@@ -25,12 +28,12 @@ pub trait Accept: Sized {
 
     type Error;
 
-    fn accept(&self, visitor: &mut Visitor<Self>, v: &Self::V) -> Result<(), Self::Error>;
+    fn accept(&self, visitor: &mut Visitor<Self>, v: Self::V) -> Result<(), Self::Error>;
 }
 
 enum StackFrame<V: 'static, Data, Err> {
     Action(Box<dyn FnOnce(&mut Data) -> Result<(), Err> + Send + Sync + 'static>),
-    Children(&'static V),
+    Children(V),
 }
 
 pub struct Visitor<T: Accept> {
@@ -39,8 +42,8 @@ pub struct Visitor<T: Accept> {
 }
 
 impl<T: Accept> Visitor<T> {
-    pub fn visit_children(&mut self, v: &T::V) {
-        self.frame.push_back(StackFrame::Children(unsafe { std::mem::transmute(v) }));
+    pub fn visit_children(&mut self, v: T::V) {
+        self.frame.push_back(StackFrame::Children(v));
     }
 
     pub fn action<F: FnOnce(&mut T::Data) -> Result<(), T::Error> + Send + Sync>(&mut self, f: F) {
@@ -49,7 +52,7 @@ impl<T: Accept> Visitor<T> {
             .push_back(StackFrame::Action(unsafe { std::mem::transmute(src) }));
     }
 
-    pub fn visit(v: &T::V, data: T::Data, accept: T) -> Result<(), T::Error> {
+    pub fn visit(v: T::V, data: T::Data, accept: T) -> Result<(), T::Error> {
         let mut executor = VisitorExecutor { accept };
         let visitor = Visitor {
             data,
@@ -64,7 +67,7 @@ struct VisitorExecutor<T: Accept> {
 }
 
 impl<T: Accept> VisitorExecutor<T> {
-    pub fn visit(&mut self, v: &T::V, mut visitor: Visitor<T>) -> Result<(), T::Error> {
+    pub fn visit(&mut self, v: T::V, mut visitor: Visitor<T>) -> Result<(), T::Error> {
         self.accept.accept(&mut visitor, v)?;
 
         let frame = std::mem::take(&mut visitor.frame);
@@ -92,18 +95,98 @@ impl<T: Accept> VisitorExecutor<T> {
     }
 }
 
-struct DisplayData {
-    formatter: &'static mut std::fmt::Formatter<'static>,
+pub struct DisplayData {
+    pub formatter: &'static mut std::fmt::Formatter<'static>,
 }
 
-struct DisplayExprAccept {}
+pub struct DisplayExprAccept {}
+
+impl DisplayExprAccept {
+    fn needs_parentheses(parent: Option<Affix>, child: Affix, is_left: bool) -> bool {
+        match (parent, child) {
+            (Some(Affix::Infix(parent_prec, parent_assoc)), Affix::Infix(child_prec, _)) => {
+                if parent_prec < child_prec {
+                    return false;
+                }
+                if parent_prec > child_prec {
+                    return true;
+                }
+                if matches!(parent_assoc, Associativity::Left) && !is_left {
+                    return true;
+                }
+                if matches!(parent_assoc, Associativity::Right) && is_left {
+                    return true;
+                }
+            }
+            (
+                Some(
+                    Affix::Infix(parent_prec, _)
+                    | Affix::Prefix(parent_prec)
+                    | Affix::Postfix(parent_prec),
+                ),
+                Affix::Infix(child_prec, _)
+                | Affix::Prefix(child_prec)
+                | Affix::Postfix(child_prec),
+            ) => {
+                return parent_prec > child_prec;
+            }
+            _ => (),
+        }
+        false
+    }
+}
+
+pub struct DisplayExprVisitEle {
+    parent: Option<Affix>,
+    v: &'static Expr,
+    is_left: bool,
+}
+
+impl DisplayExprVisitEle {
+    pub fn new(expr: &Expr) -> DisplayExprVisitEle {
+        DisplayExprVisitEle {
+            parent: None,
+            is_left: true,
+            v: unsafe { std::mem::transmute(expr) },
+        }
+    }
+
+    pub fn with_affix(expr: &Expr, affix: Affix) -> DisplayExprVisitEle {
+        DisplayExprVisitEle {
+            parent: Some(affix),
+            is_left: true,
+            v: unsafe { std::mem::transmute(expr) },
+        }
+    }
+
+    pub fn right_with_affix(expr: &Expr, affix: Affix) -> DisplayExprVisitEle {
+        DisplayExprVisitEle {
+            parent: Some(affix),
+            is_left: false,
+            v: unsafe { std::mem::transmute(expr) },
+        }
+    }
+}
 
 impl Accept for DisplayExprAccept {
-    type V = Expr;
+    type V = DisplayExprVisitEle;
     type Data = DisplayData;
     type Error = std::fmt::Error;
 
-    fn accept(&self, visitor: &mut Visitor<Self>, v: &Expr) -> Result<(), Self::Error> {
+    fn accept(
+        &self,
+        visitor: &mut Visitor<Self>,
+        v: DisplayExprVisitEle,
+    ) -> Result<(), Self::Error> {
+        let (v, parent, is_left) = (v.v, v.parent, v.is_left);
+        let affix = v.affix();
+
+        let need_paren = Self::needs_parentheses(parent, affix, is_left);
+
+        if need_paren {
+            visitor.action(move |data| write!(data.formatter, "("));
+        }
+
         match v {
             Expr::ColumnRef { column, .. } => {
                 visitor.action(move |data| {
@@ -115,7 +198,7 @@ impl Accept for DisplayExprAccept {
                 });
             }
             Expr::IsNull { expr, not, .. } => {
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                 visitor.action(move |data| {
                     write!(data.formatter, " IS")?;
 
@@ -128,7 +211,7 @@ impl Accept for DisplayExprAccept {
             Expr::IsDistinctFrom {
                 left, right, not, ..
             } => {
-                visitor.visit_children(left);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(left, affix));
 
                 visitor.action(move |data| {
                     write!(data.formatter, " IS")?;
@@ -139,13 +222,13 @@ impl Accept for DisplayExprAccept {
                     write!(data.formatter, " DISTINCT FROM ")
                 });
 
-                visitor.visit_children(right);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(right, affix));
             }
 
             Expr::InList {
                 expr, list, not, ..
             } => {
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
 
                 visitor.action(move |data| {
                     if *not {
@@ -164,7 +247,7 @@ impl Accept for DisplayExprAccept {
                 not,
                 ..
             } => {
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
 
                 visitor.action(move |data| {
                     if *not {
@@ -180,7 +263,7 @@ impl Accept for DisplayExprAccept {
                 not,
                 ..
             } => {
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                 visitor.action(move |data| {
                     if *not {
                         write!(data.formatter, " NOT")?;
@@ -189,36 +272,36 @@ impl Accept for DisplayExprAccept {
                     write!(data.formatter, " BETWEEN ")
                 });
 
-                visitor.visit_children(low);
+                visitor.visit_children(DisplayExprVisitEle::new(low));
                 visitor.action(move |data| write!(data.formatter, " AND "));
-                visitor.visit_children(high);
+                visitor.visit_children(DisplayExprVisitEle::new(high));
             }
             Expr::UnaryOp { op, expr, .. } => {
                 match op {
                     // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
                     UnaryOperator::Factorial => {
-                        visitor.visit_children(expr);
+                        visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                         visitor.action(move |data| write!(data.formatter, " {op}"));
                     }
                     _ => {
                         visitor.action(move |data| write!(data.formatter, "{op} "));
-                        visitor.visit_children(expr);
+                        visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                     }
                 }
             }
             Expr::BinaryOp {
                 op, left, right, ..
             } => {
-                visitor.visit_children(left);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(left, affix));
                 visitor.action(move |data| write!(data.formatter, " {op} "));
-                visitor.visit_children(right);
+                visitor.visit_children(DisplayExprVisitEle::right_with_affix(right, affix));
             }
             Expr::JsonOp {
                 op, left, right, ..
             } => {
-                visitor.visit_children(left);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(left, affix));
                 visitor.action(move |data| write!(data.formatter, " {op} "));
-                visitor.visit_children(right);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(right, affix));
             }
             Expr::Cast {
                 expr,
@@ -227,11 +310,11 @@ impl Accept for DisplayExprAccept {
                 ..
             } => {
                 if *pg_style {
-                    visitor.visit_children(expr);
+                    visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                     visitor.action(move |data| write!(data.formatter, "::{target_type}"));
                 } else {
                     visitor.action(move |data| write!(data.formatter, "CAST("));
-                    visitor.visit_children(expr);
+                    visitor.visit_children(DisplayExprVisitEle::new(expr));
                     visitor.action(move |data| write!(data.formatter, " AS {target_type})"));
                 }
             }
@@ -239,21 +322,21 @@ impl Accept for DisplayExprAccept {
                 expr, target_type, ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "TRY_CAST("));
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, " AS {target_type})"));
             }
             Expr::Extract {
                 kind: field, expr, ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "EXTRACT({field} FROM "));
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::DatePart {
                 kind: field, expr, ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "DATE_PART({field}, "));
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::Position {
@@ -262,9 +345,9 @@ impl Accept for DisplayExprAccept {
                 ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "POSITION("));
-                visitor.visit_children(substr_expr);
+                visitor.visit_children(DisplayExprVisitEle::new(substr_expr));
                 visitor.action(move |data| write!(data.formatter, " IN "));
-                visitor.visit_children(str_expr);
+                visitor.visit_children(DisplayExprVisitEle::new(str_expr));
                 visitor.action(move |data| write!(data.formatter, " )"));
             }
             Expr::Substring {
@@ -274,13 +357,13 @@ impl Accept for DisplayExprAccept {
                 ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "SUBSTRING("));
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, " FROM "));
-                visitor.visit_children(substring_from);
+                visitor.visit_children(DisplayExprVisitEle::new(substring_from));
 
                 if let Some(substring_for) = substring_for {
                     visitor.action(move |data| write!(data.formatter, " FOR "));
-                    visitor.visit_children(substring_for);
+                    visitor.visit_children(DisplayExprVisitEle::new(substring_for));
                 }
 
                 visitor.action(move |data| write!(data.formatter, ")"));
@@ -292,11 +375,11 @@ impl Accept for DisplayExprAccept {
 
                 if let Some((trim_where, trim_str)) = trim_where {
                     visitor.action(move |data| write!(data.formatter, "{trim_where} "));
-                    visitor.visit_children(trim_str);
+                    visitor.visit_children(DisplayExprVisitEle::new(trim_str));
                     visitor.action(move |data| write!(data.formatter, " FROM "));
                 }
 
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::Literal { value, .. } => {
@@ -340,14 +423,14 @@ impl Accept for DisplayExprAccept {
 
                 for (cond, res) in conditions.iter().zip(results) {
                     visitor.action(move |data| write!(data.formatter, " WHEN "));
-                    visitor.visit_children(cond);
+                    visitor.visit_children(DisplayExprVisitEle::new(cond));
                     visitor.action(move |data| write!(data.formatter, " THEN "));
-                    visitor.visit_children(res);
+                    visitor.visit_children(DisplayExprVisitEle::new(res));
                 }
 
                 if let Some(el) = else_result {
                     visitor.action(move |data| write!(data.formatter, " ELSE "));
-                    visitor.visit_children(el);
+                    visitor.visit_children(DisplayExprVisitEle::new(el));
                 }
 
                 visitor.action(move |data| write!(data.formatter, " END"));
@@ -369,7 +452,7 @@ impl Accept for DisplayExprAccept {
                 visitor.action(move |data| write!(data.formatter, "({subquery})"));
             }
             Expr::MapAccess { expr, accessor, .. } => {
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::with_affix(expr, affix));
                 visitor.action(move |data| match accessor {
                     MapAccessor::Bracket { key } => write!(data.formatter, "[{key}]"),
                     MapAccessor::DotNumber { key } => write!(data.formatter, ".{key}"),
@@ -397,7 +480,7 @@ impl Accept for DisplayExprAccept {
             }
             Expr::Interval { expr, unit, .. } => {
                 visitor.action(move |data| write!(data.formatter, "INTERVAL "));
-                visitor.visit_children(expr);
+                visitor.visit_children(DisplayExprVisitEle::new(expr));
                 visitor.action(move |data| write!(data.formatter, " {unit}"));
             }
             Expr::DateAdd {
@@ -407,9 +490,9 @@ impl Accept for DisplayExprAccept {
                 ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "DATE_ADD({unit}, "));
-                visitor.visit_children(interval);
+                visitor.visit_children(DisplayExprVisitEle::new(interval));
                 visitor.action(move |data| write!(data.formatter, ", "));
-                visitor.visit_children(date);
+                visitor.visit_children(DisplayExprVisitEle::new(date));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::DateSub {
@@ -419,19 +502,23 @@ impl Accept for DisplayExprAccept {
                 ..
             } => {
                 visitor.action(move |data| write!(data.formatter, "DATE_SUB({unit}, "));
-                visitor.visit_children(interval);
+                visitor.visit_children(DisplayExprVisitEle::new(interval));
                 visitor.action(move |data| write!(data.formatter, ", "));
-                visitor.visit_children(date);
+                visitor.visit_children(DisplayExprVisitEle::new(date));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::DateTrunc { unit, date, .. } => {
                 visitor.action(move |data| write!(data.formatter, "DATE_TRUNC({unit}, "));
-                visitor.visit_children(date);
+                visitor.visit_children(DisplayExprVisitEle::new(date));
                 visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::Hole { name, .. } => {
                 visitor.action(move |data| write!(data.formatter, ":{name}"));
             }
+        }
+
+        if need_paren {
+            visitor.action(move |data| write!(data.formatter, ")"));
         }
 
         Ok(())
@@ -445,6 +532,7 @@ mod test {
 
     use crate::ast::expr_visitor::DisplayData;
     use crate::ast::expr_visitor::DisplayExprAccept;
+    use crate::ast::expr_visitor::DisplayExprVisitEle;
     use crate::ast::expr_visitor::Visitor;
     use crate::ast::BinaryOperator;
     use crate::ast::Expr;
@@ -457,7 +545,8 @@ mod test {
             value: Literal::Boolean(true),
         };
 
-        for _index in 0..5000 {
+        // TODO(winter): drop expr will stack overflow if deep exceeds this
+        for _index in 0..18000 {
             expr = Expr::BinaryOp {
                 span: None,
                 op: BinaryOperator::Or,
@@ -477,10 +566,13 @@ mod test {
                 let formatter: &'static mut Formatter<'static> = unsafe { std::mem::transmute(f) };
                 let display_data = DisplayData { formatter };
                 let expr_accept = DisplayExprAccept {};
-                Visitor::visit(expr, display_data, expr_accept)
+                Visitor::visit(DisplayExprVisitEle::new(expr), display_data, expr_accept)
             }
         }
 
-        println!("{}", TestWarp(expr));
+        let display_text = format!("{}", TestWarp(expr));
+
+        assert_eq!(display_text.matches("OR").count(), 18000);
+        assert_eq!(display_text.matches("TRUE").count(), 18001);
     }
 }

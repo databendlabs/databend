@@ -21,15 +21,21 @@ use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
 use pratt::Associativity;
+use pratt::Precedence;
 
 use super::ColumnRef;
 use super::OrderByExpr;
 use crate::ast::display_decimal_256;
+use crate::ast::expr_visitor::DisplayData;
+use crate::ast::expr_visitor::DisplayExprAccept;
+use crate::ast::expr_visitor::DisplayExprVisitEle;
+use crate::ast::expr_visitor::Visitor;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::expr::ExprElement;
+use crate::parser::expr::BETWEEN_PREC;
+use crate::parser::expr::NOT_PREC;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
@@ -415,317 +421,85 @@ impl Expr {
         ]
     }
 
-    fn affix(&self) -> Affix {
-        ExprElement::from(self.clone()).affix()
+    pub(crate) fn affix(&self) -> Affix {
+        match self {
+            Expr::MapAccess { .. } => Affix::Postfix(Precedence(60)),
+            Expr::IsNull { .. } => Affix::Postfix(Precedence(17)),
+            Expr::Between { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
+            Expr::IsDistinctFrom { .. } => {
+                Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left)
+            }
+            Expr::InList { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
+            Expr::InSubquery { .. } => Affix::Postfix(Precedence(BETWEEN_PREC)),
+            Expr::UnaryOp { op, .. } => match op {
+                UnaryOperator::Not => Affix::Prefix(Precedence(NOT_PREC)),
+
+                UnaryOperator::Plus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::Minus => Affix::Prefix(Precedence(50)),
+                UnaryOperator::BitwiseNot => Affix::Prefix(Precedence(50)),
+                UnaryOperator::SquareRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::CubeRoot => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Abs => Affix::Prefix(Precedence(60)),
+                UnaryOperator::Factorial => Affix::Postfix(Precedence(60)),
+            },
+            Expr::BinaryOp { op, .. } => match op {
+                BinaryOperator::Or => Affix::Infix(Precedence(5), Associativity::Left),
+
+                BinaryOperator::And => Affix::Infix(Precedence(10), Associativity::Left),
+
+                BinaryOperator::Eq => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::NotEq => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Gt => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::NotRLike => Affix::Infix(Precedence(20), Associativity::Left),
+                BinaryOperator::SoundsLike => Affix::Infix(Precedence(20), Associativity::Left),
+
+                BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
+                BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
+                BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+                BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
+
+                BinaryOperator::BitwiseShiftLeft => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+                BinaryOperator::BitwiseShiftRight => {
+                    Affix::Infix(Precedence(23), Associativity::Left)
+                }
+
+                BinaryOperator::Xor => Affix::Infix(Precedence(24), Associativity::Left),
+
+                BinaryOperator::Plus => Affix::Infix(Precedence(30), Associativity::Left),
+                BinaryOperator::Minus => Affix::Infix(Precedence(30), Associativity::Left),
+
+                BinaryOperator::Multiply => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Div => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Divide => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::IntDiv => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
+                BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Right),
+            },
+            Expr::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
+            Expr::Cast { pg_style: true, .. } => Affix::Postfix(Precedence(60)),
+            _ => Affix::Nilfix,
+        }
     }
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        fn needs_parentheses(parent: Option<Affix>, child: Affix, is_left: bool) -> bool {
-            match (parent, child) {
-                (Some(Affix::Infix(parent_prec, parent_assoc)), Affix::Infix(child_prec, _)) => {
-                    if parent_prec < child_prec {
-                        return false;
-                    }
-                    if parent_prec > child_prec {
-                        return true;
-                    }
-                    if matches!(parent_assoc, Associativity::Left) && !is_left {
-                        return true;
-                    }
-                    if matches!(parent_assoc, Associativity::Right) && is_left {
-                        return true;
-                    }
-                }
-                (
-                    Some(
-                        Affix::Infix(parent_prec, _)
-                        | Affix::Prefix(parent_prec)
-                        | Affix::Postfix(parent_prec),
-                    ),
-                    Affix::Infix(child_prec, _)
-                    | Affix::Prefix(child_prec)
-                    | Affix::Postfix(child_prec),
-                ) => {
-                    return parent_prec > child_prec;
-                }
-                _ => (),
-            }
-            false
-        }
-
-        fn write_expr(
-            expr: &Expr,
-            parent: Option<Affix>,
-            is_left: bool,
-            f: &mut Formatter,
-        ) -> std::fmt::Result {
-            let affix = expr.affix();
-            let need_paren = needs_parentheses(parent, affix, is_left);
-
-            if need_paren {
-                write!(f, "(")?;
-            }
-
-            match expr {
-                Expr::ColumnRef { column, .. } => {
-                    if f.alternate() {
-                        write!(f, "{column:#}")?;
-                    } else {
-                        write!(f, "{column}")?;
-                    }
-                }
-                Expr::IsNull { expr, not, .. } => {
-                    write_expr(expr, Some(affix), true, f)?;
-                    write!(f, " IS")?;
-                    if *not {
-                        write!(f, " NOT")?;
-                    }
-                    write!(f, " NULL")?;
-                }
-                Expr::IsDistinctFrom {
-                    left, right, not, ..
-                } => {
-                    write_expr(left, Some(affix), true, f)?;
-                    write!(f, " IS")?;
-                    if *not {
-                        write!(f, " NOT")?;
-                    }
-                    write!(f, " DISTINCT FROM ")?;
-                    write_expr(right, Some(affix), true, f)?;
-                }
-
-                Expr::InList {
-                    expr, list, not, ..
-                } => {
-                    write_expr(expr, Some(affix), true, f)?;
-                    if *not {
-                        write!(f, " NOT")?;
-                    }
-                    write!(f, " IN(")?;
-                    write_comma_separated_list(f, list)?;
-                    write!(f, ")")?;
-                }
-                Expr::InSubquery {
-                    expr,
-                    subquery,
-                    not,
-                    ..
-                } => {
-                    write_expr(expr, Some(affix), true, f)?;
-                    if *not {
-                        write!(f, " NOT")?;
-                    }
-                    write!(f, " IN({subquery})")?;
-                }
-                Expr::Between {
-                    expr,
-                    low,
-                    high,
-                    not,
-                    ..
-                } => {
-                    write_expr(expr, Some(affix), true, f)?;
-                    if *not {
-                        write!(f, " NOT")?;
-                    }
-                    write!(f, " BETWEEN {low} AND {high}")?;
-                }
-                Expr::UnaryOp { op, expr, .. } => {
-                    match op {
-                        // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
-                        UnaryOperator::Factorial => {
-                            write_expr(expr, Some(affix), true, f)?;
-                            write!(f, " {op}")?;
-                        }
-                        _ => {
-                            write!(f, "{op} ")?;
-                            write_expr(expr, Some(affix), true, f)?;
-                        }
-                    }
-                }
-                Expr::BinaryOp {
-                    op, left, right, ..
-                } => {
-                    write_expr(left, Some(affix), true, f)?;
-                    write!(f, " {op} ")?;
-                    write_expr(right, Some(affix), false, f)?;
-                }
-                Expr::JsonOp {
-                    op, left, right, ..
-                } => {
-                    write_expr(left, Some(affix), true, f)?;
-                    write!(f, " {op} ")?;
-                    write_expr(right, Some(affix), true, f)?;
-                }
-                Expr::Cast {
-                    expr,
-                    target_type,
-                    pg_style,
-                    ..
-                } => {
-                    if *pg_style {
-                        write_expr(expr, Some(affix), true, f)?;
-                        write!(f, "::{target_type}")?;
-                    } else {
-                        write!(f, "CAST({expr} AS {target_type})")?;
-                    }
-                }
-                Expr::TryCast {
-                    expr, target_type, ..
-                } => {
-                    write!(f, "TRY_CAST({expr} AS {target_type})")?;
-                }
-                Expr::Extract {
-                    kind: field, expr, ..
-                } => {
-                    write!(f, "EXTRACT({field} FROM {expr})")?;
-                }
-                Expr::DatePart {
-                    kind: field, expr, ..
-                } => {
-                    write!(f, "DATE_PART({field}, {expr})")?;
-                }
-                Expr::Position {
-                    substr_expr,
-                    str_expr,
-                    ..
-                } => {
-                    write!(f, "POSITION({substr_expr} IN {str_expr})")?;
-                }
-                Expr::Substring {
-                    expr,
-                    substring_from,
-                    substring_for,
-                    ..
-                } => {
-                    write!(f, "SUBSTRING({expr} FROM {substring_from}")?;
-                    if let Some(substring_for) = substring_for {
-                        write!(f, " FOR {substring_for}")?;
-                    }
-                    write!(f, ")")?;
-                }
-                Expr::Trim {
-                    expr, trim_where, ..
-                } => {
-                    write!(f, "TRIM(")?;
-                    if let Some((trim_where, trim_str)) = trim_where {
-                        write!(f, "{trim_where} {trim_str} FROM ")?;
-                    }
-                    write!(f, "{expr})")?;
-                }
-                Expr::Literal { value, .. } => {
-                    write!(f, "{value}")?;
-                }
-                Expr::CountAll { window, .. } => {
-                    write!(f, "COUNT(*)")?;
-                    if let Some(window) = window {
-                        write!(f, " OVER {window}")?;
-                    }
-                }
-                Expr::Tuple { exprs, .. } => {
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, exprs)?;
-                    if exprs.len() == 1 {
-                        write!(f, ",")?;
-                    }
-                    write!(f, ")")?;
-                }
-                Expr::FunctionCall { func, .. } => {
-                    write!(f, "{func}")?;
-                }
-                Expr::Case {
-                    operand,
-                    conditions,
-                    results,
-                    else_result,
-                    ..
-                } => {
-                    write!(f, "CASE")?;
-                    if let Some(op) = operand {
-                        write!(f, " {op} ")?;
-                    }
-                    for (cond, res) in conditions.iter().zip(results) {
-                        write!(f, " WHEN {cond} THEN {res}")?;
-                    }
-                    if let Some(el) = else_result {
-                        write!(f, " ELSE {el}")?;
-                    }
-                    write!(f, " END")?;
-                }
-                Expr::Exists { not, subquery, .. } => {
-                    if *not {
-                        write!(f, "NOT ")?;
-                    }
-                    write!(f, "EXISTS ({subquery})")?;
-                }
-                Expr::Subquery {
-                    subquery, modifier, ..
-                } => {
-                    if let Some(m) = modifier {
-                        write!(f, "{m} ")?;
-                    }
-                    write!(f, "({subquery})")?;
-                }
-                Expr::MapAccess { expr, accessor, .. } => {
-                    write_expr(expr, Some(affix), true, f)?;
-                    match accessor {
-                        MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                        MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
-                        MapAccessor::Colon { key } => write!(f, ":{key}")?,
-                    }
-                }
-                Expr::Array { exprs, .. } => {
-                    write!(f, "[")?;
-                    write_comma_separated_list(f, exprs)?;
-                    write!(f, "]")?;
-                }
-                Expr::Map { kvs, .. } => {
-                    write!(f, "{{")?;
-                    for (i, (k, v)) in kvs.iter().enumerate() {
-                        if i > 0 {
-                            write!(f, ",")?;
-                        }
-                        write!(f, "{k}:{v}")?;
-                    }
-                    write!(f, "}}")?;
-                }
-                Expr::Interval { expr, unit, .. } => {
-                    write!(f, "INTERVAL {expr} {unit}")?;
-                }
-                Expr::DateAdd {
-                    unit,
-                    interval,
-                    date,
-                    ..
-                } => {
-                    write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
-                }
-                Expr::DateSub {
-                    unit,
-                    interval,
-                    date,
-                    ..
-                } => {
-                    write!(f, "DATE_SUB({unit}, {interval}, {date})")?;
-                }
-                Expr::DateTrunc { unit, date, .. } => {
-                    write!(f, "DATE_TRUNC({unit}, {date})")?;
-                }
-                Expr::Hole { name, .. } => {
-                    write!(f, ":{name}")?;
-                }
-            }
-
-            if need_paren {
-                write!(f, ")")?;
-            }
-
-            Ok(())
-        }
-
-        write_expr(self, None, true, f)
+        let expr = self;
+        let formatter: &'static mut Formatter<'static> = unsafe { std::mem::transmute(f) };
+        let display_data = DisplayData { formatter };
+        let expr_accept = DisplayExprAccept {};
+        Visitor::visit(DisplayExprVisitEle::new(expr), display_data, expr_accept)
     }
 }
 
