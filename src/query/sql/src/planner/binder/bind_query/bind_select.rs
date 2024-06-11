@@ -69,7 +69,6 @@ impl Binder {
         stmt: &SelectStmt,
         order_by: &[OrderByExpr],
         limit: Option<usize>,
-        from_set_op: bool,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(hints) = &stmt.hints {
             if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
@@ -206,7 +205,7 @@ impl Binder {
             .await?;
 
         // After all analysis is done.
-        if set_returning_functions.is_empty() && !from_set_op {
+        if set_returning_functions.is_empty() {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,

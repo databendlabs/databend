@@ -28,11 +28,10 @@ impl Binder {
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
         limit: Option<usize>,
-        from_set_op: bool,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
             SetExpr::Select(stmt) => {
-                Box::pin(self.bind_select(bind_context, stmt, order_by, limit, from_set_op)).await
+                Box::pin(self.bind_select(bind_context, stmt, order_by, limit)).await
             }
             SetExpr::Query(stmt) => Box::pin(self.bind_query(bind_context, stmt)).await,
             SetExpr::SetOperation(set_operation) => {
