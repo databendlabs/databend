@@ -277,4 +277,18 @@ SELECT
 10086
 
 statement ok
+create or replace table t (n bigint);
+
+statement ok
+insert into t (n) values (1);
+
+query I
+with t1 as (SELECT  user_id AS root_uid  FROM test4 where parent is not null limit 2), t2 as (SELECT 10086 AS root_uid  from t limit 200) select * from t1 union all select * from t2;
+----
+10086
+
+statement ok
 drop table test4;
+
+statement ok
+drop table t;
