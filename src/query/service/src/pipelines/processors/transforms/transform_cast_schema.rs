@@ -89,7 +89,7 @@ impl Transform for TransformCastSchema {
         {
             let value = evaluator.run(expr).map_err(|err| {
                 let msg = format!(
-                    "fail to auto cast column {} ({}) to column {} ({}), ",
+                    "fail to auto cast column {} ({}) to column {} ({})",
                     self.select_schema.fields[i].name(),
                     self.select_schema.fields[i].data_type(),
                     field.name(),
