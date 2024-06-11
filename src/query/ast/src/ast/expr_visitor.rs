@@ -348,7 +348,7 @@ impl Accept for DisplayExprAccept {
                 visitor.visit_children(DisplayExprVisitEle::new(substr_expr));
                 visitor.action(move |data| write!(data.formatter, " IN "));
                 visitor.visit_children(DisplayExprVisitEle::new(str_expr));
-                visitor.action(move |data| write!(data.formatter, " )"));
+                visitor.action(move |data| write!(data.formatter, ")"));
             }
             Expr::Substring {
                 expr,
@@ -470,7 +470,7 @@ impl Accept for DisplayExprAccept {
                 visitor.action(move |data| write!(data.formatter, "{{"));
                 for (i, (k, v)) in kvs.iter().enumerate() {
                     if i > 0 {
-                        visitor.action(move |data| write!(data.formatter, "."));
+                        visitor.action(move |data| write!(data.formatter, ","));
                     }
 
                     visitor.action(move |data| write!(data.formatter, "{k}:{v}"));
