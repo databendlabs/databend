@@ -47,7 +47,7 @@ def load_data_from_json():
                 NOTIFICATION_HISTORY_DB[
                     notification_history.name
                 ] = notification_history
-                
+
 
 def create_task_request_to_task(id, create_task_request):
     # Convert CreateTaskRequest to dictionary
