@@ -62,6 +62,18 @@ impl Binder {
         let ctes_map = self.ctes_map.clone();
         if let Some(cte_info) = ctes_map.get(&table_name) {
             if bind_cte {
+                if self
+                    .metadata
+                    .read()
+                    .get_table_index(Some(&database), &table_name)
+                    .is_some()
+                {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Table name `{}` is misleading, please distinguish it.",
+                        table_name
+                    ))
+                    .set_span(*span));
+                }
                 return if !cte_info.materialized {
                     self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
                         .await

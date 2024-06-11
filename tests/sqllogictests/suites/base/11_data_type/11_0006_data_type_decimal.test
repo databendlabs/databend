@@ -46,8 +46,12 @@ select typeof(1e38);
 ----
 DECIMAL(39, 0)
 
+
 statement ok
-drop table if exists t;
+create or replace database decimal_t;
+
+statement ok
+use decimal_t;
 
 ##  p in [1, 76]; s in [0, p]
 statement ok
@@ -427,6 +431,20 @@ query II
 select a > b, a < b, a = b, a != b, a <= b, a >= b from (values( '5497.0000000000000000'::DECIMAL(20, 15) , '5497.0000000000000000'::DECIMAL(60, 30) )) t(a,b);
 ----
 0 0 1 0 1 1
+
+statement ok
+CREATE TABLE test3 (
+amount1 DECIMAL(38, 18) NULL,
+amount2 DECIMAL(28, 8) NULL
+);
+
+statement ok
+insert into test3 values('30.60616846','30.60616846');
+
+query BBBB
+select sum(amount1) = sum(amount2), sum(amount1) > sum(amount2), sum(amount1) < sum(amount2), sum(amount1) != sum(amount2) from test3;
+----
+1 0 0 0
 
 query T
 select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
@@ -1097,4 +1115,4 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 -2 -2 -2
 
 statement ok
-drop table t
+drop database decimal_t;

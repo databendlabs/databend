@@ -106,6 +106,15 @@ impl SortAndLimitPushDownOptimizer {
         let mut sort: Sort = s_expr.plan().clone().try_into()?;
         sort.after_exchange = Some(false);
         let exchange_sexpr = s_expr.child(0)?;
+
+        // this is window shuffle sort
+        if matches!(
+            exchange_sexpr.plan.as_ref(),
+            RelOperator::Exchange(Exchange::Hash(_))
+        ) {
+            return Ok(s_expr.clone());
+        }
+
         debug_assert!(matches!(
             exchange_sexpr.plan.as_ref(),
             RelOperator::Exchange(Exchange::Merge) | RelOperator::Exchange(Exchange::MergeSort)

@@ -210,13 +210,17 @@ impl SnapshotGenerator for AppendGenerator {
             .get_auto_compaction_imperfect_blocks_threshold()?;
 
         if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
-            // if imperfect_count is larger, slightly increase the number of blocks
-            // eligible for auto-compaction.
-            // this adjustment is intended to help reduce fragmentation over time.
+            // If imperfect_count is larger, SLIGHTLY increase the number of blocks
+            // eligible for auto-compaction, this adjustment is intended to help reduce
+            // fragmentation over time.
+            //
+            // To prevent the off-by-one mistake, we need to add 1 to it;
+            // this way, the potentially previously left non-compacted segment will
+            // also be included.
             let compact_num_block_hint = std::cmp::min(
                 imperfect_count,
                 (auto_compaction_imperfect_blocks_threshold as f64 * 1.5).ceil() as u64,
-            );
+            ) + 1;
             info!("set compact_num_block_hint to {compact_num_block_hint }");
             self.ctx
                 .set_compaction_num_block_hint(compact_num_block_hint);
