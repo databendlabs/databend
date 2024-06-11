@@ -4184,12 +4184,14 @@ Functions overloads:
 23 try_to_boolean(Float64 NULL) :: Boolean NULL
 0 try_to_date(Variant) :: Date NULL
 1 try_to_date(Variant NULL) :: Date NULL
-2 try_to_date(String) :: Date NULL
-3 try_to_date(String NULL) :: Date NULL
-4 try_to_date(Timestamp) :: Date NULL
-5 try_to_date(Timestamp NULL) :: Date NULL
-6 try_to_date(Int64) :: Date NULL
-7 try_to_date(Int64 NULL) :: Date NULL
+2 try_to_date(String, String) :: Date NULL
+3 try_to_date(String NULL, String NULL) :: Date NULL
+4 try_to_date(String) :: Date NULL
+5 try_to_date(String NULL) :: Date NULL
+6 try_to_date(Timestamp) :: Date NULL
+7 try_to_date(Timestamp NULL) :: Date NULL
+8 try_to_date(Int64) :: Date NULL
+9 try_to_date(Int64 NULL) :: Date NULL
 0 try_to_decimal FACTORY
 1 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
@@ -4398,10 +4400,12 @@ Functions overloads:
 1 try_to_timestamp(Variant NULL) :: Timestamp NULL
 2 try_to_timestamp(String) :: Timestamp NULL
 3 try_to_timestamp(String NULL) :: Timestamp NULL
-4 try_to_timestamp(Date) :: Timestamp NULL
-5 try_to_timestamp(Date NULL) :: Timestamp NULL
-6 try_to_timestamp(Int64) :: Timestamp NULL
-7 try_to_timestamp(Int64 NULL) :: Timestamp NULL
+4 try_to_timestamp(String, String) :: Timestamp NULL
+5 try_to_timestamp(String NULL, String NULL) :: Timestamp NULL
+6 try_to_timestamp(Date) :: Timestamp NULL
+7 try_to_timestamp(Date NULL) :: Timestamp NULL
+8 try_to_timestamp(Int64) :: Timestamp NULL
+9 try_to_timestamp(Int64 NULL) :: Timestamp NULL
 0 try_to_uint16(Variant) :: UInt16 NULL
 1 try_to_uint16(Variant NULL) :: UInt16 NULL
 2 try_to_uint16(String) :: UInt16 NULL
