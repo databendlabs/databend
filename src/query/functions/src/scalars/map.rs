@@ -245,18 +245,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let (map_key_type, _map_value_type) = match args_type[0].remove_nullable() {
-            DataType::Map(box DataType::Tuple(type_tuple)) => {
-                if type_tuple.len() == 2 {
-                    (type_tuple[0].clone(), type_tuple[1].clone())
-                } else {
-                    return None;
-                }
+        let map_key_type = match args_type[0].remove_nullable() {
+            DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+                type_tuple[0].clone()
             }
-            DataType::EmptyMap => (DataType::EmptyMap, DataType::EmptyMap),
-            _ => {
-                return None;
-            }
+            DataType::EmptyMap => DataType::EmptyMap,
+            _ => return None,
         };
 
         if map_key_type != DataType::EmptyMap {
@@ -304,37 +298,37 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ColumnBuilder::with_capacity(&return_type, input_length.unwrap_or(1));
 
                     for idx in 0..(input_length.unwrap_or(1)) {
-                        let mut delete_key_list = HashSet::new();
-
-                        for input_key_item in args.iter().skip(1) {
-                            let input_key = match &input_key_item {
-                                ValueRef::Scalar(scalar) => scalar.clone(),
-                                ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
-                            };
-
-                            delete_key_list.insert(input_key.to_owned());
-                        }
-
                         let input_map_sref = match &args[0] {
                             ValueRef::Scalar(map) => map.clone(),
                             ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
-                        };
-
-                        let inner_builder_type = match input_map_sref.infer_data_type() {
-                            DataType::Map(box typ) => typ,
-                            DataType::EmptyMap => DataType::EmptyMap,
-                            _ => unreachable!(),
                         };
 
                         match &input_map_sref {
                             ScalarRef::Null | ScalarRef::EmptyMap => {
                                 output_map_builder.push_default();
                             }
-                            ScalarRef::Map(_) => {
-                                let mut filtered_kv_builder = ColumnBuilder::with_capacity(
-                                    &inner_builder_type,
-                                    input_length.unwrap_or(1),
-                                );
+                            ScalarRef::Map(col) => {
+                                let mut delete_key_list = HashSet::new();
+
+                                for input_key_item in args.iter().skip(1) {
+                                    let input_key = match &input_key_item {
+                                        ValueRef::Scalar(scalar) => scalar.clone(),
+                                        ValueRef::Column(col) => unsafe {
+                                            col.index_unchecked(idx)
+                                        },
+                                    };
+
+                                    delete_key_list.insert(input_key.to_owned());
+                                }
+
+                                let inner_builder_type = match input_map_sref.infer_data_type() {
+                                    DataType::Map(box typ) => typ,
+                                    DataType::EmptyMap => DataType::EmptyMap,
+                                    _ => unreachable!(),
+                                };
+
+                                let mut filtered_kv_builder =
+                                    ColumnBuilder::with_capacity(&inner_builder_type, col.len());
 
                                 let input_map: KvColumn<AnyType, AnyType> =
                                     MapType::try_downcast_scalar(&input_map_sref).unwrap();
