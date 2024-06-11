@@ -1,27 +1,26 @@
-onlyif mysql
+onlyif http
 statement ok
 set max_threads = 8;
 
 statement ok
 SET aggregate_spilling_bytes_threshold_per_proc=1;
 
-onlyif mysql
-query TIFS
+onlyif http
+query T
 SELECT COUNT() FROM (SELECT number::string, count() FROM numbers_mt(100000) group by number::string);
 ----
 100000
 
-
-onlyif mysql
-query TIFS
+onlyif http
+query T
 SELECT (SELECT COUNT() FROM system.temp_files) > 1;
 ----
 1
 
-onlyif mysql
+onlyif http
 statement ok
 unset max_threads;
 
-onlyif mysql
+onlyif http
 statement ok
 unset aggregate_spilling_bytes_threshold_per_proc;
