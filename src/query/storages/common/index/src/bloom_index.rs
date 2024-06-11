@@ -595,7 +595,7 @@ fn visit_expr_column_eq_constant(
                     ..
                 },
             ] => {
-                // decimal don't respect datatyoe equal
+                // decimal don't respect datatype equal
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
                 if scalar_type == column_type {
