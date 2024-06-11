@@ -414,10 +414,6 @@ impl Expr {
             "DATE_TRUNC",
         ]
     }
-
-    fn affix(&self) -> Affix {
-        ExprElement::from(self.clone()).affix()
-    }
 }
 
 impl Display for Expr {
