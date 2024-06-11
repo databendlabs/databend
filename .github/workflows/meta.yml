@@ -1,12 +1,9 @@
-name: MetaChaos
+name: Meta
 
 on:
-  # pull_request_target:
-  #   types:
-  #     - labeled
-  #   branches:
-  #     - main
-  pull_request:
+  pull_request_target:
+    types:
+      - labeled
     branches:
       - main
 
@@ -57,7 +54,7 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: meta,metactl,metaverifier
 
-  io_delay_chaos:
+  chaos:
     needs: [info, build]
     runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
     steps:
