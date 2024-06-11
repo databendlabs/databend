@@ -27,7 +27,7 @@ output         : false
 
 ast            : 1.0=1
 raw expr       : eq(1.0, 1)
-checked expr   : eq<Decimal(4, 1), Decimal(4, 1)>(to_decimal<Decimal(2, 1)>(4, 1)(1.0_d128(2,1)), to_decimal<UInt8>(4, 1)(1_u8))
+checked expr   : eq<Decimal(2, 1), Decimal(3, 0)>(1.0_d128(2,1), to_decimal<UInt8>(3, 0)(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -36,7 +36,7 @@ output         : true
 
 ast            : 2.222>2.11
 raw expr       : gt(2.222, 2.11)
-checked expr   : gt<Decimal(4, 3), Decimal(4, 3)>(2.222_d128(4,3), to_decimal<Decimal(3, 2)>(4, 3)(2.11_d128(3,2)))
+checked expr   : gt<Decimal(4, 3), Decimal(3, 2)>(2.222_d128(4,3), 2.11_d128(3,2))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
