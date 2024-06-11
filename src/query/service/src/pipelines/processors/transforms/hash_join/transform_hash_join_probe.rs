@@ -442,13 +442,17 @@ impl Processor for TransformHashJoinProbe {
                     .await?;
                 self.data_blocks_need_to_spill.clear();
                 if self.is_left_related_join_type() {
-                    self.unspilled_data_blocks_need_to_probe
-                        .extend(unspilled_data_blocks);
+                    self.add_splitted_data_blocks(
+                        &mut self.unspilled_data_blocks_need_to_probe,
+                        unspilled_data_blocks,
+                    );
                 }
             }
             Step::Async(AsyncStep::Restore) => {
-                self.restored_data_blocks
-                    .extend(self.spiller.restore(self.partition_id_to_restore).await?);
+                self.add_splitted_data_blocks(
+                    &mut self.restored_data_blocks,
+                    self.spiller.restore(self.partition_id_to_restore).await?,
+                );
             }
             Step::Async(AsyncStep::NextRound) => {
                 self.reset_probe_state()?;
@@ -538,11 +542,20 @@ impl TransformHashJoinProbe {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
             // Split data to `block_size` rows per sub block.
-            let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
-            self.input_data_blocks.extend(sub_blocks);
-            if let Some(remain) = remain_block {
-                self.input_data_blocks.push_back(remain);
-            }
+            self.add_splitted_data_blocks(data_blocks, data_block);
+        }
+    }
+
+    fn add_splitted_data_blocks(
+        &self,
+        data_blocks: &mut VecDeque<DataBlock>,
+        data_block: DataBlock,
+    ) {
+        // Split data to `block_size` rows per sub block.
+        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
+        self.input_data_blocks.extend(sub_blocks);
+        if let Some(remain) = remain_block {
+            self.input_data_blocks.push_back(remain);
         }
     }
 
