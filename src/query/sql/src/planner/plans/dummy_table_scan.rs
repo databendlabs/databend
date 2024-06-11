@@ -54,6 +54,7 @@ impl Operator for DummyTableScan {
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

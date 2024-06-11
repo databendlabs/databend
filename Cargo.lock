@@ -2617,6 +2617,7 @@ dependencies = [
  "minitrace",
  "opendal",
  "poem",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "serfig",
@@ -10375,7 +10376,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.46.0"
-source = "git+https://github.com/apache/opendal?rev=2034a26#2034a266b8560054b28ad1417c92d7f1f0772bfb"
+source = "git+https://github.com/Xuanwo/opendal?rev=a392106#a392106af00919749b198e95d52b773308551ea1"
 dependencies = [
  "anyhow",
  "async-backtrace",

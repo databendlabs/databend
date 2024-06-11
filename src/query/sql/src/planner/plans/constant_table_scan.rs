@@ -116,6 +116,7 @@ impl Operator for ConstantTableScan {
             outer_columns: Default::default(),
             used_columns: self.columns.clone(),
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

@@ -57,6 +57,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
+use crate::filters::BlockFilter;
 use crate::filters::Filter;
 use crate::filters::FilterBuilder;
 use crate::filters::V2BloomBlock;
@@ -185,6 +186,11 @@ impl BloomIndex {
         data_blocks_tobe_indexed: &[&DataBlock],
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
+        // TODO refactor :
+        // if only current version is allowed, just use the current version
+        // instead of passing it in
+        assert_eq!(version, BlockFilter::VERSION);
+
         if data_blocks_tobe_indexed.is_empty() {
             return Err(ErrorCode::BadArguments("block is empty"));
         }

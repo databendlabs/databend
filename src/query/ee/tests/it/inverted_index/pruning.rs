@@ -70,7 +70,7 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols)?
+    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
         .read_pruning(segment_locs)
         .await
 }

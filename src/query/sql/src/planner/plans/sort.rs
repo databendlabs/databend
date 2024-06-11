@@ -25,6 +25,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::ScalarItem;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -39,6 +40,9 @@ pub struct Sort {
     /// The columns needed by the plan after the sort plan.
     /// It's used to build a projection operation before building the sort operator.
     pub pre_projection: Option<Vec<IndexType>>,
+
+    /// If sort is for window clause, we need the input to exchange by partitions
+    pub window_partition: Vec<ScalarItem>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -58,30 +62,80 @@ impl Operator for Sort {
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
+        let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        if input_physical_prop.distribution == Distribution::Serial
+            || self.window_partition.is_empty()
+        {
+            return Ok(input_physical_prop);
+        }
+
+        let partition_by = self
+            .window_partition
+            .iter()
+            .map(|s| s.scalar.clone())
+            .collect();
+        Ok(PhysicalProperty {
+            distribution: Distribution::Hash(partition_by),
+        })
     }
 
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
         required.distribution = Distribution::Serial;
+
+        if self.window_partition.is_empty() {
+            return Ok(required);
+        }
+
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        // Can't merge to shuffle
+        if child_physical_prop.distribution == Distribution::Serial {
+            return Ok(required);
+        }
+
+        let partition_by = self
+            .window_partition
+            .iter()
+            .map(|s| s.scalar.clone())
+            .collect();
+        required.distribution = Distribution::Hash(partition_by);
+
         Ok(required)
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
+        rel_expr: &RelExpr,
+        required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
-        }]])
+        let mut required = required.clone();
+        required.distribution = Distribution::Serial;
+
+        if self.window_partition.is_empty() {
+            return Ok(vec![vec![required]]);
+        }
+
+        // Can't merge to shuffle
+        let child_physical_prop = rel_expr.derive_physical_prop_child(0)?;
+        if child_physical_prop.distribution == Distribution::Serial {
+            return Ok(vec![vec![required]]);
+        }
+
+        let partition_by = self
+            .window_partition
+            .iter()
+            .map(|s| s.scalar.clone())
+            .collect();
+
+        required.distribution = Distribution::Hash(partition_by);
+        Ok(vec![vec![required]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -93,12 +147,21 @@ impl Operator for Sort {
 
         // Derive orderings
         let orderings = self.items.clone();
+        let (orderings, partition_orderings) = if !self.window_partition.is_empty() {
+            (
+                vec![],
+                Some((self.window_partition.clone(), orderings.clone())),
+            )
+        } else {
+            (self.items.clone(), None)
+        };
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 
