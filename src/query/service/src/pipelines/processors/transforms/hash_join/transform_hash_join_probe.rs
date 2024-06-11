@@ -442,16 +442,18 @@ impl Processor for TransformHashJoinProbe {
                     .await?;
                 self.data_blocks_need_to_spill.clear();
                 if self.is_left_related_join_type() {
-                    self.add_splitted_data_blocks(
+                    Self::add_splitted_data_blocks(
                         &mut self.unspilled_data_blocks_need_to_probe,
                         unspilled_data_blocks,
+                        self.max_block_size,
                     );
                 }
             }
             Step::Async(AsyncStep::Restore) => {
-                self.add_splitted_data_blocks(
+                Self::add_splitted_data_blocks(
                     &mut self.restored_data_blocks,
                     self.spiller.restore(self.partition_id_to_restore).await?,
+                    self.max_block_size,
                 );
             }
             Step::Async(AsyncStep::NextRound) => {
@@ -542,20 +544,27 @@ impl TransformHashJoinProbe {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
             // Split data to `block_size` rows per sub block.
-            self.add_splitted_data_blocks(&mut self.input_data_blocks, data_block);
+            Self::add_splitted_data_blocks(
+                &mut self.input_data_blocks,
+                vec![data_block],
+                self.max_block_size,
+            );
         }
     }
 
     fn add_splitted_data_blocks(
-        &self,
         data_blocks: &mut VecDeque<DataBlock>,
-        data_block: DataBlock,
+        data_blocks_to_split: Vec<DataBlock>,
+        max_block_size: usize,
     ) {
         // Split data to `block_size` rows per sub block.
-        let (sub_blocks, remain_block) = data_block.split_by_rows(self.max_block_size);
-        self.input_data_blocks.extend(sub_blocks);
-        if let Some(remain) = remain_block {
-            self.input_data_blocks.push_back(remain);
+        for data_block in data_blocks_to_split {
+            // Split data to `block_size` rows per sub block.
+            let (sub_blocks, remain_block) = data_block.split_by_rows(max_block_size);
+            data_blocks.extend(sub_blocks);
+            if let Some(remain) = remain_block {
+                data_blocks.push_back(remain);
+            }
         }
     }
 
