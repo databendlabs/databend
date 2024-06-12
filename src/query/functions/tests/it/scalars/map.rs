@@ -223,6 +223,7 @@ fn test_map_contains_key(file: &mut impl Write) {
 
 fn test_map_values(file: &mut impl Write) {
     run_ast(file, "map_values({})", &[]);
+    run_ast(file, "map_values({})", &[]);
     run_ast(file, "map_values({'a':1,'b':2,'c':3})", &[]);
     run_ast(file, "map_values({1:'a',2:'b',3:'c'})", &[]);
     run_ast(file, "map_values({'a':NULL,'b':2,'c':NULL})", &[]);
@@ -282,6 +283,8 @@ fn test_map_size(file: &mut impl Write) {
 
 fn test_map_delete(file: &mut impl Write) {
     // Deleting keys from an empty map
+    run_ast(file, "map_delete({}, 'a', 'b')", &[]);
+
     run_ast(file, "map_delete({})", &[]);
 
     run_ast(file, "map_delete({}, NULL, NULL)", &[]);

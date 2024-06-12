@@ -247,12 +247,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
         let map_key_type = match args_type[0].remove_nullable() {
             DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
-                type_tuple[0].clone()
+                Some(type_tuple[0].clone())
             }
+            DataType::EmptyMap => None,
             _ => return None,
         };
 
-        if map_key_type != DataType::EmptyMap {
+        if let Some(map_key_type) = map_key_type {
             for arg_type in args_type.iter().skip(1) {
                 if arg_type != &map_key_type {
                     return None;
@@ -322,7 +323,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                                 let inner_builder_type = match input_map_sref.infer_data_type() {
                                     DataType::Map(box typ) => typ,
-                                    DataType::EmptyMap => DataType::EmptyMap,
                                     _ => unreachable!(),
                                 };
 
