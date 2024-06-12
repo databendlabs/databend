@@ -47,6 +47,8 @@ use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::Visibility;
+use crate::ColumnEntry;
+use crate::DerivedColumn;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsofJoin {
@@ -100,12 +102,12 @@ impl PhysicalPlanBuilder {
         )?;
         let mut ss_expr = s_expr.clone();
         ss_expr.children[1] = Arc::new(window_plan);
-        let  join_type = match join.join_type {
-                JoinType::Asof => JoinType::Inner,
-                JoinType::LeftAsof => JoinType::Left,
-                JoinType::RightAsof => JoinType::Right,
-                _ => right = Err(ErrorCode::Internal("unsupported join type!"))
-        };
+        let join_type = match join.join_type {
+                JoinType::Asof => Ok(JoinType::Inner),
+                JoinType::LeftAsof => Ok(JoinType::Left),
+                JoinType::RightAsof => Ok(JoinType::Right),
+                _ => Err(ErrorCode::Internal("unsupported join type!"))
+        }?;
         let left_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();

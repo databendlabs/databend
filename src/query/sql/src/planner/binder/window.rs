@@ -584,8 +584,7 @@ pub async fn bind_window_function_info(
         child
     };
 
-    let default_nulls_first = !self
-        .ctx
+    let default_nulls_first = !ctx
         .get_settings()
         .get_sql_dialect()
         .unwrap()
