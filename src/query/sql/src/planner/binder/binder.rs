@@ -614,7 +614,7 @@ impl<'a> Binder {
             Statement::SetPriority {priority, object_id} => {
                 self.bind_set_priority(priority, object_id).await?
             },
-            Statement::SetBacktrace{switch} => self.bind_set_backtrace(switch).await?,
+            Statement::System(stmt) => self.bind_system(stmt).await?,
         };
 
         match plan.kind() {

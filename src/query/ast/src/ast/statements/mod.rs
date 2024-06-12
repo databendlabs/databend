@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod backtrace_switch;
 mod call;
 mod catalog;
 mod columns;
@@ -46,6 +45,7 @@ mod show;
 mod stage;
 mod statement;
 mod stream;
+mod system_action;
 mod table;
 mod task;
 mod udf;
@@ -55,7 +55,6 @@ mod user;
 mod view;
 mod virtual_column;
 
-pub use backtrace_switch::*;
 pub use call::*;
 pub use catalog::*;
 pub use columns::*;
@@ -89,6 +88,7 @@ pub use show::*;
 pub use stage::*;
 pub use statement::*;
 pub use stream::*;
+pub use system_action::*;
 pub use table::*;
 pub use task::*;
 pub use udf::*;
