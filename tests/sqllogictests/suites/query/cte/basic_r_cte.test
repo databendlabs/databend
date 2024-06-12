@@ -97,3 +97,30 @@ select * from recur;
 1 new loan 10000 0.10 10000.0
 2 new loan 500 0.20 12500.0
 3 add interest 0 0.15 14374.999999999998
+
+# alias columns name
+query I
+with recursive recur(a, b, c, d, e) as
+(select id,
+action,
+amount,
+interest,
+cast(amount as double) as total_bal
+from nk_example_table
+where id = 1
+union all
+select b.id,
+b.action,
+b.amount,
+b.interest,
+cast((r.e * (1+b.interest))+b.amount as double)
+from recur r, nk_example_table b where r.a+1 = b.id
+)
+select * from recur;
+----
+1 new loan 10000 0.10 10000.0
+2 new loan 500 0.20 12500.0
+3 add interest 0 0.15 14374.999999999998
+
+statement ok
+drop table nk_example_table;

@@ -63,6 +63,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::binder::apply_alias_for_columns;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -405,8 +406,14 @@ impl Binder {
         self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
         let mut metadata = self.metadata.write();
-        let mut columns = Vec::with_capacity(cte_info.columns.len());
-        for col in cte_info.columns.iter() {
+        let mut columns = cte_info.columns.clone();
+        if let Some(alias) = alias {
+            apply_alias_for_columns(&mut columns, alias, &self.name_resolution_ctx)?;
+        }
+        for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
+            columns[index].column_name = column_name.clone();
+        }
+        for col in columns.iter() {
             // Expand a number type to a higher precision to avoid overflow
             // (Because the output type of recursive cte is the left of the union)
             let expand_data_type = match *col.data_type {
@@ -427,20 +434,16 @@ impl Binder {
                 *expand_data_type.clone(),
                 None,
             );
-            columns.push(
+            new_bind_ctx.columns.push(
                 ColumnBindingBuilder::new(
                     col.column_name.clone(),
                     idx,
                     expand_data_type,
                     Visibility::Visible,
                 )
-                .table_name(Some(cte_name.to_string()))
+                .table_name(col.table_name.clone())
                 .build(),
             )
-        }
-        new_bind_ctx.columns = columns;
-        if let Some(alias) = alias {
-            new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
         let mut fields = Vec::with_capacity(cte_info.columns.len());
         for col in new_bind_ctx.columns.iter() {
