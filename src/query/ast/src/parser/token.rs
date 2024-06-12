@@ -454,8 +454,6 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("CREDENTIALS", ignore(ascii_case))]
-    CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
     CROSS,
     #[token("CSV", ignore(ascii_case))]

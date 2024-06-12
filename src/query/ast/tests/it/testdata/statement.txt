@@ -10237,7 +10237,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -10282,7 +10282,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -13607,7 +13607,7 @@ CopyIntoLocation(
 ---------- Input ----------
 COPY INTO mytable
     FROM 's3://mybucket/data.csv'
-    CREDENTIALS = (
+    CONNECTION = (
         AWS_KEY_ID = 'access_key'
         AWS_SECRET_KEY = 'secret_key'
     )
