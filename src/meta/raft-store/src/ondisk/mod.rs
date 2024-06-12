@@ -16,19 +16,17 @@
 
 mod data_version;
 mod header;
+pub(crate) mod upgrade_to_v003;
 pub(crate) mod version_info;
 
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Debug;
-use std::fs;
-use std::io;
 
 pub use data_version::DataVersion;
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledTree;
 use databend_common_meta_stoerr::MetaStorageError;
-use databend_common_meta_types::SnapshotData;
 pub use header::Header;
 use log::debug;
 use log::info;
@@ -38,12 +36,9 @@ use crate::config::RaftConfig;
 use crate::key_spaces::DataHeader;
 use crate::key_spaces::SMEntry;
 use crate::log::TREE_RAFT_LOG;
-use crate::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
 use crate::sm_v003::SnapshotStoreV002;
-use crate::sm_v003::SnapshotStoreV003;
 use crate::sm_v003::WriteEntry;
 use crate::state::TREE_RAFT_STATE;
-use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
 
 /// The sled tree name to store the data versions.
@@ -181,24 +176,7 @@ impl OnDisk {
                     }
                 }
                 DataVersion::V003 => {
-                    let snapshot_store = SnapshotStoreV003::new(self.config.clone());
-                    let loader = snapshot_store.new_loader();
-
-                    let last_snapshot = loader.load_last_snapshot().await.map_err(|e| {
-                        let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-                        MetaStorageError::SnapshotError(ae)
-                    })?;
-
-                    if last_snapshot.is_some() {
-                        self.progress(format_args!(
-                            "There is V003 snapshot, upgrade is done; Finish upgrading"
-                        ));
-
-                        self.v002_remove_all_snapshot().await?;
-
-                        // Note that this will increase `header.version`.
-                        self.finish_upgrading().await?;
-                    }
+                    self.clean_in_progress_v002_to_v003().await?;
                 }
             }
 
@@ -230,46 +208,6 @@ impl OnDisk {
                 }
             }
         }
-
-        Ok(())
-    }
-
-    /// Upgrade the on-disk data form [`DataVersion::V002`] to [`DataVersion::V003`].
-    ///
-    /// `V002` saves snapshot in a file instead of in sled db.
-    /// `V003` saves snapshot in a `rotbl` file and uses rotbl to store the state machine.
-    ///
-    /// Upgrade will be skipped if:
-    /// - there is no V002 snapshot files.
-    ///
-    /// Steps:
-    /// - Build a V003 snapshot from V002 snapshot.
-    /// - Remove the V002 snapshot.
-    #[minitrace::trace]
-    async fn upgrade_v002_to_v003(&mut self) -> Result<(), MetaStorageError> {
-        self.begin_upgrading(DataVersion::V002).await?;
-
-        let snapshot_store = SnapshotStoreV002::new(self.config.clone());
-
-        let loaded = snapshot_store.load_last_snapshot().await?;
-
-        let Some((snapshot_id, snapshot_data)) = loaded else {
-            self.progress(format_args!("No V002 snapshot, skip upgrade"));
-            self.finish_upgrading().await?;
-            return Ok(());
-        };
-
-        self.v002_convert_snapshot_to_v003(snapshot_id.clone(), snapshot_data)
-            .await
-            .map_err(|e| {
-                MetaStorageError::snapshot_error(&e, || {
-                    format!("convert v002 snapshot to v003 {}", snapshot_id.to_string())
-                })
-            })?;
-
-        self.v002_remove_all_snapshot().await?;
-
-        self.finish_upgrading().await?;
 
         Ok(())
     }
@@ -342,22 +280,6 @@ impl OnDisk {
 
         let tree_name = format!("state_machine/{}", min_sm_id);
         Ok(Some(tree_name))
-    }
-
-    async fn v002_convert_snapshot_to_v003(
-        &mut self,
-        snapshot_id: MetaSnapshotId,
-        snapshot_data: SnapshotData,
-    ) -> Result<(), io::Error> {
-        let store_v003 = SnapshotStoreV003::new(self.config.clone());
-
-        upgrade_snapshot_data_v002_to_v003(
-            &store_v003,
-            Box::new(snapshot_data),
-            snapshot_id.to_string(),
-        )
-        .await?;
-        Ok(())
     }
 
     async fn v001_dump_state_machine_to_v002_snapshot(
@@ -438,18 +360,6 @@ impl OnDisk {
             snapshot_data.path()
         ));
 
-        Ok(())
-    }
-
-    async fn v002_remove_all_snapshot(&mut self) -> Result<(), MetaStorageError> {
-        //
-        let store_v002 = SnapshotStoreV002::new(self.config.clone());
-        let c = store_v002.snapshot_config();
-        let dir = c.snapshot_dir();
-
-        fs::remove_dir_all(&dir).map_err(|e| {
-            MetaStorageError::snapshot_error(&e, || format!("removing v002 snapshot dir: {}", dir))
-        })?;
         Ok(())
     }
 
