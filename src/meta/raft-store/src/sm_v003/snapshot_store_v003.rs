@@ -49,6 +49,7 @@ impl SnapshotStoreV003 {
         &self.snapshot_config
     }
 
+    /// Create a receiver to receive snapshot in binary form.
     pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<Receiver, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
 
@@ -71,10 +72,12 @@ impl SnapshotStoreV003 {
         Ok(r)
     }
 
+    /// Create a loader to load snapshot from disk
     pub fn new_loader(&self) -> SnapshotLoader<DB> {
         SnapshotLoader::new(self.snapshot_config.clone())
     }
 
+    /// Create a writer to build a snapshot from key-value pairs
     pub fn new_writer(&self) -> Result<WriterV003, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
         WriterV003::new(&self.snapshot_config)

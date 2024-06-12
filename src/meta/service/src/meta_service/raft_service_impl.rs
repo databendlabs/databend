@@ -74,14 +74,15 @@ use crate::metrics::raft_metrics;
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
 
-    snapshot: Mutex<Option<ReceiverV1>>,
+    /// The receiver for install-snapshot v1 RPC.
+    receiver_v1: Mutex<Option<ReceiverV1>>,
 }
 
 impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self {
             meta_node,
-            snapshot: Mutex::new(None),
+            receiver_v1: Mutex::new(None),
         }
     }
 
@@ -120,7 +121,7 @@ impl RaftServiceImpl {
         };
 
         let res = self
-            .receive_chunked_snapshot(install_snapshot_req)
+            .receive_chunked_snapshot_v1(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
             .await;
 
@@ -130,7 +131,7 @@ impl RaftServiceImpl {
     }
 
     /// Receive a chunk based snapshot from the leader.
-    async fn receive_chunked_snapshot(
+    async fn receive_chunked_snapshot_v1(
         &self,
         req: InstallSnapshotRequest,
     ) -> Result<InstallSnapshotResponse, RaftError<InstallSnapshotError>> {
@@ -152,8 +153,8 @@ impl RaftServiceImpl {
         let ss_store = self.meta_node.sto.snapshot_store();
 
         let finished_snapshot = {
-            let mut streaming = self.snapshot.lock().await;
-            receive_snapshot(&mut streaming, &ss_store, req).await?
+            let mut receiver_v1 = self.receiver_v1.lock().await;
+            receive_snapshot_v1(&mut receiver_v1, &ss_store, req).await?
         };
 
         if let Some(temp_path) = finished_snapshot {
@@ -442,7 +443,7 @@ impl ReceiverV1 {
     }
 }
 
-async fn receive_snapshot(
+async fn receive_snapshot_v1(
     receiver: &mut Option<ReceiverV1>,
     ss_store: &SnapshotStoreV003,
     req: InstallSnapshotRequest,
