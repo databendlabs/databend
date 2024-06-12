@@ -77,6 +77,7 @@ pub struct RangeJoinCondition {
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
+        join_type: JoinType,
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
@@ -135,7 +136,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
-            join_type: JoinType::Inner,
+            join_type,
             range_join_type,
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))

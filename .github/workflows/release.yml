@@ -122,7 +122,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
       - name: Basic Sqllogic Test
         if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
@@ -626,6 +626,16 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqlsmith
+
+  meta_chaos:
+    needs: [create_release, build_default]
+    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - uses: ./.github/actions/io_delay_chaos
+        timeout-minutes: 20
 
   benchmark:
     needs: [create_release, docker_service, notify]

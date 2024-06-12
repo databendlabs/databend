@@ -263,21 +263,21 @@ SELECT enroll_date, salary, first_value(salary) OVER (ORDER BY enroll_date) FROM
 2008-01-01 4200 5000
 2008-01-01 4500 5000
 
-query TII
+query TII rowsort
 SELECT depname, salary, first_value(salary) OVER (PARTITION BY depname ORDER BY enroll_date) FROM empsalary
 ----
-develop 6000 6000
-develop 5200 6000
-develop 5200 6000
 develop 4200 6000
 develop 4500 6000
-personnel 3900 3900
+develop 5200 6000
+develop 5200 6000
+develop 6000 6000
 personnel 3500 3900
+personnel 3900 3900
+sales 4800 5000
+sales 4800 5000
 sales 5000 5000
-sales 4800 5000
-sales 4800 5000
 
-query TII
+query TII rowsort
 SELECT depname, salary, first_value(salary) OVER (PARTITION BY depname ORDER BY salary) FROM empsalary
 ----
 develop 4200 4200
@@ -292,33 +292,33 @@ sales 4800 4800
 sales 5000 4800
 
 query II
-SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary
+SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary order by 1,2
 ----
+1 1
+2 2
+3 1
+4 1
+5 2
 7 7
 8 7
 9 7
 10 7
 11 7
-2 2
-5 2
-1 1
-3 1
-4 1
 
 # first with nullable column
 query II
-SELECT empno, first(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary2
+SELECT empno, first(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary2 order by 1,2
 ----
+1 1
+2 2
+3 1
+4 1
+5 2
 7 7
 8 7
 9 7
 10 7
 11 7
-2 2
-5 2
-1 1
-3 1
-4 1
 
 # last_value
 query TII
@@ -336,21 +336,21 @@ SELECT enroll_date, salary, last_value(salary) OVER (ORDER BY enroll_date) FROM 
 2008-01-01 4500 4500
 
 query TII
-SELECT depname, salary, last_value(salary) OVER (PARTITION BY depname ORDER BY enroll_date) FROM empsalary
+SELECT depname, salary, last_value(salary) OVER (PARTITION BY depname ORDER BY enroll_date) FROM empsalary order by 1,2,3;
 ----
-develop 6000 6000
-develop 5200 5200
-develop 5200 5200
 develop 4200 4500
 develop 4500 4500
-personnel 3900 3900
+develop 5200 5200
+develop 5200 5200
+develop 6000 6000
 personnel 3500 3500
+personnel 3900 3900
+sales 4800 4800
+sales 4800 4800
 sales 5000 5000
-sales 4800 4800
-sales 4800 4800
 
 query TII
-SELECT depname, salary, last_value(salary) OVER (PARTITION BY depname ORDER BY salary) FROM empsalary
+SELECT depname, salary, last_value(salary) OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by 1,2,3;
 ----
 develop 4200 4200
 develop 4500 4500
@@ -369,7 +369,7 @@ SELECT depname, empno,
     PARTITION BY depname ORDER BY empno ASC
     ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
   ) fv
-FROM empsalary
+FROM empsalary order by 1,2,3;
 ----
 develop 7 11
 develop 8 11
@@ -389,7 +389,7 @@ SELECT depname, empno,
     PARTITION BY depname ORDER BY empno ASC
     ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
   ) fv
-FROM empsalary2
+FROM empsalary2 order by 1,2,3;
 ----
 develop 7 11
 develop 8 11
@@ -510,7 +510,7 @@ FROM empsalary
 
 # ntile
 query TII
-SELECT depname, salary, ntile(3) OVER (PARTITION BY depname ORDER BY salary) AS rank_group FROM empsalary
+SELECT depname, salary, ntile(3) OVER (PARTITION BY depname ORDER BY salary) AS rank_group FROM empsalary order by 1,2,3;
 ----
 develop 4200 1
 develop 4500 1
@@ -576,22 +576,22 @@ sales 0.0
 sales 0.0
 
 # aggregate functions in window clause
-query TII
-select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)), sum(salary) from empsalary group by depname;
+query TII rowsort
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)), sum(salary) from empsalary group by depname order by 1,2;
 ----
+develop 47100 25100
 personnel 7400 7400
 sales 22000 14600
-develop 47100 25100
 
-query TI
-select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)) from empsalary group by depname;
+query TI rowsort
+select depname, sum(sum(salary)) over (partition by 1 order by sum(salary)) from empsalary group by depname order by 1,2;
 ----
+develop 47100
 personnel 7400
 sales 22000
-develop 47100
 
-query III
-select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary);
+query III rowsort
+select grouping(salary), grouping(depname), sum(grouping(salary)) over (partition by grouping(salary) + grouping(depname) order by grouping(depname) desc) from empsalary group by rollup (depname, salary) order by 1,2,3;
 ----
 0 0 0
 0 0 0
@@ -608,33 +608,33 @@ select grouping(salary), grouping(depname), sum(grouping(salary)) over (partitio
 
 # Window func in subquery
 query I
-SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn)
+SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn) order by 1;
 ----
 1
+1
+1
 2
+2
+2
+3
 3
 4
 5
-1
-2
-1
-2
-3
 
 # Window func in order by
 query II
-SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY count() OVER (PARTITION BY depname ORDER BY salary) DESC
+SELECT salary, sum(salary) OVER (PARTITION BY depname) FROM empsalary ORDER BY count() OVER (PARTITION BY depname ORDER BY salary) DESC, 1,2;
 ----
 6000 25100
 5200 25100
 5200 25100
 5000 14600
-4500 25100
 3900 7400
+4500 25100
 4800 14600
 4800 14600
-4200 25100
 3500 7400
+4200 25100
 
 # diff windows
 query TIIII
@@ -653,7 +653,7 @@ sales 4 4800 14600 4800
 
 # window with where
 query TIII
-SELECT depname, empno, salary, RANK() OVER (PARTITION BY depname ORDER BY empno) FROM empsalary WHERE enroll_date BETWEEN '2006-10-01' AND '2007-12-10'
+SELECT depname, empno, salary, RANK() OVER (PARTITION BY depname ORDER BY empno) FROM empsalary WHERE enroll_date BETWEEN '2006-10-01' AND '2007-12-10' order by 1,2,3,4;
 ----
 develop 8 6000 1
 develop 10 5200 2
@@ -715,7 +715,7 @@ statement ok
 insert into t values (1),(2),(3),(4),(5)
 
 query II
-select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3
+select max(a) OVER (partition by a) FROM t qualify max(a) OVER (partition by a) > 3 order by 1
 ----
 4
 5
@@ -793,6 +793,31 @@ select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id
 999977 8
 999974 9
 999971 10
+
+query II
+with results_rollup AS
+  (
+         select sum(number) gross_margin, 2 as lochierarchy   from numbers(1000000) group by number % 4
+   )
+SELECT gross_margin, rank() OVER ( PARTITION BY lochierarchy
+                    ORDER BY gross_margin ASC) AS rank_within_parent
+FROM results_rollup order by 1,2;
+----
+124999500000 1
+124999750000 2
+125000000000 3
+125000250000 4
+
+query II
+with results_rollup AS
+  (
+         select sum(number) gross_margin, 2 as lochierarchy   from numbers(1000000)
+   )
+SELECT gross_margin, rank() OVER ( PARTITION BY lochierarchy
+                    ORDER BY gross_margin ASC) AS rank_within_parent
+FROM results_rollup order by 1,2;
+----
+499999500000 1
 
 statement ok
 DROP DATABASE test_window_basic;

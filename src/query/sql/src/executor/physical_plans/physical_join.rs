@@ -172,7 +172,7 @@ impl PhysicalPlanBuilder {
                     .await
             }
             PhysicalJoinType::RangeJoin(range, other) => {
-                self.build_range_join(s_expr, left_required, right_required, range, other)
+                self.build_range_join(join.join_type, s_expr, left_required, right_required, range, other)
                     .await
             }
         }

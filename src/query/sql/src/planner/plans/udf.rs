@@ -81,12 +81,14 @@ impl Operator for Udf {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 

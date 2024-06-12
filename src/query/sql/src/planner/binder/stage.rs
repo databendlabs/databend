@@ -79,7 +79,7 @@ impl BindContext {
                 }
             }
 
-            let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
+            let (mut scalar, data_type) = scalar_binder.bind(expr)?;
             if let ScalarExpr::AsyncFunctionCall(async_func) = &scalar {
                 let value = async_func
                     .function

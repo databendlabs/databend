@@ -978,7 +978,7 @@ impl Binder {
                 );
 
                 let push_downs = if let Some(expr) = selection {
-                    let (scalar, _) = scalar_binder.bind(expr).await?;
+                    let (scalar, _) = scalar_binder.bind(expr)?;
                     Some(scalar)
                 } else {
                     None
@@ -1545,7 +1545,7 @@ impl Binder {
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            let (cluster_key, _) = scalar_binder.bind(cluster_by)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",

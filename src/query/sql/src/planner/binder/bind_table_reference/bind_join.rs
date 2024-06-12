@@ -715,8 +715,8 @@ impl<'a> JoinConditionResolver<'a> {
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
 
         let mut added = if let Some((left, right)) = split_equivalent_predicate_expr(predicate) {
-            let (left, _) = scalar_binder.bind(&left).await?;
-            let (right, _) = scalar_binder.bind(&right).await?;
+            let (left, _) = scalar_binder.bind(&left)?;
+            let (right, _) = scalar_binder.bind(&right)?;
             self.add_equi_conditions(left, right, left_join_conditions, right_join_conditions)?
         } else {
             false
@@ -726,7 +726,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .add_other_conditions(predicate, other_join_conditions)
                 .await?;
             if !added {
-                let (predicate, _) = scalar_binder.bind(predicate).await?;
+                let (predicate, _) = scalar_binder.bind(predicate)?;
                 non_equi_conditions.push(predicate);
             }
         }
@@ -860,7 +860,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (predicate, _) = scalar_binder.bind(predicate).await?;
+        let (predicate, _) = scalar_binder.bind(predicate)?;
         let predicate_used_columns = predicate.used_columns();
         let (left_columns, right_columns) = self.left_right_columns()?;
         match self.join_op {

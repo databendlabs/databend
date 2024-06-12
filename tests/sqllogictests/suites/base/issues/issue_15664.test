@@ -34,3 +34,24 @@ query I
 select * from test_table;
 ----
 2
+
+statement ok
+drop table if exists test_table_2;
+
+statement ok
+CREATE OR REPLACE TABLE test_table_2 as select 1;
+
+statement error 1006
+CREATE OR REPLACE TABLE test_table_2 as select 1/0;
+
+statement error 2308
+UNDROP TABLE test_table_2
+
+statement ok
+drop table if exists test_table;
+
+statement ok
+drop table if exists test_table_1;
+
+statement ok
+drop table if exists test_table_2;

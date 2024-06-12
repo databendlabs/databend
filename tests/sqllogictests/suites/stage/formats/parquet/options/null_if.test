@@ -1,0 +1,74 @@
+statement ok
+drop table if exists string
+
+statement ok
+create table string(a string)
+
+statement ok
+drop table if exists int
+
+statement ok
+create table int(a int)
+
+statement ok
+drop table if exists int_not_null
+
+statement ok
+create table int_not_null(a int not null)
+
+
+statement ok
+insert into string values (''), ('null'),('128')
+
+statement ok
+remove @data/unload/parquet/null_if/
+
+query
+copy into @data/unload/parquet/null_if from string
+----
+3 40 384
+
+statement ok
+drop file format if exists parquet_null_if
+
+statement ok
+create file format parquet_null_if type=parquet null_if=('', 'null')
+
+query error 1006.*fail to auto cast column a
+copy into int from @data/unload/parquet/null_if/
+
+query
+copy into int from @data/unload/parquet/null_if/ file_format=(format_name='parquet_null_if') force=true  RETURN_FAILED_ONLY=TRUE
+----
+
+query
+select * from int
+----
+NULL
+NULL
+128
+
+statement ok
+truncate table int
+
+# null_if not work for transform
+query error 1006.*fail to auto cast column a
+copy into int from (select a from @data/unload/parquet/null_if/)  file_format=(format_name='parquet_null_if') force=true
+
+query
+copy into int from (select if(a in ('', 'null'), null, a) from @data/unload/parquet/null_if/) file_format=(type='parquet') force=true RETURN_FAILED_ONLY=TRUE
+----
+
+query
+select * from int
+----
+NULL
+NULL
+128
+
+statement ok
+truncate table int
+
+# null_if not work for not-null dest column
+query error 1006.*fail to auto cast column a
+copy into int_not_null from (select a from @data/unload/parquet/null_if/)  file_format=(format_name='parquet_null_if')

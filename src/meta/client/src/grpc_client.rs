@@ -65,6 +65,7 @@ use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_metrics::count::Count;
 use futures::stream::StreamExt;
 use log::debug;
 use log::error;
@@ -268,7 +269,7 @@ impl ClientHandle {
                 "Meta ClientHandle send request to meta client worker"
             );
 
-            grpc_metrics::incr_meta_grpc_client_request_inflight(1);
+            let _g = grpc_metrics::client_request_inflight.counter_guard();
 
             let tracking_payload = ThreadTracker::new_tracking_payload();
             let res = self
@@ -284,8 +285,6 @@ impl ClientHandle {
                 });
 
             if let Err(err) = res {
-                grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
-
                 error!(
                     error :? =(&err);
                     "Meta ClientHandle send request to meta client worker failed"
@@ -295,8 +294,6 @@ impl ClientHandle {
             }
 
             let res = rx.await.map_err(|e| {
-                grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
-
                 error!(
                     error :? =(&e);
                     "Meta ClientHandle recv response from meta client worker failed"
@@ -307,7 +304,6 @@ impl ClientHandle {
                 )
             })?;
 
-            grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
             let res: Result<Req::Reply, E> = res
                 .try_into()
                 .map_err(|e| {

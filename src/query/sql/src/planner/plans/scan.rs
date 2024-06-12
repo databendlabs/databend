@@ -191,6 +191,7 @@ impl Operator for Scan {
             outer_columns: Default::default(),
             used_columns: self.used_columns(),
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 
