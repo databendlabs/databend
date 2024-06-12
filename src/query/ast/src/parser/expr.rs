@@ -137,7 +137,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 /// For example, `a + b AND c is null` is parsed as `[col(a), PLUS, col(b), AND, col(c), ISNULL]` by nom parsers.
 /// Then the Pratt parser is able to parse the expression into `AND(PLUS(col(a), col(b)), ISNULL(col(c)))`.
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExprElement {
+enum ExprElement {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
         column: ColumnRef,
@@ -774,7 +774,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
     }
 }
 
-pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
+fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     let column_ref = map(column_id, |column| ExprElement::ColumnRef {
         column: ColumnRef {
             database: None,
