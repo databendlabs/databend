@@ -597,6 +597,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             priority,
             object_id,
         } => visitor.visit_set_priority(priority, object_id),
-        Statement::SetBacktrace { switch } => visitor.visit_set_backtrace(switch),
+        Statement::System(stmt) => visitor.visit_system(stmt),
     }
 }

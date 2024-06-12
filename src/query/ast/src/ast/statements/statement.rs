@@ -319,9 +319,7 @@ pub enum Statement {
     },
 
     // Enable or disable Rust Backtrace
-    SetBacktrace {
-        switch: BacktraceSwitch,
-    },
+    System(SystemStmt),
 }
 
 impl Statement {
@@ -726,11 +724,7 @@ impl Display for Statement {
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
             }
-            Statement::SetBacktrace { switch } => {
-                write!(f, "SYSTEM")?;
-                write!(f, " {switch}")?;
-                write!(f, " EXCEPTION_BACKTRACE")?;
-            }
+            Statement::System(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

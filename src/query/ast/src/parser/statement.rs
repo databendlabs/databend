@@ -2051,7 +2051,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             SYSTEM ~ #switch ~ EXCEPTION_BACKTRACE
         },
-        |(_, switch, _)| Statement::SetBacktrace { switch },
+        |(_, switch, _)| {
+            Statement::System(SystemStmt {
+                action: SystemAction::Backtrace(switch),
+            })
+        },
     );
 
     alt((
@@ -3752,10 +3756,10 @@ pub fn priority(i: Input) -> IResult<Priority> {
     ))(i)
 }
 
-pub fn switch(i: Input) -> IResult<BacktraceSwitch> {
+pub fn switch(i: Input) -> IResult<bool> {
     alt((
-        value(BacktraceSwitch::ENABLE, rule! { ENABLE }),
-        value(BacktraceSwitch::DISABLE, rule! { DISABLE }),
+        value(true, rule! { ENABLE }),
+        value(false, rule! { DISABLE }),
     ))(i)
 }
 

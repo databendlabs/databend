@@ -17,17 +17,30 @@ use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum BacktraceSwitch {
-    ENABLE,
-    DISABLE,
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct SystemStmt {
+    pub action: SystemAction,
 }
 
-impl Display for BacktraceSwitch {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl Display for SystemStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SYSTEM {}", self.action)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub enum SystemAction {
+    Backtrace(bool),
+}
+
+impl Display for SystemAction {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            BacktraceSwitch::ENABLE => write!(f, "ENABLE"),
-            BacktraceSwitch::DISABLE => write!(f, "DISABLE"),
+            SystemAction::Backtrace(switch) => match switch {
+                true => write!(f, "ENABLE EXCEPTION_BACKTRACE"),
+                false => write!(f, "DISABLE EXCEPTION_BACKTRACE"),
+            },
         }
     }
 }

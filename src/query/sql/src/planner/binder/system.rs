@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::BacktraceSwitch;
+use databend_common_ast::ast::SystemAction;
+use databend_common_ast::ast::SystemStmt;
 use databend_common_exception::Result;
 
 use crate::planner::binder::Binder;
@@ -21,14 +22,12 @@ use crate::plans::SetBacktracePlan;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_set_backtrace(&mut self, switch: &BacktraceSwitch) -> Result<Plan> {
-        let is_enabled = match switch {
-            BacktraceSwitch::ENABLE => true,
-            BacktraceSwitch::DISABLE => false,
-        };
-
-        let plan = Box::new(SetBacktracePlan { switch: is_enabled });
-
-        Ok(Plan::SetBacktrace(plan))
+    pub(super) async fn bind_system(&mut self, stmt: &SystemStmt) -> Result<Plan> {
+        let SystemStmt { action } = stmt;
+        match action {
+            SystemAction::Backtrace(switch) => Ok(Plan::SetBacktrace(Box::new(SetBacktracePlan {
+                switch: *switch,
+            }))),
+        }
     }
 }
