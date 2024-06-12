@@ -29,7 +29,6 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::expr::ExprElement;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
