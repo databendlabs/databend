@@ -274,7 +274,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
         }
-        
+
         let return_type = args_type[0].clone();
 
         Some(Arc::new(Function {
