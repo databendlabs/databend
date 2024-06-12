@@ -42,6 +42,7 @@ pub struct CopyIntoTable {
 
     pub project_columns: Option<Vec<ColumnBinding>>,
     pub source: CopyIntoTableSource,
+    pub is_transform: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]

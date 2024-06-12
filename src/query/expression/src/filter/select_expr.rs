@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use itertools::Itertools;
+
 use crate::filter::like::gerenate_like_pattern;
 use crate::filter::like::LikePattern;
 use crate::filter::select_expr_permutation::FilterPermutation;
@@ -118,7 +120,9 @@ impl SelectExprBuilder {
                         .can_push_down_not(can_push_down_not)
                 } else {
                     match func_name {
-                        "eq" | "noteq" | "gt" | "lt" | "gte" | "lte" => {
+                        "eq" | "noteq" | "gt" | "lt" | "gte" | "lte"
+                            if function.signature.args_type.iter().all_equal() =>
+                        {
                             let select_op =
                                 SelectOp::try_from_func_name(&function.signature.name).unwrap();
                             let select_op = if not { select_op.not() } else { select_op };

@@ -246,6 +246,7 @@ impl Binder {
             limit: None,
             after_exchange: None,
             pre_projection: None,
+            window_partition: vec![],
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)

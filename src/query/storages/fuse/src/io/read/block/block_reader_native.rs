@@ -189,7 +189,7 @@ impl BlockReader {
                 .blocking()
                 .reader_with(path)
                 .call()?
-                .into_std_read(offset..offset + length);
+                .into_std_read(offset..offset + length)?;
 
             let reader: Reader = Box::new(BufReader::new(reader));
 
@@ -255,7 +255,8 @@ impl BlockReader {
             .blocking()
             .reader(loc)
             .ok()?
-            .into_std_read(0..meta.content_length());
+            .into_std_read(0..meta.content_length())
+            .ok()?;
         let schema = infer_schema(&mut reader).ok()?;
         Some(schema)
     }

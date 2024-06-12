@@ -36,7 +36,8 @@ impl AggIndexReader {
                     .blocking()
                     .reader(loc)
                     .ok()?
-                    .into_std_read(0..meta.content_length());
+                    .into_std_read(0..meta.content_length())
+                    .ok()?;
                 let metadata = nread::reader::read_meta(&mut reader)
                     .inspect_err(|e| {
                         debug!("Read aggregating index `{loc}`'s metadata failed: {e}")

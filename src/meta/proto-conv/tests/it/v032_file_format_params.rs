@@ -139,6 +139,7 @@ fn test_decode_v32_parquet_file_format_params() -> anyhow::Result<()> {
     let want = || {
         mt::principal::FileFormatParams::Parquet(ParquetFileFormatParams {
             missing_field_as: Default::default(),
+            null_if: vec![],
         })
     };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
