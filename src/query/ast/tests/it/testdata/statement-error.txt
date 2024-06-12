@@ -328,23 +328,23 @@ error:
 
 
 ---------- Input ----------
-COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
+COPY INTO mytable FROM 's3://bucket' CONECTION= ();
 ---------- Output ---------
 error: 
   --> SQL:1:38
   |
-1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ unexpected `CREDENTIAL`, expecting `CREDENTIALS`, `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `CONNECTION`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `LOCATION_PREFIX`, `FORMAT`, `PATTERN`, `FILES`, `MAX_FILES`, `SIZE_LIMIT`, `FILE_FORMAT`, `ON_ERROR`, `SPLIT_SIZE`, or `;`
+1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `LOCATION_PREFIX`, `FORMAT`, `VALIDATION_MODE`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
-COPY INTO mytable FROM @mystage CREDENTIALS = ();
+COPY INTO mytable FROM @mystage CONNECTION = ();
 ---------- Output ---------
 error: 
   --> SQL:1:33
   |
-1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ unexpected `CREDENTIALS`, expecting `DISABLE_VARIANT_CHECK`, `RETURN_FAILED_ONLY`, `MAX_FILES`, `PURGE`, `VALIDATION_MODE`, `FORCE`, `FORMAT`, `PATTERN`, `FILES`, `SIZE_LIMIT`, `SPLIT_SIZE`, `FILE_FORMAT`, `ON_ERROR`, or `;`
+1 | COPY INTO mytable FROM @mystage CONNECTION = ();
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `VALIDATION_MODE`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
