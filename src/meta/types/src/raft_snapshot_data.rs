@@ -89,6 +89,7 @@ impl SnapshotData {
         }
     }
 
+    /// Open an existing snapshot file as a temp snapshot.
     pub fn open_temp(path: String) -> Result<Self, io::Error> {
         let mut d = Self::open(path)?;
         d.is_temp = true;
