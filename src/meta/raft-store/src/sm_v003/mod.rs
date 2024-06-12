@@ -14,7 +14,6 @@
 
 #[allow(clippy::module_inception)]
 mod sm_v003;
-mod snapshot_stat;
 mod snapshot_store_v002;
 mod snapshot_store_v003;
 mod writer_v003;
@@ -23,7 +22,6 @@ pub mod adapter;
 pub mod open_snapshot;
 pub mod receiver_v003;
 pub mod snapshot_loader;
-pub mod writer_v002;
 
 #[cfg(test)]
 mod compact_immutable_levels_test;
@@ -33,7 +31,6 @@ mod compact_with_db_test;
 mod sm_v003_test;
 
 pub use sm_v003::SMV003;
-pub use snapshot_stat::SnapshotStat;
 pub use snapshot_store_v002::SnapshotStoreError;
 pub use snapshot_store_v002::SnapshotStoreV002;
 pub use snapshot_store_v003::SnapshotStoreV003;

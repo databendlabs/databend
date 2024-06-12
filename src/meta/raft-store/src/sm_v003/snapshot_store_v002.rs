@@ -13,18 +13,14 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use std::fs;
 use std::io;
 use std::str::FromStr;
 
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::ErrorSubject;
-use databend_common_meta_types::LogId;
 use databend_common_meta_types::SnapshotData;
-use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StorageIOError;
-use databend_common_meta_types::TempSnapshotData;
 use log::error;
 use log::info;
 use log::warn;
@@ -34,7 +30,6 @@ use openraft::SnapshotId;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
-use crate::sm_v003::writer_v002::WriterV002;
 use crate::snapshot_config::SnapshotConfig;
 use crate::state_machine::MetaSnapshotId;
 
@@ -201,56 +196,6 @@ impl SnapshotStoreV002 {
         Ok((snapshot_ids, invalid_files))
     }
 
-    pub fn new_writer(&self) -> Result<WriterV002, SnapshotStoreError> {
-        self.snapshot_config
-            .ensure_snapshot_dir()
-            .map_err(|e| SnapshotStoreError::write(e).with_meta("creating snapshot writer", ""))?;
-
-        WriterV002::new(&self.snapshot_config)
-            .map_err(|e| SnapshotStoreError::write(e).with_context("creating snapshot writer"))
-    }
-
-    /// Create a temp and empty snapshot data to receive snapshot from remote.
-    pub async fn new_temp(&self) -> Result<SnapshotData, io::Error> {
-        let p = self.snapshot_config.snapshot_temp_path();
-
-        SnapshotData::new_temp(p).await
-    }
-
-    /// Commit [`TempSnapshotData`] to a snapshot file with a generated snapshot id.
-    pub fn commit_snapshot_data_gen_id(
-        &self,
-        temp: TempSnapshotData,
-        last_applied: Option<LogId>,
-        key_cnt: u64,
-    ) -> Result<(MetaSnapshotId, SnapshotData), io::Error> {
-        let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied).with_key_num(Some(key_cnt));
-        let d = self.commit_snapshot_data(temp, snapshot_id.clone())?;
-        Ok((snapshot_id, d))
-    }
-
-    /// Commit [`TempSnapshotData`] to a snapshot file with the given snapshot id.
-    pub fn commit_snapshot_data(
-        &self,
-        temp: TempSnapshotData,
-        snapshot_id: MetaSnapshotId,
-    ) -> Result<SnapshotData, io::Error> {
-        if snapshot_id.key_num.is_none() {
-            warn!("snapshot_id.key_num is not set: {:?}", snapshot_id);
-        }
-
-        let final_path = self.snapshot_config.snapshot_path(&snapshot_id.to_string());
-        let d = temp.commit(final_path.clone())?;
-
-        info!(
-            "snapshot committed: snapshot_id: {}, path: {}",
-            snapshot_id.to_string(),
-            final_path
-        );
-
-        Ok(d)
-    }
-
     /// Return a snapshot for async reading
     pub async fn load_snapshot(
         &self,
@@ -266,34 +211,6 @@ impl SnapshotStoreV002 {
             error!("failed to open snapshot file({}): {}", path, e);
             SnapshotStoreError::read(e).with_meta("opening snapshot file", path)
         })?;
-
-        Ok(d)
-    }
-
-    /// Finish receiving a snapshot.
-    ///
-    /// Move it from the temp path to the final path and make it visible.
-    /// It returns the final snapshot for reading.
-    pub async fn commit_received(
-        &self,
-        mut temp: Box<SnapshotData>,
-        meta: &SnapshotMeta,
-    ) -> Result<SnapshotData, SnapshotStoreError> {
-        assert!(temp.is_temp());
-
-        let src = temp.path().to_string();
-
-        temp.sync_all()
-            .await
-            .map_err(|e| SnapshotStoreError::read(e).with_meta("temp.sync_all(): {}", &src))?;
-
-        let dst = self.snapshot_config.snapshot_path(&meta.snapshot_id);
-
-        fs::rename(&src, &dst).map_err(|e| {
-            SnapshotStoreError::read(e).with_context(format_args!("rename: {} to {}", &src, &dst))
-        })?;
-
-        let d = self.load_snapshot(&meta.snapshot_id).await?;
 
         Ok(d)
     }
