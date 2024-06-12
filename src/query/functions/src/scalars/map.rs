@@ -249,7 +249,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
                 type_tuple[0].clone()
             }
-            DataType::EmptyMap => DataType::EmptyMap,
             _ => return None,
         };
 
