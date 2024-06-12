@@ -91,6 +91,7 @@ message FileFormatParams {
 message ParquetFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
+  repeated string null_if = 4;
 }
 
 message CsvFileFormatParams {
