@@ -19,14 +19,18 @@ runs:
 
     - name: Test compatibility
       shell: bash
+      # test-*.sh <old-query-ver> <meta-ver> <test-suite>
+      # The `meta-ver` must be compatible with `<old-query-ver>` and the latest version.
+      #
+      # `meta-ver` is not the target to test, just choose one that is compatible with `<old-query-ver>` and the latest query.
       run: |
-          bash ./tests/fuse-compat/test-fuse-compat.sh 1.1.46 base
-          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.241 revoke
-          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.306 rbac
-          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.307 rbac
-          bash ./tests/fuse-compat/test-fuse-compat.sh 1.2.318 rbac
-          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 rbac
-          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.46  1.2.527 base
+          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.241 1.2.527 revoke
+          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.306 1.2.527 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.307 1.2.527 rbac
+          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.318 1.2.527 rbac
+          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 1.2.527 rbac
+          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 1.2.527 rbac
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

@@ -115,22 +115,22 @@ run_test() {
     python3 -m pip list
 
     local query_old_ver="$1"
-    local old_config_path="$2"
-    local logictest_path="tests/fuse-compat/compat-logictest/$3"
-    local forward="$4"
+    local meta_ver="$2"
+    local old_config_path="$3"
+    local logictest_path="tests/fuse-compat/compat-logictest/$4"
+    local forward="$5"
 
     echo " === Test with query-$query_old_ver and current query"
 
     local query_old="./bins/$query_old_ver/bin/databend-query"
     local query_new="./bins/current/databend-query"
-    local metasrv_old="./bins/$query_old_ver/bin/databend-meta"
-    local metasrv_new="./bins/current/databend-meta"
+    local metasrv_old="./bins/$meta_ver/bin/databend-meta"
     local sqllogictests="./bins/current/databend-sqllogictests"
 
 
-    echo " === metasrv version:"
+    echo " === metasrv version"
     # TODO remove --single
-    "$metasrv_new" --single --cmd ver || echo " === no version yet"
+    "$metasrv_old" --single --cmd ver || echo " === no version yet"
 
     echo " === old query version:"
     "$query_old" --cmd ver || echo " === no version yet"
@@ -153,16 +153,14 @@ run_test() {
 
     if [ "$forward" == "forward" ]
     then
-        echo ' === Start new databend-meta and databend-query...'
+        echo ' === Start databend-meta and new databend-query...'
         config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
         log="query-current.log"
-        start $metasrv_new $query_new $config_path $log
+        start $metasrv_old $query_new $config_path $log
 
         echo " === Run test: fuse_compat_write with current query"
     else
-        echo ' === Start old databend-meta...'
-
-        echo ' === Start old databend-meta and databend-query...'
+        echo ' === Start databend-meta and old databend-query...'
         log="query-old.log"
         start "$metasrv_old" "$query_old" "$old_config_path" $log
 
@@ -177,19 +175,18 @@ run_test() {
     $sqllogictests --handlers mysql --suites "$logictest_path" --run_file fuse_compat_write
 
     kill_proc databend-query
-    kill_proc databend-meta
 
     if [ "$forward" == 'forward' ]
     then
         echo " === Start old databend-meta and databend-query..."
         log="query-old.log"
-        start "$metasrv_old" "$query_old" "$old_config_path" $log
+        start "" "$query_old" "$old_config_path" $log
         echo " === Run test: fuse_compat_read with old query"
     else
         echo ' === Start new databend-meta and databend-query...'
         config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
         log="query-current.log"
-        start $metasrv_new $query_new $config_path $log
+        start "" $query_new $config_path $log
         echo " === Run test: fuse_compat_read with current query"
     fi
 
@@ -203,10 +200,15 @@ start() {
       local config_path="$3"
       local log="$4"
       export RUST_BACKTRACE=1
-      echo " === Start $metasrv databend-meta..."
 
-      nohup "$metasrv" --single --log-level=DEBUG &
-      python3 scripts/ci/wait_tcp.py --timeout 20 --port 9191
+      if [ ".$metasrv" = "." ]; then
+          echo " === Do not start databend-meta"
+      else
+          echo " === Start $metasrv databend-meta..."
+
+          nohup "$metasrv" --single --log-level=DEBUG &
+          python3 scripts/ci/wait_tcp.py --timeout 20 --port 9191
+      fi
 
       echo " === Start $query databend-query..."
 
@@ -215,6 +217,7 @@ start() {
       nohup "$query" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" > "$log" &
       python3 scripts/ci/wait_tcp.py --timeout 30 --port 3307
 }
+
 # Run suppelmentary stateless tests
 run_stateless() {
     local case_path="$1"
