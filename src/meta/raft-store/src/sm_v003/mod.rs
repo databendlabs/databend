@@ -14,7 +14,6 @@
 
 #[allow(clippy::module_inception)]
 mod sm_v003;
-mod snapshot_data_impl;
 mod snapshot_stat;
 mod snapshot_store_v002;
 mod snapshot_store_v003;

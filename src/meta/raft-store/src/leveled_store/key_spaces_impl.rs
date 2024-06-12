@@ -145,6 +145,7 @@ mod tests {
 
     #[test]
     fn test_expire_encode_decode() {
+        #[allow(clippy::redundant_closure)]
         let exp = |time_ms, seq| ExpireKey::new(time_ms, seq);
 
         t_expire_codec(exp(0, 0), "00000000000000000000/00000000000000000000");
