@@ -31,6 +31,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::physical_plans::RangeJoinCondition;
 use databend_common_sql::executor::physical_plans::RangeJoinType;
+use databend_common_sql::plans::JoinType;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -61,6 +62,7 @@ pub struct RangeJoinState {
     pub(crate) finished_tasks: AtomicU64,
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
+    pub(crate) join_type: JoinType,
 }
 
 impl RangeJoinState {
@@ -88,6 +90,7 @@ impl RangeJoinState {
             row_offset: RwLock::new(vec![]),
             finished_tasks: AtomicU64::new(0),
             ie_join_state,
+            join_type: range_join.join_type.clone(),
         }
     }
 
