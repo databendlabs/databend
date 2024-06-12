@@ -1089,6 +1089,22 @@ select to_timestamp('10000-09-09 01:46:39', '%Y-%m-%d %H:%M:%S');
 ----
 NULL
 
+statement error 1006
+select to_timestamp('10000-09-09 01:46:39', '%s-%m-%d %H:%M:%S');
+
+query T
+select try_to_timestamp('10000-09-09 01:46:39', '%s-%m-%d %H:%M:%S');
+----
+NULL
+
+statement error 1006
+select to_date('2022-02-02', '%m');
+
+query T
+select try_to_date('2022-02-02', '%m');
+----
+NULL
+
 query I
 select week('2017-01-01');
 ----
