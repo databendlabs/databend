@@ -225,10 +225,6 @@ impl<'a> TypeChecker<'a> {
         Ok((scalar.clone(), data_type.clone()))
     }
 
-    pub fn resolve_new(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve(expr)
-    }
-
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -282,7 +278,7 @@ impl<'a> TypeChecker<'a> {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                             let expr = parse_expr(&sql_tokens, self.dialect)?;
-                            return self.resolve_new(&expr);
+                            return self.resolve(&expr);
                         } else {
                             let data_type = *column.data_type.clone();
                             (
@@ -305,7 +301,7 @@ impl<'a> TypeChecker<'a> {
                         if let Some(virtual_computed_expr) = column.virtual_computed_expr {
                             let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                             let expr = parse_expr(&sql_tokens, self.dialect)?;
-                            return self.resolve_new(&expr);
+                            return self.resolve(&expr);
                         } else {
                             let data_type = *column.data_type.clone();
                             (
@@ -474,7 +470,7 @@ impl<'a> TypeChecker<'a> {
                             expr: Box::new(result),
                         };
                     }
-                    self.resolve_new(&result)?
+                    self.resolve(&result)?
                 }
             }
 
@@ -586,7 +582,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, data_type) = self.resolve_new(expr)?;
+                let box (scalar, data_type) = self.resolve(expr)?;
                 if target_type == &TypeName::Variant {
                     if let Some(result) =
                         self.resolve_cast_to_variant(expr.span(), &data_type, &scalar, false)
@@ -629,7 +625,7 @@ impl<'a> TypeChecker<'a> {
             Expr::TryCast {
                 expr, target_type, ..
             } => {
-                let box (scalar, data_type) = self.resolve_new(expr)?;
+                let box (scalar, data_type) = self.resolve(expr)?;
                 if target_type == &TypeName::Variant {
                     if let Some(result) =
                         self.resolve_cast_to_variant(expr.span(), &data_type, &scalar, true)
@@ -850,7 +846,7 @@ impl<'a> TypeChecker<'a> {
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
                     let mut new_params = Vec::with_capacity(params.len());
                     for param in params {
-                        let box (scalar, _data_type) = self.resolve_new(param)?;
+                        let box (scalar, _data_type) = self.resolve(param)?;
                         let expr = scalar.as_expr()?;
                         let (expr, _) =
                             ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
@@ -911,7 +907,7 @@ impl<'a> TypeChecker<'a> {
                     // Scalar function
                     let mut new_params: Vec<Scalar> = Vec::with_capacity(params.len());
                     for param in params {
-                        let box (scalar, _data_type) = self.resolve_new(param)?;
+                        let box (scalar, _data_type) = self.resolve(param)?;
                         let expr = scalar.as_expr()?;
                         let (expr, _) =
                             ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
@@ -1147,13 +1143,13 @@ impl<'a> TypeChecker<'a> {
         self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in spec.partition_by.iter() {
-            let box (part, _part_type) = self.resolve_new(p)?;
+            let box (part, _part_type) = self.resolve(p)?;
             partitions.push(part);
         }
 
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in spec.order_by.iter() {
-            let box (order, _) = self.resolve_new(&o.expr)?;
+            let box (order, _) = self.resolve(&o.expr)?;
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
@@ -1270,7 +1266,7 @@ impl<'a> TypeChecker<'a> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
             | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (expr, _) = self.resolve_new(expr)?;
+                let box (expr, _) = self.resolve(expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let databend_common_expression::Expr::Constant { scalar, .. } = expr {
@@ -1437,7 +1433,7 @@ impl<'a> TypeChecker<'a> {
         let mut arguments = vec![];
         let mut arg_types = vec![];
         for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve_new(arg)?;
+            let box (argument, arg_type) = self.resolve(arg)?;
             arguments.push(argument);
             arg_types.push(arg_type);
         }
@@ -1677,7 +1673,7 @@ impl<'a> TypeChecker<'a> {
         let mut arguments = vec![];
         let mut arg_types = vec![];
         for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve_new(arg)?;
+            let box (argument, arg_type) = self.resolve(arg)?;
             arguments.push(argument);
             arg_types.push(arg_type);
         }
@@ -1849,7 +1845,7 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let box (mut arg, arg_type) = self.resolve_new(args[0])?;
+        let box (mut arg, arg_type) = self.resolve(args[0])?;
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
@@ -2038,7 +2034,7 @@ impl<'a> TypeChecker<'a> {
         let field_arg = args[0];
         let query_arg = args[1];
 
-        let box (field_scalar, _) = self.resolve_new(field_arg)?;
+        let box (field_scalar, _) = self.resolve(field_arg)?;
         let column_refs = match field_scalar {
             // single field without boost
             ScalarExpr::BoundColumnRef(column_ref) => {
@@ -2077,7 +2073,7 @@ impl<'a> TypeChecker<'a> {
                             )),
                         },
                     };
-                    let box (field_scalar, _) = self.resolve_new(&column_expr)?;
+                    let box (field_scalar, _) = self.resolve(&column_expr)?;
                     let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
                         return Err(ErrorCode::SemanticError(
                             "invalid arguments for search function, field must be a column"
@@ -2111,7 +2107,7 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        let box (query_scalar, _) = self.resolve_new(query_arg)?;
+        let box (query_scalar, _) = self.resolve(query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
@@ -2174,7 +2170,7 @@ impl<'a> TypeChecker<'a> {
 
         let query_arg = args[0];
 
-        let box (query_scalar, _) = self.resolve_new(query_arg)?;
+        let box (query_scalar, _) = self.resolve(query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
@@ -2214,7 +2210,7 @@ impl<'a> TypeChecker<'a> {
                     )),
                 },
             };
-            let box (field_scalar, _) = self.resolve_new(&column_expr)?;
+            let box (field_scalar, _) = self.resolve(&column_expr)?;
             let Ok(column_ref) = BoundColumnRef::try_from(field_scalar) else {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column".to_string(),
@@ -2363,7 +2359,7 @@ impl<'a> TypeChecker<'a> {
         let mut arg_types = vec![];
 
         for argument in arguments {
-            let box (arg, mut arg_type) = self.resolve_new(argument)?;
+            let box (arg, mut arg_type) = self.resolve(argument)?;
             if let ScalarExpr::SubqueryExpr(subquery) = &arg {
                 if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
                     arg_type = arg_type.wrap_nullable();
@@ -2509,8 +2505,8 @@ impl<'a> TypeChecker<'a> {
             }
             BinaryOperator::SoundsLike => {
                 // rewrite "expr1 SOUNDS LIKE expr2" to "SOUNDEX(expr1) = SOUNDEX(expr2)"
-                let box (left, _) = self.resolve_new(left)?;
-                let box (right, _) = self.resolve_new(right)?;
+                let box (left, _) = self.resolve(left)?;
+                let box (right, _) = self.resolve(right)?;
 
                 let (left, _) =
                     *self.resolve_scalar_function_call(span, "soundex", vec![], vec![left])?;
@@ -2553,7 +2549,7 @@ impl<'a> TypeChecker<'a> {
         match op {
             UnaryOperator::Plus => {
                 // Omit unary + operator
-                self.resolve_new(child)
+                self.resolve(child)
             }
             other => {
                 let name = other.to_func_name();
@@ -2594,11 +2590,11 @@ impl<'a> TypeChecker<'a> {
         let mut args = vec![];
         let mut arg_types = vec![];
 
-        let (date, date_type) = *self.resolve_new(date)?;
+        let (date, date_type) = *self.resolve(date)?;
         args.push(date);
         arg_types.push(date_type);
 
-        let (interval, interval_type) = *self.resolve_new(interval)?;
+        let (interval, interval_type) = *self.resolve(interval)?;
 
         args.push(interval);
         arg_types.push(interval_type);
@@ -2732,7 +2728,7 @@ impl<'a> TypeChecker<'a> {
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            let box (scalar, _) = self.resolve_new(&expr)?;
+            let box (scalar, _) = self.resolve(&expr)?;
             child_scalar = Some(Box::new(scalar));
         }
 
@@ -2795,24 +2791,24 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         match (func_name.to_lowercase().as_str(), args) {
             ("database" | "currentdatabase" | "current_database", &[]) => {
-                Some(self.resolve_new(&Expr::Literal {
+                Some(self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(self.ctx.get_current_database()),
                 }))
             }
-            ("version", &[]) => Some(self.resolve_new(&Expr::Literal {
+            ("version", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_fuse_version()),
             })),
             ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
-                Ok(user) => Some(self.resolve_new(&Expr::Literal {
+                Ok(user) => Some(self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(user.identity().display().to_string()),
                 })),
                 Err(e) => Some(Err(e)),
             },
             ("current_role", &[]) => Some(
-                self.resolve_new(&Expr::Literal {
+                self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(
                         self.ctx
@@ -2822,13 +2818,13 @@ impl<'a> TypeChecker<'a> {
                     ),
                 }),
             ),
-            ("connection_id", &[]) => Some(self.resolve_new(&Expr::Literal {
+            ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_connection_id()),
             })),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
-                Some(self.resolve_new(&Expr::Literal {
+                Some(self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(tz),
                 }))
@@ -2998,7 +2994,7 @@ impl<'a> TypeChecker<'a> {
                     if args.is_empty() {
                         -1
                     } else {
-                        let box (scalar, _) = self.resolve_new(args[0])?;
+                        let box (scalar, _) = self.resolve(args[0])?;
 
                         let expr = scalar.as_expr()?;
                         match expr {
@@ -3021,7 +3017,7 @@ impl<'a> TypeChecker<'a> {
                 Some(match res {
                     Ok(index) => {
                         let query_id = self.ctx.get_last_query_id(index as i32);
-                        self.resolve_new(&Expr::Literal {
+                        self.resolve(&Expr::Literal {
                             span,
                             value: Literal::String(query_id),
                         })
@@ -3036,7 +3032,7 @@ impl<'a> TypeChecker<'a> {
                 let mut asc = true;
                 let mut nulls_first = true;
                 if args.len() >= 2 {
-                    let box (arg, _) = self.resolve_new(args[1]).ok()?;
+                    let box (arg, _) = self.resolve(args[1]).ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
                         if let Scalar::String(sort_order) = arg.value {
                             if sort_order.eq_ignore_ascii_case("asc") {
@@ -3060,7 +3056,7 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
                 if args.len() == 3 {
-                    let box (arg, _) = self.resolve_new(args[2]).ok()?;
+                    let box (arg, _) = self.resolve(args[2]).ok()?;
                     if let Ok(arg) = ConstantExpr::try_from(arg) {
                         if let Scalar::String(nulls_order) = arg.value {
                             if nulls_order.eq_ignore_ascii_case("nulls first") {
@@ -3096,7 +3092,7 @@ impl<'a> TypeChecker<'a> {
                 if args.len() != 2 {
                     return None;
                 }
-                let box (arg, _) = self.resolve_new(args[1]).ok()?;
+                let box (arg, _) = self.resolve(args[1]).ok()?;
                 if let Ok(arg) = ConstantExpr::try_from(arg) {
                     if let Scalar::String(aggr_func_name) = arg.value {
                         let func_name = format!("array_{}", aggr_func_name);
@@ -3112,14 +3108,14 @@ impl<'a> TypeChecker<'a> {
                 if args.len() != 1 {
                     return None;
                 }
-                let box (scalar, data_type) = self.resolve_new(args[0]).ok()?;
+                let box (scalar, data_type) = self.resolve(args[0]).ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, false)
             }
             ("try_to_variant", args) => {
                 if args.len() != 1 {
                     return None;
                 }
-                let box (scalar, data_type) = self.resolve_new(args[0]).ok()?;
+                let box (scalar, data_type) = self.resolve(args[0]).ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
             }
             ("greatest", args) => {
@@ -3148,7 +3144,7 @@ impl<'a> TypeChecker<'a> {
                 TrimWhere::Both => "trim_both",
             };
 
-            let box (trim_scalar, trim_type) = self.resolve_new(trim_expr)?;
+            let box (trim_scalar, trim_type) = self.resolve(trim_expr)?;
             (func_name, trim_scalar, trim_type)
         } else {
             let trim_scalar = ConstantExpr {
@@ -3159,7 +3155,7 @@ impl<'a> TypeChecker<'a> {
             ("trim_both", trim_scalar, DataType::String)
         };
 
-        let box (trim_source, _source_type) = self.resolve_new(expr)?;
+        let box (trim_source, _source_type) = self.resolve(expr)?;
         let args = vec![trim_source, trim_scalar];
 
         self.resolve_scalar_function_call(span, func_name, vec![], args)
@@ -3195,7 +3191,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_array(&mut self, span: Span, exprs: &[Expr]) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve_new(expr)?;
+            let box (arg, _data_type) = self.resolve(expr)?;
             elems.push(arg);
         }
 
@@ -3212,7 +3208,7 @@ impl<'a> TypeChecker<'a> {
         for (key_expr, val_expr) in kvs {
             let box (key_arg, _data_type) = self.resolve_literal(span, key_expr)?;
             keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve_new(val_expr)?;
+            let box (val_arg, _data_type) = self.resolve(val_expr)?;
             vals.push(val_arg);
         }
         let box (key_arg, _data_type) =
@@ -3227,7 +3223,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_tuple(&mut self, span: Span, exprs: &[Expr]) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve_new(expr)?;
+            let box (arg, _data_type) = self.resolve(expr)?;
             args.push(arg);
         }
 
@@ -3337,7 +3333,7 @@ impl<'a> TypeChecker<'a> {
 
         let mut args = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
-            let box (arg, ty) = self.resolve_new(argument)?;
+            let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
             } else {
@@ -3446,7 +3442,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
-            let box (arg, ty) = self.resolve_new(argument)?;
+            let box (arg, ty) = self.resolve(argument)?;
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
             } else {
@@ -3513,7 +3509,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(None)
             })
             .map_err(|e| e.set_span(span))?;
-        let scalar = self.resolve_new(&udf_expr)?;
+        let scalar = self.resolve(&udf_expr)?;
         Ok(Box::new((
             UDFLambdaCall {
                 span,
@@ -3626,7 +3622,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (mut scalar, data_type) = self.resolve_new(expr)?;
+        let box (mut scalar, data_type) = self.resolve(expr)?;
         // Variant type can be converted to `get_by_keypath` function.
         if data_type.remove_nullable() == DataType::Variant {
             return self.resolve_variant_map_access(scalar, &mut paths);
@@ -3868,7 +3864,7 @@ impl<'a> TypeChecker<'a> {
         let data_type = ctx.columns[0].data_type.clone();
         let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
         let rel_prop = rel_expr.derive_relational_prop()?;
-        let box (scalar, _) = self.resolve_new(expr)?;
+        let box (scalar, _) = self.resolve(expr)?;
         let child_scalar = Some(Box::new(scalar));
         let subquery_expr = SubqueryExpr {
             span: None,

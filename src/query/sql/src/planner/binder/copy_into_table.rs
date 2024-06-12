@@ -373,9 +373,7 @@ impl<'a> Binder {
             .await?;
 
         // Generate an analyzed select list with from context
-        let select_list = self
-            .normalize_select_list(&mut from_context, select_list)
-            .await?;
+        let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {

@@ -219,8 +219,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    #[async_backtrace::framed]
-    pub async fn normalize_select_list<'a>(
+    pub fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
@@ -252,8 +251,7 @@ impl Binder {
                         names.as_slice(),
                         column_filter,
                         &mut output,
-                    )
-                    .await?;
+                    )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
                     let mut scalar_binder = ScalarBinder::new(
@@ -304,8 +302,7 @@ impl Binder {
         Ok(output)
     }
 
-    #[async_backtrace::framed]
-    async fn build_select_item<'a>(
+    fn build_select_item<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -343,8 +340,7 @@ impl Binder {
         })
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_star_columns<'a>(
+    fn resolve_star_columns<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -439,9 +435,12 @@ impl Binder {
                 column_ids.push(column_binding.index);
                 column_names.push(column_binding.column_name.clone())
             } else {
-                let item = self
-                    .build_select_item(span, input_context, select_target, column_binding.clone())
-                    .await?;
+                let item = self.build_select_item(
+                    span,
+                    input_context,
+                    select_target,
+                    column_binding.clone(),
+                )?;
                 output.items.push(item);
                 adds += 1;
             }
@@ -533,14 +532,12 @@ impl Binder {
                         .iter()
                         .filter(|x| new_column_idx.contains(&x.index))
                     {
-                        let item = self
-                            .build_select_item(
-                                span,
-                                input_context,
-                                select_target,
-                                column_binding.clone(),
-                            )
-                            .await?;
+                        let item = self.build_select_item(
+                            span,
+                            input_context,
+                            select_target,
+                            column_binding.clone(),
+                        )?;
                         output.items.push(item);
                     }
                 }

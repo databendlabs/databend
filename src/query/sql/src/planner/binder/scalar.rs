@@ -90,7 +90,7 @@ impl<'a> ScalarBinder<'a> {
         )?;
         type_checker.set_m_cte_bound_ctx(self.m_cte_bound_ctx.clone());
         type_checker.set_ctes_map(self.ctes_map.clone());
-        Ok(*type_checker.resolve_new(expr)?)
+        Ok(*type_checker.resolve(expr)?)
     }
 
     pub fn get_func_ctx(&self) -> Result<FunctionContext> {

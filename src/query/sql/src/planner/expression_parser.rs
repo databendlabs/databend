@@ -135,7 +135,7 @@ pub fn parse_exprs(
     let exprs = ast_exprs
         .iter()
         .map(|ast| {
-            let (scalar, _) = *type_checker.resolve_new(&ast)?;
+            let (scalar, _) = *type_checker.resolve(ast)?;
             let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
             Ok(expr)
         })
@@ -232,7 +232,7 @@ pub fn parse_computed_expr(
         )));
     }
     let ast = asts.remove(0);
-    let (scalar, _) = *type_checker.resolve_new(&ast)?;
+    let (scalar, _) = *type_checker.resolve(&ast)?;
     let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
     Ok(expr)
 }
@@ -257,7 +257,7 @@ pub fn parse_default_expr_to_string(
         false,
     )?;
 
-    let (mut scalar, data_type) = *type_checker.resolve_new(&ast)?;
+    let (mut scalar, data_type) = *type_checker.resolve(ast)?;
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
@@ -322,7 +322,7 @@ pub fn parse_computed_expr_to_string(
         false,
     )?;
 
-    let (scalar, data_type) = *type_checker.resolve_new(&ast)?;
+    let (scalar, data_type) = *type_checker.resolve(ast)?;
     if data_type != DataType::from(field.data_type()) {
         return Err(ErrorCode::SemanticError(format!(
             "expected computed column expression have type {}, but `{}` has type {}.",
@@ -382,7 +382,7 @@ pub fn parse_lambda_expr(
         false,
     )?;
 
-    type_checker.resolve_new(&ast)
+    type_checker.resolve(ast)
 }
 
 pub fn parse_cluster_keys(
@@ -420,7 +420,7 @@ pub fn parse_cluster_keys(
 
     let mut exprs = Vec::with_capacity(ast_exprs.len());
     for ast in ast_exprs {
-        let (scalar, _) = *type_checker.resolve_new(&ast)?;
+        let (scalar, _) = *type_checker.resolve(&ast)?;
         let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
 
         let inner_type = expr.data_type().remove_nullable();
