@@ -35,8 +35,7 @@ use crate::Binder;
 impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details.
-    #[async_backtrace::framed]
-    pub async fn analyze_aggregate_having<'a>(
+    pub fn analyze_aggregate_having(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -52,7 +51,7 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (mut scalar, _) = scalar_binder.bind(having).await?;
+        let (mut scalar, _) = scalar_binder.bind(having)?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         rewriter.visit(&mut scalar)?;
         Ok(scalar)

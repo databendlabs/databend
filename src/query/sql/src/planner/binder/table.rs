@@ -529,7 +529,7 @@ impl Binder {
                     &[],
                     false,
                 )?;
-                let box (scalar, _) = type_checker.resolve(expr).await?;
+                let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
@@ -567,7 +567,7 @@ impl Binder {
                     &[],
                     false,
                 )?;
-                let box (scalar, _) = type_checker.resolve(expr).await?;
+                let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;
 
                 let (new_expr, _) = ConstantFolder::fold(

@@ -114,7 +114,7 @@ impl Binder {
             }
 
             // TODO(zhyass): update_list support subquery.
-            let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
+            let (scalar, _) = scalar_binder.bind(&update_expr.expr)?;
             if !self.check_allowed_scalar_expr(&scalar)? {
                 return Err(ErrorCode::SemanticError(
                     "update_list in update statement can't contain subquery|window|aggregate|udf functions|async functions".to_string(),

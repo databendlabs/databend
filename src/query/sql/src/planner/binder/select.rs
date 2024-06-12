@@ -88,7 +88,7 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (scalar, _) = scalar_binder.bind(expr).await?;
+        let (scalar, _) = scalar_binder.bind(expr)?;
 
         let f = |scalar: &ScalarExpr| {
             matches!(
