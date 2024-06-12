@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use databend_common_pipeline_core::processors::*;
-pub(crate) mod transforms;
+use databend_common_ast::ast::SetOperation;
+use derive_visitor::VisitorMut;
 
-pub use transforms::DeduplicateRowNumber;
-pub use transforms::HashJoinBuildState;
-pub use transforms::HashJoinDesc;
-pub use transforms::HashJoinState;
-pub use transforms::TransformAddStreamColumns;
-pub use transforms::TransformCastSchema;
-pub use transforms::TransformCreateSets;
-pub use transforms::TransformLimit;
-pub use transforms::TransformNullIf;
-pub use transforms::TransformResortAddOn;
-pub use transforms::TransformResortAddOnWithoutSourceSchema;
-pub use transforms::TransformWindow;
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SetOperation(enter))]
+pub struct CountSetOps {
+    pub count: usize,
+}
+
+impl CountSetOps {
+    pub fn enter_set_operation(&mut self, _set_operation: &SetOperation) {
+        self.count += 1;
+    }
+}

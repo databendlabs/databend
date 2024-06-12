@@ -292,3 +292,29 @@ drop table test4;
 
 statement ok
 drop table t;
+
+statement ok
+set max_set_operator_count = 10;
+
+# The number of set operations: 15 exceeds the limit: 10.
+query error
+SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(3), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(4), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(5), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(6), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(7), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(8), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(9), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(10), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(11), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(12), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(13), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(14), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(15), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(16), 'numbers(10)' FROM numbers(10);
+
+
+statement ok
+unset max_set_operator_count;
