@@ -52,6 +52,7 @@ impl DBBuilder {
         Ok(b)
     }
 
+    /// This method is only used for test.
     #[allow(dead_code)]
     pub fn new_with_default_config<P: AsRef<Path>>(path: P) -> Result<Self, io::Error> {
         let mut config = rotbl::v001::Config::default();
@@ -64,6 +65,7 @@ impl DBBuilder {
         self.rotbl_builder.append_kv(k, v)
     }
 
+    /// This method is only used for test
     #[allow(dead_code)]
     pub async fn append_kv_stream(
         &mut self,
