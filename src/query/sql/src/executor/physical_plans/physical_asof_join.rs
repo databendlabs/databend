@@ -47,6 +47,8 @@ use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::Visibility;
+use crate::ColumnEntry;
+use crate::DerivedColumn;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsofJoin {
@@ -100,6 +102,12 @@ impl PhysicalPlanBuilder {
         )?;
         let mut ss_expr = s_expr.clone();
         ss_expr.children[1] = Arc::new(window_plan);
+        let join_type = match join.join_type {
+                JoinType::Asof => Ok(JoinType::Inner),
+                JoinType::LeftAsof => Ok(JoinType::Left),
+                JoinType::RightAsof => Ok(JoinType::Right),
+                _ => Err(ErrorCode::Internal("unsupported join type!"))
+        }?;
         let left_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
@@ -400,6 +408,32 @@ impl PhysicalPlanBuilder {
         if let ScalarExpr::BoundColumnRef(col) = &arg {
             Ok(col.clone())
         } else {
+            for entry in self.metadata.read().columns() {
+                if let ColumnEntry::DerivedColumn(DerivedColumn {
+                    scalar_expr,
+                    alias,
+                    column_index,
+                    data_type,
+                    ..
+                }) = entry
+                {
+                    if scalar_expr.as_ref() == Some(arg) {
+                        // Generate a ColumnBinding for each argument of aggregates
+                        let column = ColumnBindingBuilder::new(
+                            alias.to_string(),
+                            *column_index,
+                            Box::new(data_type.clone()),
+                            Visibility::Visible,
+                        )
+                        .build();
+
+                        return Ok(BoundColumnRef {
+                            span: arg.span(),
+                            column,
+                        });
+                    }
+                }
+            }
             let ty = arg.data_type()?;
             let index = self.metadata.write().add_derived_column(
                 name.to_string(),
