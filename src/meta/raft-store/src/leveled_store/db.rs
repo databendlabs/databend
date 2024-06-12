@@ -46,6 +46,7 @@ use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
 
+/// Export DB data to a stream of [`SMEntry`].
 pub struct DBExporter<'a> {
     db: &'a DB,
 }
@@ -55,6 +56,7 @@ impl<'a> DBExporter<'a> {
         Self { db }
     }
 
+    /// Convert sys data to a series of [`SMEntry`] for export.
     pub fn sys_data_sm_entries(&self) -> Result<Vec<SMEntry>, io::Error> {
         let sys_data: SysData = serde_json::from_str(self.db.inner().meta().user_data())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
