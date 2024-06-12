@@ -123,7 +123,6 @@ pub use crate::grpc_helper::GrpcHelper;
 pub use crate::non_empty::NonEmptyStr;
 pub use crate::non_empty::NonEmptyString;
 pub use crate::raft_snapshot_data::SnapshotData;
-pub use crate::raft_snapshot_data::TempSnapshotData;
 pub use crate::raft_types::new_log_id;
 pub use crate::raft_types::AppendEntriesRequest;
 pub use crate::raft_types::AppendEntriesResponse;
