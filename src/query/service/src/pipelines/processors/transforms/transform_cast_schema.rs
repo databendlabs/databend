@@ -33,6 +33,7 @@ use crate::pipelines::processors::ProcessorPtr;
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
     insert_schema: DataSchemaRef,
+    select_schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
 
@@ -66,6 +67,7 @@ where Self: Transform
             Self {
                 func_ctx,
                 insert_schema,
+                select_schema,
                 exprs,
             },
         )))
@@ -78,8 +80,23 @@ impl Transform for TransformCastSchema {
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let mut columns = Vec::with_capacity(self.exprs.len());
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
-            let value = evaluator.run(expr)?;
+        for (i, (field, expr)) in self
+            .insert_schema
+            .fields()
+            .iter()
+            .zip(self.exprs.iter())
+            .enumerate()
+        {
+            let value = evaluator.run(expr).map_err(|err| {
+                let msg = format!(
+                    "fail to auto cast column {} ({}) to column {} ({})",
+                    self.select_schema.fields[i].name(),
+                    self.select_schema.fields[i].data_type(),
+                    field.name(),
+                    field.data_type(),
+                );
+                err.add_message(msg)
+            })?;
             let column = BlockEntry::new(field.data_type().clone(), value);
             columns.push(column);
         }
