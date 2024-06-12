@@ -18,7 +18,7 @@ use databend_common_ast::Span;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::DataBlock;
@@ -27,13 +27,13 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
-use futures_util::StreamExt;
 
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
@@ -41,7 +41,7 @@ use crate::pipelines::processors::ProcessorPtr;
 
 pub struct TransformNullIf {
     func_ctx: FunctionContext,
-    insert_schema: DataSchemaRef,
+    schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
 
@@ -76,32 +76,36 @@ where Self: Transform
                 )
             })
             .collect::<Result<Vec<_>>>()?;
+        let schema = Self::new_schema(&select_schema);
         Ok(ProcessorPtr::create(Transformer::create(
             input_port,
             output_port,
             Self {
                 func_ctx,
-                insert_schema,
+                schema,
                 exprs,
             },
         )))
     }
 
-    fn datatype_need_transform(ty: &DataType) -> bool {
-        match ty {
-            DataType::String => true,
-            DataType::Nullable(b) if matches!(**b, DataType::String) => true,
-            _ => false,
-        }
+    pub fn column_need_transform(src_type: &DataType, dest_type: &DataType) -> bool {
+        dest_type.is_nullable()
+            && match src_type {
+                DataType::String => true,
+                DataType::Nullable(b) if matches!(**b, DataType::String) => true,
+                _ => false,
+            }
     }
 
-    fn new_schema(schema: &mut DataSchema) {
+    pub fn new_schema(schema: &Arc<DataSchema>) -> Arc<DataSchema> {
+        let mut schema = schema.as_ref().clone();
         for field in &mut schema.fields {
             if let DataType::String = field.data_type() {
                 *field =
                     DataField::new(field.name(), DataType::Nullable(Box::new(DataType::String)))
             }
         }
+        Arc::new(schema)
     }
 
     fn try_null_if<Index: ColumnIndex>(
@@ -112,26 +116,28 @@ where Self: Transform
         null_str_list: &[String],
     ) -> Result<Expr<Index>> {
         let src_type = expr.data_type();
-        let mut args = null_str_list
-            .iter()
-            .map(|s| Expr::Constant {
-                span,
-                scalar: Scalar::String(s.clone()),
-                data_type: DataType::String,
-            })
-            .collect::<Vec<_>>();
-        args.push(expr.clone());
-        if dest_type.is_nullable() && Self::datatype_need_transform(src_type) {
-            let in_expr = check_function(span, "contains", &[], &args, fn_registry)?;
+        let column = StringType::from_data(null_str_list.to_vec());
+        let args1 = Expr::Constant {
+            span,
+            scalar: Scalar::Array(column),
+            data_type: DataType::Array(Box::new(DataType::String)),
+        };
+        if Self::column_need_transform(src_type, dest_type) {
+            let in_expr =
+                check_function(span, "contains", &[], &[args1, expr.clone()], fn_registry)?;
             let if_expr = check_function(
                 span,
                 "if",
                 &[],
-                &[in_expr, Expr::Constant {
-                    span,
-                    scalar: Scalar::Null,
-                    data_type: DataType::Nullable(Box::new(DataType::String)),
-                }],
+                &[
+                    in_expr,
+                    Expr::Constant {
+                        span,
+                        scalar: Scalar::Null,
+                        data_type: DataType::Nullable(Box::new(DataType::String)),
+                    },
+                    expr,
+                ],
                 fn_registry,
             )?;
             Ok(if_expr)
@@ -147,7 +153,7 @@ impl Transform for TransformNullIf {
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let mut columns = Vec::with_capacity(self.exprs.len());
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
+        for (field, expr) in self.schema.fields().iter().zip(self.exprs.iter()) {
             let value = evaluator.run(expr)?;
             let column = BlockEntry::new(field.data_type().clone(), value);
             columns.push(column);
