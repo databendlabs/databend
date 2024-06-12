@@ -630,4 +630,8 @@ impl Settings {
     pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_temp_files_after_query")
     }
+
+    pub fn get_max_set_operator_count(&self) -> Result<u64> {
+        self.try_get_u64("max_set_operator_count")
+    }
 }
