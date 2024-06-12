@@ -265,7 +265,7 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    let (bound_expr, _) = scalar_binder.bind(expr).await?;
+                    let (bound_expr, _) = scalar_binder.bind(expr)?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match (expr.as_ref(), alias) {
@@ -327,7 +327,7 @@ impl Binder {
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, self.dialect)?;
 
-                let (scalar, _) = scalar_binder.bind(&expr).await?;
+                let (scalar, _) = scalar_binder.bind(&expr)?;
                 scalar
             }
             None => ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -509,7 +509,7 @@ impl Binder {
                 &[],
                 true,
             )?;
-            let (scalar, _) = *type_checker.resolve(&expr).await?;
+            let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
             let (new_expr, _) =
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);

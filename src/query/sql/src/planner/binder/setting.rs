@@ -49,7 +49,7 @@ impl Binder {
             false,
         )?;
 
-        let (scalar, _) = *type_checker.resolve(value).await?;
+        let (scalar, _) = *type_checker.resolve(value)?;
         let scalar = wrap_cast(&scalar, &DataType::String);
         let expr = scalar.as_expr()?;
 

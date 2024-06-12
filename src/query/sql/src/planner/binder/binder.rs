@@ -654,7 +654,7 @@ impl<'a> Binder {
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+            let (scalar, _) = *type_checker.resolve(&hint.expr)?;
 
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;

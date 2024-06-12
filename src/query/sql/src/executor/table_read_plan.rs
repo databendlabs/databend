@@ -257,7 +257,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                     &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
                                     start.elapsed())
                                 );
-                                let scalar = type_checker.resolve(&ast_expr).await?;
+                                let scalar = type_checker.resolve_new(&ast_expr)?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
                                 mask_policy_map.insert(i, expr.as_remote_expr());
                             } else {

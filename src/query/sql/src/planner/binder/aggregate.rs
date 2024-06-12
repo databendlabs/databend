@@ -652,7 +652,6 @@ impl Binder {
             );
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)
-                .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {

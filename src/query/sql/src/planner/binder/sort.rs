@@ -115,7 +115,7 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
+                    let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
                     if let Some((idx, (alias, _))) = aliases
                         .iter()

@@ -220,7 +220,7 @@ impl ReplaceInterpreter {
                 Default::default(),
                 Default::default(),
             );
-            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let (scalar, _) = scalar_binder.bind(expr)?;
             let columns = scalar.used_columns();
             if columns.len() != 1 {
                 return Err(ErrorCode::BadArguments(

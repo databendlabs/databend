@@ -52,7 +52,7 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (mut scalar, _) = scalar_binder.bind(having).await?;
+        let (mut scalar, _) = scalar_binder.bind(having)?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         rewriter.visit(&mut scalar)?;
         Ok(scalar)
