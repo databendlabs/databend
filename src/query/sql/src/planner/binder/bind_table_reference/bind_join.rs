@@ -225,8 +225,15 @@ impl Binder {
                 "Join conditions should be empty in cross join",
             ));
         }
-        if join_type == JoinType::AsOf && non_equi_conditions.is_empty() {
+        if matches!(join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) 
+            && non_equi_conditions.is_empty() {
             return Err(ErrorCode::SemanticError("Missing inequality condition!"));
+        }
+        if join_type == JoinType::RightAsof {
+            join_type = JoinType::LeftAsof;
+            let tmp = left_child;
+            left_child = right_child;
+            right_child = tmp;
         }
         self.push_down_other_conditions(
             &join_type,
@@ -325,7 +332,9 @@ impl Binder {
                 JoinPredicate::ALL(_) => match join_type {
                     JoinType::Cross
                     | JoinType::Inner
-                    | JoinType::AsOf
+                    | JoinType::Asof
+                    | JoinType::LeftAsof
+                    | JoinType::RightAsof
                     | JoinType::LeftSemi
                     | JoinType::LeftAnti
                     | JoinType::RightSemi
@@ -923,7 +932,9 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::RightSemi => JoinType::RightSemi,
         JoinOperator::LeftAnti => JoinType::LeftAnti,
         JoinOperator::RightAnti => JoinType::RightAnti,
-        JoinOperator::AsofJoin => JoinType::AsOf,
+        JoinOperator::AsofJoin => JoinType::Asof,
+        JoinOperator::LeftAsofJoin => JoinType::LeftAsof,
+        JoinOperator::RightAsofJoin => JoinType::RightAsof,
     }
 }
 

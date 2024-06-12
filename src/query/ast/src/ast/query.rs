@@ -792,6 +792,12 @@ impl Display for TableReference {
                     JoinOperator::AsofJoin => {
                         write!(f, " ASOF JOIN")?;
                     }
+                    JoinOperator::LeftAsofJoin => {
+                        write!(f, " LEFT ASOF JOIN")?;
+                    }
+                    JoinOperator::RightAsofJoin => {
+                        write!(f, " RIGHT ASOF JOIN")?;
+                    }
                 }
                 write!(f, " {}", join.right)?;
                 match &join.condition {
@@ -864,7 +870,10 @@ pub enum JoinOperator {
     RightAnti,
     // CrossJoin can only work with `JoinCondition::None`
     CrossJoin,
+    // Asof 
     AsofJoin,
+    LeftAsofJoin,
+    RightAsofJoin,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]

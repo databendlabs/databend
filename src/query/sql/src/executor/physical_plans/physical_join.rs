@@ -35,7 +35,8 @@ pub enum PhysicalJoinType {
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.left_conditions.is_empty() && join.join_type != JoinType::AsOf {
+    if !join.left_conditions.is_empty()
+       && matches!(join.join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
@@ -64,7 +65,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             other_conditions,
         ));
     }
-    if join.join_type == JoinType::AsOf {
+    if matches!(join.join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) {
         return Ok(PhysicalJoinType::AsofJoin(
             range_conditions,
             other_conditions,
