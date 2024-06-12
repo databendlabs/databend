@@ -252,26 +252,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        if map_key_type != DataType::EmptyMap {
-            for arg_type in args_type.iter().skip(1) {
-                if arg_type != &map_key_type {
-                    return None;
-                }
-            }
-        } else {
-            let key_type = &args_type[1];
-            if !key_type.is_boolean()
-                && !key_type.is_string()
-                && !key_type.is_numeric()
-                && !key_type.is_decimal()
-                && !key_type.is_date_or_date_time()
-            {
+        if !map_key_type.is_boolean()
+            && !map_key_type.is_string()
+            && !map_key_type.is_numeric()
+            && !map_key_type.is_decimal()
+            && !map_key_type.is_date_or_date_time()
+        {
+            return None;
+        }
+
+        for arg_type in args_type.iter().skip(1) {
+            if arg_type != &map_key_type {
                 return None;
-            }
-            for arg_type in args_type.iter().skip(2) {
-                if arg_type != key_type {
-                    return None;
-                }
             }
         }
 
