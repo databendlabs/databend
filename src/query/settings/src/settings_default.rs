@@ -745,6 +745,12 @@ impl DefaultSettings {
                     desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_set_operator_count", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })
             ]);
 

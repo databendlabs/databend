@@ -476,7 +476,7 @@ impl Binder {
         target_name: &str,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
-            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(expr)?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
             }
@@ -503,7 +503,7 @@ impl Binder {
             } else {
                 let mut update_columns = HashMap::with_capacity(update_list.len());
                 for update_expr in update_list {
-                    let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
+                    let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr)?;
                     if !self.check_allowed_scalar_expr(&scalar_expr)? {
                         return Err(ErrorCode::SemanticError(
                             "update clause's can't contain subquery|window|aggregate|udf functions"
@@ -567,7 +567,7 @@ impl Binder {
         update_or_insert_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
-            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+            let (scalar_expr, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
                     "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
@@ -621,7 +621,7 @@ impl Binder {
                 ));
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
-                let (mut scalar_expr, _) = scalar_binder.bind(expr).await?;
+                let (mut scalar_expr, _) = scalar_binder.bind(expr)?;
                 if !self.check_allowed_scalar_expr(&scalar_expr)? {
                     return Err(ErrorCode::SemanticError(
                         "insert clause's can't contain subquery|window|aggregate|udf functions"

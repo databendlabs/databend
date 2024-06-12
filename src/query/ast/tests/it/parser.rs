@@ -235,8 +235,8 @@ fn test_statement() {
         r#"SELECT avg((number > 314)::UInt32);"#,
         r#"SELECT 1 - (2 + 3);"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
@@ -439,7 +439,7 @@ fn test_statement() {
         r#"
             COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
-                CREDENTIALS = (
+                CONNECTION = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
                 )
@@ -866,8 +866,8 @@ fn test_statement_error() {
         r#"GRANT select ON UDF a TO 'test-grant';"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
-        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
-        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#,
+        r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,

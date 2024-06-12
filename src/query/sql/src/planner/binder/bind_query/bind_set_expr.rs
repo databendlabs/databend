@@ -44,9 +44,7 @@ impl Binder {
                 ))
                 .await
             }
-            SetExpr::Values { span, values } => {
-                Box::pin(self.bind_values(bind_context, *span, values)).await
-            }
+            SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values),
         }
     }
 }

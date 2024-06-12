@@ -328,6 +328,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(mt::principal::ParquetFileFormatParams {
             missing_field_as: NullAs::Error,
+            null_if: p.null_if,
         })
     }
 
@@ -335,6 +336,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
         Ok(pb::ParquetFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            null_if: self.null_if.clone(),
         })
     }
 }
