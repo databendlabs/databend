@@ -51,8 +51,8 @@ pub trait BloomPruner {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut Option<HashSet<String>>,
-    ) -> bool;
+        is_sample: bool,
+    ) -> (bool, Option<HashSet<String>>);
 
     fn update_index_fields(
         &self,
@@ -133,8 +133,8 @@ impl BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut Option<HashSet<String>>,
-    ) -> Result<bool> {
+        is_sample: bool,
+    ) -> Result<(bool, Option<HashSet<String>>)> {
         let version = index_location.1;
 
         // filter out columns that no longer exist in the indexed block
@@ -192,24 +192,27 @@ impl BloomPrunerCreator {
         };
 
         match maybe_filter {
-            Ok(filter) => Ok(BloomIndex::from_filter_block(
-                self.func_ctx.clone(),
-                filter.filter_schema,
-                filter.filters,
-                version,
-            )?
-            .apply(
-                self.filter_expression.clone(),
-                &self.scalar_map,
-                column_stats,
-                self.data_schema.clone(),
-                invalid_keys,
-            )? != FilterEvalResult::MustFalse),
+            Ok(filter) => {
+                let bloom_index = BloomIndex::from_filter_block(
+                    self.func_ctx.clone(),
+                    filter.filter_schema,
+                    filter.filters,
+                    version,
+                )?;
+                let result = bloom_index.apply(
+                    self.filter_expression.clone(),
+                    &self.scalar_map,
+                    column_stats,
+                    self.data_schema.clone(),
+                    is_sample,
+                )?;
+                Ok((result.0 != FilterEvalResult::MustFalse, result.1))
+            }
             Err(e) if e.code() == ErrorCode::DEPRECATED_INDEX_FORMAT => {
                 // In case that the index is no longer supported, just return true to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)
-                Ok(true)
+                Ok(true, None)
             }
             Err(e) => Err(e),
         }
@@ -280,8 +283,8 @@ impl BloomPruner for BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut Option<HashSet<String>>,
-    ) -> bool {
+        is_sample: bool,
+    ) -> (bool, Option<HashSet<String>>) {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
             match self
@@ -299,11 +302,11 @@ impl BloomPruner for BloomPrunerCreator {
                 Err(e) => {
                     // swallow exceptions intentionally, corrupted index should not prevent execution
                     warn!("failed to apply bloom pruner, returning true. {}", e);
-                    true
+                    (true, None)
                 }
             }
         } else {
-            true
+            (true, None)
         }
     }
 

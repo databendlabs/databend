@@ -324,8 +324,8 @@ impl FusePruner {
                         )
                         .await?;
 
-                        let res = Self::block_pruning(block_pruner, segment_block_metas, &mut None)
-                            .await?;
+                        let (res, _) =
+                            Self::block_pruning(block_pruner, segment_block_metas, false).await?;
 
                         Result::<_, ErrorCode>::Ok((res, deleted_segments))
                     }
@@ -390,13 +390,8 @@ impl FusePruner {
             let (sample_block_metas, mut remainder_block_metas) =
                 Self::split_sample_block_metas(sample_num, segment_block_metas);
 
-            let mut invalid_keys_map = HashMap::new();
-            let sample_result_block_metas = Self::block_pruning(
-                block_pruner.clone(),
-                sample_block_metas,
-                &mut Some(invalid_keys_map),
-            )
-            .await?;
+            let (sample_result_block_metas, invalid_keys_map) =
+                Self::block_pruning(block_pruner.clone(), sample_block_metas, true).await?;
 
             let ratio = 0.7;
             let mut ignored_keys = HashSet::new();
@@ -447,8 +442,8 @@ impl FusePruner {
                     let block_pruner = block_pruner.clone();
 
                     async move {
-                        let remainder_result_block_metas =
-                            Self::block_pruning(block_pruner, batch, &mut None).await?;
+                        let (remainder_result_block_metas, _) =
+                            Self::block_pruning(block_pruner, batch, false).await?;
 
                         Result::<_, ErrorCode>::Ok((remainder_result_block_metas, vec![]))
                     }
@@ -531,17 +526,32 @@ impl FusePruner {
     async fn block_pruning(
         block_pruner: Arc<BlockPruner>,
         segment_block_metas: Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
-        invalid_keys_map: &mut Option<HashMap<String, u64>>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let mut res = vec![];
+        is_sample: bool,
+    ) -> Result<(
+        Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        Option<HashMap<String, usize>>,
+    )> {
+        let mut block_metas = vec![];
+        let mut invalid_keys_map = if is_sample {
+            Some(HashMap::new())
+        } else {
+            None
+        };
         for (location, block_metas) in segment_block_metas {
-            res.extend(
-                block_pruner
-                    .pruning(location, block_metas, invalid_keys_map)
-                    .await?,
-            );
+            let res = block_pruner
+                .pruning(location, block_metas, is_sample)
+                .await?;
+            block_metas.extend(res.0);
+            if let Some(mut invalid_keys_map) = invalid_keys_map {
+                if let Some(ref keys_map) = res.1 {
+                    for (invalid_key, num) in keys_map {
+                        let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
+                        *val_ref += num;
+                    }
+                }
+            }
         }
-        Ok(res)
+        Ok((block_metas, invalid_keys_map))
     }
 
     #[allow(clippy::type_complexity)]
@@ -604,11 +614,11 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             batch,
-                            &mut None,
+                            false,
                         )
                         .await?;
 
-                    Result::<_, ErrorCode>::Ok(res)
+                    Result::<_, ErrorCode>::Ok(res.0)
                 }
             }));
             segment_idx += 1;

@@ -48,8 +48,11 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
-        invalid_keys_map: &mut Option<HashMap<String, u64>>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        is_sample: bool,
+    ) -> Result<(
+        Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        Option<HashMap<String, u64>>,
+    )> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
 
@@ -58,16 +61,13 @@ impl BlockPruner {
             || self.pruning_ctx.inverted_index_pruner.is_some()
         {
             // async pruning with bloom index or inverted index.
-            self.block_pruning(
-                segment_location,
-                block_metas,
-                block_meta_indexes,
-                invalid_keys_map,
-            )
-            .await
+            self.block_pruning(segment_location, block_metas, block_meta_indexes, is_sample)
+                .await
         } else {
             // sync pruning without a bloom index and inverted index.
-            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)
+            let block_metas =
+                self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)?;
+            Ok((block_metas, None))
         }
     }
 
@@ -100,8 +100,11 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        invalid_keys_map: &mut Option<HashMap<String, u64>>,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        is_sample: bool,
+    ) -> Result<(
+        Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+        Option<HashMap<String, u64>>,
+    )> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
@@ -133,18 +136,13 @@ impl BlockPruner {
                     pruning_stats.set_blocks_range_pruning_before(1);
                 }
 
-                let invalid_keys = if invalid_keys_map.is_some() {
-                    Some(HashSet::new())
-                } else {
-                    None
-                };
                 let mut prune_result = BlockPruneResult::new(
                     block_idx,
                     block_meta.location.0.clone(),
                     false,
                     None,
                     None,
-                    invalid_keys,
+                    None,
                 );
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
@@ -180,17 +178,20 @@ impl BlockPruner {
 
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
-                                let keep = bloom_pruner
+                                let bloom_result = bloom_pruner
                                     .should_keep(
                                         &index_location,
                                         index_size,
                                         &block_meta.col_stats,
                                         column_ids,
                                         &block_meta,
-                                        &mut prune_result.invalid_keys
+                                        is_sample,
                                     )
-                                    .await
-                                    && limit_pruner.within_limit(row_count);
+                                    .await;
+
+                                let keep = bloom_result.0 && limit_pruner.within_limit(row_count);
+                                prune_result.invalid_keys = bloom_result.1;
+
                                 if keep {
                                     // Perf.
                                     {
@@ -270,12 +271,18 @@ impl BlockPruner {
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
+        let mut invalid_keys_map = if is_sample {
+            Some(HashMap::new())
+        } else {
+            None
+        };
+
         let mut result = Vec::with_capacity(joint.len());
         let block_num = block_metas.len();
         for prune_result in joint {
             let prune_result = prune_result?;
 
-            if let Some(invalid_keys_map) = invalid_keys_map {
+            if let Some(mut invalid_keys_map) = invalid_keys_map {
                 let invalid_keys = prune_result.invalid_keys.unwrap_or_default();
                 for invalid_key in invalid_keys {
                     let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
@@ -310,7 +317,7 @@ impl BlockPruner {
             metrics_inc_pruning_milliseconds(start.elapsed().as_millis() as u64);
         }
 
-        Ok(result)
+        Ok((result, invalid_keys_map))
     }
 
     fn block_pruning_sync(

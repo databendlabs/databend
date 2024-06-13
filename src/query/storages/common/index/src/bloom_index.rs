@@ -160,6 +160,13 @@ pub enum FilterEvalResult {
     Uncertain,
 }
 
+// result of bloom filter result
+struct BloomFilterResult {
+    eval_result: FilterEvalResult,
+    // invalid bloom filter keys
+    invalid_keys: Option<HashSet<String>>,
+}
+
 impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[minitrace::trace]
@@ -347,10 +354,16 @@ impl BloomIndex {
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
-        invalid_keys: &mut Option<HashSet<String>>,
-    ) -> Result<FilterEvalResult> {
+        is_sample: bool,
+    ) -> Result<(FilterEvalResult, Option<HashSet<String>>)> {
         let mut new_col_id = 1;
         let mut domains = ConstantFolder::full_input_domains(&expr);
+
+        let mut invalid_keys = if is_sample {
+            Some(HashSet::new())
+        } else {
+            None
+        };
 
         visit_expr_column_eq_constant(
             &mut expr,
@@ -411,13 +424,15 @@ impl BloomIndex {
         let (new_expr, _) =
             ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-        match new_expr {
+        let eval_result = match new_expr {
             Expr::Constant {
                 scalar: Scalar::Boolean(false),
                 ..
-            } => Ok(FilterEvalResult::MustFalse),
-            _ => Ok(FilterEvalResult::Uncertain),
-        }
+            } => FilterEvalResult::MustFalse,
+            _ => FilterEvalResult::Uncertain,
+        };
+
+        Ok((eval_result, invalid_keys))
     }
 
     /// calculate digest for column

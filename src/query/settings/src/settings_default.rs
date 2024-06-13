@@ -757,7 +757,7 @@ impl DefaultSettings {
                     desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                })
+                }),
                 ("enable_bloom_filter_ignore_invalid_key", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables bloom filter ignore invalid keys. Take 10% of the blocks as sample. If the filter key is invalid for 70% of the bloom filter, the remaining blocks do not use the bloom index.",
