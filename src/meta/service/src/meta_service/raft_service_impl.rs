@@ -15,11 +15,7 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
-use std::fs;
-use std::fs::File;
 use std::io;
-use std::io::BufWriter;
-use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -28,12 +24,6 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
-use databend_common_meta_sled_store::openraft::error::Fatal;
-use databend_common_meta_sled_store::openraft::ErrorSubject;
-use databend_common_meta_sled_store::openraft::ErrorVerb;
-use databend_common_meta_sled_store::openraft::SnapshotId;
-use databend_common_meta_sled_store::openraft::SnapshotSegmentId;
 use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -51,7 +41,6 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::SnapshotMismatch;
 use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::fmt;
 use std::io;
 use std::sync::Arc;
 
@@ -28,6 +28,7 @@ use tokio::task::JoinHandle;
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::sm_v003::temp_snapshot_data::TempSnapshotDataV003;
 use crate::sm_v003::write_entry::WriteEntry;
+use crate::sm_v003::writer_stat::WriterStat;
 use crate::snapshot_config::SnapshotConfig;
 
 /// Write kv pair snapshot data to [`SnapshotStoreV002`].
@@ -36,14 +37,7 @@ pub struct WriterV003 {
 
     snapshot_config: SnapshotConfig,
 
-    /// Number of entries written.
-    pub(crate) cnt: u64,
-
-    /// The count of entries to reach before next progress logging.
-    next_progress_cnt: u64,
-
-    /// The time when the writer starts to write entries.
-    start_time: std::time::Instant,
+    stat: WriterStat,
 }
 
 impl WriterV003 {
@@ -59,48 +53,10 @@ impl WriterV003 {
         let writer = WriterV003 {
             db_builder,
             snapshot_config: snapshot_config.clone(),
-            cnt: 0,
-            next_progress_cnt: 1000,
-            start_time: std::time::Instant::now(),
+            stat: WriterStat::new(),
         };
 
         Ok(writer)
-    }
-
-    /// Increase the number of entries written by one.
-    fn count(&mut self) {
-        self.cnt += 1;
-
-        if self.cnt == self.next_progress_cnt {
-            self.log_progress();
-
-            // Increase the number of entries before next log by 5%,
-            // but at least 50k, at most 800k.
-            let step = std::cmp::min(self.next_progress_cnt / 20, 800_000);
-            let step = std::cmp::max(step, 50_000);
-
-            self.next_progress_cnt += step;
-        }
-    }
-
-    fn log_progress(&self) {
-        let elapsed_sec = self.start_time.elapsed().as_secs();
-        // Avoid div by 0
-        let avg = self.cnt / (elapsed_sec + 1);
-
-        if self.cnt >= 10_000_000 {
-            info!(
-                "Snapshot Writer has written {} million entries; avg: {} kilo entries/s",
-                self.cnt / 1_000_000,
-                avg / 1_000,
-            )
-        } else {
-            info!(
-                "Snapshot Writer has written {} kilo entries; avg: {} kilo entries/s",
-                self.cnt / 1_000,
-                avg / 1_000,
-            )
-        }
     }
 
     pub async fn write_kv_stream(
@@ -141,7 +97,7 @@ impl WriterV003 {
                 WriteEntry::Finish(sys_data) => {
                     info!(
                         "received Commit, written {} entries, flush with: {:?}",
-                        self.cnt, sys_data
+                        self.stat, sys_data
                     );
                     let temp_snapshot_data = self.flush(sys_data)?;
                     return Ok(temp_snapshot_data);
@@ -150,7 +106,7 @@ impl WriterV003 {
 
             self.db_builder.append_kv(k, v)?;
 
-            self.count();
+            self.stat.count();
         }
 
         Err(io::Error::new(
@@ -183,7 +139,7 @@ impl WriterV003 {
     #[allow(clippy::type_complexity)]
     pub fn spawn_writer_thread(
         self,
-        context: impl Display + Send + Sync + 'static,
+        context: impl fmt::Display + Send + Sync + 'static,
     ) -> (
         mpsc::Sender<WriteEntry<(String, SeqMarked), SysData>>,
         JoinHandle<Result<TempSnapshotDataV003, io::Error>>,
