@@ -23,3 +23,6 @@ killall vector || true
 sleep 1
 nohup vector --config-yaml ./tests/logging/vector/config.yaml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 4317
+
+NOW=$(date +%s)
+echo "select ${NOW}" | bendsql
