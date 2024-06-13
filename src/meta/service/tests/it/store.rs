@@ -14,7 +14,7 @@
 
 use std::io;
 
-use databend_common_meta_raft_store::leveled_store::db::DBExporter;
+use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_raft_store::state_machine::testing::snapshot_logs;
 use databend_common_meta_sled_store::openraft::entry::RaftEntry;
 use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;

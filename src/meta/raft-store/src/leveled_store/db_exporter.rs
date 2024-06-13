@@ -14,11 +14,8 @@
 
 //! The persisted layer of the state machine data.
 
-use std::borrow::Borrow;
 use std::future;
 use std::io;
-use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
@@ -26,22 +23,11 @@ use databend_common_meta_types::SeqNum;
 use databend_common_meta_types::SeqV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
-use log::info;
-use openraft::SnapshotId;
-use rotbl::v001::Rotbl;
-use rotbl::v001::SeqMarked;
 
-use crate::config::RaftConfig;
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApiRO;
-use crate::leveled_store::map_api::MapKey;
-use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::rotbl_codec::RotblCodec;
-use crate::marked::Marked;
-use crate::sm_v003::open_snapshot::OpenSnapshot;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
@@ -123,65 +109,6 @@ impl<'a> DBExporter<'a> {
             .map(Ok)
             .chain(expire_strm)
             .chain(kv_strm);
-
-        Ok(strm.boxed())
-    }
-}
-
-impl OpenSnapshot for DB {
-    fn open_snapshot(
-        path: impl ToString,
-        snapshot_id: SnapshotId,
-        raft_config: &RaftConfig,
-    ) -> Result<Self, io::Error> {
-        let config = raft_config.to_rotbl_config();
-        let r = Rotbl::open(config, path.to_string())?;
-
-        info!("Opened snapshot at {}", path.to_string());
-
-        let db = Self::new(path, snapshot_id, Arc::new(r))?;
-        Ok(db)
-    }
-}
-
-#[async_trait::async_trait]
-impl<K> MapApiRO<K> for DB
-where
-    K: MapKey,
-    Marked<K::V>: TryFrom<SeqMarked, Error = io::Error>,
-{
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
-        let key = RotblCodec::encode_key(key)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        let res = self.rotbl.get(&key).await?;
-
-        let Some(seq_marked) = res else {
-            return Ok(Marked::empty());
-        };
-
-        let marked = Marked::<K::V>::try_from(seq_marked)?;
-        Ok(marked)
-    }
-
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
-    where R: RangeBounds<K> + Clone + Send + Sync + 'static {
-        let rng = RotblCodec::encode_range(&range)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        let strm = self.rotbl.range(rng);
-
-        let strm = strm.map(|res_item: Result<(String, SeqMarked), io::Error>| {
-            let (str_k, seq_marked) = res_item?;
-            let key = RotblCodec::decode_key(&str_k)?;
-            let marked = Marked::try_from(seq_marked)?;
-            Ok((key, marked))
-        });
 
         Ok(strm.boxed())
     }
