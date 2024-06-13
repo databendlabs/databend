@@ -31,6 +31,7 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SnapshotMismatch;
 use databend_common_meta_types::StorageIOError;
 use log::info;
+use minitrace::func_name;
 
 pub struct ReceiverV1 {
     /// The offset of the last byte written to the snapshot.

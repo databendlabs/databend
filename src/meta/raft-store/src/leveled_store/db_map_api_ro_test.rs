@@ -59,10 +59,9 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
         let path = path.join("temp-db");
 
         let db_builder = DBBuilder::new_with_default_config(path)?;
-        let db = db_builder
-            .build_from_leveled_map(&mut lm, |_| "1-1-1-1".to_string())
-            .await?;
-        db
+        db_builder
+            .build_from_leveled_map(lm, |_| "1-1-1-1".to_string())
+            .await?
     };
 
     // Test kv map
