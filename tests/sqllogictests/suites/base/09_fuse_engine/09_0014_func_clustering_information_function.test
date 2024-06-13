@@ -46,3 +46,52 @@ select * exclude(timestamp) from clustering_information('default','t09_0014', '(
 statement ok
 drop table t09_0014
 
+statement ok
+create table t09_0014_1(c string)
+
+statement ok
+insert into t09_0014_1 values ('abc'), ('abd')
+
+statement ok
+insert into t09_0014_1 values ('xyy'), ('xyz')
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(c)')
+----
+(c) 2 0 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1))')
+----
+(SUBSTRING(c FROM 1)) 2 0 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1,2))')
+----
+(SUBSTRING(c FROM 1 FOR 2)) 2 2 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,2,2))')
+----
+(SUBSTRING(c FROM 2 FOR 2)) 2 0 1.0 2.0 {"00002":2}
+
+query T
+explain select * from t09_0014_1 where left(c, 2) = 'ab'
+----
+Filter
+├── output columns: [t09_0014_1.c (#0)]
+├── filters: [is_true(left(t09_0014_1.c (#0), 2) = 'ab')]
+├── estimated rows: 0.80
+└── TableScan
+    ├── table: default.default.t09_0014_1
+    ├── output columns: [c (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(left(t09_0014_1.c (#0), 2) = 'ab')], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+drop table t09_0014_1
