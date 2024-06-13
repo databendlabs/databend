@@ -20,7 +20,7 @@ use databend_common_meta_types::sys_data::SysData;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
-use crate::sm_v003::receiver_v003::Receiver;
+use crate::sm_v003::receiver_v003::ReceiverV003;
 use crate::sm_v003::snapshot_loader::SnapshotLoader;
 use crate::sm_v003::WriterV003;
 use crate::snapshot_config::SnapshotConfig;
@@ -50,7 +50,7 @@ impl SnapshotStoreV003 {
     }
 
     /// Create a receiver to receive snapshot in binary form.
-    pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<Receiver, io::Error> {
+    pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<ReceiverV003, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
 
         let temp_path = self.snapshot_config.snapshot_temp_path();
@@ -68,7 +68,7 @@ impl SnapshotStoreV003 {
                 )
             })?;
 
-        let r = Receiver::new(remote_addr, temp_path, f);
+        let r = ReceiverV003::new(remote_addr, temp_path, f);
         Ok(r)
     }
 

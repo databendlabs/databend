@@ -25,7 +25,7 @@ use databend_common_meta_types::Vote;
 use log::debug;
 use log::info;
 
-pub struct Receiver {
+pub struct ReceiverV003 {
     remote_addr: String,
 
     temp_path: String,
@@ -42,13 +42,13 @@ pub struct Receiver {
     size_received: usize,
 }
 
-impl Receiver {
+impl ReceiverV003 {
     /// Create a new snapshot receiver with an empty snapshot.
     pub(crate) fn new(remote_addr: impl ToString, temp_path: impl ToString, temp_f: File) -> Self {
         let remote_addr = remote_addr.to_string();
         info!("Begin receiving snapshot v2 stream from: {}", remote_addr);
 
-        Receiver {
+        ReceiverV003 {
             remote_addr,
             temp_path: temp_path.to_string(),
             temp_file: Some(BufWriter::with_capacity(64 * 1024 * 1024, temp_f)),
