@@ -225,6 +225,7 @@ impl<'a> TypeChecker<'a> {
         Ok((scalar.clone(), data_type.clone()))
     }
 
+    #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {

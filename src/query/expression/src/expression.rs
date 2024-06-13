@@ -75,17 +75,17 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
 
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
 /// It is .
-#[derive(Debug, Clone, Educe, EnumAsInner)]
-#[educe(PartialEq, Eq, Hash)]
+#[derive(Debug, Educe, EnumAsInner)]
+#[educe(Hash)]
 pub enum Expr<Index: ColumnIndex = usize> {
     Constant {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         span: Span,
         scalar: Scalar,
         data_type: DataType,
     },
     ColumnRef {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         span: Span,
         id: Index,
         data_type: DataType,
@@ -94,24 +94,24 @@ pub enum Expr<Index: ColumnIndex = usize> {
         display_name: String,
     },
     Cast {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         span: Span,
         is_try: bool,
         expr: Box<Expr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         span: Span,
         id: FunctionID,
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
         return_type: DataType,
     },
     LambdaFunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore))]
         span: Span,
         name: String,
         args: Vec<Expr<Index>>,
@@ -119,6 +119,171 @@ pub enum Expr<Index: ColumnIndex = usize> {
         lambda_display: String,
         return_type: DataType,
     },
+}
+
+impl<Index: ColumnIndex> Clone for Expr<Index> {
+    #[recursive::recursive]
+    fn clone(&self) -> Self {
+        match self {
+            Expr::Constant {
+                span,
+                scalar,
+                data_type,
+            } => Expr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+                data_type: data_type.clone(),
+            },
+            Expr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => Expr::ColumnRef {
+                span: *span,
+                id: id.clone(),
+                data_type: data_type.clone(),
+                display_name: display_name.clone(),
+            },
+            Expr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => Expr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: expr.clone(),
+                dest_type: dest_type.clone(),
+            },
+            Expr::FunctionCall {
+                span,
+                id,
+                function,
+                generics,
+                args,
+                return_type,
+            } => Expr::FunctionCall {
+                span: *span,
+                id: id.clone(),
+                function: function.clone(),
+                generics: generics.clone(),
+                args: args.clone(),
+                return_type: return_type.clone(),
+            },
+            Expr::LambdaFunctionCall {
+                span,
+                name,
+                args,
+                lambda_expr,
+                lambda_display,
+                return_type,
+            } => Expr::LambdaFunctionCall {
+                span: *span,
+                name: name.clone(),
+                args: args.clone(),
+                lambda_expr: lambda_expr.clone(),
+                lambda_display: lambda_display.clone(),
+                return_type: return_type.clone(),
+            },
+        }
+    }
+}
+
+impl<Index: ColumnIndex> Eq for Expr<Index> {}
+
+impl<Index: ColumnIndex> PartialEq for Expr<Index> {
+    #[recursive::recursive]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Expr::Constant {
+                    scalar: l_scalar,
+                    data_type: l_data_type,
+                    ..
+                },
+                Expr::Constant {
+                    scalar: r_scalar,
+                    data_type: r_data_type,
+                    ..
+                },
+            ) => l_scalar.eq(r_scalar) && l_data_type.eq(r_data_type),
+            (
+                Expr::ColumnRef {
+                    id: l_id,
+                    data_type: l_data_type,
+                    display_name: l_display_name,
+                    ..
+                },
+                Expr::ColumnRef {
+                    id: r_id,
+                    data_type: r_data_type,
+                    display_name: r_display_name,
+                    ..
+                },
+            ) => l_id.eq(r_id) && l_data_type.eq(r_data_type) && l_display_name.eq(r_display_name),
+            (
+                Expr::Cast {
+                    is_try: l_is_try,
+                    expr: l_expr,
+                    dest_type: l_dest_type,
+                    ..
+                },
+                Expr::Cast {
+                    is_try: r_is_try,
+                    expr: r_expr,
+                    dest_type: r_dest_type,
+                    ..
+                },
+            ) => l_is_try.eq(r_is_try) && l_expr.eq(r_expr) && l_dest_type.eq(r_dest_type),
+            (
+                Expr::FunctionCall {
+                    id: l_id,
+                    generics: l_generics,
+                    args: l_args,
+                    return_type: l_return_type,
+                    ..
+                },
+                Expr::FunctionCall {
+                    id: r_id,
+                    generics: r_generics,
+                    args: r_args,
+                    return_type: r_return_type,
+                    ..
+                },
+            ) => {
+                l_id.eq(r_id)
+                    && l_generics.eq(r_generics)
+                    && l_args.eq(r_args)
+                    && l_return_type.eq(r_return_type)
+            }
+            (
+                Expr::LambdaFunctionCall {
+                    name: l_name,
+                    args: l_args,
+                    lambda_expr: l_lambda_expr,
+                    lambda_display: l_lambda_display,
+                    return_type: l_return_type,
+                    ..
+                },
+                Expr::LambdaFunctionCall {
+                    name: r_name,
+                    args: r_args,
+                    lambda_expr: r_lambda_expr,
+                    lambda_display: r_lambda_display,
+                    return_type: r_rteurn_type,
+                    ..
+                },
+            ) => {
+                l_name.eq(r_name)
+                    && l_args.eq(r_args)
+                    && l_lambda_expr.eq(r_lambda_expr)
+                    && l_lambda_display.eq(r_lambda_display)
+                    && l_return_type.eq(r_rteurn_type)
+            }
+            _ => false,
+        }
+    }
 }
 
 /// Serializable expression used to share executable expression between nodes.

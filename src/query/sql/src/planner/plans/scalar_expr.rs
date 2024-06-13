@@ -37,7 +37,7 @@ use crate::optimizer::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
@@ -50,6 +50,66 @@ pub enum ScalarExpr {
     UDFCall(UDFCall),
     UDFLambdaCall(UDFLambdaCall),
     AsyncFunctionCall(AsyncFunctionCall),
+}
+
+impl Clone for ScalarExpr {
+    #[recursive::recursive]
+    fn clone(&self) -> Self {
+        match self {
+            ScalarExpr::BoundColumnRef(v) => ScalarExpr::BoundColumnRef(v.clone()),
+            ScalarExpr::ConstantExpr(v) => ScalarExpr::ConstantExpr(v.clone()),
+            ScalarExpr::WindowFunction(v) => ScalarExpr::WindowFunction(v.clone()),
+            ScalarExpr::AggregateFunction(v) => ScalarExpr::AggregateFunction(v.clone()),
+            ScalarExpr::LambdaFunction(v) => ScalarExpr::LambdaFunction(v.clone()),
+            ScalarExpr::FunctionCall(v) => ScalarExpr::FunctionCall(v.clone()),
+            ScalarExpr::CastExpr(v) => ScalarExpr::CastExpr(v.clone()),
+            ScalarExpr::SubqueryExpr(v) => ScalarExpr::SubqueryExpr(v.clone()),
+            ScalarExpr::UDFCall(v) => ScalarExpr::UDFCall(v.clone()),
+            ScalarExpr::UDFLambdaCall(v) => ScalarExpr::UDFLambdaCall(v.clone()),
+            ScalarExpr::AsyncFunctionCall(v) => ScalarExpr::AsyncFunctionCall(v.clone()),
+        }
+    }
+}
+
+impl Eq for ScalarExpr {}
+
+impl PartialEq for ScalarExpr {
+    #[recursive::recursive]
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ScalarExpr::BoundColumnRef(l), ScalarExpr::BoundColumnRef(r)) => l.eq(r),
+            (ScalarExpr::ConstantExpr(l), ScalarExpr::ConstantExpr(r)) => l.eq(r),
+            (ScalarExpr::WindowFunction(l), ScalarExpr::WindowFunction(r)) => l.eq(r),
+            (ScalarExpr::AggregateFunction(l), ScalarExpr::AggregateFunction(r)) => l.eq(r),
+            (ScalarExpr::LambdaFunction(l), ScalarExpr::LambdaFunction(r)) => l.eq(r),
+            (ScalarExpr::FunctionCall(l), ScalarExpr::FunctionCall(r)) => l.eq(r),
+            (ScalarExpr::CastExpr(l), ScalarExpr::CastExpr(r)) => l.eq(r),
+            (ScalarExpr::SubqueryExpr(l), ScalarExpr::SubqueryExpr(r)) => l.eq(r),
+            (ScalarExpr::UDFCall(l), ScalarExpr::UDFCall(r)) => l.eq(r),
+            (ScalarExpr::UDFLambdaCall(l), ScalarExpr::UDFLambdaCall(r)) => l.eq(r),
+            (ScalarExpr::AsyncFunctionCall(l), ScalarExpr::AsyncFunctionCall(r)) => l.eq(r),
+            _ => false,
+        }
+    }
+}
+
+impl Hash for ScalarExpr {
+    #[recursive::recursive]
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            ScalarExpr::BoundColumnRef(v) => v.hash(state),
+            ScalarExpr::ConstantExpr(v) => v.hash(state),
+            ScalarExpr::WindowFunction(v) => v.hash(state),
+            ScalarExpr::AggregateFunction(v) => v.hash(state),
+            ScalarExpr::LambdaFunction(v) => v.hash(state),
+            ScalarExpr::FunctionCall(v) => v.hash(state),
+            ScalarExpr::CastExpr(v) => v.hash(state),
+            ScalarExpr::SubqueryExpr(v) => v.hash(state),
+            ScalarExpr::UDFCall(v) => v.hash(state),
+            ScalarExpr::UDFLambdaCall(v) => v.hash(state),
+            ScalarExpr::AsyncFunctionCall(v) => v.hash(state),
+        }
+    }
 }
 
 impl ScalarExpr {

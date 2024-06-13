@@ -2731,6 +2731,7 @@ dependencies = [
  "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
+ "recursive",
  "regex",
  "serde",
  "serde_json",
@@ -3000,6 +3001,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "recursive",
  "rmp-serde",
  "roaring",
  "rust_decimal",
@@ -3768,6 +3770,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "prqlc",
+ "recursive",
  "regex",
  "roaring",
  "serde",
@@ -12087,6 +12090,26 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "recursive"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0786a43debb760f491b1bc0269fe5e84155353c67482b9e60d0cfb596054b43e"
+dependencies = [
+ "recursive-proc-macro-impl",
+ "stacker",
+]
+
+[[package]]
+name = "recursive-proc-macro-impl"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76009fbe0614077fc1a2ce255e3a1881a2e3a3527097d5dc6d8212c585e7e38b"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
