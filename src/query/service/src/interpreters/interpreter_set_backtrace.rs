@@ -18,7 +18,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SetBacktracePlan;
-use databend_common_tracing::change_backtrace;
+use databend_common_exception::set_backtrace;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -79,7 +79,7 @@ impl Interpreter for SetBacktraceInterpreter {
             }
         }
 
-        change_backtrace(self.plan.switch);
+        set_backtrace(self.plan.switch);
         Ok(PipelineBuildResult::create())
     }
 }

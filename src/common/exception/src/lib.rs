@@ -26,3 +26,5 @@ pub use exception::ToErrorCode;
 pub use exception_into::SerializedError;
 pub use with_context::ErrorWithContext;
 pub use with_context::WithContext;
+pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
+pub use exception_backtrace::set_backtrace;

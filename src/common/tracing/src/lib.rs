@@ -35,7 +35,6 @@ pub use crate::init::init_logging;
 pub use crate::init::inject_span_to_tonic_request;
 pub use crate::init::start_trace_for_remote_request;
 pub use crate::init::GlobalLogger;
-pub use crate::panic_hook::change_backtrace;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
 pub use crate::structlog::DummyReporter;

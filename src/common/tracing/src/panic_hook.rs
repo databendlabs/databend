@@ -14,13 +14,13 @@
 
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::LimitMemGuard;
 use log::error;
+use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 
-static ENABLE_BACKTRACE: AtomicBool = AtomicBool::new(true);
 
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
@@ -35,8 +35,17 @@ pub fn set_panic_hook() {
     }));
 }
 
+fn should_backtrace() -> bool {
+    // if user not specify or user set to enable, we should backtrace
+    match USER_SET_ENABLE_BACKTRACE.load(Ordering::Relaxed) {
+        0 => true,
+        1 => false,
+        _ => true,
+    }
+}
+
 pub fn log_panic(panic: &PanicInfo) {
-    let backtrace_str = if ENABLE_BACKTRACE.load(Ordering::Relaxed) {
+    let backtrace_str = if should_backtrace() {
         let backtrace = Backtrace::force_capture();
         format!("{:?}", backtrace)
     } else {
@@ -59,6 +68,4 @@ pub fn log_panic(panic: &PanicInfo) {
     }
 }
 
-pub fn change_backtrace(switch: bool) {
-    ENABLE_BACKTRACE.store(switch, Ordering::Relaxed);
-}
+
