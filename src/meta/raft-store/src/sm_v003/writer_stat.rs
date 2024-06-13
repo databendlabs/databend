@@ -16,6 +16,7 @@ use std::fmt;
 
 use log::info;
 
+/// The progress stat about snapshot writer.
 pub(crate) struct WriterStat {
     /// Number of entries written.
     pub(crate) cnt: u64,
@@ -46,8 +47,9 @@ impl WriterStat {
             start_time: std::time::Instant::now(),
         }
     }
+
     /// Increase the number of entries written by one.
-    pub(crate) fn count(&mut self) {
+    pub(crate) fn inc(&mut self) {
         self.cnt += 1;
 
         if self.cnt == self.next_progress_cnt {

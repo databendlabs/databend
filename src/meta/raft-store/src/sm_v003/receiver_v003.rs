@@ -25,6 +25,8 @@ use databend_common_meta_types::Vote;
 use log::debug;
 use log::info;
 
+use crate::sm_v003::received::Received;
+
 pub struct ReceiverV003 {
     remote_addr: String,
 
@@ -72,7 +74,7 @@ impl ReceiverV003 {
     pub fn receive(
         &mut self,
         chunk: SnapshotChunkRequestV003,
-    ) -> Result<Option<(String, Vote, SnapshotMeta, String /* path */)>, io::Error> {
+    ) -> Result<Option<Received>, io::Error> {
         let remote_addr = self.remote_addr.clone();
         let temp_path = self.temp_path.clone();
 
@@ -150,7 +152,15 @@ impl ReceiverV003 {
             f?.sync_all()
                 .map_err(|e| ctx(e, "sync_all() for temp snapshot"))?;
 
-            Ok(Some((format, vote, snapshot_meta, self.temp_path.clone())))
+            Ok(Some(Received {
+                format,
+                vote,
+                snapshot_meta,
+                temp_path: self.temp_path.clone(),
+                remote_addr: self.remote_addr.clone(),
+                n_received: self.n_received,
+                size_received: self.size_received,
+            }))
         }
     }
 

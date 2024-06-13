@@ -24,6 +24,7 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
+use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
@@ -178,8 +179,14 @@ impl RaftServiceImpl {
     ) -> Result<Response<RaftReply>, Status> {
         let addr = remote_addr(&request);
 
-        let (_format, req_vote, snapshot_meta, temp_path) =
-            self.receive_binary_snapshot(request).await?;
+        let received = self.receive_binary_snapshot(request).await?;
+
+        let Received {
+            vote: req_vote,
+            snapshot_meta,
+            temp_path,
+            ..
+        } = received;
 
         let raft_config = &self.meta_node.sto.config;
 
@@ -216,32 +223,31 @@ impl RaftServiceImpl {
     async fn receive_binary_snapshot(
         &self,
         request: Request<Streaming<SnapshotChunkRequestV003>>,
-    ) -> Result<(String, Vote, SnapshotMeta, String), Status> {
+    ) -> Result<Received, Status> {
         let addr = remote_addr(&request);
 
         let _guard = snapshot_recv_inflight(&addr).counter_guard();
 
         let ss_store = self.meta_node.sto.snapshot_store();
 
-        let mut receiver = ss_store.new_receiver(&addr).map_err(io_err_to_status)?;
-
-        receiver.set_on_recv_callback(new_incr_recvfrom_bytes(addr.clone()));
+        let mut receiver_v003 = ss_store.new_receiver(&addr).map_err(io_err_to_status)?;
+        receiver_v003.set_on_recv_callback(new_incr_recvfrom_bytes(addr.clone()));
 
         let mut strm = request.into_inner();
 
         // TODO: move receiving to blocking task.
 
         while let Some(chunk) = strm.try_next().await? {
-            let finished = receiver.receive(chunk).map_err(io_err_to_status)?;
+            let received = receiver_v003.receive(chunk).map_err(io_err_to_status)?;
 
-            if let Some((format, req_vote, snapshot_meta, temp_path)) = finished {
-                return Ok((format, req_vote, snapshot_meta, temp_path));
+            if let Some(received) = received {
+                return Ok(received);
             }
         }
 
         Err(Status::invalid_argument(format!(
             "snapshot stream is closed without finishing: {}",
-            receiver.stat_str()
+            receiver_v003.stat_str()
         )))
     }
 }

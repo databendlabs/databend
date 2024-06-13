@@ -65,12 +65,14 @@ impl WriterV003 {
         sys_data: SysData,
     ) -> Result<TempSnapshotDataV003, io::Error> {
         let (tx, jh) = self.spawn_writer_thread("write_kv_stream");
+
         while let Some((k, v)) = stream.try_next().await? {
             let ent = WriteEntry::Data((k, v));
             tx.send(ent).await.map_err(|_e| {
                 io::Error::new(io::ErrorKind::Other, "fail to send entry to writer thread")
             })?;
         }
+
         tx.send(WriteEntry::Finish(sys_data)).await.map_err(|_e| {
             io::Error::new(io::ErrorKind::Other, "fail to send entry to writer thread")
         })?;
@@ -106,7 +108,7 @@ impl WriterV003 {
 
             self.db_builder.append_kv(k, v)?;
 
-            self.stat.count();
+            self.stat.inc();
         }
 
         Err(io::Error::new(

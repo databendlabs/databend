@@ -20,6 +20,7 @@ mod writer_v003;
 
 pub mod adapter;
 pub mod open_snapshot;
+pub mod received;
 pub mod receiver_v003;
 pub mod snapshot_loader;
 pub mod temp_snapshot_data;
