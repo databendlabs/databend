@@ -16,12 +16,15 @@ use compactor::Compactor;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use log::info;
+use tokio::sync::oneshot::error::TryRecvError;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 
+#[cfg(test)]
+mod acquire_compactor_test;
 pub mod compactor;
 pub mod compactor_data;
 #[cfg(test)]
@@ -160,9 +163,19 @@ impl LeveledMap {
     /// This method requires a mutable reference to prevent concurrent access to shared data,
     /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
     pub(crate) fn try_acquire_compactor(&mut self) -> Option<Compactor> {
-        if self.current_compactor.is_some() {
-            // Other compactor is running.
-            return None;
+        if let Some(rx) = &mut self.current_compactor {
+            match rx.try_recv() {
+                Err(TryRecvError::Closed) => {
+                    // Ok, released.
+                }
+                Err(TryRecvError::Empty) => {
+                    // Another compactor still in use.
+                    return None;
+                }
+                Ok(_) => {
+                    unreachable!("it never send any value")
+                }
+            }
         }
 
         Some(self.new_compactor())
