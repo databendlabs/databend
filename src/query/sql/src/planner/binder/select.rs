@@ -261,13 +261,24 @@ impl Binder {
             }
         }
 
-        let (new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
+        let (mut new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
             left_span,
             right_span,
             left_context,
             right_context,
             coercion_types,
         )?;
+
+        if let Some(cte_name) = &cte_name {
+            for (col, cte_col) in new_bind_context
+                .columns
+                .iter_mut()
+                .zip(self.ctes_map.get(cte_name).unwrap().columns.iter())
+            {
+                col.table_name = cte_col.table_name.clone();
+                col.column_name = cte_col.column_name.clone();
+            }
+        }
 
         let union_plan = UnionAll {
             left_outputs,
