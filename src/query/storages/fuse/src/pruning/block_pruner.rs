@@ -48,7 +48,7 @@ impl BlockPruner {
         &self,
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
-        invalid_keys_map: &mut HashMap<String, u64>,
+        invalid_keys_map: &mut Option<HashMap<String, u64>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -100,7 +100,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Vec<Arc<BlockMeta>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        invalid_keys_map: &mut HashMap<String, u64>,
+        invalid_keys_map: &mut Option<HashMap<String, u64>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -133,12 +133,18 @@ impl BlockPruner {
                     pruning_stats.set_blocks_range_pruning_before(1);
                 }
 
+                let invalid_keys = if invalid_keys_map.is_some() {
+                    Some(HashSet::new())
+                } else {
+                    None
+                };
                 let mut prune_result = BlockPruneResult::new(
                     block_idx,
                     block_meta.location.0.clone(),
                     false,
                     None,
                     None,
+                    invalid_keys,
                 );
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
@@ -269,9 +275,12 @@ impl BlockPruner {
         for prune_result in joint {
             let prune_result = prune_result?;
 
-            for invalid_key in prune_result.invalid_keys {
-                let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
-                *val_ref += 1;
+            if let Some(invalid_keys_map) = invalid_keys_map {
+                let invalid_keys = prune_result.invalid_keys.unwrap_or_default();
+                for invalid_key in invalid_keys {
+                    let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
+                    *val_ref += 1;
+                }
             }
 
             if prune_result.keep {
@@ -387,7 +396,7 @@ struct BlockPruneResult {
     // only used by inverted index search
     matched_rows: Option<Vec<(usize, Option<F32>)>>,
     // invalid bloom filter keys
-    invalid_keys: HashSet<String>,
+    invalid_keys: Option<HashSet<String>>,
 }
 
 impl BlockPruneResult {
@@ -397,6 +406,7 @@ impl BlockPruneResult {
         keep: bool,
         range: Option<Range<usize>>,
         matched_rows: Option<Vec<(usize, Option<F32>)>>,
+        invalid_keys: Option<HashSet<String>>,
     ) -> Self {
         Self {
             block_idx,
@@ -404,7 +414,7 @@ impl BlockPruneResult {
             range,
             block_location,
             matched_rows,
-            invalid_keys: HashSet::new(),
+            invalid_keys,
         }
     }
 }

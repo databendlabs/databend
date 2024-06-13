@@ -324,13 +324,8 @@ impl FusePruner {
                         )
                         .await?;
 
-                        let mut invalid_keys_map = HashMap::new();
-                        let res = Self::block_pruning(
-                            block_pruner,
-                            segment_block_metas,
-                            &mut invalid_keys_map,
-                        )
-                        .await?;
+                        let res = Self::block_pruning(block_pruner, segment_block_metas, &mut None)
+                            .await?;
 
                         Result::<_, ErrorCode>::Ok((res, deleted_segments))
                     }
@@ -399,7 +394,7 @@ impl FusePruner {
             let sample_result_block_metas = Self::block_pruning(
                 block_pruner.clone(),
                 sample_block_metas,
-                &mut invalid_keys_map,
+                &mut Some(invalid_keys_map),
             )
             .await?;
 
@@ -450,11 +445,10 @@ impl FusePruner {
                     .collect::<Vec<_>>();
                 works.push(pruning_ctx.pruning_runtime.spawn({
                     let block_pruner = block_pruner.clone();
-                    let mut invalid_keys_map = HashMap::new();
 
                     async move {
                         let remainder_result_block_metas =
-                            Self::block_pruning(block_pruner, batch, &mut invalid_keys_map).await?;
+                            Self::block_pruning(block_pruner, batch, &mut None).await?;
 
                         Result::<_, ErrorCode>::Ok((remainder_result_block_metas, vec![]))
                     }
@@ -537,7 +531,7 @@ impl FusePruner {
     async fn block_pruning(
         block_pruner: Arc<BlockPruner>,
         segment_block_metas: Vec<(SegmentLocation, Vec<Arc<BlockMeta>>)>,
-        invalid_keys_map: &mut HashMap<String, u64>,
+        invalid_keys_map: &mut Option<HashMap<String, u64>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let mut res = vec![];
         for (location, block_metas) in segment_block_metas {
@@ -600,7 +594,6 @@ impl FusePruner {
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 async move {
-                    let mut invalid_keys_map = HashMap::new();
                     // Build pruning tasks.
                     let res = block_pruner
                         .pruning(
@@ -611,7 +604,7 @@ impl FusePruner {
                                 snapshot_loc: None,
                             },
                             batch,
-                            &mut invalid_keys_map,
+                            &mut None,
                         )
                         .await?;
 

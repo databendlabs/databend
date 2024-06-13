@@ -347,7 +347,7 @@ impl BloomIndex {
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
-        invalid_keys: &mut HashSet<String>,
+        invalid_keys: &mut Option<HashSet<String>>,
     ) -> Result<FilterEvalResult> {
         let mut new_col_id = 1;
         let mut domains = ConstantFolder::full_input_domains(&expr);
@@ -396,11 +396,13 @@ impl BloomIndex {
                         display_name: new_col_name,
                     }))
                 } else {
-                    // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
-                    // and reading the bloom filter data will increase additional costs,
-                    // so we can consider not using this bloom filter in the following queries.
-                    let filter_key = build_filter_key(col_name, opt_key, scalar);
-                    invalid_keys.insert(filter_key);
+                    if let Some(invalid_keys) = invalid_keys {
+                        // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
+                        // and reading the bloom filter data will increase additional costs,
+                        // so we can consider not using this bloom filter in the following queries.
+                        let filter_key = build_filter_key(col_name, opt_key, scalar);
+                        invalid_keys.insert(filter_key);
+                    }
                     Ok(None)
                 }
             },

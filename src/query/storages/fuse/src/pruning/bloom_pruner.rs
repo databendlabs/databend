@@ -51,7 +51,7 @@ pub trait BloomPruner {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut HashSet<String>,
+        invalid_keys: &mut Option<HashSet<String>>,
     ) -> bool;
 
     fn update_index_fields(
@@ -133,7 +133,7 @@ impl BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids_of_indexed_block: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut HashSet<String>,
+        invalid_keys: &mut Option<HashSet<String>>,
     ) -> Result<bool> {
         let version = index_location.1;
 
@@ -280,7 +280,7 @@ impl BloomPruner for BloomPrunerCreator {
         column_stats: &StatisticsOfColumns,
         column_ids: Vec<ColumnId>,
         block_meta: &BlockMeta,
-        invalid_keys: &mut HashSet<String>,
+        invalid_keys: &mut Option<HashSet<String>>,
     ) -> bool {
         if let Some(loc) = index_location {
             // load filter, and try pruning according to filter expression
