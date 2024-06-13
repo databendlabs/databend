@@ -63,7 +63,6 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
 
-use crate::binder::apply_alias_for_columns;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -407,9 +406,6 @@ impl Binder {
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
         let mut metadata = self.metadata.write();
         let mut columns = cte_info.columns.clone();
-        if let Some(alias) = alias {
-            apply_alias_for_columns(&mut columns, alias, &self.name_resolution_ctx)?;
-        }
         for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
             columns[index].column_name = column_name.clone();
         }
@@ -452,6 +448,15 @@ impl Binder {
                 *col.data_type.clone(),
             ));
         }
+        // Update the cte_info of the recursive cte
+        self.ctes_map
+            .entry(cte_name.to_string())
+            .and_modify(|cte_info| {
+                cte_info.columns = new_bind_ctx.columns.clone();
+            });
+        if let Some(alias) = alias {
+            new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
         Ok((
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
@@ -467,6 +472,7 @@ impl Binder {
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
         cte_name: &str,
+        alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
         // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
@@ -477,7 +483,7 @@ impl Binder {
                     ));
                 }
                 self.set_bind_recursive_cte(true);
-                let (union_s_expr, new_bind_ctx) = self
+                let (union_s_expr, mut new_bind_ctx) = self
                     .bind_set_operator(
                         bind_context,
                         &set_expr.left,
@@ -488,6 +494,9 @@ impl Binder {
                     )
                     .await?;
                 self.set_bind_recursive_cte(false);
+                if let Some(alias) = alias {
+                    new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
             _ => {

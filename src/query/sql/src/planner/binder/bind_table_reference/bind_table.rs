@@ -82,7 +82,8 @@ impl Binder {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
                             .await
                     } else {
-                        self.bind_r_cte(bind_context, cte_info, &table_name).await
+                        self.bind_r_cte(bind_context, cte_info, &table_name, alias)
+                            .await
                     }
                 } else {
                     self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
