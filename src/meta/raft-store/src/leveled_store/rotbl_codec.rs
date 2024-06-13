@@ -28,6 +28,7 @@ use crate::marked::Marked;
 
 pub struct RotblCodec;
 
+/// Implement codec between [`MapKey`] and rotbl string key.
 impl RotblCodec {
     /// Convert range of user key to range of rotbl range.
     pub(crate) fn encode_range<K, R>(range: &R) -> Result<(Bound<String>, Bound<String>), io::Error>

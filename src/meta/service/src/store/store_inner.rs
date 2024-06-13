@@ -22,7 +22,7 @@ use databend_common_base::base::tokio::sync::RwLockWriteGuard;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStateKV;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::leveled_store::db::DBExporter;
+use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_raft_store::log::RaftLog;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;

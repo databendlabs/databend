@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod db;
 pub mod db_builder;
+pub mod db_exporter;
 pub mod immutable;
 pub mod immutable_levels;
 pub mod level;
@@ -25,5 +25,7 @@ pub mod sys_data;
 pub mod sys_data_api;
 pub mod util;
 
+mod db_map_api_ro_impl;
+mod db_open_snapshot_impl;
 mod key_spaces_impl;
 mod rotbl_seq_mark_impl;

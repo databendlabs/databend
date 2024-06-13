@@ -31,7 +31,6 @@ impl TryFrom<SeqMarked> for Marked {
         let Some(data) = seq_marked.into_data() else {
             return Ok(Marked::new_tombstone(seq));
         };
-        println!("data: {:?}", data.len());
 
         // version, meta, value
         let ((ver, meta_str, value), size): ((u8, String, Vec<u8>), usize) =
@@ -235,7 +234,6 @@ mod tests {
 
     fn t_invalid(seq_mark: SeqMarked, want_err: impl ToString) {
         let res = Marked::<Vec<u8>>::try_from(seq_mark);
-        println!("{:?}", res);
         let err = res.unwrap_err();
         assert_eq!(want_err.to_string(), err.to_string());
     }
