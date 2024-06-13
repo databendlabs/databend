@@ -12,4 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod union;
+use databend_common_ast::ast::SetOperation;
+use derive_visitor::VisitorMut;
+
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SetOperation(enter))]
+pub struct CountSetOps {
+    pub count: usize,
+}
+
+impl CountSetOps {
+    pub fn enter_set_operation(&mut self, _set_operation: &SetOperation) {
+        self.count += 1;
+    }
+}

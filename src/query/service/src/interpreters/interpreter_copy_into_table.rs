@@ -167,6 +167,7 @@ impl CopyIntoTableInterpreter {
             validation_mode: plan.validation_mode.clone(),
             project_columns,
             source,
+            is_transform: plan.is_transform,
         }));
 
         if plan.enable_distributed {

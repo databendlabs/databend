@@ -774,6 +774,7 @@ impl CompactSegmentTestFixture {
                         location,
                         None,
                         0,
+                        None,
                         Compression::Lz4Raw,
                         Some(Utc::now()),
                     );

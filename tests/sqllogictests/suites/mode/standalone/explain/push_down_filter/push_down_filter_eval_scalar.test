@@ -123,35 +123,31 @@ AggregateFinal
         │                       ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
         │                       └── estimated rows: 0.00
         └── EvalScalar
-            ├── output columns: [t.id (#9), de (#12)]
-            ├── expressions: [CAST(de (#11) AS Int64 NULL)]
+            ├── output columns: [t.id (#9), de (#11)]
+            ├── expressions: [0]
             ├── estimated rows: 0.00
-            └── EvalScalar
-                ├── output columns: [t.id (#9), de (#11)]
-                ├── expressions: [0]
+            └── AggregateFinal
+                ├── output columns: [t.id (#9)]
+                ├── group by: [id]
+                ├── aggregate functions: []
                 ├── estimated rows: 0.00
-                └── AggregateFinal
-                    ├── output columns: [t.id (#9)]
+                └── AggregatePartial
                     ├── group by: [id]
                     ├── aggregate functions: []
                     ├── estimated rows: 0.00
-                    └── AggregatePartial
-                        ├── group by: [id]
-                        ├── aggregate functions: []
+                    └── Filter
+                        ├── output columns: [t.id (#9)]
+                        ├── filters: [is_true(t.id (#9) = 1)]
                         ├── estimated rows: 0.00
-                        └── Filter
-                            ├── output columns: [t.id (#9)]
-                            ├── filters: [is_true(t.id (#9) = 1)]
-                            ├── estimated rows: 0.00
-                            └── TableScan
-                                ├── table: default.default.t1
-                                ├── output columns: [id (#9)]
-                                ├── read rows: 0
-                                ├── read size: 0
-                                ├── partitions total: 0
-                                ├── partitions scanned: 0
-                                ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]
-                                └── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.default.t1
+                            ├── output columns: [id (#9)]
+                            ├── read rows: 0
+                            ├── read size: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]
+                            └── estimated rows: 0.00
 
 statement ok
 drop table if exists t1;

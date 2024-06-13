@@ -97,6 +97,9 @@ pub struct Binder {
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
+    /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
+    /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
+    pub bind_recursive_cte: bool,
 }
 
 impl<'a> Binder {
@@ -117,6 +120,7 @@ impl<'a> Binder {
             m_cte_bound_s_expr: Default::default(),
             ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
+            bind_recursive_cte: false,
         }
     }
 
@@ -654,7 +658,7 @@ impl<'a> Binder {
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
             let variable = &hint.name.name;
-            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+            let (scalar, _) = *type_checker.resolve(&hint.expr)?;
 
             let scalar = wrap_cast(&scalar, &DataType::String);
             let expr = scalar.as_expr()?;
@@ -688,6 +692,10 @@ impl<'a> Binder {
 
     pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
         self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
+    }
+
+    pub fn set_bind_recursive_cte(&mut self, val: bool) {
+        self.bind_recursive_cte = val;
     }
 
     #[async_backtrace::framed]

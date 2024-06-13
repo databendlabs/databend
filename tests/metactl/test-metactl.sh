@@ -6,9 +6,8 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
-meta_json_v001="$SCRIPT_PATH/meta_v001.txt"
 meta_json_v002="$SCRIPT_PATH/meta_v002.txt"
-want_exported="$SCRIPT_PATH/want_exported_v002"
+want_exported_v002="$SCRIPT_PATH/want_exported_v002"
 want_snapshot_v002="$SCRIPT_PATH/want_snapshot_v002"
 
 exported="$SCRIPT_PATH/exported"
@@ -84,8 +83,7 @@ metactl_import_export () {
     sleep 1
 }
 
-metactl_import_export 'V001' "$meta_json_v001" "$want_exported" "$want_snapshot_v002"
-metactl_import_export 'V002' "$meta_json_v002" "$want_exported" "$want_snapshot_v002"
+metactl_import_export 'V002' "$meta_json_v002" "$want_exported_v002" "$want_snapshot_v002"
 
 
 echo " === "
