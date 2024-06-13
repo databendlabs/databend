@@ -16,6 +16,8 @@ use std::borrow::Borrow;
 use std::io;
 use std::ops::Deref;
 use std::ops::RangeBounds;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::leveled_store::level::Level;
@@ -37,15 +39,18 @@ use crate::state_machine::ExpireKey;
 /// [`MapApi`]: crate::sm_v003::leveled_store::map_api::MapApi
 #[derive(Debug, Clone)]
 pub struct Immutable {
+    /// An in-process unique to identify this immutable level.
+    ///
+    /// It is used to assert a immutable level is not replaced after compaction.
     index: LevelIndex,
     level: Arc<Level>,
 }
 
 impl Immutable {
     pub fn new(level: Arc<Level>) -> Self {
-        static UNIQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        static UNIQ: AtomicU64 = AtomicU64::new(0);
 
-        let uniq = UNIQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let uniq = UNIQ.fetch_add(1, Ordering::Relaxed);
         let internal_seq = level.sys_data_ref().curr_seq();
 
         let index = LevelIndex::new(internal_seq, uniq);
