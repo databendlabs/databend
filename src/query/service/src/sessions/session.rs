@@ -262,7 +262,9 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(&self) -> Result<()> {
-        self.privilege_mgr().set_current_role(None).await
+        self.privilege_mgr()
+            .set_current_role(Some("public".to_string()))
+            .await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
@@ -283,21 +285,28 @@ impl Session {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 
     #[async_backtrace::framed]
-    pub async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
+    pub async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
-        self.privilege_mgr().has_ownership(object).await
+        self.privilege_mgr()
+            .has_ownership(object, check_current_role_only)
+            .await
     }
 
     #[async_backtrace::framed]

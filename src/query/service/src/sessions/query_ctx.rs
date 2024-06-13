@@ -637,9 +637,10 @@ impl TableContext for QueryContext {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         self.get_current_session()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 

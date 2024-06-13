@@ -119,13 +119,13 @@ tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "$t"
     insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "enable_streaming_load:1" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
 done
 
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "$t"
     insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "enable_streaming_load:1" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
 done
 
 

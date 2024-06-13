@@ -209,6 +209,7 @@ pub trait TableContext: Send + Sync {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
