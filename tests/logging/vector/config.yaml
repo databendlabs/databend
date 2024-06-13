@@ -20,6 +20,8 @@ transforms:
       resources = .resources
       . = parse_json!(.message)
       .tenant = resources.tenant_id
+      .qkey1 = resources.qkey1
+      .qkey2 = resources.qkey2
   filter_profile_logs:
     type: remap
     inputs:
@@ -32,6 +34,8 @@ transforms:
         abort
       }
       .tenant = .resources.tenant_id
+      .pkey1 = .resources.pkey1
+      .pkey2 = .resources.pkey2
       del(.resources)
       .query_profile = parse_json!(.message)
       del(.message)
