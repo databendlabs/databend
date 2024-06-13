@@ -215,8 +215,7 @@ impl WriterV003 {
     ///
     /// This method consumes the writer, thus the writer will not be used after commit.
     pub fn flush(self, sys_data: SysData) -> Result<TempSnapshotDataV003, io::Error> {
-        let path = self.db_builder.path().to_string();
-        let r = self.db_builder.flush(sys_data)?;
+        let (path, r) = self.db_builder.flush(sys_data)?;
         let t = TempSnapshotDataV003::new(path, self.snapshot_config, Arc::new(r));
         Ok(t)
     }

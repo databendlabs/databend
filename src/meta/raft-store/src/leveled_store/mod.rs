@@ -26,6 +26,8 @@ pub mod sys_data_api;
 pub mod util;
 
 mod db_map_api_ro_impl;
+#[cfg(test)]
+mod db_map_api_ro_test;
 mod db_open_snapshot_impl;
 mod key_spaces_impl;
 mod rotbl_seq_mark_impl;

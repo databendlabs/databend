@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use std::io;
-use std::sync::Arc;
 
-use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::Membership;
@@ -401,18 +399,11 @@ async fn move_bottom_to_db(lm: &mut LeveledMap, path: &str) -> Result<(), io::Er
 }
 
 async fn compact(lm: &mut LeveledMap, path: &str) -> Result<(), io::Error> {
-    lm.freeze_writable();
+    let db_builder = DBBuilder::new_with_default_config(path)?;
 
-    let mut compacter = lm.acquire_compactor().await;
-    let (sys_data, strm) = compacter.compact().await?;
-
-    let mut db_builder = DBBuilder::new_with_default_config(path)?;
-    db_builder.append_kv_stream(strm).await?;
-
-    let r = db_builder.flush(sys_data)?;
-    let db = DB::new(path, "1-1-1-1".to_string(), Arc::new(r))?;
-
-    drop(compacter);
+    let db = db_builder
+        .build_from_leveled_map(lm, |_sys_data| "1-1-1-1.snap".to_string())
+        .await?;
 
     lm.replace_immutable_levels(ImmutableLevels::new([]));
     *lm.persisted_mut() = Some(db);

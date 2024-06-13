@@ -166,7 +166,7 @@ impl LeveledMap {
         if let Some(rx) = &mut self.current_compactor {
             match rx.try_recv() {
                 Err(TryRecvError::Closed) => {
-                    // Ok, released.
+                    // Ok, released. Continue
                 }
                 Err(TryRecvError::Empty) => {
                     // Another compactor still in use.
