@@ -61,7 +61,7 @@ pub enum JoinType {
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
     RightSingle,
-    ///Asof 
+    /// Asof Join special for  Speed ​​up timestamp join
     Asof,
     LeftAsof,
     RightAsof,
@@ -498,8 +498,12 @@ impl Operator for Join {
         )?;
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right | JoinType::RightAsof => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => {
+                f64::max(left_cardinality, inner_join_cardinality)
+            }
+            JoinType::Right | JoinType::RightAsof => {
+                f64::max(right_cardinality, inner_join_cardinality)
+            }
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)

@@ -225,15 +225,16 @@ impl Binder {
                 "Join conditions should be empty in cross join",
             ));
         }
-        if matches!(join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) 
-            && non_equi_conditions.is_empty() {
+        if matches!(
+            join_type,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        ) && non_equi_conditions.is_empty()
+        {
             return Err(ErrorCode::SemanticError("Missing inequality condition!"));
         }
         if join_type == JoinType::RightAsof {
             join_type = JoinType::LeftAsof;
-            let tmp = left_child;
-            left_child = right_child;
-            right_child = tmp;
+            std::mem::swap(&mut left_child, &mut right_child);
         }
         self.push_down_other_conditions(
             &join_type,

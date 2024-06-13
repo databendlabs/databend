@@ -36,7 +36,11 @@ pub enum PhysicalJoinType {
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     if !join.left_conditions.is_empty()
-       && matches!(join.join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) {
+        && matches!(
+            join.join_type,
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+        )
+    {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
@@ -65,7 +69,10 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             other_conditions,
         ));
     }
-    if matches!(join.join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) {
+    if matches!(
+        join.join_type,
+        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+    ) {
         return Ok(PhysicalJoinType::AsofJoin(
             range_conditions,
             other_conditions,
@@ -172,8 +179,15 @@ impl PhysicalPlanBuilder {
                     .await
             }
             PhysicalJoinType::RangeJoin(range, other) => {
-                self.build_range_join(join.join_type.clone(), s_expr, left_required, right_required, range, other)
-                    .await
+                self.build_range_join(
+                    join.join_type.clone(),
+                    s_expr,
+                    left_required,
+                    right_required,
+                    range,
+                    other,
+                )
+                .await
             }
         }
     }

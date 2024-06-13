@@ -15,8 +15,8 @@
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::Result;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::NumberDataType;
@@ -362,7 +362,7 @@ impl RangeJoinState {
             }
         }
         let mut indices = Vec::with_capacity(left_buffer.len());
-        let mut result_block =  match self.join_type {
+        let mut result_block = match self.join_type {
             JoinType::Inner => {
                 if left_buffer.is_empty() {
                     return Ok(DataBlock::empty());
@@ -370,8 +370,11 @@ impl RangeJoinState {
                 for res in left_buffer.iter() {
                     indices.push((0u32, *res as u32, 1usize));
                 }
-                let mut left_result_block =
-                    DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
+                let mut left_result_block = DataBlock::take_blocks(
+                    &left_table[left_idx..left_idx + 1],
+                    &indices,
+                    indices.len(),
+                );
                 indices.clear();
                 for res in right_buffer.iter() {
                     indices.push((0u32, *res as u32, 1usize));
@@ -386,18 +389,21 @@ impl RangeJoinState {
                     left_result_block.add_column(col.clone());
                 }
                 Ok(left_result_block)
-            },
-            JoinType::Left  =>  {
+            }
+            JoinType::Left => {
                 let mut unmatches = Vec::with_capacity(block_size);
                 for (i, state) in left_row_state.iter().enumerate() {
                     if *state {
                         indices.push((0u32, i as u32, 1usize));
-                    }else{
+                    } else {
                         unmatches.push((0u32, i as u32, 1usize));
                     }
                 }
-                let mut left_result_block =
-                    DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
+                let mut left_result_block = DataBlock::take_blocks(
+                    &left_table[left_idx..left_idx + 1],
+                    &indices,
+                    indices.len(),
+                );
                 indices.clear();
                 for res in right_buffer.iter() {
                     indices.push((0u32, *res as u32, 1usize));
@@ -411,24 +417,27 @@ impl RangeJoinState {
                 for col in right_result_block.columns() {
                     left_result_block.add_column(col.clone());
                 }
-                if unmatches.len() > 0 {
-                    let mut left_unmatch_block =
-                        DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &unmatches, unmatches.len());
-                    let nullable_columns = 
-                        right_table[right_idx] 
-                            .columns()
-                            .iter()
-                            .map(|c| BlockEntry {
-                                value: Value::Scalar(Scalar::Null),
-                                data_type: c.data_type.wrap_nullable(),
-                            })
-                            .collect::<Vec<_>>();
-                    let right_unmatch_block  = DataBlock::new(nullable_columns, unmatches.len());
+                if !unmatches.is_empty() {
+                    let mut left_unmatch_block = DataBlock::take_blocks(
+                        &left_table[left_idx..left_idx + 1],
+                        &unmatches,
+                        unmatches.len(),
+                    );
+                    let nullable_columns = right_table[right_idx]
+                        .columns()
+                        .iter()
+                        .map(|c| BlockEntry {
+                            value: Value::Scalar(Scalar::Null),
+                            data_type: c.data_type.wrap_nullable(),
+                        })
+                        .collect::<Vec<_>>();
+                    let right_unmatch_block = DataBlock::new(nullable_columns, unmatches.len());
                     // Merge left_result_block and right_result_block
                     for col in right_unmatch_block.columns() {
                         left_unmatch_block.add_column(col.clone());
                     }
-                    left_result_block = DataBlock::concat(&vec![left_result_block,left_unmatch_block])?;
+                    left_result_block =
+                        DataBlock::concat(&[left_result_block, left_unmatch_block])?;
                 }
                 Ok(left_result_block)
             }
