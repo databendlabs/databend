@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import glob
 import json
 import logging
@@ -60,6 +59,6 @@ if __name__ == "__main__":
     argparse = argparse.ArgumentParser()
     argparse.add_argument("--sql", type=str)
     args = argparse.parse_args()
-    logger.info("sql: %s", args.sql)
+
     check_queries(args.sql)
     check_profiles()
