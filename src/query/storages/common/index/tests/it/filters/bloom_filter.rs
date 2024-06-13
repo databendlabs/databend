@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -362,10 +361,10 @@ fn eval_index(
         }
     }
     let column_stats = StatisticsOfColumns::new();
-    let mut invalid_keys = HashSet::new();
-    index
-        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
-        .unwrap()
+    let res = index
+        .apply(expr, &scalar_map, &column_stats, schema, false)
+        .unwrap();
+    res.0
 }
 
 fn eval_map_index(
@@ -423,10 +422,10 @@ fn eval_map_index(
         }
     }
     let column_stats = StatisticsOfColumns::new();
-    let mut invalid_keys = HashSet::new();
-    index
-        .apply(expr, &scalar_map, &column_stats, schema, &mut invalid_keys)
-        .unwrap()
+    let res = index
+        .apply(expr, &scalar_map, &column_stats, schema, false)
+        .unwrap();
+    res.0
 }
 
 fn bloom_columns_map(

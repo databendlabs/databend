@@ -160,13 +160,6 @@ pub enum FilterEvalResult {
     Uncertain,
 }
 
-// result of bloom filter result
-struct BloomFilterResult {
-    eval_result: FilterEvalResult,
-    // invalid bloom filter keys
-    invalid_keys: Option<HashSet<String>>,
-}
-
 impl BloomIndex {
     /// Load a filter directly from the source table's schema and the corresponding filter parquet file.
     #[minitrace::trace]
