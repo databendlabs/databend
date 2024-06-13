@@ -70,12 +70,12 @@ ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = "2"
 prqlc = "0.11.3"
+recursive = "0.1.1"
 regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-recursive = "0.1.1"
 
 [lints]
 workspace = true
