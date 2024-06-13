@@ -24,6 +24,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_meta_app::app_error::AppError;
+use databend_common_meta_app::app_error::CannotAccessShareTable;
 use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -59,8 +60,6 @@ use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
-use databend_common_meta_app::app_error::WrongShare;
-use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
@@ -184,8 +183,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::tenant::Tenant;
@@ -226,7 +223,6 @@ use crate::fetch_id;
 use crate::get_pb_value;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
-use crate::get_share_or_err;
 use crate::get_share_table_info;
 use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
@@ -250,9 +246,7 @@ use crate::util::deserialize_struct_get_response;
 use crate::util::deserialize_u64;
 use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
-use crate::util::get_table_names_by_ids;
 use crate::util::get_virtual_column_by_id_or_err;
-use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
@@ -2067,12 +2061,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let table_id = match db_meta.from_share {
             Some(ref share_name_ident_raw) => {
                 let share_ident = share_name_ident_raw.clone().to_tident(());
-                get_table_id_from_share_by_name(
-                    self,
-                    &share_ident,
-                    &tenant_dbname_tbname.table_name,
-                )
-                .await?
+                error!("get_table {:?} from share {:?}", tenant_dbname, share_ident,);
+                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
+                    CannotAccessShareTable::new(
+                        &tenant_dbname_tbname.tenant.tenant,
+                        share_ident.name(),
+                        &tenant_dbname_tbname.table_name,
+                    ),
+                )));
             }
             None => {
                 // Get table by tenant,db_id, table_name to assert presence.
@@ -2293,7 +2289,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             None => list_tables_from_unshare_db(self, db_id, tenant_dbname).await?,
             Some(share) => {
                 let share_ident = share.to_tident(());
-                list_tables_from_share_db(self, share_ident, tenant_dbname).await?
+                error!(
+                    "list_tables {:?} from share {:?}",
+                    tenant_dbname, share_ident,
+                );
+                return Err(KVAppError::AppError(AppError::CannotAccessShareTable(
+                    CannotAccessShareTable::new(
+                        &tenant_dbname.tenant().tenant,
+                        share_ident.share_name(),
+                        tenant_dbname.name(),
+                    ),
+                )));
             }
         };
 
@@ -4846,46 +4852,6 @@ async fn get_share_table_info_map(
     }
 
     Ok(Some(share_table_info_map_vec))
-}
-
-async fn get_table_id_from_share_by_name(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share: &ShareNameIdent,
-    table_name: &String,
-) -> Result<u64, KVAppError> {
-    let res = get_share_or_err(
-        kv_api,
-        share,
-        format!("list_tables_from_share_db: {}", share.display()),
-    )
-    .await;
-
-    let (share_id_seq, _share_id, _share_meta_seq, share_meta) = match res {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(e);
-        }
-    };
-    if share_id_seq == 0 {
-        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-            share.to_string_key(),
-        ))));
-    }
-
-    let mut ids = Vec::with_capacity(share_meta.entries.len());
-    for (_, entry) in share_meta.entries.iter() {
-        if let ShareGrantObject::Table(table_id) = entry.object {
-            ids.push(table_id);
-        }
-    }
-
-    let table_names = get_table_names_by_ids(kv_api, &ids).await?;
-    match table_names.binary_search(table_name) {
-        Ok(i) => Ok(ids[i]),
-        Err(_) => Err(KVAppError::AppError(AppError::WrongShareObject(
-            WrongShareObject::new(table_name.to_string()),
-        ))),
-    }
 }
 
 fn build_upsert_table_copied_file_info_conditions(
