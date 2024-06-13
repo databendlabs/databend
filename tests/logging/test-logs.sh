@@ -15,6 +15,9 @@ fi
 echo "Starting standalone Databend Query with logging"
 ./scripts/ci/deploy/databend-query-standalone-logging.sh
 
+echo "Clean previous logs"
+rm -rf .databend/vector/*
+
 echo "Starting Vector"
 killall vector || true
 sleep 1
