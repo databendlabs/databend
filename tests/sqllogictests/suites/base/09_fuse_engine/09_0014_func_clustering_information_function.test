@@ -46,3 +46,34 @@ select * exclude(timestamp) from clustering_information('default','t09_0014', '(
 statement ok
 drop table t09_0014
 
+statement ok
+create table t09_0014_1(c string)
+
+statement ok
+insert into t09_0014_1 values ('abc'), ('abd')
+
+statement ok
+insert into t09_0014_1 values ('xyy'), ('xyz')
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(c)')
+----
+(c) 2 0 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1))')
+----
+(SUBSTRING(c FROM 1)) 2 0 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,1,2))')
+----
+(SUBSTRING(c FROM 1 FOR 2)) 2 2 0.0 1.0 {"00001":2}
+
+query TIIFFT
+select * exclude(timestamp) from clustering_information('default','t09_0014_1', '(substr(c,2,2))')
+----
+(SUBSTRING(c FROM 2 FOR 2)) 2 0 1.0 2.0 {"00002":2}
+
+statement ok
+drop table t09_0014_1
