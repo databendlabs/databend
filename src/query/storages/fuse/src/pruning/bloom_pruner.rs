@@ -212,7 +212,7 @@ impl BloomPrunerCreator {
                 // In case that the index is no longer supported, just return true to indicate
                 // that the block being pruned should be kept. (Although the caller of this method
                 // "FilterPruner::should_keep",  will ignore any exceptions returned)
-                Ok(true, None)
+                Ok((true, None))
             }
             Err(e) => Err(e),
         }
@@ -294,7 +294,7 @@ impl BloomPruner for BloomPrunerCreator {
                     column_stats,
                     column_ids,
                     block_meta,
-                    invalid_keys,
+                    is_sample,
                 )
                 .await
             {

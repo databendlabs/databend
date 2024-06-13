@@ -409,7 +409,7 @@ impl BloomIndex {
                         display_name: new_col_name,
                     }))
                 } else {
-                    if let Some(invalid_keys) = invalid_keys {
+                    if let Some(ref mut invalid_keys) = invalid_keys {
                         // If the result of a bloom filter is Uncertain, it means that the filter is invalid,
                         // and reading the bloom filter data will increase additional costs,
                         // so we can consider not using this bloom filter in the following queries.

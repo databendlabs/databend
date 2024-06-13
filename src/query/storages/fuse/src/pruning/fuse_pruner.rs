@@ -395,13 +395,15 @@ impl FusePruner {
 
             let ratio = 0.7;
             let mut ignored_keys = HashSet::new();
-            for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
-                // invalid_num is the number of bloom filters that return Uncertain.
-                // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
-                // we put the filter key into the cache and the filter key is ignored in following queries.
-                let invalid_ratio = invalid_num as f32 / sample_num as f32;
-                if invalid_ratio > ratio {
-                    ignored_keys.insert(invalid_key);
+            if let Some(invalid_keys_map) = invalid_keys_map {
+                for (invalid_key, invalid_num) in invalid_keys_map.into_iter() {
+                    // invalid_num is the number of bloom filters that return Uncertain.
+                    // If the ratio of these invalid filters to all blocks exceeds the threshold set by the user,
+                    // we put the filter key into the cache and the filter key is ignored in following queries.
+                    let invalid_ratio = invalid_num as f32 / sample_num as f32;
+                    if invalid_ratio > ratio {
+                        ignored_keys.insert(invalid_key);
+                    }
                 }
             }
 
@@ -531,7 +533,7 @@ impl FusePruner {
         Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
         Option<HashMap<String, usize>>,
     )> {
-        let mut block_metas = vec![];
+        let mut result_block_metas = vec![];
         let mut invalid_keys_map = if is_sample {
             Some(HashMap::new())
         } else {
@@ -541,17 +543,17 @@ impl FusePruner {
             let res = block_pruner
                 .pruning(location, block_metas, is_sample)
                 .await?;
-            block_metas.extend(res.0);
-            if let Some(mut invalid_keys_map) = invalid_keys_map {
-                if let Some(ref keys_map) = res.1 {
-                    for (invalid_key, num) in keys_map {
+            result_block_metas.extend(res.0);
+            if let Some(ref mut invalid_keys_map) = invalid_keys_map {
+                if let Some(keys_map) = res.1 {
+                    for (invalid_key, num) in keys_map.into_iter() {
                         let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
                         *val_ref += num;
                     }
                 }
             }
         }
-        Ok((block_metas, invalid_keys_map))
+        Ok((result_block_metas, invalid_keys_map))
     }
 
     #[allow(clippy::type_complexity)]

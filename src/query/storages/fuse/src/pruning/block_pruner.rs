@@ -51,7 +51,7 @@ impl BlockPruner {
         is_sample: bool,
     ) -> Result<(
         Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-        Option<HashMap<String, u64>>,
+        Option<HashMap<String, usize>>,
     )> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -103,7 +103,7 @@ impl BlockPruner {
         is_sample: bool,
     ) -> Result<(
         Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
-        Option<HashMap<String, u64>>,
+        Option<HashMap<String, usize>>,
     )> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -282,7 +282,7 @@ impl BlockPruner {
         for prune_result in joint {
             let prune_result = prune_result?;
 
-            if let Some(mut invalid_keys_map) = invalid_keys_map {
+            if let Some(ref mut invalid_keys_map) = invalid_keys_map {
                 let invalid_keys = prune_result.invalid_keys.unwrap_or_default();
                 for invalid_key in invalid_keys {
                     let val_ref = invalid_keys_map.entry(invalid_key).or_insert(0);
