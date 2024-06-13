@@ -264,7 +264,8 @@ impl DPhpy {
             | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::RecursiveCteScan(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 

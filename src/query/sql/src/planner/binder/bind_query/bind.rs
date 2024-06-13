@@ -86,6 +86,7 @@ impl Binder {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 materialized: cte.materialized,
+                recursive: with.recursive,
                 cte_idx: idx,
                 used_count: 0,
                 columns: vec![],

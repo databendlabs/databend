@@ -24,6 +24,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
@@ -474,15 +475,16 @@ impl HttpQuery {
         http_query_runtime_instance.runtime().try_spawn(
             async move {
                 let state = state_clone.clone();
-                if let Err(e) = ExecuteState::try_start_query(
+                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
                     state,
                     sql,
                     session,
                     ctx_clone.clone(),
                     block_sender,
                     format_settings_clone,
-                )
+                ))
                 .await
+                .flatten()
                 {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),

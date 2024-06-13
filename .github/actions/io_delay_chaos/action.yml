@@ -1,20 +1,8 @@
 name: "Chaos Test meta service"
 description: "Running stateless tests in management mode"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
-        artifacts: meta,metactl,metaverifier
-
     - name: Meta Service IO Delay tests
       shell: bash
       run: |

@@ -226,6 +226,7 @@ impl PipelineBuilder {
                 self.build_chunk_commit_insert(chunk_commit_insert)
             }
             PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
+            PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
         }
     }
 }
