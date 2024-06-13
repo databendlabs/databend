@@ -1121,7 +1121,7 @@ pub enum JoinOperator {
     RightAnti,
     // CrossJoin can only work with `JoinCondition::None`
     CrossJoin,
-    // Asof 
+    // Asof
     AsofJoin,
     LeftAsofJoin,
     RightAsofJoin,

@@ -63,7 +63,7 @@ pub enum JoinType {
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
     RightSingle,
-    ///Asof 
+    /// Asof Join special for  Speed ​​up timestamp join
     Asof,
     LeftAsof,
     RightAsof,

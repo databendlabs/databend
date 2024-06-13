@@ -74,7 +74,10 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             other_conditions,
         ));
     }
-    if matches!(join.join_type, JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof) {
+    if matches!(
+        join.join_type,
+        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+    ) {
         return Ok(PhysicalJoinType::AsofJoin(
             range_conditions,
             other_conditions,
