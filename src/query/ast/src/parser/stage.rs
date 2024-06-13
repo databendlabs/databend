@@ -235,15 +235,11 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
         rule! {
             #literal_string
             ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
-            ~ (CREDENTIALS ~ ^"=" ~ ^#connection_options ~ ","?)?
             ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
-        |(location, connection_opts, credentials_opts, location_prefix)| {
+        |(location, connection_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {
-                if location_prefix.is_none()
-                    && connection_opts.is_none()
-                    && credentials_opts.is_none()
-                {
+                if location_prefix.is_none() && connection_opts.is_none() {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
                     Err(nom::Err::Failure(ErrorKind::Other(
@@ -258,9 +254,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 };
                 // fs location is not a valid url, let's check it in advance.
 
-                // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
-                let mut conns = connection_opts.map(|v| v.2).unwrap_or_default();
-                conns.extend(credentials_opts.map(|v| v.2).unwrap_or_default());
+                let conns = connection_opts.map(|v| v.2).unwrap_or_default();
 
                 let uri = UriLocation::from_uri(location, part_prefix, conns)
                     .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;

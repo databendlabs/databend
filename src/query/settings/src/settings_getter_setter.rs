@@ -302,6 +302,10 @@ impl Settings {
         Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
     }
 
+    pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
@@ -629,6 +633,10 @@ impl Settings {
 
     pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_temp_files_after_query")
+    }
+
+    pub fn get_max_set_operator_count(&self) -> Result<u64> {
+        self.try_get_u64("max_set_operator_count")
     }
 
     pub fn get_enable_bloom_filter_ignore_invalid_key(&self) -> Result<bool> {

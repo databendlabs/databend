@@ -17,7 +17,7 @@ query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 usage() {
     echo " === Assert that an old version query being compatible with lastest version query on fuse-table format"
     echo " === Expect ./bins/current contains current version binaries"
-    echo " === Usage: $0 <old_version> <logictest_path> <supplementray_statless_test_path>"
+    echo " === Usage: $0 <old_version> <meta_ver> <logictest_path> <supplementray_statless_test_path>"
 }
 
 source "${SCRIPT_PATH}/util.sh"
@@ -29,13 +29,17 @@ source "${SCRIPT_PATH}/util.sh"
 # e.g. old_query_ver="0.7.151"
 old_query_ver="$1"
 
+# The databend-meta version runs with both old_query_ver and current query
+meta_ver="$2"
+
 # default sqllogic test suite is "testlogictest_path=${2:-"./base"}s/fuse-forward-compat/compat-logictest/"
-logictest_path=${2:-"./base"}
+logictest_path=${3:-"./base"}
 
 # supplementary stateless test suite if provided (optional), which will be searched under "tests/fuse-forward-compat/compat-stateless"
-stateless_test_path="$3"
+stateless_test_path="$4"
 
 echo " === old query ver : ${old_query_ver}"
+echo " === meta-service ver : ${meta_ver}"
 echo " === sql logic test path: ${logictest_path}"
 echo " === supplementary stateless test path: ${stateless_test_path}"
 
@@ -50,12 +54,13 @@ echo " === old query ver: $old_query_ver"
 mkdir -p ./target/${BUILD_PROFILE}/
 
 download_query_config "$old_query_ver" old_config
+download_binary "$meta_ver"
 download_binary "$old_query_ver"
 
 echo "=== Now test forward compat ==="
 
 old_config_path="old_config/$query_config_path"
-run_test $old_query_ver $old_config_path $logictest_path "forward"
+run_test $old_query_ver $meta_ver $old_config_path $logictest_path "forward"
 
 if [ -n "$stateless_test_path" ];
 then

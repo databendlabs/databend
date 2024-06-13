@@ -134,9 +134,7 @@ impl Binder {
         self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
         // Generate a analyzed select list with from context
-        let mut select_list = self
-            .normalize_select_list(&mut from_context, &stmt.select_list)
-            .await?;
+        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -176,10 +174,7 @@ impl Binder {
         )?;
 
         let having = if let Some(having) = &stmt.having {
-            Some(
-                self.analyze_aggregate_having(&mut from_context, &aliases, having)
-                    .await?,
-            )
+            Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
         } else {
             None
         };
@@ -221,7 +216,7 @@ impl Binder {
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
-            s_expr = self.bind_aggregate(&mut from_context, s_expr).await?;
+            s_expr = self.bind_aggregate(&mut from_context, s_expr)?;
         }
 
         if let Some(having) = having {

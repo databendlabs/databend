@@ -43,6 +43,7 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
+use crate::CountSetOps;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -147,7 +148,7 @@ impl Planner {
                     return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
                 }
 
-                self.replace_stmt(&mut stmt);
+                self.replace_stmt(&mut stmt)?;
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -242,11 +243,21 @@ impl Planner {
         }
     }
 
-    fn replace_stmt(&self, stmt: &mut Statement) {
+    fn replace_stmt(&self, stmt: &mut Statement) -> Result<()> {
         stmt.drive_mut(&mut DistinctToGroupBy::default());
         stmt.drive_mut(&mut AggregateRewriter);
+        let mut set_ops_counter = CountSetOps::default();
+        stmt.drive_mut(&mut set_ops_counter);
+        let max_set_ops = self.ctx.get_settings().get_max_set_operator_count()?;
+        if max_set_ops < set_ops_counter.count as u64 {
+            return Err(ErrorCode::SyntaxException(format!(
+                "The number of set operations: {} exceeds the limit: {}",
+                set_ops_counter.count, max_set_ops
+            )));
+        }
 
         self.add_max_rows_limit(stmt);
+        Ok(())
     }
 }
 

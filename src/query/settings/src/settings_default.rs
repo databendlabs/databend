@@ -296,6 +296,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_cte_recursive_depth", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Max recursive depth for recursive cte",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
@@ -746,6 +752,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("max_set_operator_count", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                })
                 ("enable_bloom_filter_ignore_invalid_key", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables bloom filter ignore invalid keys. Take 10% of the blocks as sample. If the filter key is invalid for 70% of the bloom filter, the remaining blocks do not use the bloom index.",

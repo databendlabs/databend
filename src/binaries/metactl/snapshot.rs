@@ -106,54 +106,18 @@ async fn import_lines<B: BufRead + 'static>(
         DataVersion::V0 => {
             return Err(anyhow::anyhow!(
                 "importing from V0 is not supported since 2024-03-01,
-                 please use an older version to import from V0"
+                 please use an older version databend-metactl to import from V0"
             ));
         }
-        DataVersion::V001 => import_v001(config, it)?,
+        DataVersion::V001 => {
+            return Err(anyhow::anyhow!(
+                "importing from V001 is not supported since 2024-06-12,
+                 please use an older version databend-metactl to import from V001"
+            ));
+        }
         DataVersion::V002 => import_v002(config, it).await?,
     };
 
-    Ok(max_log_id)
-}
-
-/// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
-///
-/// While importing, the max log id is also returned.
-fn import_v001(
-    _config: &Config,
-    lines: impl IntoIterator<Item = Result<String, io::Error>>,
-) -> anyhow::Result<Option<LogId>> {
-    let db = get_sled_db();
-    let mut n = 0;
-    let mut max_log_id: Option<LogId> = None;
-    let mut trees = BTreeMap::new();
-
-    for line in lines {
-        let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
-
-        if !trees.contains_key(&tree_name) {
-            let tree = db.open_tree(&tree_name)?;
-            trees.insert(tree_name.clone(), tree);
-        }
-
-        let tree = trees.get(&tree_name).unwrap();
-
-        let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
-
-        tree.insert(k, v)?;
-        n += 1;
-
-        if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
-            max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
-        };
-    }
-
-    for tree in trees.values() {
-        tree.flush()?;
-    }
-
-    eprintln!("Imported {} records", n);
     Ok(max_log_id)
 }
 
