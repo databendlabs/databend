@@ -44,8 +44,7 @@ impl<'a> DBExporter<'a> {
 
     /// Convert sys data to a series of [`SMEntry`] for export.
     pub fn sys_data_sm_entries(&self) -> Result<Vec<SMEntry>, io::Error> {
-        let sys_data: SysData = serde_json::from_str(self.db.inner().meta().user_data())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let sys_data = &self.db.sys_data;
 
         let last_applied = *sys_data.last_applied_ref();
         let last_membership = sys_data.last_membership_ref().clone();
@@ -79,7 +78,7 @@ impl<'a> DBExporter<'a> {
         Ok(res)
     }
 
-    /// Export all data in a stream of [`SMEntry`].
+    /// Export all data in a stream of [`SMEntry`], ignore tombstone.
     ///
     /// First several lines are system data,
     /// including `seq`, `last_applied_log_id`, `last_applied_membership`, and `nodes`.
@@ -92,16 +91,20 @@ impl<'a> DBExporter<'a> {
         // expire index
 
         let strm = self.db.expire_map().range(..).await?;
-        let expire_strm = strm.try_filter_map(|(k, v)| {
-            let exp_val: Option<ExpireValue> = v.into();
-            let ent = exp_val.map(|value| SMEntry::Expire { key: k, value });
+        let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
+            // Tombstone will be convert to None and be ignored.
+            let exp_val: Option<ExpireValue> = marked.into();
+            let ent = exp_val.map(|value| SMEntry::Expire { key: exp_k, value });
             future::ready(Ok(ent))
         });
 
+        // kv
+
         let strm = self.db.str_map().range(..).await?;
-        let kv_strm = strm.try_filter_map(|(k, v)| {
-            let seqv: Option<SeqV<_>> = v.into();
-            let ent = seqv.map(|value| SMEntry::GenericKV { key: k, value });
+        let kv_strm = strm.try_filter_map(|(str_k, marked)| {
+            // Tombstone will be convert to None and be ignored.
+            let seqv: Option<SeqV<_>> = marked.into();
+            let ent = seqv.map(|value| SMEntry::GenericKV { key: str_k, value });
             future::ready(Ok(ent))
         });
 
