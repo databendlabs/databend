@@ -15,6 +15,7 @@
 //! implement the sub key space for the state machine.
 
 use std::fmt;
+use std::io;
 use std::io::Error;
 
 use crate::leveled_store::map_api::MapKey;
@@ -61,7 +62,7 @@ impl MapKey for ExpireKey {
     fn decode(buf: &str) -> Result<Self, Error> {
         if buf.len() != 41 {
             return Err(Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("ExpireKey len must be 41, but {}: {:?}", buf.len(), buf),
             ));
         }
@@ -70,49 +71,49 @@ impl MapKey for ExpireKey {
 
         let time_ms = segments.next().ok_or_else(|| {
             Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("first segment `time_ms` not found: {:?}", buf),
             )
         })?;
 
         let seq = segments.next().ok_or_else(|| {
             Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("second segment `seq` not found: {:?}", buf),
             )
         })?;
 
         if segments.next().is_some() {
             return Err(Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("ExpireKey must have only one '/': {:?}", buf),
             ));
         }
 
         if time_ms.len() != 20 {
             return Err(Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("`time_ms` len must be 20, but {}: {:?}", time_ms.len(), buf),
             ));
         }
 
         if seq.len() != 20 {
             return Err(Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("`seq` len must be 20, but {}: {:?}", seq.len(), buf),
             ));
         }
 
         let time_ms = time_ms.parse().map_err(|_| {
             Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("parse `time_ms` failed: {:?}", buf),
             )
         })?;
 
         let seq = seq.parse().map_err(|_| {
             Error::new(
-                std::io::ErrorKind::InvalidData,
+                io::ErrorKind::InvalidData,
                 format!("parse `seq` failed: {:?}", buf),
             )
         })?;
