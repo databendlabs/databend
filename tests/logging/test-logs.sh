@@ -9,7 +9,8 @@ cd "$SCRIPT_PATH/../../" || exit
 if vector -V; then
   echo "vector is already installed"
 else
-  echo "Installing vector" curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | sudo bash -s -- -y --prefix /usr/local
+  echo "Installing vector"
+  curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | sudo bash -s -- -y --prefix /usr/local
 fi
 
 echo "Starting standalone Databend Query with logging"
