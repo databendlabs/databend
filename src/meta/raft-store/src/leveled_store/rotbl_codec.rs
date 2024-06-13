@@ -128,6 +128,15 @@ mod tests {
     fn test_encode_key_string() {
         let r = RotblCodec::encode_key::<String>(&s("a")).unwrap();
         assert_eq!(r, "kv--/a");
+
+        assert_eq!(RotblCodec::decode_key::<String>("kv--/").unwrap(), s(""));
+        assert_eq!(RotblCodec::decode_key::<String>("kv--/a").unwrap(), s("a"));
+        assert_eq!(
+            RotblCodec::decode_key::<String>("kv--/a/").unwrap(),
+            s("a/")
+        );
+        assert!(RotblCodec::decode_key::<String>("kv-").is_err());
+        assert!(RotblCodec::decode_key::<String>("kv--").is_err());
     }
 
     #[test]
@@ -150,8 +159,18 @@ mod tests {
 
     #[test]
     fn test_encode_key_expire() {
-        let r = RotblCodec::encode_key::<ExpireKey>(&ExpireKey::new(12, 34)).unwrap();
+        let exp = ExpireKey::new(12, 34);
+        let r = RotblCodec::encode_key::<ExpireKey>(&exp).unwrap();
         assert_eq!(r, "exp-/00000000000000000012/00000000000000000034");
+
+        assert_eq!(RotblCodec::decode_key::<ExpireKey>(&r).unwrap(), exp);
+        assert!(RotblCodec::decode_key::<ExpireKey>("exp").is_err());
+        assert!(RotblCodec::decode_key::<ExpireKey>("exp-").is_err());
+        assert!(RotblCodec::decode_key::<ExpireKey>("exp-/").is_err());
+        assert!(
+            RotblCodec::decode_key::<ExpireKey>("exp-/00000000000000000012/00000000000000000034/")
+                .is_err()
+        );
     }
 
     #[test]

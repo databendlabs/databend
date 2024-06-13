@@ -52,7 +52,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
     // Build a db from all data of the state machine
     let db = {
-        let mut lm = sm.levels_mut();
+        let lm = sm.levels_mut();
 
         let temp_dir = tempfile::tempdir()?;
         let path = temp_dir.path();
