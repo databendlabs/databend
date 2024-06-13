@@ -16,36 +16,37 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
-use databend_common_exception::Result;
-use databend_common_sql::plans::SetBacktracePlan;
 use databend_common_exception::set_backtrace;
+use databend_common_exception::Result;
+use databend_common_sql::plans::SystemAction;
+use databend_common_sql::plans::SystemPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::packets::Packet;
-use crate::servers::flight::v1::packets::SetBacktracePacket;
+use crate::servers::flight::v1::packets::SystemActionPacket;
 use crate::sessions::QueryContext;
 
-pub struct SetBacktraceInterpreter {
+pub struct SystemActionInterpreter {
     ctx: Arc<QueryContext>,
-    plan: SetBacktracePlan,
+    plan: SystemPlan,
     proxy_to_cluster: bool,
 }
 
-impl SetBacktraceInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: SetBacktracePlan) -> Result<Self> {
-        Ok(SetBacktraceInterpreter {
+impl SystemActionInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: SystemPlan) -> Result<Self> {
+        Ok(SystemActionInterpreter {
             ctx,
             plan,
             proxy_to_cluster: true,
         })
     }
 
-    pub fn from_flight(ctx: Arc<QueryContext>, packet: SetBacktracePacket) -> Result<Self> {
-        Ok(SetBacktraceInterpreter {
+    pub fn from_flight(ctx: Arc<QueryContext>, packet: SystemActionPacket) -> Result<Self> {
+        Ok(SystemActionInterpreter {
             ctx,
-            plan: SetBacktracePlan {
-                switch: packet.switch,
+            plan: SystemPlan {
+                action: packet.action,
             },
             proxy_to_cluster: false,
         })
@@ -53,9 +54,9 @@ impl SetBacktraceInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SetBacktraceInterpreter {
+impl Interpreter for SystemActionInterpreter {
     fn name(&self) -> &str {
-        "SetBacktraceInterpreter"
+        "SystemActionInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -73,13 +74,16 @@ impl Interpreter for SetBacktraceInterpreter {
             for node_info in &cluster.nodes {
                 if node_info.id != cluster.local_id {
                     let set_backtrace_packet =
-                        SetBacktracePacket::create(self.plan.switch, node_info.clone());
+                        SystemActionPacket::create(self.plan.action.clone(), node_info.clone());
                     set_backtrace_packet.commit(conf.as_ref(), timeout).await?;
                 }
             }
         }
-
-        set_backtrace(self.plan.switch);
+        match self.plan.action {
+            SystemAction::Backtrace(switch) => {
+                set_backtrace(switch);
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }

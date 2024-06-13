@@ -14,13 +14,11 @@
 
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::LimitMemGuard;
-use log::error;
 use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
-
+use log::error;
 
 pub fn set_panic_hook() {
     // Set a panic hook that records the panic as a `tracing` event at the
@@ -67,5 +65,3 @@ pub fn log_panic(panic: &PanicInfo) {
         error!(backtrace = backtrace_str; "{}", panic);
     }
 }
-
-

@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::SystemAction;
+use databend_common_ast::ast::SystemAction as AstSystemAction;
 use databend_common_ast::ast::SystemStmt;
 use databend_common_exception::Result;
 
 use crate::planner::binder::Binder;
 use crate::plans::Plan;
-use crate::plans::SetBacktracePlan;
+use crate::plans::SystemAction;
+use crate::plans::SystemPlan;
 
 impl Binder {
     #[async_backtrace::framed]
     pub(super) async fn bind_system(&mut self, stmt: &SystemStmt) -> Result<Plan> {
         let SystemStmt { action } = stmt;
         match action {
-            SystemAction::Backtrace(switch) => Ok(Plan::SetBacktrace(Box::new(SetBacktracePlan {
-                switch: *switch,
+            AstSystemAction::Backtrace(switch) => Ok(Plan::System(Box::new(SystemPlan {
+                action: SystemAction::Backtrace(*switch),
             }))),
         }
     }

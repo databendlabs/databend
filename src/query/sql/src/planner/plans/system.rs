@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetBacktracePlan {
-    pub switch: bool,
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemPlan {
+    pub action: SystemAction,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub enum SystemAction {
+    Backtrace(bool),
 }

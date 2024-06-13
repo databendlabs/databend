@@ -30,7 +30,6 @@ pub fn set_backtrace(switch: bool) {
     }
 }
 
-
 fn enable_rust_backtrace() -> bool {
     match USER_SET_ENABLE_BACKTRACE.load(Ordering::Relaxed) {
         0 => {}

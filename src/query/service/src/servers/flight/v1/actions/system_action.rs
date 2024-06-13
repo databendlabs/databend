@@ -17,21 +17,21 @@ use databend_common_exception::Result;
 use databend_common_settings::Settings;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::SetBacktraceInterpreter;
-use crate::servers::flight::v1::packets::SetBacktracePacket;
+use crate::interpreters::SystemActionInterpreter;
+use crate::servers::flight::v1::packets::SystemActionPacket;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-pub static SET_BACKTRACE: &str = "/actions/set_backtrace";
+pub static SYSTEM_ACTION: &str = "/actions/system_action";
 
-pub async fn set_backtrace(req: SetBacktracePacket) -> Result<()> {
+pub async fn system_action(req: SystemActionPacket) -> Result<()> {
     let config = GlobalConfig::instance();
     let session_manager = SessionManager::instance();
     let settings = Settings::create(config.query.tenant_id.clone());
     let session = session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
     let session = session_manager.register_session(session)?;
     let ctx = session.create_query_context().await?;
-    let interpreter = SetBacktraceInterpreter::from_flight(ctx, req)?;
+    let interpreter = SystemActionInterpreter::from_flight(ctx, req)?;
     interpreter.execute2().await?;
     Ok(())
 }

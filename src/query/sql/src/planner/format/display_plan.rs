@@ -226,7 +226,7 @@ impl Plan {
             Plan::DropSequence(_) => Ok("DropSequence".to_string()),
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
-            Plan::SetBacktrace(_) => Ok("SetBacktrace".to_string()),
+            Plan::System(_) => Ok("System".to_string()),
         }
     }
 }
