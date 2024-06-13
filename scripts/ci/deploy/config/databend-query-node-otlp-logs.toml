@@ -48,8 +48,7 @@ dir = "./.databend/logs_1"
 [log.query]
 on = true
 otlp_endpoint = "http://127.0.0.1:4317"
-
-[[log.query.otlp_labels]]
+[log.query.otlp_labels]
 qkey1 = "qvalue1"
 qkey2 = "qvalue2"
 
@@ -57,8 +56,7 @@ qkey2 = "qvalue2"
 on = true
 otlp_endpoint = "http://127.0.0.1:4318"
 otlp_protocol = "http"
-
-[[log.profile.otlp_labels]]
+[log.profile.otlp_labels]
 pkey1 = "pvalue1"
 pkey2 = "pvalue2"
 
