@@ -793,10 +793,10 @@ impl Display for TableReference {
                         write!(f, " ASOF JOIN")?;
                     }
                     JoinOperator::LeftAsofJoin => {
-                        write!(f, " LEFT ASOF JOIN")?;
+                        write!(f, " ASOF LEFT JOIN")?;
                     }
                     JoinOperator::RightAsofJoin => {
-                        write!(f, " RIGHT ASOF JOIN")?;
+                        write!(f, " ASOF RIGHT JOIN")?;
                     }
                 }
                 write!(f, " {}", join.right)?;
