@@ -36,7 +36,7 @@ mkdir -p temp/distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-meta ./temp/distro/amd64
 cp ./target/"${BUILD_PROFILE}"/databend-metactl ./temp/distro/amd64
 cp tests/metaverifier/cat-logs.sh ./temp/distro/amd64
-docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/chaos-meta/meta.Dockerfile temp
+docker build -t databend-meta:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/meta-chaos/meta.Dockerfile temp
 docker tag databend-meta:meta-chaos k3d-registry.localhost:5111/databend-meta:meta-chaos
 docker push k3d-registry.localhost:5111/databend-meta:meta-chaos
 
@@ -45,7 +45,7 @@ rm -rf temp/distro/amd64/*
 cp ./target/"${BUILD_PROFILE}"/databend-metaverifier ./temp/distro/amd64
 cp tests/metaverifier/start-verifier.sh ./temp/distro/amd64
 cp tests/metaverifier/cat-logs.sh ./temp/distro/amd64
-docker build -t databend-metaverifier:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/chaos-meta/verifier.Dockerfile temp
+docker build -t databend-metaverifier:meta-chaos --build-arg TARGETPLATFORM="amd64" -f ./docker/meta-chaos/verifier.Dockerfile temp
 docker tag databend-metaverifier:meta-chaos k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
 docker push k3d-registry.localhost:5111/databend-metaverifier:meta-chaos
 
