@@ -122,6 +122,12 @@ impl DefaultSettings {
             let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
+                ("enable_streaming_load", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables streaming load.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_clickhouse_handler", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables clickhouse handler.",

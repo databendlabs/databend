@@ -269,7 +269,7 @@ async fn show_account_grants(
     let tenant = ctx.get_tenant();
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
-        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant)
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
         .await
         .is_ok();
 
