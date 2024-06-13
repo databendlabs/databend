@@ -4,16 +4,17 @@ import os
 import glob
 import json
 import logging
+import argparse
 
-QUERY_LOGS_DIR = "./databend/vector/query"
-PROFILE_LOGS_DIR = "./databend/vector/profile"
+QUERY_LOGS_DIR = ".databend/vector/query"
+PROFILE_LOGS_DIR = ".databend/vector/profile"
 
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-def check_queries(now: str):
+def check_queries(sql: str):
     queries = []
     for filename in glob.glob(QUERY_LOGS_DIR + "/*.log"):
         logger.info("checking query logs: %s", filename)
@@ -31,10 +32,10 @@ def check_queries(now: str):
         assert query["tenant"] == "test_tenant"
         assert query["qkey1"] == "qvalue1"
         assert query["qkey2"] == "qvalue2"
-        assert query["query_text"] == f"select {now}"
+        assert query["query_text"] == sql
 
 
-def check_profiles(now: str):
+def check_profiles():
     profiles = []
     for filename in glob.glob(PROFILE_LOGS_DIR + "/*.log"):
         logger.info("checking profile logs: %s", filename)
@@ -56,6 +57,9 @@ def check_profiles(now: str):
 
 
 if __name__ == "__main__":
-    now = os.environ.get("NOW")
-    check_queries(now)
-    check_profiles(now)
+    argparse = argparse.ArgumentParser()
+    argparse.add_argument("--sql", type=str)
+    args = argparse.parse_args()
+    logger.info("sql: %s", args.sql)
+    check_queries(args.sql)
+    check_profiles()

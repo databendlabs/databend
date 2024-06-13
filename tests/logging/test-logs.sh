@@ -25,11 +25,11 @@ nohup vector --config-yaml ./tests/logging/vector/config.yaml &
 python3 scripts/ci/wait_tcp.py --timeout 10 --port 4317
 
 NOW=$(date +%s)
-echo "select ${NOW}" | bendsql
+echo "SELECT ${NOW}" | bendsql
 
-echo "Exiting..."
-killall databend-query || true
-killall vector || true
-sleep 5
+# echo "Exiting..."
+# killall databend-query || true
+# killall vector || true
+sleep 1
 
-./tests/logging/check_logs.py
+./tests/logging/check_logs.py --sql "SELECT ${NOW}"
