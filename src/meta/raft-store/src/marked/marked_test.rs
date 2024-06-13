@@ -58,9 +58,9 @@ fn test_empty() -> anyhow::Result<()> {
     Ok(())
 }
 
-// Test Marked::internal_seq()
+// Test Marked::order_key()
 #[test]
-fn test_internal_seq() -> anyhow::Result<()> {
+fn test_order_key() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, 2, None);
     assert_eq!(m.order_key(), InternalSeq::normal(1));
 

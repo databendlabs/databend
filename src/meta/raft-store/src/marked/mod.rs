@@ -106,17 +106,6 @@ impl<T> Marked<T> {
         }
     }
 
-    /// Get internal sequence number. Both None and Normal have sequence number.
-    #[allow(dead_code)]
-    pub(crate) fn internal_seq(&self) -> InternalSeq {
-        match self {
-            Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
-            Marked::Normal {
-                internal_seq: seq, ..
-            } => InternalSeq::normal(*seq),
-        }
-    }
-
     pub fn unpack(self) -> Option<(T, Option<KVMeta>)> {
         match self {
             Marked::TombStone { internal_seq: _ } => None,

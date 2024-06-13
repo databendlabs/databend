@@ -14,71 +14,21 @@
 
 use std::fmt::Display;
 use std::io;
-use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
-use openraft::SnapshotId;
-use rotbl::v001::Rotbl;
 use rotbl::v001::SeqMarked;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::leveled_store::db_builder::DBBuilder;
-use crate::sm_v003::open_snapshot::OpenSnapshot;
+use crate::sm_v003::temp_snapshot_data::TempSnapshotDataV003;
+use crate::sm_v003::write_entry::WriteEntry;
 use crate::snapshot_config::SnapshotConfig;
-
-/// A typed temporary snapshot data.
-pub struct TempSnapshotDataV003 {
-    path: String,
-    snapshot_config: SnapshotConfig,
-    inner: Arc<Rotbl>,
-}
-
-impl Deref for TempSnapshotDataV003 {
-    type Target = Arc<Rotbl>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl TempSnapshotDataV003 {
-    pub fn new(path: impl ToString, snapshot_config: SnapshotConfig, r: Arc<Rotbl>) -> Self {
-        Self {
-            path: path.to_string(),
-            snapshot_config,
-            inner: r,
-        }
-    }
-
-    pub fn move_to_final_path(self, snapshot_id: SnapshotId) -> Result<DB, io::Error> {
-        let final_path = self
-            .snapshot_config
-            .move_to_final_path(&self.path, snapshot_id.clone())?;
-
-        let db = DB::open_snapshot(final_path, snapshot_id, self.snapshot_config.raft_config())?;
-        Ok(db)
-    }
-
-    pub fn path(&self) -> &str {
-        &self.path
-    }
-}
-
-/// A write entry sent to snapshot writer.
-///
-/// A `Finish` entry indicates the end of the data.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum WriteEntry<D, F = ()> {
-    Data(D),
-    Finish(F),
-}
 
 /// Write kv pair snapshot data to [`SnapshotStoreV002`].
 pub struct WriterV003 {

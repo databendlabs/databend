@@ -25,8 +25,8 @@ use crate::leveled_store::level_index::LevelIndex;
 
 #[cfg(test)]
 mod acquire_compactor_test;
+pub mod compacting_data;
 pub mod compactor;
-pub mod compactor_data;
 #[cfg(test)]
 mod leveled_map_test;
 mod map_api_impl;

@@ -30,8 +30,8 @@ use rotbl::v001::SeqMarked;
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::marked::Marked;
+use crate::sm_v003::write_entry::WriteEntry;
 use crate::sm_v003::SnapshotStoreV003;
-use crate::sm_v003::WriteEntry;
 use crate::state_machine::StateMachineMetaKey;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]

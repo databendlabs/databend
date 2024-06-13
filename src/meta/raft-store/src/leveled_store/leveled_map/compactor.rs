@@ -20,14 +20,14 @@ use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level_index::LevelIndex;
-use crate::leveled_store::leveled_map::compactor_data::CompactingData;
+use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::map_api::IOResultStream;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///
 /// Only one Compactor can be running at a time.
 pub struct Compactor {
-    /// Give back the token to the [`LeveledMap`] when dropped.
+    /// When dropped, drop the Sender so that the [`LeveledMap`] will be notified.
     #[allow(dead_code)]
     pub(super) guard: tokio::sync::oneshot::Sender<()>,
 
@@ -37,7 +37,7 @@ pub struct Compactor {
     /// Persisted data.
     pub(super) db: Option<DB>,
 
-    /// Remember the newest level
+    /// Remember the newest level included in this compactor.
     pub(super) since: Option<LevelIndex>,
 }
 

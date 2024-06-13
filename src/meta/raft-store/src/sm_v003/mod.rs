@@ -22,6 +22,8 @@ pub mod adapter;
 pub mod open_snapshot;
 pub mod receiver_v003;
 pub mod snapshot_loader;
+pub mod temp_snapshot_data;
+pub mod write_entry;
 
 #[cfg(test)]
 mod compact_immutable_levels_test;
@@ -34,5 +36,5 @@ pub use sm_v003::SMV003;
 pub use snapshot_store_v002::SnapshotStoreError;
 pub use snapshot_store_v002::SnapshotStoreV002;
 pub use snapshot_store_v003::SnapshotStoreV003;
-pub use writer_v003::WriteEntry;
+pub use write_entry::WriteEntry;
 pub use writer_v003::WriterV003;

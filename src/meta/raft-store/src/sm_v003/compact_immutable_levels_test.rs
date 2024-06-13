@@ -23,7 +23,7 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
-use crate::leveled_store::leveled_map::compactor_data::CompactingData;
+use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApi;
