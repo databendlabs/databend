@@ -73,9 +73,9 @@ impl Interpreter for SystemActionInterpreter {
             let cluster = self.ctx.get_cluster();
             for node_info in &cluster.nodes {
                 if node_info.id != cluster.local_id {
-                    let set_backtrace_packet =
+                    let system_action_packet =
                         SystemActionPacket::create(self.plan.action.clone(), node_info.clone());
-                    set_backtrace_packet.commit(conf.as_ref(), timeout).await?;
+                    system_action_packet.commit(conf.as_ref(), timeout).await?;
                 }
             }
         }
