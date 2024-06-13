@@ -43,7 +43,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
@@ -124,9 +123,30 @@ impl Binder {
         right: &SetExpr,
         op: &SetOperator,
         all: &bool,
+        cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let (left_expr, left_bind_context) =
             self.bind_set_expr(bind_context, left, &[], None).await?;
+        if let Some(cte_name) = cte_name.as_ref() {
+            if !all {
+                return Err(ErrorCode::Internal(
+                    "Currently, recursive cte only support union all".to_string(),
+                ));
+            }
+            // Add recursive cte's columns to cte info
+            let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            for column in left_bind_context.columns.iter() {
+                let col = ColumnBindingBuilder::new(
+                    column.column_name.clone(),
+                    column.index,
+                    column.data_type.clone(),
+                    Visibility::Visible,
+                )
+                .table_name(Some(cte_name.clone()))
+                .build();
+                mut_cte_info.columns.push(col);
+            }
+        }
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None).await?;
 
@@ -169,6 +189,7 @@ impl Binder {
                 left_expr,
                 right_expr,
                 false,
+                cte_name,
             ),
             (SetOperator::Union, false) => self.bind_union(
                 left.span(),
@@ -178,6 +199,7 @@ impl Binder {
                 left_expr,
                 right_expr,
                 true,
+                cte_name,
             ),
             _ => Err(ErrorCode::Unimplemented(
                 "Unsupported query type, currently, databend only support intersect distinct and except distinct",
@@ -195,44 +217,63 @@ impl Binder {
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
+        cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
-        for (left_col, right_col) in left_context
-            .columns
-            .iter()
-            .zip(right_context.columns.iter())
-        {
-            if left_col.data_type != right_col.data_type {
-                if let Some(data_type) = common_super_type(
-                    *left_col.data_type.clone(),
-                    *right_col.data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                ) {
-                    coercion_types.push(data_type);
+        if cte_name.is_some() {
+            let mut count = 0;
+            self.count_r_cte_scan(&right_expr, &mut count, &mut coercion_types)?;
+            if count == 0 {
+                return Err(ErrorCode::SemanticError(
+                    "Recursive cte should be used in recursive cte".to_string(),
+                ));
+            }
+            if count > 1 {
+                return Err(ErrorCode::SemanticError(
+                    "Currently, only support recursive cte be used in one place".to_string(),
+                ));
+            }
+        } else {
+            for (left_col, right_col) in left_context
+                .columns
+                .iter()
+                .zip(right_context.columns.iter())
+            {
+                if left_col.data_type != right_col.data_type {
+                    if let Some(data_type) = common_super_type(
+                        *left_col.data_type.clone(),
+                        *right_col.data_type.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    ) {
+                        coercion_types.push(data_type);
+                    } else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
+                            left_col.column_name,
+                            left_col.data_type,
+                            right_col.column_name,
+                            right_col.data_type
+                        )));
+                    }
                 } else {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                        left_col.column_name,
-                        left_col.data_type,
-                        right_col.column_name,
-                        right_col.data_type
-                    )));
+                    coercion_types.push(*left_col.data_type.clone());
                 }
-            } else {
-                coercion_types.push(*left_col.data_type.clone());
             }
         }
-        let (new_bind_context, pairs, left_expr, right_expr) = self.coercion_union_type(
+
+        let (new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
             left_span,
             right_span,
             left_context,
             right_context,
-            left_expr,
-            right_expr,
             coercion_types,
         )?;
 
-        let union_plan = UnionAll { pairs };
+        let union_plan = UnionAll {
+            left_outputs,
+            right_outputs,
+            cte_name,
+        };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),
@@ -355,21 +396,22 @@ impl Binder {
         right_span: Span,
         left_bind_context: BindContext,
         right_bind_context: BindContext,
-        mut left_expr: SExpr,
-        mut right_expr: SExpr,
         coercion_types: Vec<DataType>,
-    ) -> Result<(BindContext, Vec<(IndexType, IndexType)>, SExpr, SExpr)> {
-        let mut left_scalar_items = Vec::with_capacity(left_bind_context.columns.len());
-        let mut right_scalar_items = Vec::with_capacity(right_bind_context.columns.len());
+    ) -> Result<(
+        BindContext,
+        Vec<(IndexType, Option<ScalarExpr>)>,
+        Vec<(IndexType, Option<ScalarExpr>)>,
+    )> {
+        let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
+        let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
-        let mut pairs = Vec::with_capacity(left_bind_context.columns.len());
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
             .zip(right_bind_context.columns.iter())
             .enumerate()
         {
-            let left_index = if *left_col.data_type != coercion_types[idx] {
+            if *left_col.data_type != coercion_types[idx] {
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -382,29 +424,23 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
-                let new_column_index = self.metadata.write().add_derived_column(
-                    left_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    Some(ScalarExpr::CastExpr(left_coercion_expr.clone())),
-                );
+                left_outputs.push((
+                    left_col.index,
+                    Some(ScalarExpr::CastExpr(left_coercion_expr)),
+                ));
                 let column_binding = ColumnBindingBuilder::new(
                     left_col.column_name.clone(),
-                    new_column_index,
+                    left_col.index,
                     Box::new(coercion_types[idx].clone()),
                     Visibility::Visible,
                 )
                 .build();
-                left_scalar_items.push(ScalarItem {
-                    scalar: left_coercion_expr.into(),
-                    index: new_column_index,
-                });
                 new_bind_context.add_column_binding(column_binding);
-                new_column_index
             } else {
+                left_outputs.push((left_col.index, None));
                 new_bind_context.add_column_binding(left_col.clone());
-                left_col.index
-            };
-            let right_index = if *right_col.data_type != coercion_types[idx] {
+            }
+            if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
                     span: right_span,
                     is_try: false,
@@ -417,44 +453,15 @@ impl Binder {
                     ),
                     target_type: Box::new(coercion_types[idx].clone()),
                 };
-                let new_column_index = self.metadata.write().add_derived_column(
-                    right_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    Some(ScalarExpr::CastExpr(right_coercion_expr.clone())),
-                );
-                right_scalar_items.push(ScalarItem {
-                    scalar: right_coercion_expr.into(),
-                    index: new_column_index,
-                });
-                new_column_index
+                right_outputs.push((
+                    right_col.index,
+                    Some(ScalarExpr::CastExpr(right_coercion_expr)),
+                ));
             } else {
-                right_col.index
-            };
-            pairs.push((left_index, right_index));
+                right_outputs.push((right_col.index, None));
+            }
         }
-        if !left_scalar_items.is_empty() {
-            left_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: left_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_expr),
-            );
-        }
-        if !right_scalar_items.is_empty() {
-            right_expr = SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: right_scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(right_expr),
-            );
-        }
-        Ok((new_bind_context, pairs, left_expr, right_expr))
+        Ok((new_bind_context, left_outputs, right_outputs))
     }
 
     #[allow(clippy::too_many_arguments)]

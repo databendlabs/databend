@@ -21,6 +21,8 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
@@ -37,6 +39,7 @@ use databend_common_exception::Result;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -60,6 +63,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::binder::apply_alias_for_columns;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -71,6 +75,8 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
+use crate::plans::RecursiveCteScan;
+use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -387,6 +393,109 @@ impl Binder {
         let cte_info = self.ctes_map.get(table_name).unwrap().clone();
         let s_expr = self.bind_cte_scan(&cte_info)?;
         Ok((s_expr, new_bind_context))
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte_scan(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        cte_name: &str,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
+        let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut metadata = self.metadata.write();
+        let mut columns = cte_info.columns.clone();
+        if let Some(alias) = alias {
+            apply_alias_for_columns(&mut columns, alias, &self.name_resolution_ctx)?;
+        }
+        for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
+            columns[index].column_name = column_name.clone();
+        }
+        for col in columns.iter() {
+            // Expand a number type to a higher precision to avoid overflow
+            // (Because the output type of recursive cte is the left of the union)
+            let expand_data_type = match *col.data_type {
+                DataType::Number(NumberDataType::UInt8)
+                | DataType::Number(NumberDataType::UInt16)
+                | DataType::Number(NumberDataType::UInt32) => {
+                    Box::new(DataType::Number(NumberDataType::UInt64))
+                }
+                DataType::Number(NumberDataType::Int8)
+                | DataType::Number(NumberDataType::Int16)
+                | DataType::Number(NumberDataType::Int32) => {
+                    Box::new(DataType::Number(NumberDataType::Int64))
+                }
+                _ => col.data_type.clone(),
+            };
+            let idx = metadata.add_derived_column(
+                col.column_name.clone(),
+                *expand_data_type.clone(),
+                None,
+            );
+            new_bind_ctx.columns.push(
+                ColumnBindingBuilder::new(
+                    col.column_name.clone(),
+                    idx,
+                    expand_data_type,
+                    Visibility::Visible,
+                )
+                .table_name(col.table_name.clone())
+                .build(),
+            )
+        }
+        let mut fields = Vec::with_capacity(cte_info.columns.len());
+        for col in new_bind_ctx.columns.iter() {
+            fields.push(DataField::new(
+                col.index.to_string().as_str(),
+                *col.data_type.clone(),
+            ));
+        }
+        Ok((
+            SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
+                fields,
+                cte_name: cte_name.to_string(),
+            }))),
+            new_bind_ctx,
+        ))
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        cte_name: &str,
+    ) -> Result<(SExpr, BindContext)> {
+        // Recursive cte's query must be a union(all)
+        match &cte_info.query.body {
+            SetExpr::SetOperation(set_expr) => {
+                if set_expr.op != SetOperator::Union {
+                    return Err(ErrorCode::SyntaxException(
+                        "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                    ));
+                }
+                self.set_bind_recursive_cte(true);
+                let (union_s_expr, new_bind_ctx) = self
+                    .bind_set_operator(
+                        bind_context,
+                        &set_expr.left,
+                        &set_expr.right,
+                        &set_expr.op,
+                        &set_expr.all,
+                        Some(cte_name.to_string()),
+                    )
+                    .await?;
+                self.set_bind_recursive_cte(false);
+                Ok((union_s_expr, new_bind_ctx.clone()))
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                ));
+            }
+        }
     }
 
     #[async_backtrace::framed]

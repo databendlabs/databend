@@ -302,6 +302,10 @@ impl Settings {
         Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
     }
 
+    pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
+    }
+
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
         match self.try_get_string("sql_dialect")?.to_lowercase().as_str() {
             "hive" => Ok(Dialect::Hive),
