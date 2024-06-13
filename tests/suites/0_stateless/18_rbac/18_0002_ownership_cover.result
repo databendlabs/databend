@@ -11,8 +11,8 @@
 0
 200
 === test role r_0002 ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF a for user 'owner'@'%' with roles [public,r_0002]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE hello for user 'owner'@'%' with roles [public,r_0002]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Usage] is required on UDF a for user 'owner'@'%' with roles [public,r_0002]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE hello for user 'owner'@'%' with roles [public,r_0002]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'d_0002'.'t' for user 'owner'@'%' with roles [public,r_0002]
 === test ownership: show stmt ===
 public	0		false	false

@@ -572,6 +572,7 @@ impl TableContext for CtxDelegation {
         &self,
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
     ) -> Result<()> {
         todo!()
     }
