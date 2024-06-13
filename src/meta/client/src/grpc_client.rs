@@ -25,8 +25,8 @@ use std::time::Instant;
 use databend_common_arrow::arrow_format::flight::data::BasicAuth;
 use databend_common_base::base::tokio::select;
 use databend_common_base::base::tokio::sync::mpsc;
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
-use databend_common_base::base::tokio::sync::mpsc::Sender;
+use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
+use databend_common_base::base::tokio::sync::mpsc::UnboundedSender;
 use databend_common_base::base::tokio::sync::oneshot;
 use databend_common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
@@ -36,7 +36,6 @@ use databend_common_base::containers::Pool;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_grpc::ConnectionFactory;
@@ -67,12 +66,13 @@ use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
 use futures::stream::StreamExt;
+use futures::FutureExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use minitrace::full_name;
-use minitrace::future::FutureExt;
+use minitrace::future::FutureExt as MTFutureExt;
 use minitrace::Span;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
@@ -95,6 +95,7 @@ use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
+use crate::message::Response;
 use crate::to_digit_ver;
 use crate::ClientWorkerRequest;
 use crate::MetaGrpcReadReq;
@@ -233,7 +234,7 @@ impl ItemManager for MetaChannelManager {
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
 pub struct ClientHandle {
     /// For sending request to meta-client worker.
-    pub(crate) req_tx: Sender<(TrackingPayload, message::ClientWorkerRequest)>,
+    pub(crate) req_tx: UnboundedSender<ClientWorkerRequest>,
     /// Notify auto sync to stop.
     /// `oneshot::Receiver` impl `Drop` by sending a closed notification to the `Sender` half.
     #[allow(dead_code)]
@@ -241,84 +242,107 @@ pub struct ClientHandle {
 }
 
 impl ClientHandle {
-    /// Send a request to the internal worker task, which may be running in another runtime.
+    /// Send a request to the internal worker task, which will be running in another runtime.
     #[minitrace::trace]
     pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
         Req: RequestFor,
         Req: Into<message::Request>,
-        Result<Req::Reply, E>: TryFrom<message::Response>,
-        <Result<Req::Reply, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
+        Result<Req::Reply, E>: TryFrom<Response>,
+        <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
+    {
+        let rx = self.send_request_to_worker(req)?;
+        UnlimitedFuture::create(async move {
+            let _g = grpc_metrics::client_request_inflight.counter_guard();
+            rx.await
+        })
+        .map(|recv_res| Self::parse_worker_result(recv_res))
+        .await
+    }
+
+    /// Send a request to the internal worker task, which will be running in another runtime.
+    #[minitrace::trace]
+    pub fn request_sync<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
+    where
+        Req: RequestFor,
+        Req: Into<message::Request>,
+        Result<Req::Reply, E>: TryFrom<Response>,
+        <Result<Req::Reply, E> as TryFrom<Response>>::Error: std::fmt::Display,
+        E: From<MetaClientError> + Debug,
+    {
+        let _g = grpc_metrics::client_request_inflight.counter_guard();
+
+        let rx = self.send_request_to_worker(req)?;
+        let recv_res = rx.blocking_recv();
+        Self::parse_worker_result(recv_res)
+    }
+
+    /// Send request to client worker, return a receiver to receive the RPC response.
+    fn send_request_to_worker<Req>(
+        &self,
+        req: Req,
+    ) -> Result<oneshot::Receiver<Response>, MetaClientError>
+    where
+        Req: Into<message::Request>,
     {
         static META_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
-        let request_future = async move {
-            let (tx, rx) = oneshot::channel();
-            let req = message::ClientWorkerRequest {
-                request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
-                resp_tx: tx,
-                req: req.into(),
-                span: Span::enter_with_local_parent(std::any::type_name::<
-                    message::ClientWorkerRequest,
-                >()),
-            };
-
-            debug!(
-                request :? =(&req);
-                "Meta ClientHandle send request to meta client worker"
-            );
-
-            let _g = grpc_metrics::client_request_inflight.counter_guard();
-
-            let tracking_payload = ThreadTracker::new_tracking_payload();
-            let res = self
-                .req_tx
-                .send((tracking_payload, req))
-                .await
-                .map_err(|e| {
-                    let cli_err = MetaClientError::ClientRuntimeError(
-                        AnyError::new(&e)
-                            .add_context(|| "when sending req to MetaGrpcClient worker"),
-                    );
-                    cli_err.into()
-                });
-
-            if let Err(err) = res {
-                error!(
-                    error :? =(&err);
-                    "Meta ClientHandle send request to meta client worker failed"
-                );
-
-                return Err(err);
-            }
-
-            let res = rx.await.map_err(|e| {
-                error!(
-                    error :? =(&e);
-                    "Meta ClientHandle recv response from meta client worker failed"
-                );
-
-                MetaClientError::ClientRuntimeError(
-                    AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
-                )
-            })?;
-
-            let res: Result<Req::Reply, E> = res
-                .try_into()
-                .map_err(|e| {
-                    format!(
-                        "expect: {}, got: {}",
-                        std::any::type_name::<Req::Reply>(),
-                        e
-                    )
-                })
-                .unwrap();
-
-            res
+        let (tx, rx) = oneshot::channel();
+        let worker_request = ClientWorkerRequest {
+            request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
+            resp_tx: tx,
+            req: req.into(),
+            span: Span::enter_with_local_parent(std::any::type_name::<ClientWorkerRequest>()),
+            tracking_payload: Some(ThreadTracker::new_tracking_payload()),
         };
 
-        UnlimitedFuture::create(request_future).await
+        debug!(
+            worker_request :? =(&worker_request);
+            "Meta ClientHandle send request to meta client worker"
+        );
+
+        self.req_tx.send(worker_request).map_err(|e| {
+            let req = e.0;
+
+            let err = AnyError::error(format!(
+                "Meta ClientHandle failed to send request(request_id={}, req_name={}) to worker",
+                req.request_id,
+                req.req.name()
+            ));
+
+            error!("{}", err);
+            MetaClientError::ClientRuntimeError(err)
+        })?;
+
+        Ok(rx)
+    }
+
+    /// Parse the result returned from grpc client worker.
+    fn parse_worker_result<Reply, E>(
+        res: Result<Response, oneshot::error::RecvError>,
+    ) -> Result<Reply, E>
+    where
+        Result<Reply, E>: TryFrom<Response>,
+        <Result<Reply, E> as TryFrom<Response>>::Error: Display,
+        E: From<MetaClientError> + Debug,
+    {
+        let response = res.map_err(|e| {
+            error!(
+                error :? =(&e);
+                "Meta ClientHandle recv response from meta client worker failed"
+            );
+            MetaClientError::ClientRuntimeError(
+                AnyError::new(&e).add_context(|| "when recv resp from MetaGrpcClient worker"),
+            )
+        })?;
+
+        let res: Result<Reply, E> = response
+            .try_into()
+            .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Reply>(), e))
+            .unwrap();
+
+        res
     }
 
     pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
@@ -420,7 +444,7 @@ impl MetaGrpcClient {
 
         // Build the handle-worker pair
 
-        let (tx, rx) = mpsc::channel(256);
+        let (tx, rx) = mpsc::unbounded_channel();
         let (one_tx, one_rx) = oneshot::channel::<()>();
 
         let handle = Arc::new(ClientHandle {
@@ -448,26 +472,19 @@ impl MetaGrpcClient {
 
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
     #[minitrace::trace]
-    async fn worker_loop(
-        self: Arc<Self>,
-        mut req_rx: Receiver<(TrackingPayload, message::ClientWorkerRequest)>,
-    ) {
+    async fn worker_loop(self: Arc<Self>, mut req_rx: UnboundedReceiver<ClientWorkerRequest>) {
         info!("MetaGrpcClient::worker spawned");
 
         loop {
             let recv_res = req_rx.recv().await;
-            let (tracking_payload, worker_request) = match recv_res {
-                None => {
-                    warn!("MetaGrpcClient handle closed. worker quit");
-                    return;
-                }
-                Some(x) => x,
+            let Some(mut worker_request) = recv_res else {
+                warn!("MetaGrpcClient handle closed. worker quit");
+                return;
             };
-
-            let _guard = ThreadTracker::tracking(tracking_payload);
 
             debug!(worker_request :? =(&worker_request); "MetaGrpcClient worker handle request");
 
+            let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
             let span = Span::enter_with_parent(full_name!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {
@@ -483,7 +500,7 @@ impl MetaGrpcClient {
             match worker_request.req {
                 message::Request::GetEndpoints(_) => {
                     let endpoints = self.get_all_endpoints();
-                    let resp = message::Response::GetEndpoints(Ok(endpoints));
+                    let resp = Response::GetEndpoints(Ok(endpoints));
                     Self::send_response(worker_request.resp_tx, worker_request.request_id, resp);
                     continue;
                 }
@@ -517,7 +534,7 @@ impl MetaGrpcClient {
                         info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
                     )
                     .await;
-                message::Response::StreamMGet(strm)
+                Response::StreamMGet(strm)
             }
             message::Request::StreamList(r) => {
                 let strm = self
@@ -527,44 +544,44 @@ impl MetaGrpcClient {
                         info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
                     )
                     .await;
-                message::Response::StreamMGet(strm)
+                Response::StreamMGet(strm)
             }
             message::Request::Upsert(r) => {
                 let resp = self
                     .kv_api(r)
                     .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
                     .await;
-                message::Response::Upsert(resp)
+                Response::Upsert(resp)
             }
             message::Request::Txn(r) => {
                 let resp = self
                     .transaction(r)
                     .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
                     .await;
-                message::Response::Txn(resp)
+                Response::Txn(resp)
             }
             message::Request::Watch(r) => {
                 let resp = self.watch(r).await;
-                message::Response::Watch(resp)
+                Response::Watch(resp)
             }
             message::Request::Export(r) => {
                 let resp = self.export(r).await;
-                message::Response::Export(resp)
+                Response::Export(resp)
             }
             message::Request::MakeEstablishedClient(_) => {
                 let resp = self.make_established_client().await;
-                message::Response::MakeEstablishedClient(resp)
+                Response::MakeEstablishedClient(resp)
             }
             message::Request::GetEndpoints(_) => {
                 unreachable!("handled above");
             }
             message::Request::GetClusterStatus(_) => {
                 let resp = self.get_cluster_status().await;
-                message::Response::GetClusterStatus(resp)
+                Response::GetClusterStatus(resp)
             }
             message::Request::GetClientInfo(_) => {
                 let resp = self.get_client_info().await;
-                message::Response::GetClientInfo(resp)
+                Response::GetClientInfo(resp)
             }
         };
 
@@ -573,7 +590,7 @@ impl MetaGrpcClient {
         Self::send_response(resp_tx, request_id, resp);
     }
 
-    fn send_response(tx: OneSend<message::Response>, request_id: u64, resp: message::Response) {
+    fn send_response(tx: OneSend<Response>, request_id: u64, resp: Response) {
         debug!(
             request_id :? =(&request_id),
             resp :? =(&resp);
