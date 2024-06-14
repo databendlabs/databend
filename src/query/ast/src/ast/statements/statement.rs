@@ -318,7 +318,7 @@ pub enum Statement {
         object_id: String,
     },
 
-    // Enable or disable Rust Backtrace
+    // System actions
     System(SystemStmt),
 }
 
