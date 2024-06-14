@@ -37,6 +37,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
+use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -216,6 +217,8 @@ impl AsyncSource for InspectParquetSource {
             let visibility_checker = self.ctx.get_visibility_checker().await?;
             if !stage_info.is_temporary
                 && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                && !(stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
             {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",

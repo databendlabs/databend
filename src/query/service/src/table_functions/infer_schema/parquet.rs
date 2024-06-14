@@ -27,6 +27,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageType;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
@@ -108,6 +109,8 @@ impl AsyncSource for ParquetInferSchemaSource {
             let visibility_checker = self.ctx.get_visibility_checker().await?;
             if !stage_info.is_temporary
                 && !visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                && !(stage_info.stage_type == StageType::User
+                    && stage_info.stage_name == self.ctx.get_current_user()?.name)
             {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege READ is required on stage {} for user {}",
