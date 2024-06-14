@@ -148,8 +148,7 @@ impl OnDisk {
                     unreachable!("Upgrading to V0 is not supported");
                 }
                 DataVersion::V001 => {
-                    // TODO: fix version and date when merged.
-                    unreachable!("Upgrading to V001 is not supported since 2024-06-12, 1.2.*");
+                    unreachable!("Upgrading to V001 is not supported since 2024-06-13, 1.2.528");
                 }
                 DataVersion::V002 => {
                     let snapshot_store =
@@ -188,9 +187,8 @@ impl OnDisk {
                     )
                 }
                 DataVersion::V001 => {
-                    // TODO: fix version and date when merged
                     unreachable!(
-                        "{} is no longer supported, since 2024-06-12, 1.2.*",
+                        "{} is no longer supported, since 2024-06-13, 1.2.528",
                         self.header.version
                     )
                 }
