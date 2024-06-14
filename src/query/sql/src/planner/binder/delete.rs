@@ -47,7 +47,7 @@ impl<'a> Binder {
         scalar_binder: &mut ScalarBinder<'_>,
     ) -> Result<(Option<ScalarExpr>, Vec<SubqueryDesc>)> {
         Ok(if let Some(expr) = filter {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let (scalar, _) = scalar_binder.bind(expr)?;
             let mut subquery_desc = vec![];
             self.subquery_desc(&scalar, table_expr, &mut subquery_desc)
                 .await?;

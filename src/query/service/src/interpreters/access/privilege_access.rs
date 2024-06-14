@@ -159,10 +159,16 @@ impl PrivilegeAccess {
         if_exists: bool,
     ) -> Result<()> {
         let tenant = self.ctx.get_tenant();
+        let check_current_role_only = match privileges {
+            // create table/stream need check db's Create Privilege
+            UserPrivilegeType::Create => true,
+            _ => false,
+        };
         match self
             .validate_access(
                 &GrantObject::Database(catalog_name.to_string(), db_name.to_string()),
                 privileges,
+                check_current_role_only,
             )
             .await
         {
@@ -181,6 +187,7 @@ impl PrivilegeAccess {
                             .validate_access(
                                 &GrantObject::DatabaseById(catalog_name.to_string(), db_id),
                                 privileges,
+                                check_current_role_only,
                             )
                             .await
                         {
@@ -189,15 +196,25 @@ impl PrivilegeAccess {
                             }
                             let current_user = self.ctx.get_current_user()?;
                             let session = self.ctx.get_current_session();
-                            let roles_name = session
-                                .get_all_effective_roles()
-                                .await?
-                                .iter()
-                                .map(|r| r.name.clone())
-                                .collect::<Vec<_>>()
-                                .join(",");
+                            let roles_name = if check_current_role_only {
+                                // Roles name use to return err msg. If None no need to return Err
+                                session
+                                    .get_current_role()
+                                    .map(|r| r.name)
+                                    .unwrap_or_default()
+                            } else {
+                                session
+                                    .get_all_effective_roles()
+                                    .await?
+                                    .iter()
+                                    .map(|r| r.name.clone())
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                            };
+
                             return Err(ErrorCode::PermissionDenied(format!(
-                                "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]",
+                                "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -256,6 +273,7 @@ impl PrivilegeAccess {
                             table_name.to_string(),
                         ),
                         privilege,
+                        false,
                     )
                     .await
                 {
@@ -270,6 +288,7 @@ impl PrivilegeAccess {
                                     ObjectId::Table(db_id, table_id) => (db_id, Some(table_id)),
                                     ObjectId::Database(db_id) => (db_id, None),
                                 };
+                                // Note: validate_table_access is not used for validate Create Table privilege
                                 if let Err(err) = self
                                     .validate_access(
                                         &GrantObject::TableById(
@@ -278,6 +297,7 @@ impl PrivilegeAccess {
                                             table_id.unwrap(),
                                         ),
                                         privilege,
+                                        false,
                                     )
                                     .await
                                 {
@@ -320,11 +340,11 @@ impl PrivilegeAccess {
                 }
             }
             Err(error) => {
-                if error.code() == ErrorCode::UNKNOWN_CATALOG && if_exists {
-                    return Ok(());
+                return if error.code() == ErrorCode::UNKNOWN_CATALOG && if_exists {
+                    Ok(())
                 } else {
-                    return Err(error);
-                }
+                    Err(error)
+                };
             }
         }
 
@@ -335,6 +355,7 @@ impl PrivilegeAccess {
         &self,
         session: &Arc<Session>,
         grant_object: &GrantObject,
+        check_current_role_only: bool,
     ) -> Result<bool> {
         let owner_object = self
             .convert_to_owner_object(grant_object)
@@ -357,12 +378,19 @@ impl PrivilegeAccess {
                     db_id: *db_id,
                 };
                 // If Table ownership check fails, check for Database ownership
-                if session.has_ownership(object).await?
-                    || session.has_ownership(&database_owner).await?
+                if session
+                    .has_ownership(object, check_current_role_only)
+                    .await?
+                    || session
+                        .has_ownership(&database_owner, check_current_role_only)
+                        .await?
                 {
                     return Ok(true);
                 }
-            } else if session.has_ownership(object).await? {
+            } else if session
+                .has_ownership(object, check_current_role_only)
+                .await?
+            {
                 return Ok(true);
             }
         }
@@ -373,6 +401,7 @@ impl PrivilegeAccess {
         &self,
         grant_object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
 
@@ -386,12 +415,19 @@ impl PrivilegeAccess {
             GrantObject::Global => false,
         };
 
-        if verify_ownership && self.has_ownership(&session, grant_object).await? {
+        if verify_ownership
+            && self
+                .has_ownership(&session, grant_object, check_current_role_only)
+                .await?
+        {
             return Ok(());
         }
 
         // wrap an user-facing error message with table/db names on cases like TableByID / DatabaseByID
-        match session.validate_privilege(grant_object, privilege).await {
+        match session
+            .validate_privilege(grant_object, privilege, check_current_role_only)
+            .await
+        {
             Ok(_) => Ok(()),
             Err(err) => {
                 if err.code() != ErrorCode::PERMISSION_DENIED {
@@ -399,13 +435,22 @@ impl PrivilegeAccess {
                 }
                 let current_user = self.ctx.get_current_user()?;
 
-                let roles_name = session
-                    .get_all_effective_roles()
-                    .await?
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(",");
+                let roles_name = if check_current_role_only {
+                    // Roles name use to return err msg. If None no need to return Err
+                    session
+                        .get_current_role()
+                        .map(|r| r.name)
+                        .unwrap_or_default()
+                } else {
+                    session
+                        .get_all_effective_roles()
+                        .await?
+                        .iter()
+                        .map(|r| r.name.clone())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                };
+
                 match grant_object {
                     GrantObject::TableById(_, _, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
@@ -414,7 +459,8 @@ impl PrivilegeAccess {
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]",
+                        "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -451,17 +497,24 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
+        // Note: validate_stage_access is not used for validate Create Stage privilege
         self.validate_access(
             &GrantObject::Stage(stage_info.stage_name.to_string()),
             privilege,
+            false,
         )
         .await
     }
 
     async fn validate_udf_access(&self, udf_names: HashSet<&String>) -> Result<()> {
+        // Note: validate_udf_access is not used for validate Create UDF
         for udf in udf_names {
-            self.validate_access(&GrantObject::UDF(udf.clone()), UserPrivilegeType::Usage)
-                .await?;
+            self.validate_access(
+                &GrantObject::UDF(udf.clone()),
+                UserPrivilegeType::Usage,
+                false,
+            )
+            .await?;
         }
         Ok(())
     }
@@ -487,6 +540,25 @@ impl PrivilegeAccess {
             return Ok(ObjectId::Table(db_id, table_id));
         }
         Ok(ObjectId::Database(db_id))
+    }
+
+    async fn validate_insert_source(
+        &self,
+        ctx: &Arc<QueryContext>,
+        source: &InsertInputSource,
+    ) -> Result<()> {
+        match source {
+            InsertInputSource::SelectPlan(plan) => {
+                self.check(ctx, plan).await?;
+            }
+            InsertInputSource::Stage(plan) => {
+                self.check(ctx, plan).await?;
+            }
+            InsertInputSource::StreamingWithFormat(..)
+            | InsertInputSource::StreamingWithFileFormat { .. }
+            | InsertInputSource::Values(_) => {}
+        }
+        Ok(())
     }
 }
 
@@ -561,8 +633,8 @@ impl AccessChecker for PrivilegeAccess {
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
                         let session = self.ctx.get_current_session();
-                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone())).await? ||
-                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone())).await?   {
+                        if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false).await? ||
+                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false).await?   {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -632,7 +704,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Select, false).await?
             }
             Plan::CreateDatabase(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateDatabase, true)
                     .await?;
             }
             Plan::DropDatabase(plan) => {
@@ -642,7 +714,15 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropIndex(_)
             | Plan::DropTableIndex(_) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false)
+                    .await?;
+            }
+            Plan::CreateStage(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true)
+                    .await?;
+            }
+            Plan::CreateUDF(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, true)
                     .await?;
             }
             Plan::DropUDF(plan) => {
@@ -654,7 +734,7 @@ impl AccessChecker for PrivilegeAccess {
                     let udf = HashSet::from([udf_name]);
                     self.validate_udf_access(udf).await?;
                 } else {
-                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop)
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false)
                                         .await?;
                 }
             }
@@ -667,17 +747,17 @@ impl AccessChecker for PrivilegeAccess {
                                 self.validate_stage_access(&stage, privilege).await?;
                             }
                         } else {
-                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
+                            self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                                 .await?;
                         }
                     }
                     Err(e) => {
-                        match e.code() {
+                        return match e.code() {
                             ErrorCode::UNKNOWN_STAGE if plan.if_exists =>
                                 {
-                                    return Ok(());
+                                    Ok(())
                                 }
-                            _ => return Err(e.add_message("error on validating stage access")),
+                            _ => Err(e.add_message("error on validating stage access")),
                         }
                     }
                 }
@@ -793,7 +873,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Super, false).await?
             }
             Plan::VacuumTemporaryFiles(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super).await?
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false).await?
             }
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
@@ -808,17 +888,7 @@ impl AccessChecker for PrivilegeAccess {
                 for privilege in target_table_privileges {
                     self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
                 }
-                match &plan.source {
-                    InsertInputSource::SelectPlan(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::Stage(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::StreamingWithFormat(..)
-                    | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values(_) => {}
-                }
+                self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::InsertMultiTable(plan) => {
                 let target_table_privileges = if plan.overwrite {
@@ -839,17 +909,7 @@ impl AccessChecker for PrivilegeAccess {
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
                 }
-                match &plan.source {
-                    InsertInputSource::SelectPlan(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::Stage(plan) => {
-                        self.check(ctx, plan).await?;
-                    }
-                    InsertInputSource::StreamingWithFormat(..)
-                    | InsertInputSource::StreamingWithFileFormat {..}
-                    | InsertInputSource::Values(_) => {}
-                }
+                self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::MergeInto(plan) => {
                 if enable_experimental_rbac_check {
@@ -970,6 +1030,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateUser,
+                    false,
                 )
                     .await?;
             }
@@ -977,6 +1038,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropUser,
+                    false,
                 )
                     .await?;
             }
@@ -984,6 +1046,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateRole,
+                    false,
                 )
                     .await?;
             }
@@ -991,6 +1054,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropRole,
+                    false,
                 )
                     .await?;
             }
@@ -1002,11 +1066,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
             | Plan::RevokeRole(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false)
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
+            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }
             Plan::AlterUser(_)
@@ -1016,7 +1080,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
             | Plan::RefreshTableIndex(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
@@ -1044,7 +1108,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
-            | Plan::CreateStage(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)
@@ -1061,7 +1124,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ShowConnections(_)
             | Plan::DescConnection(_)
             | Plan::DropConnection(_)
-            | Plan::CreateUDF(_)
             | Plan::CreateIndex(_)
             | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
@@ -1076,13 +1138,14 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
             | Plan::DropSequence(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }
             Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateDataMask,
+                    false,
                 )
                     .await?;
             }

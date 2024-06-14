@@ -209,6 +209,7 @@ pub trait TableContext: Send + Sync {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
@@ -263,6 +264,12 @@ pub trait TableContext: Send + Sync {
         mem_table: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()>;
 
+    fn set_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()>;
+
+    fn get_recursive_cte_scan(&self, name: &str) -> Result<Vec<DataBlock>>;
+
+    fn update_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()>;
+
     fn get_materialized_cte(
         &self,
         idx: (usize, usize),
@@ -296,6 +303,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+
+    fn clear_runtime_filter(&self);
 
     fn set_merge_into_join(&self, join: MergeIntoJoin);
 

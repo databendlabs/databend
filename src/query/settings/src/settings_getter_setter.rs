@@ -131,6 +131,15 @@ impl Settings {
     pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
     }
+
+    pub fn get_enable_streaming_load(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_streaming_load")? != 0)
+    }
+
+    pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
+    }
+
     // Get max_block_size.
     pub fn get_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("max_block_size")
@@ -295,6 +304,10 @@ impl Settings {
 
     pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    }
+
+    pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -624,5 +637,9 @@ impl Settings {
 
     pub fn get_max_vacuum_temp_files_after_query(&self) -> Result<u64> {
         self.try_get_u64("max_vacuum_temp_files_after_query")
+    }
+
+    pub fn get_max_set_operator_count(&self) -> Result<u64> {
+        self.try_get_u64("max_set_operator_count")
     }
 }

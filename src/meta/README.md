@@ -102,8 +102,6 @@ History versions that are not included in the above chart:
 | [1.2.212,  1.2.479) | [0.9.41,  1.2.479)      |
 | [1.2.479, +∞)       | [1.2.212, +∞)            |
 
-TODO: fix the above version when merged
-
 
 - `1.2.53` Incompatible, rolling upgrade is allowed without snapshot transmitting.
   Snapshot format changed thus during rolling upgrading,
@@ -111,13 +109,17 @@ TODO: fix the above version when merged
 
 - `1.2.163` Feature: gRPC API: `kv_read_v1()` is added. For stream reading.
 
-- `1.2.212` Feature: raft API: `install_snapshot_v1()`. Compatible with old versions.
+- `1.2.212` 2023-11-16 Feature: raft API: `install_snapshot_v1()`. Compatible with old versions.
   Rolling upgrade is supported.
   In this version, databend-meta raft-server introduced a new API `install_snapshot_v1()`.
   The raft-client will try to use either this new API or the original `install_snapshot()`.
 
-- `1.2.479` Remove: `install_snapshot()`(v0) from client and server.
+- `1.2.479` 2024-05-21 Remove: `install_snapshot()`(v0) from client and server.
   The `install_snapshot_v1()` is the only API to install snapshot, and becomes **REQUIRED** for the client.
+
+- `1.2.528` 2024-06-13 Remove on-disk data version `V001`. The first version using `V002` is `1.2.53`, 2023-08-08.
+  Therefore, since `1.2.528`, the oldest compatible version is `1.2.53`.
+  Consequently, compatibility remains unchanged from this version onward.
     
 
 ## Compatibility of databend-meta on-disk data

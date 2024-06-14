@@ -680,14 +680,16 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
-pub struct UnknownShareTable {
+#[error(
+    "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
+)]
+pub struct CannotAccessShareTable {
     pub tenant: String,
     pub share_name: String,
     pub table_name: String,
 }
 
-impl UnknownShareTable {
+impl CannotAccessShareTable {
     pub fn new(
         tenant: impl Into<String>,
         share_name: impl Into<String>,
@@ -1148,7 +1150,7 @@ pub enum AppError {
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
-    UnknownShareTable(#[from] UnknownShareTable),
+    CannotAccessShareTable(#[from] CannotAccessShareTable),
 
     #[error(transparent)]
     WrongShare(#[from] WrongShare),
@@ -1436,10 +1438,10 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
-impl AppErrorMessage for UnknownShareTable {
+impl AppErrorMessage for CannotAccessShareTable {
     fn message(&self) -> String {
         format!(
-            "unknown share table {} of share {}.{}",
+            "cannot access to share table {} from share {}.{}",
             self.table_name, self.tenant, self.share_name
         )
     }
@@ -1723,7 +1725,9 @@ impl From<AppError> for ErrorCode {
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
-            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
+            AppError::CannotAccessShareTable(err) => {
+                ErrorCode::CannotAccessShareTable(err.message())
+            }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())

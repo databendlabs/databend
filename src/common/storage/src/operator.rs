@@ -167,6 +167,8 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
     builder.account_name(&cfg.account_name);
     builder.account_key(&cfg.account_key);
 
+    builder.http_client(new_storage_http_client()?);
+
     Ok(builder)
 }
 
@@ -192,6 +194,8 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .credential(&cfg.credential);
+
+    builder.http_client(new_storage_http_client()?);
 
     Ok(builder)
 }
@@ -296,38 +300,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder.enable_virtual_host_style();
     }
 
-    let http_builder = {
-        let mut builder = reqwest::ClientBuilder::new();
-
-        // Set dns resolver.
-        builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
-
-        // Pool max idle per host controls connection pool size.
-        // Default to no limit, set to `0` for disable it.
-        let pool_max_idle_per_host = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(usize::MAX);
-        builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
-
-        // Connect timeout default to 30s.
-        let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(30);
-        builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
-
-        // Enable TCP keepalive if set.
-        if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
-            if let Ok(v) = v.parse::<u64>() {
-                builder = builder.tcp_keepalive(Duration::from_secs(v));
-            }
-        }
-
-        builder
-    };
-
-    builder.http_client(HttpClient::build(http_builder)?);
+    builder.http_client(new_storage_http_client()?);
 
     Ok(builder)
 }
@@ -345,6 +318,8 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
     builder.access_key_id(&cfg.access_key_id);
     builder.secret_access_key(&cfg.secret_access_key);
 
+    builder.http_client(new_storage_http_client()?);
+
     Ok(builder)
 }
 
@@ -361,6 +336,8 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .root(&cfg.root)
         .server_side_encryption(&cfg.server_side_encryption)
         .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
+
+    builder.http_client(new_storage_http_client()?);
 
     Ok(builder)
 }
@@ -398,6 +375,8 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root);
 
+    builder.http_client(new_storage_http_client()?);
+
     Ok(builder)
 }
 
@@ -413,6 +392,41 @@ fn init_huggingface_operator(cfg: &StorageHuggingfaceConfig) -> Result<impl Buil
         .root(&cfg.root);
 
     Ok(builder)
+}
+
+/// Create a new http client for storage.
+fn new_storage_http_client() -> Result<HttpClient> {
+    let mut builder = reqwest::ClientBuilder::new();
+
+    // Disable http2 for better performance.
+    builder = builder.http1_only();
+
+    // Set dns resolver.
+    builder = builder.dns_resolver(GLOBAL_HICKORY_RESOLVER.clone());
+
+    // Pool max idle per host controls connection pool size.
+    // Default to no limit, set to `0` for disable it.
+    let pool_max_idle_per_host = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(usize::MAX);
+    builder = builder.pool_max_idle_per_host(pool_max_idle_per_host);
+
+    // Connect timeout default to 30s.
+    let connect_timeout = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(30);
+    builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
+
+    // Enable TCP keepalive if set.
+    if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
+        if let Ok(v) = v.parse::<u64>() {
+            builder = builder.tcp_keepalive(Duration::from_secs(v));
+        }
+    }
+
+    Ok(HttpClient::build(builder)?)
 }
 
 /// DataOperator is the operator to access persist data services.

@@ -127,19 +127,7 @@ impl FileFormatParams {
                 let compression = reader.take_compression()?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 let null_field_as = reader.options.remove(NULL_FIELD_AS);
-                let null_if = reader.options.remove(NULL_IF);
-                let null_if = match null_if {
-                    None => {
-                        vec![]
-                    }
-                    Some(s) => {
-                        let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
-                            ErrorCode::InvalidArgument(format!(
-                            "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
-                            )))?;
-                        values
-                    }
-                };
+                let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
                     compression,
                     missing_field_as.as_deref(),
@@ -149,8 +137,10 @@ impl FileFormatParams {
             }
             StageFileFormatType::Parquet => {
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
                     missing_field_as.as_deref(),
+                    null_if,
                 )?)
             }
             StageFileFormatType::Orc => FileFormatParams::Orc(OrcFileFormatParams::try_create()?),
@@ -285,6 +275,7 @@ impl Default for FileFormatParams {
     fn default() -> Self {
         FileFormatParams::Parquet(ParquetFileFormatParams {
             missing_field_as: NullAs::Error,
+            null_if: vec![],
         })
     }
 }
@@ -663,12 +654,16 @@ impl NdJsonFileFormatParams {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParquetFileFormatParams {
     pub missing_field_as: NullAs,
+    pub null_if: Vec<String>,
 }
 
 impl ParquetFileFormatParams {
-    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+    pub fn try_create(missing_field_as: Option<&str>, null_if: Vec<String>) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        Ok(Self { missing_field_as })
+        Ok(Self {
+            missing_field_as,
+            null_if,
+        })
     }
 }
 
@@ -802,4 +797,17 @@ pub fn check_choices(v: &str, choices: &[&str]) -> std::result::Result<(), Strin
         return Err(format!("The valid values are {choices}."));
     }
     Ok(())
+}
+
+fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
+    match null_if {
+        None => Ok(vec![]),
+        Some(s) => {
+            let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
+                ErrorCode::InvalidArgument(format!(
+                    "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
+                )))?;
+            Ok(values)
+        }
+    }
 }

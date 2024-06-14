@@ -32,7 +32,7 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
 use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_ssid_args;
+use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 use crate::table_functions::FuseBlock;
 use crate::table_functions::TableArgs;
@@ -57,7 +57,7 @@ impl FuseBlockTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_db_tb_ssid_args(&table_args, FUSE_FUNC_BLOCK)?;
+            parse_db_tb_opt_args(&table_args, FUSE_FUNC_BLOCK)?;
 
         let engine = FUSE_FUNC_BLOCK.to_owned();
 

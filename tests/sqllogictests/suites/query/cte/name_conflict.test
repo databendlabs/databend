@@ -1,0 +1,34 @@
+statement ok
+drop database if exists poc;
+
+
+statement ok
+create database poc;
+
+statement ok
+use poc;
+
+statement ok
+create or replace table poc.t1 (n bigint);
+
+statement ok
+insert into poc.t1 (n) values (1);
+
+statement ok
+insert into poc.t1 (n) values (2);
+
+query error
+with t1 as (
+  select * from poc.t1 where n = 1 limit 1
+),
+t2 as (
+  select * from poc.t1 where n = 2 limit 1
+),
+union_all_t as (
+  select * from t1 union all
+  select * from t2
+)
+select * from union_all_t;
+
+statement ok
+drop database poc;

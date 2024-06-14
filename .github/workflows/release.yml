@@ -122,7 +122,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
       - name: Basic Sqllogic Test
         if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash

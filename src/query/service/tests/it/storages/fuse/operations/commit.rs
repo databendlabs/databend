@@ -572,6 +572,7 @@ impl TableContext for CtxDelegation {
         &self,
         _object: &GrantObject,
         _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
     ) -> Result<()> {
         todo!()
     }
@@ -692,6 +693,18 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
+        todo!()
+    }
+
+    fn get_recursive_cte_scan(&self, _name: &str) -> Result<Vec<DataBlock>> {
+        todo!()
+    }
+
+    fn update_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
+        todo!()
+    }
+
     fn get_materialized_cte(
         &self,
         _idx: (usize, usize),
@@ -772,6 +785,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
+        todo!()
+    }
+
+    fn clear_runtime_filter(&self) {
         todo!()
     }
 
