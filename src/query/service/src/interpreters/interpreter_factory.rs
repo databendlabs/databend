@@ -50,6 +50,7 @@ use crate::interpreters::interpreter_notification_drop::DropNotificationInterpre
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
@@ -595,6 +596,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::SetPriority(p) => Ok(Arc::new(SetPriorityInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::System(p) => Ok(Arc::new(SystemActionInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

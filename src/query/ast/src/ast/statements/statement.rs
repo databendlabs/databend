@@ -317,6 +317,9 @@ pub enum Statement {
         priority: Priority,
         object_id: String,
     },
+
+    // System actions
+    System(SystemStmt),
 }
 
 impl Statement {
@@ -721,6 +724,7 @@ impl Display for Statement {
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
             }
+            Statement::System(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

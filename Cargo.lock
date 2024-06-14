@@ -4286,6 +4286,7 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "databend-common-base",
+ "databend-common-exception",
  "defer",
  "fern",
  "humantime",

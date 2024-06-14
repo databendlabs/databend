@@ -2047,6 +2047,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, script)| Statement::ExecuteImmediate(ExecuteImmediateStmt { script }),
     );
 
+    let system_action = map(
+        rule! {
+            SYSTEM ~ #action
+        },
+        |(_, action)| Statement::System(SystemStmt { action }),
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2063,7 +2070,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_locks : "`SHOW LOCKS [IN ACCOUNT] [WHERE ...]`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #vacuum_temp_files : "VACUUM TEMPORARY FILES [RETAIN number SECONDS|DAYS] [LIMIT number]"
-            | #set_priority: "SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>"
+            | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
+            | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
         // database
         rule!(
@@ -3741,6 +3749,26 @@ pub fn priority(i: Input) -> IResult<Priority> {
         value(Priority::LOW, rule! { LOW }),
         value(Priority::MEDIUM, rule! { MEDIUM }),
         value(Priority::HIGH, rule! { HIGH }),
+    ))(i)
+}
+
+pub fn action(i: Input) -> IResult<SystemAction> {
+    let mut backtrace = map(
+        rule! {
+             #switch ~ EXCEPTION_BACKTRACE
+        },
+        |(switch, _)| SystemAction::Backtrace(switch),
+    );
+    // add other system action type here
+    rule!(
+        #backtrace
+    )(i)
+}
+
+pub fn switch(i: Input) -> IResult<bool> {
+    alt((
+        value(true, rule! { ENABLE }),
+        value(false, rule! { DISABLE }),
     ))(i)
 }
 
