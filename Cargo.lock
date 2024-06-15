@@ -3450,6 +3450,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
+ "deepsize",
  "derive_more",
  "log",
  "num-derive",
@@ -4553,6 +4554,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-metrics",
  "databend-common-tracing",
+ "deepsize",
  "derive_more",
  "env_logger",
  "feature-set",
@@ -5318,6 +5320,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "uuid",
+]
+
+[[package]]
+name = "deepsize"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cdb987ec36f6bf7bfbea3f928b75590b736fc42af8e54d97592481351b2b96c"
+dependencies = [
+ "deepsize_derive",
+]
+
+[[package]]
+name = "deepsize_derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "990101d41f3bc8c1a45641024377ee284ecc338e5ecf3ea0f0e236d897c72796"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -10429,9 +10451,9 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.9.9"
+version = "0.9.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f29df094119e6d79274ddec81e44189b4b9f59f1a38635920151e1264b6687c"
+checksum = "8809b74bd5176a346bee70b31c2ff9d0406a045356f6e89b23e28c7ea06f10b3"
 dependencies = [
  "anyerror",
  "byte-unit",
