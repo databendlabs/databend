@@ -428,7 +428,7 @@ impl RangeJoinState {
                         .iter()
                         .map(|c| BlockEntry {
                             value: Value::Scalar(Scalar::Null),
-                            data_type: c.data_type.wrap_nullable(),
+                            data_type: c.data_type.clone(),
                         })
                         .collect::<Vec<_>>();
                     let right_unmatch_block = DataBlock::new(nullable_columns, unmatches.len());
