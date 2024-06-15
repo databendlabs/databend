@@ -14,8 +14,10 @@
 
 use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::runtime::LimitMemGuard;
+use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 use log::error;
 
 pub fn set_panic_hook() {
@@ -31,12 +33,25 @@ pub fn set_panic_hook() {
     }));
 }
 
+fn should_backtrace() -> bool {
+    // if user not specify or user set to enable, we should backtrace
+    match USER_SET_ENABLE_BACKTRACE.load(Ordering::Relaxed) {
+        0 => true,
+        1 => false,
+        _ => true,
+    }
+}
+
 pub fn log_panic(panic: &PanicInfo) {
-    let backtrace = Backtrace::force_capture();
-    let backtrace_str = format!("{:?}", backtrace);
+    let backtrace_str = if should_backtrace() {
+        let backtrace = Backtrace::force_capture();
+        format!("{:?}", backtrace)
+    } else {
+        String::new()
+    };
 
     eprintln!("{}", panic);
-    eprintln!("{}", backtrace);
+    eprintln!("{}", backtrace_str);
 
     if let Some(location) = panic.location() {
         error!(

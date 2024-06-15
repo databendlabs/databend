@@ -49,6 +49,7 @@ mod show;
 mod sort;
 mod stage;
 mod stream_column_factory;
+mod system;
 mod table;
 mod table_args;
 mod udf;

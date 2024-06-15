@@ -18,6 +18,7 @@ mod init_query_fragments;
 mod kill_query;
 mod set_priority;
 mod start_prepared_query;
+mod system_action;
 mod truncate_table;
 
 pub use flight_actions::flight_actions;
@@ -28,4 +29,5 @@ pub use init_query_fragments::INIT_QUERY_FRAGMENTS;
 pub use kill_query::KILL_QUERY;
 pub use set_priority::SET_PRIORITY;
 pub use start_prepared_query::START_PREPARED_QUERY;
+pub use system_action::SYSTEM_ACTION;
 pub use truncate_table::TRUNCATE_TABLE;

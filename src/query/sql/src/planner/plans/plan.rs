@@ -144,6 +144,7 @@ use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
+use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -305,6 +306,7 @@ pub enum Plan {
     UnSetVariable(Box<UnSettingPlan>),
     Kill(Box<KillPlan>),
     SetPriority(Box<SetPriorityPlan>),
+    System(Box<SystemPlan>),
 
     // Share
     CreateShareEndpoint(Box<CreateShareEndpointPlan>),
