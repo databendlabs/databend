@@ -654,8 +654,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter
-    #[clap(long = "log-file-prefix-filter", default_value = "databend_")]
+    /// Log prefix filter, separated by comma.
+    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
+    /// This filter does not affect `WARNING` and `ERROR` log.
+    #[clap(long = "log-file-prefix-filter", default_value = "databend_,openraft")]
     #[serde(rename = "prefix_filter")]
     pub file_prefix_filter: String,
 }
