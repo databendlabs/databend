@@ -15,6 +15,7 @@ anyerror = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-tracing = { workspace = true }
+deepsize = { workspace = true }
 derive_more = { workspace = true }
 log = { workspace = true }
 num-derive = "0.3.3"

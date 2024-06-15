@@ -232,6 +232,7 @@ clap = { version = "4.4.2", features = ["derive"] }
 codespan-reporting = "0.11"
 criterion = "0.5"
 dashmap = "5.4.0"
+deepsize = { version = "0.2.0" }
 deltalake = "0.17"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = "0.99.17"
@@ -328,7 +329,7 @@ walkdir = "2.3.2"
 xorfilter-rs = "0.5"
 # openraft for debugging
 # openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.9", features = [
+openraft = { version = "0.9.12", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",

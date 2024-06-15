@@ -29,6 +29,7 @@
 
 pub mod base;
 pub mod containers;
+pub mod display;
 pub mod future;
 pub mod mem_allocator;
 pub mod rangemap;
