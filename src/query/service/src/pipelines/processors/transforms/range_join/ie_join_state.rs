@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::time::Duration;
+use std::sync::atomic::Ordering;
+
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -37,7 +39,6 @@ use databend_common_expression::ValueRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_sql::executor::physical_plans::RangeJoin;
-use databend_common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
@@ -177,6 +178,112 @@ impl IEJoinState {
 
 impl RangeJoinState {
     pub fn ie_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
+        let partition_count = self.partition_count.read();
+        if task_id < *partition_count {
+            self.inner_join(task_id)
+        } else {
+            Ok(vec![self.fill_outer(task_id)?])
+        }
+    }
+
+    pub fn fill_outer(&self, task_id: usize) -> Result<DataBlock> {
+        let partition_count = self.partition_count.read();
+        let mut completed_pair = self.completed_pair.load(Ordering::SeqCst) as usize;
+        while completed_pair < *partition_count {
+            std::thread::sleep(Duration::from_millis(20));
+            completed_pair = self.completed_pair.load(Ordering::SeqCst) as usize;
+        }
+
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let tasks = self.tasks.read();
+        let (left_idx, right_idx) = tasks[task_id];
+        let row_offset = self.row_offset.read();
+        let (left_offset, right_offset) = row_offset[task_id];
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
+        let mut indices = Vec::with_capacity(block_size);
+        let left_match = self.left_match.read();
+        let right_match = self.right_match.read();
+
+        if !left_match.is_empty() {
+            for (i, state) in left_match
+                .iter()
+                .enumerate()
+                .skip(left_offset - 1)
+                .take(left_table[left_idx].num_rows())
+            {
+                if !(*state) {
+                    indices.push((0u32, i as u32, 1usize));
+                }
+            }
+            if indices.is_empty() {
+                return Ok(DataBlock::empty());
+            }
+            let mut left_result_block = DataBlock::take_blocks(
+                &left_table[left_idx..left_idx + 1],
+                &indices,
+                indices.len(),
+            );
+            let nullable_columns = right_table[right_idx]
+                .columns()
+                .iter()
+                .map(|c| BlockEntry {
+                    value: Value::Scalar(Scalar::Null),
+                    data_type: c.data_type.clone(),
+                })
+                .collect::<Vec<_>>();
+            let right_result_block = DataBlock::new(nullable_columns, indices.len());
+            // Merge left_result_block and right_result_block
+            for col in right_result_block.columns() {
+                left_result_block.add_column(col.clone());
+            }
+            for filter in self.other_conditions.iter() {
+                left_result_block = filter_block(left_result_block, filter)?;
+            }
+            return Ok(left_result_block);
+        }
+
+        if !right_match.is_empty() {
+            for (i, state) in right_match
+                .iter()
+                .enumerate()
+                .skip(right_offset - 1)
+                .take(right_table[right_idx].num_rows())
+            {
+                if !(*state) {
+                    indices.push((0u32, i as u32, 1usize));
+                }
+            }
+            if indices.is_empty() {
+                return Ok(DataBlock::empty());
+            }
+            let nullable_columns = left_table[left_idx]
+                .columns()
+                .iter()
+                .map(|c| BlockEntry {
+                    value: Value::Scalar(Scalar::Null),
+                    data_type: c.data_type.clone(),
+                })
+                .collect::<Vec<_>>();
+            let mut left_result_block = DataBlock::new(nullable_columns, indices.len());
+            let right_result_block = DataBlock::take_blocks(
+                &right_table[right_idx..right_idx + 1],
+                &indices,
+                indices.len(),
+            );
+            // Merge left_result_block and right_result_block
+            for col in right_result_block.columns() {
+                left_result_block.add_column(col.clone());
+            }
+            for filter in self.other_conditions.iter() {
+                left_result_block = filter_block(left_result_block, filter)?;
+            }
+            return Ok(left_result_block);
+        }
+        Ok(DataBlock::empty())
+    }
+
+    pub fn inner_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
@@ -299,20 +406,19 @@ impl RangeJoinState {
         p_array: &[u64],
         mut bit_array: MutableBitmap,
         task_id: usize,
-    ) -> Result<DataBlock, ErrorCode> {
+    ) -> Result<DataBlock> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let row_offset = self.row_offset.read();
         let (left_offset, right_offset) = row_offset[task_id];
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let len = p_array.len();
-        let left_table = self.left_table.read();
-        let right_table = self.right_table.read();
-        let mut left_row_state = vec![false; left_table[left_idx].num_rows()];
         let mut left_buffer = Vec::with_capacity(block_size);
         let mut right_buffer = Vec::with_capacity(block_size);
         let mut off1;
         let mut off2 = 0;
+        let mut left_match = self.left_match.write();
+        let mut right_match = self.right_match.write();
         for (idx, p) in p_array.iter().enumerate() {
             if let ScalarRef::Number(NumberScalar::Int64(val)) =
                 unsafe { l1_index_column.index_unchecked(*p as usize) }
@@ -349,106 +455,50 @@ impl RangeJoinState {
                         unsafe { l1_index_column.index_unchecked(j) }
                     {
                         right_buffer.push((-right - 1) as usize - right_offset);
+                        if !right_match.is_empty() {
+                            right_match[(-right - 1) as usize] = true;
+                        }
                     }
                     if let ScalarRef::Number(NumberScalar::Int64(left)) =
                         unsafe { l1_index_column.index_unchecked(*p as usize) }
                     {
-                        let left_index = (left - 1) as usize - left_offset;
-                        left_buffer.push(left_index);
-                        unsafe { *left_row_state.get_unchecked_mut(left_index) = true };
+                        left_buffer.push((left - 1) as usize - left_offset);
+                        if !left_match.is_empty() {
+                            left_match[(left - 1) as usize] = true;
+                        }
                     }
                 }
                 j += 1;
             }
         }
-        let mut indices = Vec::with_capacity(left_buffer.len());
-        let mut result_block = match self.join_type {
-            JoinType::Inner => {
-                if left_buffer.is_empty() {
-                    return Ok(DataBlock::empty());
-                }
-                for res in left_buffer.iter() {
-                    indices.push((0u32, *res as u32, 1usize));
-                }
-                let mut left_result_block = DataBlock::take_blocks(
-                    &left_table[left_idx..left_idx + 1],
-                    &indices,
-                    indices.len(),
-                );
-                indices.clear();
-                for res in right_buffer.iter() {
-                    indices.push((0u32, *res as u32, 1usize));
-                }
-                let right_result_block = DataBlock::take_blocks(
-                    &right_table[right_idx..right_idx + 1],
-                    &indices,
-                    indices.len(),
-                );
-                // Merge left_result_block and right_result_block
-                for col in right_result_block.columns() {
-                    left_result_block.add_column(col.clone());
-                }
-                Ok(left_result_block)
-            }
-            JoinType::Left => {
-                let mut unmatches = Vec::with_capacity(block_size);
-                for (i, state) in left_row_state.iter().enumerate() {
-                    if *state {
-                        indices.push((0u32, i as u32, 1usize));
-                    } else {
-                        unmatches.push((0u32, i as u32, 1usize));
-                    }
-                }
-                let mut left_result_block = DataBlock::take_blocks(
-                    &left_table[left_idx..left_idx + 1],
-                    &indices,
-                    indices.len(),
-                );
-                indices.clear();
-                for res in right_buffer.iter() {
-                    indices.push((0u32, *res as u32, 1usize));
-                }
-                let right_result_block = DataBlock::take_blocks(
-                    &right_table[right_idx..right_idx + 1],
-                    &indices,
-                    indices.len(),
-                );
-                // Merge left_result_block and right_result_block
-                for col in right_result_block.columns() {
-                    left_result_block.add_column(col.clone());
-                }
-                if !unmatches.is_empty() {
-                    let mut left_unmatch_block = DataBlock::take_blocks(
-                        &left_table[left_idx..left_idx + 1],
-                        &unmatches,
-                        unmatches.len(),
-                    );
-                    let nullable_columns = right_table[right_idx]
-                        .columns()
-                        .iter()
-                        .map(|c| BlockEntry {
-                            value: Value::Scalar(Scalar::Null),
-                            data_type: c.data_type.clone(),
-                        })
-                        .collect::<Vec<_>>();
-                    let right_unmatch_block = DataBlock::new(nullable_columns, unmatches.len());
-                    // Merge left_result_block and right_result_block
-                    for col in right_unmatch_block.columns() {
-                        left_unmatch_block.add_column(col.clone());
-                    }
-                    left_result_block =
-                        DataBlock::concat(&[left_result_block, left_unmatch_block])?;
-                }
-                Ok(left_result_block)
-            }
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "{} is unimplemented",
-                self.join_type
-            ))),
-        }?;
-        for filter in self.other_conditions.iter() {
-            result_block = filter_block(result_block, filter)?;
+        if left_buffer.is_empty() {
+            return Ok(DataBlock::empty());
         }
-        Ok(result_block)
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
+        let mut indices = Vec::with_capacity(left_buffer.len());
+        for res in left_buffer.iter() {
+            indices.push((0u32, *res as u32, 1usize));
+        }
+        let mut left_result_block =
+            DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
+        indices.clear();
+        for res in right_buffer.iter() {
+            indices.push((0u32, *res as u32, 1usize));
+        }
+        let right_result_block = DataBlock::take_blocks(
+            &right_table[right_idx..right_idx + 1],
+            &indices,
+            indices.len(),
+        );
+        // Merge left_result_block and right_result_block
+        for col in right_result_block.columns() {
+            left_result_block.add_column(col.clone());
+        }
+        for filter in self.other_conditions.iter() {
+            left_result_block = filter_block(left_result_block, filter)?;
+        }
+        self.completed_pair.fetch_add(1, Ordering::SeqCst);
+        Ok(left_result_block)
     }
 }
