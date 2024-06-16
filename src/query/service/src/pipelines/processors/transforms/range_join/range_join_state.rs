@@ -60,9 +60,15 @@ pub struct RangeJoinState {
     // Row index offset for left/right
     pub(crate) row_offset: RwLock<Vec<(usize, usize)>>,
     pub(crate) finished_tasks: AtomicU64,
+    pub(crate) completed_pair: AtomicU64,
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
     pub(crate) join_type: JoinType,
+    // A bool indicating for tuple in the LHS if they found a match (used in full outer join)
+    pub(crate) left_match: RwLock<Vec<bool>>,
+    // A bool indicating for tuple in the RHS if they found a match (used in full outer join)
+    pub(crate) right_match: RwLock<Vec<bool>>,
+    pub(crate) partition_count: RwLock<usize>,
 }
 
 impl RangeJoinState {
@@ -72,7 +78,6 @@ impl RangeJoinState {
         } else {
             None
         };
-
         Self {
             ctx,
             left_table: RwLock::new(vec![]),
@@ -89,8 +94,12 @@ impl RangeJoinState {
             tasks: RwLock::new(vec![]),
             row_offset: RwLock::new(vec![]),
             finished_tasks: AtomicU64::new(0),
+            completed_pair: AtomicU64::new(0),
             ie_join_state,
             join_type: range_join.join_type.clone(),
+            left_match: RwLock::new(vec![]),
+            right_match: RwLock::new(vec![]),
+            partition_count: RwLock::new(0),
         }
     }
 
@@ -274,6 +283,31 @@ impl RangeJoinState {
             }
             right_offset = 0;
             left_offset += left_block.num_rows();
+        }
+        let mut partition_count = self.partition_count.write();
+        *partition_count = tasks.len();
+        // Add Fill task
+        left_offset = 0;
+        right_offset = 0;
+        if matches!(self.join_type, JoinType::Left) {
+            let mut left_match = self.left_match.write();
+            for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
+                row_offset.push((left_offset, 0));
+                tasks.push((left_idx, 0));
+                left_offset += left_block.num_rows();
+                let bool_fill = vec![false; left_block.num_rows()];
+                left_match.extend(bool_fill.into_iter());
+            }
+        }
+        if matches!(self.join_type, JoinType::Right) {
+            let mut right_match = self.right_match.write();
+            for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
+                row_offset.push((0, right_offset));
+                tasks.push((0, right_idx));
+                right_offset += right_block.num_rows();
+                let bool_fill = vec![false; right_block.num_rows()];
+                right_match.extend(bool_fill.into_iter());
+            }
         }
         Ok(())
     }
