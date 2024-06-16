@@ -146,11 +146,6 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
         }
 
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
-            if let ScalarExpr::UDFCall(_) = arg {
-                return Err(ErrorCode::InvalidArgument(
-                    "the argument of UDF server call can't be a UDF server call",
-                ));
-            }
             self.visit(arg)?;
 
             let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
@@ -170,7 +165,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                     Box::new(arg.data_type()?),
                     Visibility::Visible,
                 )
-                .build();
+                    .build();
 
                 BoundColumnRef {
                     span: arg.span(),
@@ -201,7 +196,7 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             udf.return_type.clone(),
             Visibility::Visible,
         )
-        .build();
+            .build();
 
         let replaced_column = BoundColumnRef {
             span: udf.span,
