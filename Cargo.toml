@@ -86,6 +86,7 @@ members = [
     "src/query/ee",
     "src/meta/api",
     "src/meta/app",
+    "src/meta/binaries",
     "src/meta/client",
     "src/meta/embedded",
     "src/meta/kvapi",
