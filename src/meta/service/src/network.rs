@@ -15,14 +15,17 @@
 use std::error::Error;
 use std::fmt::Display;
 use std::future::Future;
+use std::io::Read;
 use std::time::Duration;
 
 use anyerror::AnyError;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
 use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::future::TimingFutureExt;
+use databend_common_base::runtime;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
@@ -30,18 +33,16 @@ use databend_common_meta_sled_store::openraft::error::Unreachable;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
+use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
-use databend_common_meta_types::protobuf::SnapshotChunkRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Fatal;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
-use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::NetworkError;
@@ -51,18 +52,23 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::RemoteError;
 use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotResponse;
+use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::StreamingError;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
+use futures::FutureExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use minitrace::func_name;
 use openraft::RaftNetwork;
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
@@ -120,22 +126,22 @@ impl Default for Backoff {
 }
 
 #[derive(Clone)]
-pub struct Network {
+pub struct NetworkFactory {
     sto: RaftStore,
 
     backoff: Backoff,
 }
 
-impl Network {
-    pub fn new(sto: RaftStore) -> Network {
-        Network {
+impl NetworkFactory {
+    pub fn new(sto: RaftStore) -> NetworkFactory {
+        NetworkFactory {
             sto,
             backoff: Backoff::default(),
         }
     }
 }
 
-pub struct NetworkConnection {
+pub struct Network {
     /// This node id
     id: NodeId,
 
@@ -157,7 +163,7 @@ pub struct NetworkConnection {
     backoff: Backoff,
 }
 
-impl NetworkConnection {
+impl Network {
     /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
@@ -261,6 +267,11 @@ impl NetworkConnection {
         RPCError::RemoteError(remote_err)
     }
 
+    /// Wrap an error with [`RemoteError`], when building return value for an RPC method.
+    pub(crate) fn to_remote_err<E: Error>(&self, e: E) -> RemoteError<E> {
+        RemoteError::new_with_node(self.target, self.target_node.clone(), e)
+    }
+
     /// Create a new RaftRequest for AppendEntriesRequest,
     /// if it is too large, return `PayloadTooLarge` error
     /// to tell Openraft to split it in to smaller chunks.
@@ -348,9 +359,8 @@ impl NetworkConnection {
         raft_res.map_err(|e| self.to_rpc_err(e))
     }
 
-    /// Convert gRPC status to `RPCError`
-    fn status_to_unreachable<E>(&self, status: tonic::Status) -> RPCError<RaftError<E>>
-    where E: std::error::Error {
+    /// Convert gRPC status to `Unreachable`
+    fn status_to_unreachable(&self, status: tonic::Status) -> Unreachable {
         warn!(
             "target={}, endpoint={} gRPC error: {:?}",
             self.target, self.endpoint, status
@@ -359,11 +369,85 @@ impl NetworkConnection {
         let any_err = AnyError::new(&status)
             .add_context(|| format!("gRPC target={}, endpoint={}", self.target, self.endpoint));
 
-        RPCError::Unreachable(Unreachable::new(&any_err))
+        Unreachable::new(&any_err)
+    }
+
+    #[futures_async_stream::try_stream(boxed, ok = SnapshotChunkRequestV003, error = StreamingError<Fatal>)]
+    async fn snapshot_chunk_stream_v003(
+        vote: Vote,
+        snapshot: Snapshot,
+        cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
+        option: RPCOption,
+    ) {
+        let chunk_size = option.snapshot_chunk_size().unwrap_or(1024 * 1024);
+
+        let snapshot_meta = snapshot.meta;
+        let db = snapshot.snapshot;
+
+        info!(
+            "start to transmit snapshot: {}; db.file_size: {}; db.stat: {}; chunk size:{}",
+            snapshot_meta,
+            db.file_size(),
+            db.stat(),
+            chunk_size
+        );
+
+        let mut bf = db.open_file().map_err(|e| {
+            let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
+            StorageError::from(io_err)
+        })?;
+
+        let mut c = std::pin::pin!(cancel);
+
+        #[allow(clippy::uninit_vec)]
+        let mut buf = {
+            let mut b = Vec::with_capacity(chunk_size);
+            unsafe {
+                b.set_len(chunk_size);
+            }
+            b
+        };
+
+        loop {
+            // If canceled, return at once
+            if let Some(err) = c.as_mut().now_or_never() {
+                return Err(err.into());
+            }
+
+            let mut offset = 0;
+            while offset < buf.len() {
+                let n_read = bf.read(&mut buf[offset..]).map_err(|e| {
+                    let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
+                    StorageError::from(io_err)
+                })?;
+
+                debug!("offset: {}, n_read: {}", offset, n_read);
+                if n_read == 0 {
+                    break;
+                }
+                offset += n_read;
+            }
+
+            debug!("buf len: {}", buf.len());
+
+            if offset == 0 {
+                break;
+            }
+
+            debug!("build snapshot chunk len: {}", offset);
+
+            let chunk = SnapshotChunkRequestV003::new_chunk((buf[..offset]).to_vec());
+            yield chunk;
+        }
+
+        debug!("build snapshot end chunk");
+
+        let end = SnapshotChunkRequestV003::new_end_chunk(vote, snapshot_meta.clone());
+        yield end;
     }
 }
 
-impl RaftNetwork<TypeConfig> for NetworkConnection {
+impl RaftNetwork<TypeConfig> for Network {
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
     async fn append_entries(
@@ -419,64 +503,78 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
         option: RPCOption,
     ) -> Result<SnapshotResponse, StreamingError<Fatal>> {
-        // This implementation just delegates to `Chunked::send_snapshot`,
-        // which depends on `Self::install_snapshot()` to send chunks.
-        use openraft::network::snapshot_transport::Chunked;
-        use openraft::network::snapshot_transport::SnapshotTransport;
-
-        let resp = Chunked::send_snapshot(self, vote, snapshot, cancel, option).await?;
-        Ok(resp)
-    }
-
-    #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
-    async fn install_snapshot(
-        &mut self,
-        rpc: InstallSnapshotRequest,
-        _option: RPCOption,
-    ) -> Result<InstallSnapshotResponse, RPCError<RaftError<InstallSnapshotError>>> {
-        info!(
-            id = self.id,
-            target = self.target,
-            rpc = rpc.summary();
-            "send_install_snapshot"
-        );
+        info!(id = self.id, target = self.target; "{}", func_name!());
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
-        let bytes = rpc.data.len() as u64;
-        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
+        // Using strm of type `Pin<Box<Stream + Send + 'static>>` result in a higher rank lifetime error
+        // See:
+        // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=8c382b5a6d932aaf81815f3825efd5ed
+        // - https://github.com/rust-lang/rust/issues/87425
+        //
+        // Here we convert it to a concrete type `ReceiverStream` to avoid the error.
+        let mut res_strm = Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option);
 
-        let v1_req = SnapshotChunkRequest::new_v1(rpc);
-        let req = databend_common_tracing::inject_span_to_tonic_request(v1_req);
+        let (tx, rx) = mpsc::channel(16);
+
+        // let bytes = req.get_ref().data.len() as u64;
+        // raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
         let mut client = self
             .take_client()
             .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
             .await?;
 
-        let grpc_res = client
-            .install_snapshot_v1(req)
-            .timed(observe_snapshot_send_spent(self.target))
-            .await;
+        let strm = ReceiverStream::new(rx);
 
-        info!(
-            "install_snapshot resp target={}: {:?}",
-            self.target, grpc_res
-        );
+        let target = self.target;
 
-        match &grpc_res {
-            Ok(_) => {
-                self.client.lock().await.replace(client);
+        let _forward_handle = runtime::spawn(async move {
+            while let Some(x) = res_strm.try_next().await? {
+                raft_metrics::network::incr_sendto_bytes(&target, x.chunk.len() as u64);
+
+                let send_res = tx.send(x).await;
+
+                if let Err(e) = send_res {
+                    error!("{} error sending to snapshot stream: {}", func_name!(), e);
+                }
             }
-            Err(e) => {
-                warn!(target = self.target; "install_snapshot failed: {}", e);
-            }
-        }
 
-        let res = self.parse_grpc_resp(grpc_res);
+            Ok::<_, StreamingError<Fatal>>(())
+        });
+
+        let res: Result<SnapshotResponse, StreamingError<Fatal>> = try {
+            let grpc_res = client
+                .install_snapshot_v003(strm)
+                .timed(observe_snapshot_send_spent(self.target))
+                .await;
+
+            info!(
+                "{} resp from: target={}: grpc_result: {:?}",
+                func_name!(),
+                self.target,
+                grpc_res,
+            );
+
+            match &grpc_res {
+                Ok(_) => {
+                    self.client.lock().await.replace(client);
+                }
+                Err(e) => {
+                    warn!(target = self.target; "install_snapshot failed: {}", e);
+                }
+            }
+
+            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+
+            let remote_result: Result<SnapshotResponse, Fatal> =
+                GrpcHelper::parse_raft_reply_generic(grpc_response.into_inner())
+                    .map_err(|serde_err| new_net_err(&serde_err, || "parse full_snapshot reply"))?;
+
+            remote_result.map_err(|e| self.to_remote_err(e))?
+        };
+
         self.report_metrics_snapshot(res.is_ok());
-
         res
     }
 
@@ -524,11 +622,11 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
     }
 }
 
-impl RaftNetworkFactory<TypeConfig> for Network {
-    type Network = NetworkConnection;
+impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
+    type Network = Network;
 
     async fn new_client(
-        self: &mut Network,
+        self: &mut NetworkFactory,
         target: NodeId,
         node: &MembershipNode,
     ) -> Self::Network {
@@ -537,7 +635,7 @@ impl RaftNetworkFactory<TypeConfig> for Network {
             self.sto.id, target, node
         );
 
-        NetworkConnection {
+        Network {
             id: self.sto.id,
             target,
             target_node: node.clone(),

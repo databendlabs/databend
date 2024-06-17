@@ -219,7 +219,7 @@ message SnapshotChunkV1 {
 // the leader vote and snapshot-meta.
 //
 // Since the second item, the `rpc_meta` should be empty and will be ignored by the receiving end.
-message SnapshotChunkRequestV2 {
+message SnapshotChunkRequestV003 {
 
   // json serialized meta data, including vote and snapshot_meta.
   // ```text
@@ -244,7 +244,7 @@ service RaftService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
-  rpc InstallSnapshotV2(stream SnapshotChunkRequestV2) returns (RaftReply);
+  rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (RaftReply);
   rpc Vote(RaftRequest) returns (RaftReply);
 }
 

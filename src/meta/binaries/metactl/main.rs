@@ -14,11 +14,12 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod grpc;
-use grpc::export_meta;
+mod export_from_grpc;
 
+pub mod export_from_disk;
+pub mod import;
 pub(crate) mod reading;
-mod snapshot;
+pub mod upgrade;
 
 use std::collections::BTreeMap;
 
@@ -27,6 +28,8 @@ use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_raft_store::config::RaftConfig;
+use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_sled_store::init_sled_db;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
@@ -144,27 +147,13 @@ async fn main() -> anyhow::Result<()> {
     eprintln!("║║║║╣  ║ ╠═╣───║   ║ ║  ");
     eprintln!("╩ ╩╚═╝ ╩ ╩ ╩   ╚═╝ ╩ ╩═╝ Databend");
     eprintln!();
-
-    // eprintln!("███╗   ███╗███████╗████████╗ █████╗        ██████╗████████╗██╗     ");
-    // eprintln!("████╗ ████║██╔════╝╚══██╔══╝██╔══██╗      ██╔════╝╚══██╔══╝██║     ");
-    // eprintln!("██╔████╔██║█████╗     ██║   ███████║█████╗██║        ██║   ██║     ");
-    // eprintln!("██║╚██╔╝██║██╔══╝     ██║   ██╔══██║╚════╝██║        ██║   ██║     ");
-    // eprintln!("██║ ╚═╝ ██║███████╗   ██║   ██║  ██║      ╚██████╗   ██║   ███████╗");
-    // eprintln!("╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝       ╚═════╝   ╚═╝   ╚══════╝");
-
-    // ██████╗  █████╗ ████████╗ █████╗ ██████╗ ███████╗███╗   ██╗██████╗
-    // ██╔══██╗██╔══██╗╚══██╔══╝██╔══██╗██╔══██╗██╔════╝████╗  ██║██╔══██╗
-    // ██║  ██║███████║   ██║   ███████║██████╔╝█████╗  ██╔██╗ ██║██║  ██║
-    // ██║  ██║██╔══██║   ██║   ██╔══██║██╔══██╗██╔══╝  ██║╚██╗██║██║  ██║
-    // ██████╔╝██║  ██║   ██║   ██║  ██║██████╔╝███████╗██║ ╚████║██████╔╝
-    // ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═════╝
-    // ╔╦╗╔═╗╔╦╗╔═╗   ╔═╗╔╦╗╦
-    // ║║║║╣  ║ ╠═╣───║   ║ ║
-    // ╩ ╩╚═╝ ╩ ╩ ╩   ╚═╝ ╩ ╩═╝
-
     eprintln!("Version: {}", METASRV_COMMIT_VERSION.as_str());
+    eprintln!("Working DataVersion: {:?}", DATA_VERSION);
     eprintln!();
-    eprintln!("Config: {}", pretty(&config)?);
+    eprintln!("Id: {}", config.id);
+    eprintln!("Log:");
+    eprintln!("    File: {}", log_config.file);
+    eprintln!("    Stderr: {}", log_config.stderr);
 
     if !config.cmd.is_empty() {
         return match config.cmd.as_str() {
@@ -185,23 +174,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if config.export {
-        eprintln!();
-        eprintln!("Export:");
-        return snapshot::export_data(&config).await;
+        return export_data(&config).await;
     }
 
     if config.import {
-        eprintln!();
-        eprintln!("Import:");
-        return snapshot::import_data(&config).await;
+        return import::import_data(&config).await;
     }
 
     Err(anyhow::anyhow!("Nothing to do"))
-}
-
-fn pretty<T>(v: &T) -> Result<String, serde_json::Error>
-where T: Serialize {
-    serde_json::to_string_pretty(v)
 }
 
 async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
@@ -273,6 +253,17 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
         println!("NonVoters:");
         for v in res.non_voters {
             println!("  - {}", v);
+        }
+    }
+    Ok(())
+}
+
+pub async fn export_data(config: &Config) -> anyhow::Result<()> {
+    match config.raft_dir {
+        None => export_from_grpc::export_from_running_node(config).await?,
+        Some(ref dir) => {
+            init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
+            export_from_disk::export_from_dir(config).await?;
         }
     }
     Ok(())
