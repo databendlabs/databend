@@ -13,88 +13,61 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::KVMeta;
 
 use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::Level;
+use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::compacted_get;
 use crate::leveled_store::map_api::compacted_range;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::leveled_store::map_api::Transition;
 use crate::marked::Marked;
 
-/// A writable leveled map that does not not own the data.
-#[derive(Debug)]
-pub struct RefMut<'d> {
-    /// The top level is the newest and writable.
-    writable: &'d mut Level,
-
-    /// The immutable levels.
-    immutable_levels: &'d ImmutableLevels,
-}
-
-impl<'d> RefMut<'d> {
-    pub(crate) fn new(writable: &'d mut Level, immutable_levels: &'d ImmutableLevels) -> Self {
-        Self {
-            writable,
-            immutable_levels,
-        }
-    }
-
-    /// Return an iterator of all levels in new-to-old order.
-    pub(crate) fn iter_levels(&self) -> impl Iterator<Item = &'_ Level> + '_ {
-        [&*self.writable]
-            .into_iter()
-            .chain(self.immutable_levels.iter_levels())
-    }
-
-    pub(crate) fn iter_shared_levels(&self) -> (Option<&Level>, impl Iterator<Item = &Immutable>) {
-        (
-            Some(self.writable),
-            self.immutable_levels.iter_immutable_levels(),
-        )
-    }
-}
-
-// Because `LeveledRefMut` has a mut ref of lifetime 'd,
-// `self` must outlive 'd otherwise there will be two mut ref.
 #[async_trait::async_trait]
-impl<'d, K> MapApiRO<K> for RefMut<'d>
+impl<K> MapApiRO<K> for LeveledMap
 where
-    K: MapKey,
+    K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
     Immutable: MapApiRO<K>,
+    DB: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: MapKeyEncode,
     {
         let levels = self.iter_levels();
-        compacted_get(key, levels).await
+        let persisted = self.persisted.as_ref().into_iter();
+        compacted_get(key, levels, persisted).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let (top, levels) = self.iter_shared_levels();
-        compacted_range(range, top, levels).await
+        let persisted = self.persisted.as_ref().into_iter();
+        compacted_range(range, top, levels, persisted).await
     }
 }
 
 #[async_trait::async_trait]
-impl<'d, K> MapApi<K> for RefMut<'d>
+impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
     Level: MapApi<K>,
     Immutable: MapApiRO<K>,
+    DB: MapApiRO<K>,
 {
     async fn set(
         &mut self,
