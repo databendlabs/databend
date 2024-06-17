@@ -37,28 +37,55 @@ impl AsyncFunctionRewriter {
         }
     }
 
+    fn rewrite_async_func_call(&mut self, scalar: &mut ScalarExpr, index: IndexType) {
+        match scalar {
+            ScalarExpr::AsyncFunctionCall(async_func) => {
+                self.async_functions.push((index, async_func.clone()));
+                // Generate a ColumnBinding for each async function
+                let column = ColumnBindingBuilder::new(
+                    async_func.display_name.clone(),
+                    index,
+                    async_func.return_type.clone(),
+                    Visibility::Visible,
+                )
+                .build();
+
+                *scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: async_func.span,
+                    column,
+                });
+            }
+            ScalarExpr::FunctionCall(func) => {
+                for arg in &mut func.arguments {
+                    self.rewrite_async_func_call(arg, index);
+                }
+            }
+            ScalarExpr::AggregateFunction(func) => {
+                for arg in &mut func.args {
+                    self.rewrite_async_func_call(arg, index);
+                }
+            }
+            ScalarExpr::CastExpr(cast_expr) => {
+                self.rewrite_async_func_call(&mut cast_expr.argument.as_mut(), index)
+            }
+            _ => {}
+        }
+    }
+
     pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        let s_expr = s_expr.clone();
+        let mut s_expr = s_expr.clone();
+        if !s_expr.children.is_empty() {
+            let mut children = Vec::with_capacity(s_expr.children.len());
+            for child in s_expr.children.iter() {
+                children.push(Arc::new(self.rewrite(child)?));
+            }
+            s_expr.children = children;
+        }
 
         match (*s_expr.plan).clone() {
             RelOperator::EvalScalar(mut plan) => {
                 for item in &mut plan.items {
-                    if let ScalarExpr::AsyncFunctionCall(async_func) = &item.scalar {
-                        self.async_functions.push((item.index, async_func.clone()));
-                        // Generate a ColumnBinding for each async function
-                        let column = ColumnBindingBuilder::new(
-                            async_func.display_name.clone(),
-                            item.index,
-                            async_func.return_type.clone(),
-                            Visibility::Visible,
-                        )
-                        .build();
-
-                        item.scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: async_func.span,
-                            column,
-                        });
-                    }
+                    self.rewrite_async_func_call(&mut item.scalar, item.index);
                 }
 
                 if self.async_functions.is_empty() {
