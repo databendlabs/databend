@@ -66,7 +66,7 @@ impl AsyncFunctionRewriter {
                 }
             }
             ScalarExpr::CastExpr(cast_expr) => {
-                self.rewrite_async_func_call(&mut cast_expr.argument.as_mut(), index)
+                self.rewrite_async_func_call(cast_expr.argument.as_mut(), index)
             }
             _ => {}
         }
