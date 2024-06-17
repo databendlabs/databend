@@ -15,33 +15,41 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
+use std::io;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_sled_store::openraft;
-use databend_common_meta_sled_store::openraft::network::snapshot_transport;
+use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
+use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
+use databend_common_meta_raft_store::sm_v003::received::Received;
+use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
-use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
+use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::RaftError;
+use databend_common_meta_types::Snapshot;
+use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::TypeConfig;
+use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
 use futures::TryStreamExt;
+use log::error;
 use log::info;
+use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
@@ -52,21 +60,23 @@ use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
-use crate::meta_service::snapshot_receiver::Receiver;
+use crate::meta_service::snapshot_receiver_v1;
+use crate::meta_service::snapshot_receiver_v1::ReceiverV1;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
 
-    snapshot: Mutex<Option<snapshot_transport::Streaming<TypeConfig>>>,
+    /// The receiver for install-snapshot v1 RPC.
+    receiver_v1: Mutex<Option<ReceiverV1>>,
 }
 
 impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
         Self {
             meta_node,
-            snapshot: Mutex::new(None),
+            receiver_v1: Mutex::new(None),
         }
     }
 
@@ -105,7 +115,7 @@ impl RaftServiceImpl {
         };
 
         let res = self
-            .receive_chunked_snapshot(install_snapshot_req)
+            .receive_chunked_snapshot_v1(install_snapshot_req)
             .timed(observe_snapshot_recv_spent(&addr))
             .await;
 
@@ -115,7 +125,7 @@ impl RaftServiceImpl {
     }
 
     /// Receive a chunk based snapshot from the leader.
-    async fn receive_chunked_snapshot(
+    async fn receive_chunked_snapshot_v1(
         &self,
         req: InstallSnapshotRequest,
     ) -> Result<InstallSnapshotResponse, RaftError<InstallSnapshotError>> {
@@ -123,17 +133,41 @@ impl RaftServiceImpl {
 
         let req_vote = req.vote;
         let my_vote = raft.with_raft_state(|state| *state.vote_ref()).await?;
-        let resp = InstallSnapshotResponse { vote: my_vote };
+        let snapshot_meta = req.meta.clone();
+        let snapshot_id = snapshot_meta.snapshot_id.clone();
+        let sig = snapshot_meta.signature();
 
-        let finished_snapshot = {
-            use openraft::network::snapshot_transport::Chunked;
-            use openraft::network::snapshot_transport::SnapshotTransport;
-
-            let mut streaming = self.snapshot.lock().await;
-            Chunked::receive_snapshot(&mut *streaming, raft, req).await?
+        let io_err_to_read_snap_err = |e: io::Error| {
+            let io_err = StorageIOError::read_snapshot(Some(sig.clone()), &e);
+            StorageError::from(io_err)
         };
 
-        if let Some(snapshot) = finished_snapshot {
+        let resp = InstallSnapshotResponse { vote: my_vote };
+
+        let ss_store = self.meta_node.sto.snapshot_store();
+
+        let finished_snapshot = {
+            let mut receiver_v1 = self.receiver_v1.lock().await;
+            snapshot_receiver_v1::receive_snapshot_v1(&mut receiver_v1, &ss_store, req).await?
+        };
+
+        if let Some(temp_path) = finished_snapshot {
+            let snapshot_data_v1 =
+                SnapshotData::open_temp(temp_path).map_err(io_err_to_read_snap_err)?;
+
+            let db = upgrade_snapshot_data_v002_to_v003(
+                &ss_store,
+                Box::new(snapshot_data_v1),
+                snapshot_id,
+            )
+            .await
+            .map_err(io_err_to_read_snap_err)?;
+
+            let snapshot = Snapshot {
+                meta: snapshot_meta.clone(),
+                snapshot: Box::new(db),
+            };
+
             let resp = raft.install_full_snapshot(req_vote, snapshot).await?;
             Ok(resp.into())
         } else {
@@ -141,48 +175,97 @@ impl RaftServiceImpl {
         }
     }
 
-    async fn do_install_snapshot_v2(
+    async fn do_install_snapshot_v003(
         &self,
-        request: Request<Streaming<SnapshotChunkRequestV2>>,
+        request: Request<Streaming<SnapshotChunkRequestV003>>,
     ) -> Result<Response<RaftReply>, Status> {
+        let addr = remote_addr(&request);
+
+        let received = self.receive_binary_snapshot(request).await?;
+
+        let Received {
+            vote: req_vote,
+            snapshot_meta,
+            temp_path,
+            ..
+        } = received;
+
+        let raft_config = &self.meta_node.sto.config;
+
+        let db = DB::open_snapshot(&temp_path, snapshot_meta.snapshot_id.clone(), raft_config)
+            .map_err(|e| {
+                Status::internal(format!(
+                    "Fail to open snapshot: {:?}, snapshot_meta:{:?} path: {}",
+                    e, &snapshot_meta, temp_path
+                ))
+            })?;
+
+        let snapshot = Snapshot {
+            meta: snapshot_meta,
+            snapshot: Box::new(db),
+        };
+
+        let res = self
+            .meta_node
+            .raft
+            .install_full_snapshot(req_vote, snapshot)
+            .await
+            .map_err(GrpcHelper::internal_err);
+
+        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
+
+        let resp = res?;
+
+        GrpcHelper::ok_response(&resp)
+    }
+
+    /// Receive a single file snapshot in binary chunks.
+    ///
+    /// Returns the (snapshot-format, request-vote, snapshot-meta, file-temp-path).
+    async fn receive_binary_snapshot(
+        &self,
+        request: Request<Streaming<SnapshotChunkRequestV003>>,
+    ) -> Result<Received, Status> {
         let addr = remote_addr(&request);
 
         let _guard = snapshot_recv_inflight(&addr).counter_guard();
 
-        let snapshot_data = self
-            .meta_node
-            .raft
-            .begin_receiving_snapshot()
-            .await
-            .map_err(GrpcHelper::internal_err)?;
+        let ss_store = self.meta_node.sto.snapshot_store();
 
-        let mut receiver = Receiver::new(&addr, snapshot_data);
+        let mut receiver_v003 = ss_store.new_receiver(&addr).map_err(io_err_to_status)?;
+        receiver_v003.set_on_recv_callback(new_incr_recvfrom_bytes(addr.clone()));
+
+        let (tx, join_handle) = receiver_v003.spawn_receiving_thread("receive_binary_snapshot");
 
         let mut strm = request.into_inner();
 
-        while let Some(chunk) = strm.try_next().await? {
-            let snapshot = receiver.receive(chunk).await?;
-
-            if let Some((_format, req_vote, snapshot)) = snapshot {
-                let res = self
-                    .meta_node
-                    .raft
-                    .install_full_snapshot(req_vote, snapshot)
-                    .await
-                    .map_err(GrpcHelper::internal_err);
-
-                raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
-
-                let resp = res?;
-
-                return GrpcHelper::ok_response(&resp);
+        databend_common_base::runtime::spawn(async move {
+            while let Some(chunk) = strm.try_next().await.map_err(|e| {
+                error!("fail to receive binary snapshot chunk: {:?}", &e);
+                e
+            })? {
+                let res = tx.send(chunk).await;
+                if res.is_err() {
+                    info!("fail to send snapshot chunk to receiver_v003 thread; Stop receiving");
+                    break;
+                }
             }
-        }
+            Ok::<(), Status>(())
+        });
 
-        Err(Status::invalid_argument(format!(
-            "snapshot stream is closed without finishing: {}",
-            receiver.stat_str()
-        )))
+        let received = join_handle
+            .await
+            // join error
+            .map_err(|_e| {
+                warn!("receiver_v003 thread quit");
+                Status::aborted("snapshot receiver thread is closed without finishing")
+            })?
+            // io error
+            .map_err(io_err_to_status)?
+            // unfinished error
+            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+
+        Ok(received)
     }
 }
 
@@ -275,12 +358,12 @@ impl RaftService for RaftServiceImpl {
         self.do_install_snapshot_v1(request).in_span(root).await
     }
 
-    async fn install_snapshot_v2(
+    async fn install_snapshot_v003(
         &self,
-        request: Request<Streaming<SnapshotChunkRequestV2>>,
+        request: Request<Streaming<SnapshotChunkRequestV003>>,
     ) -> Result<Response<RaftReply>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
-        self.do_install_snapshot_v2(request).in_span(root).await
+        self.do_install_snapshot_v003(request).in_span(root).await
     }
 
     async fn vote(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
@@ -330,4 +413,17 @@ fn observe_snapshot_recv_spent(addr: &str) -> impl Fn(Duration, Duration) + '_ {
 /// Create a function that increases metric value of inflight snapshot receiving.
 fn snapshot_recv_inflight(addr: impl ToString) -> impl FnMut(i64) {
     move |i: i64| raft_metrics::network::incr_snapshot_recvfrom_inflight(addr.to_string(), i)
+}
+
+/// Create a function that increases metric value of bytes received from a peer.
+fn new_incr_recvfrom_bytes(addr: impl ToString) -> impl Fn(u64) + Send {
+    let addr = addr.to_string();
+    move |size: u64| raft_metrics::network::incr_recvfrom_bytes(addr.clone(), size)
+}
+
+fn io_err_to_status(e: io::Error) -> Status {
+    match e.kind() {
+        io::ErrorKind::InvalidInput => Status::invalid_argument(e.to_string()),
+        _ => Status::internal(e.to_string()),
+    }
 }
