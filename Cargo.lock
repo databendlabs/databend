@@ -2804,7 +2804,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "hashbrown 0.14.3",
- "hashlink",
+ "hashlink 0.8.4",
  "heapsize",
 ]
 
@@ -3356,6 +3356,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait-fn",
+ "bincode 2.0.0-rc.3",
  "byteorder",
  "chrono",
  "databend-common-base",
@@ -3380,6 +3381,7 @@ dependencies = [
  "openraft",
  "ordq",
  "pretty_assertions",
+ "rotbl",
  "semver",
  "serde",
  "serde_json",
@@ -3453,6 +3455,7 @@ dependencies = [
  "databend-common-tracing",
  "deepsize",
  "derive_more",
+ "futures-util",
  "log",
  "num-derive",
  "num-traits",
@@ -3460,6 +3463,7 @@ dependencies = [
  "prost 0.12.3",
  "prost-build",
  "regex",
+ "rotbl",
  "serde",
  "serde_json",
  "thiserror",
@@ -8126,6 +8130,14 @@ dependencies = [
 
 [[package]]
 name = "hashlink"
+version = "0.8.3"
+source = "git+https://github.com/drmingdrmer/hashlink?branch=master#0858a0afb08e7d52545c69e857128fc9c5f85ea5"
+dependencies = [
+ "hashbrown 0.14.3",
+]
+
+[[package]]
+name = "hashlink"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8094feaf31ff591f651a2664fb9cfd92bba7a60ce3197265e9482ebe753c8f7"
@@ -8273,7 +8285,7 @@ dependencies = [
  "futures-util",
  "hickory-proto",
  "ipconfig",
- "lru-cache",
+ "lru-cache 0.1.2",
  "once_cell",
  "parking_lot 0.12.1",
  "rand 0.8.5",
@@ -9519,6 +9531,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31e24f1ad8321ca0e8a1e0ac13f23cb668e6f5466c2c57319f6a5cf1cc8e3b1c"
 dependencies = [
  "linked-hash-map",
+]
+
+[[package]]
+name = "lru-cache"
+version = "0.1.4-alpha.4"
+source = "git+https://github.com/drmingdrmer/lru-cache?tag=v0.1.4-alpha.4#b70290fbfbf1e89b45c1546bd0a6768109210b8c"
+dependencies = [
+ "hashbrown 0.14.3",
+ "hashlink 0.8.3",
 ]
 
 [[package]]
@@ -12518,6 +12539,25 @@ dependencies = [
  "base64 0.13.1",
  "bitflags 1.3.2",
  "serde",
+]
+
+[[package]]
+name = "rotbl"
+version = "0.1.2"
+source = "git+https://github.com/drmingdrmer/rotbl?tag=v0.1.2-alpha.6#69bbe6a37e1c38703df5d0476c4c23d55551617a"
+dependencies = [
+ "anyhow",
+ "bincode 2.0.0-rc.3",
+ "byteorder",
+ "bytes",
+ "crc32fast",
+ "futures",
+ "futures-async-stream",
+ "lru-cache 0.1.4-alpha.4",
+ "num-format",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

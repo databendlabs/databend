@@ -17,11 +17,13 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
+futures-util = { workspace = true }
 log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 openraft = { workspace = true }
 prost = { workspace = true }
+rotbl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

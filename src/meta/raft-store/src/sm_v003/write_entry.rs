@@ -12,27 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-use std::fmt::Formatter;
-
-/// Snapshot stat.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct SnapshotStat {
-    /// Total number of entries in the snapshot.
-    ///
-    /// Including meta entries, such as seq, nodes, generic kv, and expire index
-    pub entry_cnt: u64,
-
-    /// Size in bytes of the snapshot file
-    pub size: u64,
-}
-
-impl fmt::Display for SnapshotStat {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{{ entry_cnt: {}, size: {} }}",
-            self.entry_cnt, self.size
-        )
-    }
+/// A write entry sent to snapshot writer.
+///
+/// A `Finish` entry indicates the end of the data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WriteEntry<D, F = ()> {
+    Data(D),
+    Finish(F),
 }
