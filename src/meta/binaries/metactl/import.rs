@@ -20,28 +20,25 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Lines;
-use std::io::Write;
-use std::net::SocketAddr;
-use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 
-use anyhow::anyhow;
-use databend_common_base::base::tokio;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
-use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
-use databend_common_meta_raft_store::ondisk::OnDisk;
-use databend_common_meta_raft_store::sm_v002::SnapshotStoreV002;
-use databend_common_meta_raft_store::sm_v002::WriteEntry;
+use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003;
+use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_raft_store::state::RaftState;
+use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
@@ -54,25 +51,11 @@ use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::StoredMembership;
 use databend_meta::store::RaftStore;
-use databend_meta::store::StoreInner;
-use futures::TryStreamExt;
-use tokio::net::TcpSocket;
 use url::Url;
 
-use crate::export_meta;
 use crate::reading;
+use crate::upgrade;
 use crate::Config;
-
-pub async fn export_data(config: &Config) -> anyhow::Result<()> {
-    match config.raft_dir {
-        None => export_from_running_node(config).await?,
-        Some(ref dir) => {
-            init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
-            export_from_dir(config).await?;
-        }
-    }
-    Ok(())
-}
 
 pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_dir = config.raft_dir.clone().unwrap_or_default();
@@ -116,6 +99,7 @@ async fn import_lines<B: BufRead + 'static>(
             ));
         }
         DataVersion::V002 => import_v002(config, it).await?,
+        DataVersion::V003 => import_v003(config, it).await?,
     };
 
     Ok(max_log_id)
@@ -130,6 +114,19 @@ async fn import_v002(
     config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
+    // v002 and v003 share the same exported data format.
+    import_v003(config, lines).await
+}
+
+/// Import serialized lines for `DataVersion::V003`
+///
+/// While importing, the max log id is also returned.
+///
+/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
+async fn import_v003(
+    config: &Config,
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
     let raft_config: RaftConfig = config.clone().into();
 
     let db = get_sled_db();
@@ -138,13 +135,15 @@ async fn import_v002(
     let mut max_log_id: Option<LogId> = None;
     let mut trees = BTreeMap::new();
 
-    let snapshot_store = SnapshotStoreV002::new(DataVersion::V002, raft_config);
+    let sys_data = Arc::new(Mutex::new(SysData::default()));
 
+    let snapshot_store = SnapshotStoreV003::new(raft_config);
     let writer = snapshot_store.new_writer()?;
+    let (tx, join_handle) = writer.spawn_writer_thread("import_v003");
 
-    let (tx, join_handle) = writer.spawn_writer_thread("import_v002");
-
-    let mut last_applied = None;
+    let mut converter = SnapshotUpgradeV002ToV003 {
+        sys_data: sys_data.clone(),
+    };
 
     for line in lines {
         let l = line?;
@@ -156,11 +155,10 @@ async fn import_v002(
                 anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
             })?;
 
-            if let Some(last) = sm_entry.last_applied() {
-                last_applied = Some(last);
+            let kv = converter.sm_entry_to_rotbl_kv(sm_entry)?;
+            if let Some(kv) = kv {
+                tx.send(WriteEntry::Data(kv)).await?;
             }
-
-            tx.send(WriteEntry::Data(sm_entry)).await?;
         } else {
             // Write to sled tree
             if !trees.contains_key(&tree_name) {
@@ -186,22 +184,27 @@ async fn import_v002(
         tree.flush()?;
     }
 
-    tx.send(WriteEntry::Finish).await?;
+    let s = {
+        let r = sys_data.lock().unwrap();
+        r.clone()
+    };
 
-    let (temp_snapshot_data, snapshot_stat) = join_handle.await??;
+    tx.send(WriteEntry::Finish(s)).await?;
+    let temp_snapshot_data = join_handle.await??;
 
-    let (snapshot_id, snapshot_data) = snapshot_store.commit_snapshot_data_gen_id(
-        temp_snapshot_data,
-        last_applied,
-        snapshot_stat.entry_cnt,
-    )?;
+    let last_applied = {
+        let r = sys_data.lock().unwrap();
+        *r.last_applied_ref()
+    };
+    let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
+    let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
 
     eprintln!(
         "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
         n,
         snapshot_id.to_string(),
-        snapshot_data.path(),
-        snapshot_stat,
+        db.path(),
+        db.stat()
     );
     Ok(max_log_id)
 }
@@ -225,22 +228,9 @@ async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<Log
         import_lines(config, lines).await?
     };
 
-    upgrade(config).await?;
+    upgrade::upgrade(config).await?;
 
     Ok(max_log_id)
-}
-
-/// Upgrade the data in raft_dir to the latest version.
-async fn upgrade(config: &Config) -> anyhow::Result<()> {
-    let raft_config: RaftConfig = config.clone().into();
-
-    let db = get_sled_db();
-
-    let mut on_disk = OnDisk::open(&db, &raft_config).await?;
-    on_disk.log_stderr(true);
-    on_disk.upgrade().await?;
-
-    Ok(())
 }
 
 /// Build `Node` for cluster with new addresses configured.
@@ -379,6 +369,7 @@ async fn init_new_cluster(
     Ok(())
 }
 
+/// Clear all sled data and on-disk snapshot.
 fn clear(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
@@ -396,86 +387,4 @@ fn clear(config: &Config) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-/// Print the entire sled db.
-///
-/// The output encodes every key-value into one line:
-/// `[sled_tree_name, {key_space: {key, value}}]`
-/// E.g.:
-/// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
-async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
-    upgrade(config).await?;
-
-    let raft_config: RaftConfig = config.clone().into();
-
-    let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
-    let mut lines = Arc::new(sto_inn).export();
-
-    eprintln!("    From: {}", raft_config.raft_dir);
-
-    let file: Option<File> = if !config.db.is_empty() {
-        eprintln!("    To:   File: {}", config.db);
-        Some((File::create(&config.db))?)
-    } else {
-        eprintln!("    To:   <stdout>");
-        None
-    };
-
-    let mut cnt = 0;
-
-    while let Some(line) = lines.try_next().await? {
-        cnt += 1;
-
-        if file.as_ref().is_none() {
-            println!("{}", line);
-        } else {
-            file.as_ref()
-                .unwrap()
-                .write_all(format!("{}\n", line).as_bytes())?;
-        }
-    }
-
-    if file.is_some() {
-        file.as_ref().unwrap().sync_all()?
-    }
-
-    eprintln!("Exported {} records", cnt);
-
-    Ok(())
-}
-
-/// Dump metasrv data, raft-log, state machine etc in json to stdout.
-async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
-    eprintln!("    From: online meta-service: {}", config.grpc_api_address);
-
-    let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
-
-    export_meta(
-        grpc_api_addr.to_string().as_str(),
-        config.db.clone(),
-        config.export_chunk_size,
-    )
-    .await?;
-    Ok(())
-}
-
-// if port is open, service is running
-async fn is_service_running(addr: SocketAddr) -> Result<bool, io::Error> {
-    let socket = TcpSocket::new_v4()?;
-    let stream = socket.connect(addr).await;
-
-    Ok(stream.is_ok())
-}
-
-// try to get available grpc api socket address
-async fn get_available_socket_addr(endpoint: &str) -> Result<SocketAddr, anyhow::Error> {
-    let addrs_iter = endpoint.to_socket_addrs()?;
-    for addr in addrs_iter {
-        if is_service_running(addr).await? {
-            return Ok(addr);
-        }
-        eprintln!("WARN: {} is not available", addr);
-    }
-    Err(anyhow!("no metasrv running on: {}", endpoint))
 }

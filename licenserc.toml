@@ -12,7 +12,7 @@ excludes = [
 
     # licensed under Elastic License 2.0
     "src/binaries/query/ee_main.rs",
-    "src/meta/binaries/meta/ee_main.rs",
+    "src/binaries/meta/ee_main.rs",
     "src/meta/ee",
     "src/query/ee",
 
