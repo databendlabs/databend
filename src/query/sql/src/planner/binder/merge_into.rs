@@ -61,7 +61,7 @@ use crate::Visibility;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
-    MatechedOnly,
+    MatchedOnly,
     FullOperation,
     InsertOnly,
 }
@@ -101,7 +101,7 @@ impl Binder {
                 bind_context,
                 stmt,
                 match merge_type {
-                    MergeIntoType::MatechedOnly => Inner,
+                    MergeIntoType::MatchedOnly => Inner,
                     MergeIntoType::InsertOnly => RightAnti,
                     _ => RightOuter,
                 },
@@ -708,7 +708,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
     if matched_len == 0 && unmatched_len > 0 {
         Ok(MergeIntoType::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(MergeIntoType::MatechedOnly)
+        Ok(MergeIntoType::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
         Ok(MergeIntoType::FullOperation)
     } else {

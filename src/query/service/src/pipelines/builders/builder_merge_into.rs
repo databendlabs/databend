@@ -137,7 +137,7 @@ impl PipelineBuilder {
 
         // case 1
         if !*change_join_order {
-            if let MergeIntoType::MatechedOnly = merge_type {
+            if let MergeIntoType::MatchedOnly = merge_type {
                 // we will receive MutationLogs only without row_number.
                 return Ok(());
             }
@@ -440,7 +440,7 @@ impl PipelineBuilder {
         let (step, need_match, need_unmatch) = match merge_type {
             MergeIntoType::FullOperation => (2, true, true),
             MergeIntoType::InsertOnly => (1, false, true),
-            MergeIntoType::MatechedOnly => (1, true, false),
+            MergeIntoType::MatchedOnly => (1, true, false),
         };
 
         for _ in (0..self.main_pipeline.output_len()).step_by(step) {
