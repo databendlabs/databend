@@ -306,7 +306,15 @@ impl MergeIntoInterpreter {
         // transform matched for delete/update
         for item in matched_evaluators {
             let condition = if let Some(condition) = &item.condition {
-                Some(self.transform_scalar_expr2expr(condition, join_output_schema.clone())?)
+                let expr = self
+                    .transform_scalar_expr2expr(condition, join_output_schema.clone())?
+                    .as_expr(&BUILTIN_FUNCTIONS);
+                let (expr, _) = ConstantFolder::fold(
+                    &expr,
+                    &self.ctx.get_function_context()?,
+                    &BUILTIN_FUNCTIONS,
+                );
+                Some(expr.as_remote_expr())
             } else {
                 None
             };
