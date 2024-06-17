@@ -15,12 +15,12 @@
 >>>> create stage s1 url='fs:///tmp/test_load_unload/'
 >>>> truncate table test_load_unload
 >>>> insert into test_load_unload values
- 	('a"b', 1, ['a"b'], parse_json('{"k":"v"}'), '2044-05-06T03:25:02.868894-07:00', 010.011, ('a', 5),
- 		[parse_json('{"k":"v"}')],
+ 	('a"b', 1, ['a"b'], '{"k":"v"}', '2044-05-06T03:25:02.868894-07:00', 010.011, ('a', 5),
+ 		['{"k":"v"}'],
  		[('a',5)]
  	),
- 	(null, 2, ['a\'b'], parse_json('[1]'), '2044-05-06T03:25:02.868894-07:00', -010.011, ('b',10),
- 		[parse_json('[1]')],
+ 	(null, 2, ['a\'b'], '[1]', '2044-05-06T03:25:02.868894-07:00', -010.011, ('b',10),
+ 		['[1]'],
  		[('b',10)]
  	);
 >>>> select * from test_load_unload
