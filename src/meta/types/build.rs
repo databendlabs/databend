@@ -47,91 +47,91 @@ fn build_proto() {
         .file_descriptor_set_path(out_dir.join("meta_descriptor.bin"))
         .type_attribute(
             "SeqV",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnGetRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnPutRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnDeleteRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnDeleteByPrefixRequest",
-            "#[derive(Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnCondition.ConditionResult",
-            "#[derive(serde::Serialize, serde::Deserialize, num_derive::FromPrimitive)]",
+            "#[derive(serde::Serialize, serde::Deserialize, num_derive::FromPrimitive, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnCondition.target",
-            "#[derive(Eq,serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq,serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnOp.request",
-            "#[derive(Eq,serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq,serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnCondition",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnOp",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnGetResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnPutResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnDeleteResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnDeleteByPrefixResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnOpResponse.response",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize, derive_more::TryInto)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, derive_more::TryInto, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnOpResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "TxnReply",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "WatchRequest",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "WatchResponse",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "Event",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .type_attribute(
             "KVMeta",
-            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
         )
         .field_attribute(
             "TxnPutRequest.ttl_ms",

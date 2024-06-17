@@ -22,6 +22,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use log::LevelFilter;
 use log::Log;
+use log::Metadata;
 use minitrace::prelude::*;
 use opentelemetry_otlp::WithExportConfig;
 
@@ -270,16 +271,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .level_for("databend::log::structlog", LevelFilter::Off)
-                .filter({
-                    let prefix_filter = cfg.file.prefix_filter.clone();
-                    move |meta| {
-                        if prefix_filter.is_empty() || meta.target().starts_with(&prefix_filter) {
-                            true
-                        } else {
-                            meta.level() <= LevelFilter::Error
-                        }
-                    }
-                })
+                .filter(make_log_filter(&cfg.file.prefix_filter))
                 .chain(normal_logger),
         )
         .chain(
@@ -308,4 +300,36 @@ pub fn init_logging(
     }
 
     guards
+}
+
+/// Creates a log filter that matches log entries based on specified target prefixes or severity.
+fn make_log_filter(prefix_filter: &str) -> impl Fn(&Metadata) -> bool {
+    let filters = prefix_filter
+        .split(',')
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    move |meta| match_prefix_many(meta, &filters)
+}
+
+fn match_prefix_many(meta: &Metadata, prefixes: &[String]) -> bool {
+    if is_severe(meta) {
+        return true;
+    }
+
+    for p in prefixes {
+        if meta.target().starts_with(p) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Return true if the log level is considered severe.
+///
+/// Severe logs ignores the prefix filter.
+fn is_severe(meta: &Metadata) -> bool {
+    // For other component, output logs with level <= WARN
+    meta.level() <= LevelFilter::Warn
 }

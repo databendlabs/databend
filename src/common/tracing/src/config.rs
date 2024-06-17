@@ -38,7 +38,7 @@ impl Config {
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
-                prefix_filter: "databend_".to_string(),
+                prefix_filter: "databend_,openraft".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
@@ -78,7 +78,7 @@ impl Default for FileConfig {
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
-            prefix_filter: "databend_".to_string(),
+            prefix_filter: "databend_,openraft".to_string(),
         }
     }
 }
