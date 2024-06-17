@@ -68,8 +68,8 @@ pub struct MergeInto {
     pub distributed: bool,
     pub change_join_order: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
-    // also use for split
     pub row_id_index: IndexType,
+    pub split_idx: IndexType,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:

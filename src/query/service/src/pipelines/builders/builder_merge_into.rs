@@ -366,6 +366,7 @@ impl PipelineBuilder {
             merge_type,
             change_join_order,
             can_try_update_column_only,
+            merge_into_split_idx,
             enable_right_broadcast,
             ..
         } = merge_into;
@@ -375,13 +376,13 @@ impl PipelineBuilder {
         self.main_pipeline
             .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
 
-        // FullOperation, use row_id_idx for split
-        if matches!(merge_type, MergeIntoType::FullOperation) {
+        // If `merge_into_split_idx` isn't None, it means the merge type is full operation.
+        if let Some(split_idx) = merge_into_split_idx {
             let mut items = Vec::with_capacity(self.main_pipeline.output_len());
             let output_len = self.main_pipeline.output_len();
             for _ in 0..output_len {
                 let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*row_id_idx as u32)?;
+                    MergeIntoSplitProcessor::create(*split_idx as u32)?;
                 items.push(merge_into_split_processor.into_pipe_item());
             }
 

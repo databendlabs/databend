@@ -39,7 +39,6 @@ pub struct MergeInto {
     pub matched: MatchExpr,
     // used to record the index of target table's field in merge_source_schema
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
-    // also use for split
     pub row_id_idx: usize,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
@@ -48,6 +47,7 @@ pub struct MergeInto {
     pub change_join_order: bool,
     pub target_build_optimization: bool,
     pub can_try_update_column_only: bool,
+    pub merge_into_split_idx: Option<usize>,
     pub enable_right_broadcast: bool,
 }
 

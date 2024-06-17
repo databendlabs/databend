@@ -136,6 +136,7 @@ impl MergeIntoInterpreter {
             merge_type,
             distributed,
             change_join_order,
+            split_idx,
             row_id_index,
             can_try_update_column_only,
             enable_right_broadcast,
@@ -254,6 +255,18 @@ impl MergeIntoInterpreter {
             }
         }
 
+        // we use `merge_into_split_idx` to specify a column from target table to spilt a block
+        // from join into matched part and unmatched part.
+        let mut merge_into_split_idx = None;
+        if matches!(merge_type, MergeIntoType::FullOperation) {
+            for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+                if *data_field.name() == split_idx.to_string() {
+                    merge_into_split_idx = Some(idx);
+                    break;
+                }
+            }
+        }
+
         let mut row_number_idx = None;
         if enable_right_broadcast {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
@@ -306,15 +319,7 @@ impl MergeIntoInterpreter {
         // transform matched for delete/update
         for item in matched_evaluators {
             let condition = if let Some(condition) = &item.condition {
-                let expr = self
-                    .transform_scalar_expr2expr(condition, join_output_schema.clone())?
-                    .as_expr(&BUILTIN_FUNCTIONS);
-                let (expr, _) = ConstantFolder::fold(
-                    &expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
-                Some(expr.as_remote_expr())
+                Some(self.transform_scalar_expr2expr(condition, join_output_schema.clone())?)
             } else {
                 None
             };
@@ -408,6 +413,7 @@ impl MergeIntoInterpreter {
                 target_build_optimization,
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
+                merge_into_split_idx,
                 enable_right_broadcast,
             }))
         } else {
@@ -438,6 +444,7 @@ impl MergeIntoInterpreter {
                 target_build_optimization: false, // we don't support for distributed mode for now..
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
+                merge_into_split_idx,
                 enable_right_broadcast,
             }));
             // if change_join_order = true, it means the target is build side,

@@ -29,7 +29,6 @@ use databend_common_pipeline_core::PipeItem;
 
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
 use crate::operations::BlockMetaIndex;
-use crate::operations::SourceFullMatched;
 
 // There are two kinds of usage for this processor:
 // 1. we will receive a probed datablock from join, and split it by rowid into matched block and unmatched block

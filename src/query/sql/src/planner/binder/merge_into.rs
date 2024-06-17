@@ -438,6 +438,8 @@ impl Binder {
             );
         }
 
+        let split_idx = row_id_index;
+
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
@@ -456,6 +458,7 @@ impl Binder {
             distributed: false,
             change_join_order: false,
             row_id_index,
+            split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
         })
