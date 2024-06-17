@@ -23,34 +23,32 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
-use crate::key_spaces::SMEntry;
-use crate::leveled_store::immutable::Immutable;
-use crate::leveled_store::immutable_levels::ImmutableLevels;
+use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
-use crate::sm_v002::sm_v002::SMV002;
-use crate::sm_v002::SnapshotViewV002;
+use crate::sm_v003::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let mut l = build_3_levels().await?;
+    let mut lm = build_3_levels().await?;
 
-    let frozen = l.freeze_writable().clone();
+    let mut immutable_levels = lm.freeze_writable().clone();
 
-    let mut snapshot = SnapshotViewV002::new(frozen);
+    {
+        let mut compacting_data = CompactingData::new(&mut immutable_levels, None);
+        compacting_data.compact_immutable_in_place().await?;
+    }
 
-    snapshot.compact_mem_levels().await?;
+    let compacted = immutable_levels;
 
-    let top_level = snapshot.compacted();
+    let d = compacted.newest().unwrap().as_ref();
 
-    let d = top_level.newest().unwrap().as_ref();
-
-    assert_eq!(top_level.iter_immutable_levels().count(), 1);
+    assert_eq!(compacted.iter_immutable_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -65,6 +63,8 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (s("a"), Marked::new_with_meta(1, b("a0"), None)),
+        (s("b"), Marked::new_tombstone(4)),
+        (s("c"), Marked::new_tombstone(6)),
         (s("d"), Marked::new_with_meta(7, b("d2"), None)),
         (s("e"), Marked::new_with_meta(6, b("e1"), None)),
     ]);
@@ -84,11 +84,12 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 async fn test_compact_expire_index() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
 
-    let mut snapshot = sm.full_snapshot_view();
-
-    snapshot.compact_mem_levels().await?;
-
-    let compacted = snapshot.compacted();
+    let compacted = {
+        sm.freeze_writable();
+        let mut compactor = sm.acquire_compactor().await;
+        compactor.compact_immutable_in_place().await?;
+        compactor.immutable_levels().clone()
+    };
 
     let d = compacted.newest().unwrap().as_ref();
 
@@ -121,6 +122,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
             ExpireKey::new(5_000, 2),
             Marked::new_with_meta(2, s("b"), None)
         ),
+        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
         (
             ExpireKey::new(15_000, 4),
             Marked::new_with_meta(4, s("a"), None)
@@ -135,30 +137,28 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn test_export_3_level() -> anyhow::Result<()> {
-    let mut l = build_3_levels().await?;
+async fn test_compact_3_level() -> anyhow::Result<()> {
+    let mut lm = build_3_levels().await?;
 
-    let frozen = l.freeze_writable().clone();
+    lm.freeze_writable();
 
-    let snapshot = SnapshotViewV002::new(frozen);
-    let got = snapshot
-        .export()
-        .await?
+    let mut compactor = lm.acquire_compactor().await;
+
+    let (sys_data, strm) = compactor.compact().await?;
+    assert_eq!(
+        r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7}"#,
+        serde_json::to_string(&sys_data).unwrap()
+    );
+
+    let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()
         .await?;
 
-    // TODO(1): add tree name: ["state_machine/0",{"Sequences":{"key":"generic-kv","value":159}}]
-
     assert_eq!(got, vec![
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
-        r#"{"Sequences":{"key":"generic-kv","value":7}}"#,
-        r#"{"Nodes":{"key":3,"value":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}}}"#,
-        r#"{"GenericKV":{"key":"a","value":{"seq":1,"meta":null,"data":[97,48]}}}"#,
-        r#"{"GenericKV":{"key":"d","value":{"seq":7,"meta":null,"data":[100,50]}}}"#,
-        r#"{"GenericKV":{"key":"e","value":{"seq":6,"meta":null,"data":[101,49]}}}"#,
+        r#"["kv--/a",{"seq":1,"marked":{"Normal":[1,4,110,117,108,108,2,97,48]}}]"#,
+        r#"["kv--/d",{"seq":7,"marked":{"Normal":[1,4,110,117,108,108,2,100,50]}}]"#,
+        r#"["kv--/e",{"seq":6,"marked":{"Normal":[1,4,110,117,108,108,2,101,49]}}]"#,
     ]);
 
     Ok(())
@@ -167,70 +167,29 @@ async fn test_export_3_level() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     let mut sm = build_sm_with_expire().await?;
+    sm.freeze_writable();
 
-    let snapshot = sm.full_snapshot_view();
+    let mut compactor = sm.acquire_compactor().await;
 
-    let got = snapshot
-        .export()
-        .await?
+    let (sys_data, strm) = compactor.compact().await?;
+    let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()
         .await?;
+
+    assert_eq!(
+        r#"{"last_applied":null,"last_membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}},"nodes":{},"sequence":4}"#,
+        serde_json::to_string(&sys_data).unwrap()
+    );
 
     assert_eq!(got, vec![
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":null,"membership":{"configs":[],"nodes":{}}}}}}"#,
-        r#"{"Sequences":{"key":"generic-kv","value":4}}"#,
-        r#"{"GenericKV":{"key":"a","value":{"seq":4,"meta":{"expire_at":15},"data":[97,49]}}}"#,
-        r#"{"GenericKV":{"key":"b","value":{"seq":2,"meta":{"expire_at":5},"data":[98,48]}}}"#,
-        r#"{"GenericKV":{"key":"c","value":{"seq":3,"meta":{"expire_at":20},"data":[99,48]}}}"#,
-        r#"{"Expire":{"key":{"time_ms":5000,"seq":2},"value":{"seq":2,"key":"b"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":15000,"seq":4},"value":{"seq":4,"key":"a"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":20000,"seq":3},"value":{"seq":3,"key":"c"}}}"#,
+        r#"["exp-/00000000000000005000/00000000000000000002",{"seq":2,"marked":{"Normal":[1,4,110,117,108,108,1,98]}}]"#,
+        r#"["exp-/00000000000000015000/00000000000000000004",{"seq":4,"marked":{"Normal":[1,4,110,117,108,108,1,97]}}]"#,
+        r#"["exp-/00000000000000020000/00000000000000000003",{"seq":3,"marked":{"Normal":[1,4,110,117,108,108,1,99]}}]"#,
+        r#"["kv--/a",{"seq":4,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,49,53,125,2,97,49]}}]"#,
+        r#"["kv--/b",{"seq":2,"marked":{"Normal":[1,15,123,34,101,120,112,105,114,101,95,97,116,34,58,53,125,2,98,48]}}]"#,
+        r#"["kv--/c",{"seq":3,"marked":{"Normal":[1,16,123,34,101,120,112,105,114,101,95,97,116,34,58,50,48,125,2,99,48]}}]"#,
     ]);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_import() -> anyhow::Result<()> {
-    let exported = vec![
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
-        r#"{"Sequences":{"key":"generic-kv","value":9}}"#,
-        r#"{"Nodes":{"key":3,"value":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}}}"#,
-        r#"{"GenericKV":{"key":"a","value":{"seq":7,"meta":{"expire_at":15},"data":[97,49]}}}"#,
-        r#"{"GenericKV":{"key":"b","value":{"seq":3,"meta":{"expire_at":5},"data":[98,48]}}}"#,
-        r#"{"GenericKV":{"key":"c","value":{"seq":5,"meta":{"expire_at":20},"data":[99,48]}}}"#,
-        r#"{"Expire":{"key":{"time_ms":5000,"seq":3},"value":{"seq":3,"key":"b"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":15000,"seq":7},"value":{"seq":7,"key":"a"}}}"#,
-        r#"{"Expire":{"key":{"time_ms":20000,"seq":5},"value":{"seq":5,"key":"c"}}}"#,
-    ];
-    let data = exported
-        .iter()
-        .map(|x| serde_json::from_str::<SMEntry>(x).unwrap());
-
-    let d = {
-        let mut importer = SMV002::new_importer();
-
-        for ent in data {
-            importer.import(ent)?;
-        }
-
-        importer.commit()
-    };
-
-    let snapshot = SnapshotViewV002::new(ImmutableLevels::new([Immutable::new_from_level(d)]));
-
-    let got = snapshot
-        .export()
-        .await?
-        .map_ok(|x| serde_json::to_string(&x).unwrap())
-        .try_collect::<Vec<_>>()
-        .await?;
-
-    assert_eq!(got, exported);
 
     Ok(())
 }
@@ -239,10 +198,10 @@ async fn test_import() -> anyhow::Result<()> {
 ///
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
-/// l0 | a  b    c    d
+/// l0 | a  b    c    d              // db
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
-    let mut l = LeveledMap::default();
-    let sd = l.writable_mut().sys_data_mut();
+    let mut lm = LeveledMap::default();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ()));
@@ -250,13 +209,13 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    l.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
-    l.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
-    l.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
-    l.str_map_mut().set(s("d"), Some((b("d0"), None))).await?;
+    lm.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
+    lm.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
+    lm.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
+    lm.str_map_mut().set(s("d"), Some((b("d0"), None))).await?;
 
-    l.freeze_writable();
-    let sd = l.writable_mut().sys_data_mut();
+    lm.freeze_writable();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ()));
@@ -264,12 +223,12 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    l.str_map_mut().set(s("b"), None).await?;
-    l.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
-    l.str_map_mut().set(s("e"), Some((b("e1"), None))).await?;
+    lm.str_map_mut().set(s("b"), None).await?;
+    lm.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
+    lm.str_map_mut().set(s("e"), Some((b("e1"), None))).await?;
 
-    l.freeze_writable();
-    let sd = l.writable_mut().sys_data_mut();
+    lm.freeze_writable();
+    let sd = lm.writable_mut().sys_data_mut();
 
     *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()));
@@ -277,10 +236,10 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    l.str_map_mut().set(s("c"), None).await?;
-    l.str_map_mut().set(s("d"), Some((b("d2"), None))).await?;
+    lm.str_map_mut().set(s("c"), None).await?;
+    lm.str_map_mut().set(s("d"), Some((b("d2"), None))).await?;
 
-    Ok(l)
+    Ok(lm)
 }
 
 /// The subscript is internal_seq:
@@ -290,8 +249,8 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-async fn build_sm_with_expire() -> anyhow::Result<SMV002> {
-    let mut sm = SMV002::default();
+async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
+    let mut sm = SMV003::default();
 
     let mut a = sm.new_applier();
     a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
