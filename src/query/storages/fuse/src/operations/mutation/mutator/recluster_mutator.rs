@@ -121,7 +121,7 @@ impl ReclusterMutator {
         );
         let depth_threshold = (snapshot.summary.block_count as f64 * avg_depth_threshold)
             .max(1.0)
-            .min(64.0);
+            .min(16.0);
 
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
