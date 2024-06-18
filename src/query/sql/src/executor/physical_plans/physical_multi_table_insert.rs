@@ -23,13 +23,10 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 
 use crate::executor::PhysicalPlan;
-use crate::ColumnBinding;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    // When input source is select clause, record the order of the select results.
-    pub project_columns: Vec<ColumnBinding>,
     pub n: usize,
 }
 
