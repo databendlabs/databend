@@ -43,7 +43,6 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
 use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 
@@ -108,7 +107,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, metadata, bind_ctx) = self.build_source_physical_plan().await?;
+        let (mut root, metadata) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), &metadata).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
@@ -154,7 +153,6 @@ impl InsertMultiTableInterpreter {
         root = PhysicalPlan::Duplicate(Box::new(Duplicate {
             plan_id: 0,
             input: Box::new(root),
-            project_columns: bind_ctx.columns.clone(),
             n: branches.len(),
         }));
 
@@ -214,9 +212,7 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(
-        &self,
-    ) -> Result<(PhysicalPlan, MetadataRef, Box<BindContext>)> {
+    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -227,7 +223,7 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                Ok((input_source, metadata.clone(), bind_context.clone()))
+                Ok((input_source, metadata.clone()))
             }
             _ => unreachable!(),
         }
