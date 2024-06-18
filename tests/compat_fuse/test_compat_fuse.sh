@@ -32,10 +32,10 @@ old_query_ver="$1"
 # The databend-meta version runs with both old_query_ver and current query
 meta_ver="$2"
 
-# default sqllogic test suite is "tests/fuse-compat/compat-logictest/"
+# default sqllogic test suite is "tests/compat_fuse/compat-logictest/"
 logictest_path=${3:-"./base"}
 
-# supplementary stateless test suite if provided (optional), which will be searched under "tests/fuse-compat/compat-stateless"
+# supplementary stateless test suite if provided (optional), which will be searched under "tests/compat_fuse/compat-stateless"
 stateless_test_path="$4"
 
 echo " === old query ver : ${old_query_ver}"
