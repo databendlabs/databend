@@ -60,7 +60,6 @@ use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
 use futures::FutureExt;
-use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -372,13 +371,15 @@ impl Network {
         Unreachable::new(&any_err)
     }
 
-    #[futures_async_stream::try_stream(boxed, ok = SnapshotChunkRequestV003, error = StreamingError<Fatal>)]
-    async fn snapshot_chunk_stream_v003(
+    /// Split V003 snapshot `DB` into chunks and send them via the given channel.
+    fn snapshot_chunk_stream_v003(
         vote: Vote,
         snapshot: Snapshot,
         cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
         option: RPCOption,
-    ) {
+        target: NodeId,
+        tx: mpsc::Sender<SnapshotChunkRequestV003>,
+    ) -> Result<(), StreamingError<Fatal>> {
         let chunk_size = option.snapshot_chunk_size().unwrap_or(1024 * 1024);
 
         let snapshot_meta = snapshot.meta;
@@ -434,16 +435,32 @@ impl Network {
                 break;
             }
 
-            debug!("build snapshot chunk len: {}", offset);
+            debug!("Build snapshot chunk len: {}", offset);
 
             let chunk = SnapshotChunkRequestV003::new_chunk((buf[..offset]).to_vec());
-            yield chunk;
+            let len = chunk.chunk.len() as u64;
+
+            let send_res = tx.blocking_send(chunk);
+            if let Err(e) = send_res {
+                error!("{} error sending to snapshot stream: {}", func_name!(), e);
+                return Ok(());
+            }
+            raft_metrics::network::incr_sendto_bytes(&target, len);
         }
 
-        debug!("build snapshot end chunk");
+        info!("build snapshot end chunk");
 
         let end = SnapshotChunkRequestV003::new_end_chunk(vote, snapshot_meta.clone());
-        yield end;
+        let send_res = tx.blocking_send(end);
+        if let Err(e) = send_res {
+            error!(
+                "{} error sending end chunk to snapshot stream: {}",
+                func_name!(),
+                e
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -507,41 +524,25 @@ impl RaftNetwork<TypeConfig> for Network {
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
+        let target = self.target;
+        let (tx, rx) = mpsc::channel(16);
+        let strm = ReceiverStream::new(rx);
+
         // Using strm of type `Pin<Box<Stream + Send + 'static>>` result in a higher rank lifetime error
         // See:
         // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=8c382b5a6d932aaf81815f3825efd5ed
         // - https://github.com/rust-lang/rust/issues/87425
         //
         // Here we convert it to a concrete type `ReceiverStream` to avoid the error.
-        let mut res_strm = Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option);
 
-        let (tx, rx) = mpsc::channel(16);
-
-        // let bytes = req.get_ref().data.len() as u64;
-        // raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
+        let strm_handle = runtime::spawn_blocking(move || {
+            Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option, target, tx)
+        });
 
         let mut client = self
             .take_client()
             .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
             .await?;
-
-        let strm = ReceiverStream::new(rx);
-
-        let target = self.target;
-
-        let _forward_handle = runtime::spawn(async move {
-            while let Some(x) = res_strm.try_next().await? {
-                raft_metrics::network::incr_sendto_bytes(&target, x.chunk.len() as u64);
-
-                let send_res = tx.send(x).await;
-
-                if let Err(e) = send_res {
-                    error!("{} error sending to snapshot stream: {}", func_name!(), e);
-                }
-            }
-
-            Ok::<_, StreamingError<Fatal>>(())
-        });
 
         let res: Result<SnapshotResponse, StreamingError<Fatal>> = try {
             let grpc_res = client
@@ -562,6 +563,19 @@ impl RaftNetwork<TypeConfig> for Network {
                 }
                 Err(e) => {
                     warn!(target = self.target; "install_snapshot failed: {}", e);
+                }
+            }
+
+            let join_res = strm_handle.await;
+            match join_res {
+                Err(e) => {
+                    warn!("Snapshot sending thread error: {}", e);
+                }
+                Ok(strm_res) => {
+                    if let Err(e) = strm_res {
+                        warn!("Snapshot sending thread error: {}", e);
+                        return Err(e);
+                    }
                 }
             }
 
