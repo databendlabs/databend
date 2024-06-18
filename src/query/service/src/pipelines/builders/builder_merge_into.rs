@@ -111,7 +111,7 @@ impl PipelineBuilder {
         //  receive row numbers and MutationLogs, exactly below:
         //  1.1 full operation: row numbers and MutationLogs
         //  1.2 matched only: MutationLogs
-        //  1.3 insert only: row numbers and MutationLogs
+        //  1.3 insert only: row numbers
         // 2. if target table is build side (change_join_order = true).
         //  receive rowids and MutationLogs,exactly below:
         //  2.1 full operation: rowids and MutationLogs
@@ -137,7 +137,7 @@ impl PipelineBuilder {
 
         // case 1
         if !*change_join_order {
-            if let MergeIntoType::MatchedOnly = merge_type {
+            if matches!(merge_type, MergeIntoType::MatchedOnly) {
                 // we will receive MutationLogs only without row_number.
                 return Ok(());
             }
@@ -287,7 +287,7 @@ impl PipelineBuilder {
             self.main_pipeline.try_resize(1)?;
         } else {
             // case 2
-            if let MergeIntoType::InsertOnly = merge_type {
+            if matches!(merge_type, MergeIntoType::InsertOnly) {
                 // we will receive MutationLogs only without rowids.
                 return Ok(());
             }
@@ -366,7 +366,6 @@ impl PipelineBuilder {
             merge_type,
             change_join_order,
             can_try_update_column_only,
-            merge_into_split_idx,
             enable_right_broadcast,
             ..
         } = merge_into;
@@ -376,13 +375,13 @@ impl PipelineBuilder {
         self.main_pipeline
             .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
 
-        // If `merge_into_split_idx` isn't None, it means the merge type is full operation.
-        if let Some(split_idx) = merge_into_split_idx {
+        // If FullOperation, use row_id_idx to split
+        if matches!(merge_type, MergeIntoType::FullOperation) {
             let mut items = Vec::with_capacity(self.main_pipeline.output_len());
             let output_len = self.main_pipeline.output_len();
             for _ in 0..output_len {
                 let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*split_idx as u32)?;
+                    MergeIntoSplitProcessor::create(*row_id_idx as u32)?;
                 items.push(merge_into_split_processor.into_pipe_item());
             }
 
@@ -720,10 +719,6 @@ impl PipelineBuilder {
                 builder.add_items_prepend(vec![create_dummy_item()]);
             }
 
-            // need to receive row_number, we should give a dummy item here.
-            if enable_right_broadcast {
-                builder.add_items(vec![create_dummy_item()]);
-            }
             self.main_pipeline.add_pipe(builder.finalize());
 
             table.cluster_gen_for_append_with_specified_len(
@@ -776,6 +771,7 @@ impl PipelineBuilder {
             if enable_right_broadcast {
                 builder.add_items(vec![create_dummy_item()]);
             }
+
             self.main_pipeline.add_pipe(builder.finalize());
 
             table.cluster_gen_for_append_with_specified_len(
@@ -842,7 +838,7 @@ impl PipelineBuilder {
             0
         };
 
-        // for distributed insert-only, the serialize_len is zero.
+        // for distributed insert-only(right anti join), the serialize_len is zero.
         if serialize_len > 0 {
             let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
             for idx in 0..serialize_len {
@@ -871,7 +867,7 @@ impl PipelineBuilder {
             if need_match {
                 vec.push(create_dummy_item())
             }
-            // for distributed insert-only, the serialize_len is zero.
+            // for distributed insert-only(right anti join), the serialize_len is zero.
             // and there is no serialize data here.
             if serialize_len > 0 {
                 vec.push(serialize_segment_transform.into_pipe_item());

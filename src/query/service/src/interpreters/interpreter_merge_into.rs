@@ -136,7 +136,6 @@ impl MergeIntoInterpreter {
             merge_type,
             distributed,
             change_join_order,
-            split_idx,
             row_id_index,
             can_try_update_column_only,
             enable_right_broadcast,
@@ -177,7 +176,7 @@ impl MergeIntoInterpreter {
         // Left,Right,Inner,Left Anti, Right Anti
         // important flag:
         //      I. change join order: if true, target table as build side, if false, source as build side.
-        //      II. distributed: this merge into is executed at a distributed stargety.
+        //      II. distributed: this merge into is executed at a distributed strategy.
         // 2.1 Left: there are matched and not matched, and change join order is true.
         // 2.2 Left Anti: change join order is true, but it's insert-only.
         // 2.3 Inner: this is matched only case.
@@ -247,7 +246,6 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
-        let mut row_number_idx = None;
         for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
@@ -256,18 +254,7 @@ impl MergeIntoInterpreter {
             }
         }
 
-        // we use `merge_into_split_idx` to specify a column from target table to spilt a block
-        // from join into matched part and unmatched part.
-        let mut merge_into_split_idx = None;
-        if matches!(merge_type, MergeIntoType::FullOperation) {
-            for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-                if *data_field.name() == split_idx.to_string() {
-                    merge_into_split_idx = Some(idx);
-                    break;
-                }
-            }
-        }
-
+        let mut row_number_idx = None;
         if enable_right_broadcast {
             row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
@@ -338,8 +325,7 @@ impl MergeIntoInterpreter {
 
             // update
             let update_list = if let Some(update_list) = &item.update {
-                // we don't need real col_indices here, just give a
-                // dummy index, that's ok.
+                // we don't need real col_indices here, just give a dummy index, that's ok.
                 let col_indices = vec![DUMMY_COLUMN_INDEX];
                 let (database, table) = match target_alias {
                     None => (Some(database.as_str()), table_name.clone()),
@@ -422,7 +408,6 @@ impl MergeIntoInterpreter {
                 target_build_optimization,
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
-                merge_into_split_idx,
                 enable_right_broadcast,
             }))
         } else {
@@ -453,7 +438,6 @@ impl MergeIntoInterpreter {
                 target_build_optimization: false, // we don't support for distributed mode for now..
                 can_try_update_column_only: *can_try_update_column_only,
                 plan_id: u32::MAX,
-                merge_into_split_idx,
                 enable_right_broadcast,
             }));
             // if change_join_order = true, it means the target is build side,
@@ -490,7 +474,7 @@ impl MergeIntoInterpreter {
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
-            // let's use update first, we will do some optimizeations and select exact strategy
+            // let's use update first, we will do some optimizations and select exact strategy
             mutation_kind: MutationKind::Update,
             update_stream_meta: update_stream_meta.clone(),
             merge_meta: false,
