@@ -117,7 +117,7 @@ run_test() {
     local query_old_ver="$1"
     local meta_ver="$2"
     local old_config_path="$3"
-    local logictest_path="tests/fuse-compat/compat-logictest/$4"
+    local logictest_path="tests/compat_fuse/compat-logictest/$4"
     local forward="$5"
 
     echo " === Test with query-$query_old_ver and current query"
@@ -222,5 +222,5 @@ start() {
 run_stateless() {
     local case_path="$1"
     local databend_test="tests/databend-test"
-    ${databend_test} --mode 'standalone' --suites tests/fuse-compat/compat-stateless --run-dir $case_path
+    ${databend_test} --mode 'standalone' --suites tests/compat_fuse/compat-stateless --run-dir $case_path
 }
