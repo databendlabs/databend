@@ -165,12 +165,12 @@ jobs:
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
-  test_compat:
+  test_compat_meta_query:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_compat
+      - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
   test_compat_fuse:
@@ -178,7 +178,7 @@ jobs:
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/fuse_compat
+      - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
   test_logs:
