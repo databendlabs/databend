@@ -89,10 +89,23 @@ impl Interpreter for ReplaceInterpreter {
 
         self.check_on_conflicts()?;
 
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
         // replace
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        pipeline.main_pipeline.add_lock_guard(lock_guard);
 
         // purge
         if let Some((files, stage_info)) = purge_info {
@@ -113,7 +126,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::Replace,
-                LockTableOption::LockNoRetry,
+                LockTableOption::NoLock,
             );
             hook_operator.execute(&mut pipeline.main_pipeline).await;
         }
