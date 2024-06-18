@@ -61,7 +61,7 @@ use crate::Visibility;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
-    MatechedOnly,
+    MatchedOnly,
     FullOperation,
     InsertOnly,
 }
@@ -101,7 +101,7 @@ impl Binder {
                 bind_context,
                 stmt,
                 match merge_type {
-                    MergeIntoType::MatechedOnly => Inner,
+                    MergeIntoType::MatchedOnly => Inner,
                     MergeIntoType::InsertOnly => RightAnti,
                     _ => RightOuter,
                 },
@@ -400,7 +400,6 @@ impl Binder {
         let column_entries = self.metadata.read().columns_by_table_index(table_index);
         let mut field_index_map = HashMap::<usize, String>::new();
         // if true, read all columns of target table
-        let has_update = self.has_update(&matched_clauses);
         if has_update {
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let used_idx = self.find_column_index(&column_entries, field.name())?;
@@ -439,8 +438,6 @@ impl Binder {
             );
         }
 
-        let split_idx = row_id_index;
-
         Ok(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
@@ -459,7 +456,6 @@ impl Binder {
             distributed: false,
             change_join_order: false,
             row_id_index,
-            split_idx,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
         })
@@ -708,7 +704,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
     if matched_len == 0 && unmatched_len > 0 {
         Ok(MergeIntoType::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(MergeIntoType::MatechedOnly)
+        Ok(MergeIntoType::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
         Ok(MergeIntoType::FullOperation)
     } else {
