@@ -361,9 +361,6 @@ impl SchemaApiTestSuite {
         suite.get_db_name_by_id(&b.build().await).await?;
         suite.test_sequence(&b.build().await).await?;
 
-        suite.get_table_name_by_id(&b.build().await).await?;
-        suite.get_db_name_by_id(&b.build().await).await?;
-
         Ok(())
     }
 
