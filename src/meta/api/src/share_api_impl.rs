@@ -82,22 +82,18 @@ use crate::ShareApi;
 /// Thus every type that impl kvapi::KVApi impls ShareApi.
 #[async_trait::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         // Get all outbound share accounts.
         let outbound_accounts = get_outbound_share_infos_by_tenant(self, &req.tenant).await?;
 
         Ok(ShowSharesReply { outbound_accounts })
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -179,9 +175,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     // iterator all the granted objects(from ShareMeta.{database|entries}),
     //     remove share id from ObjectSharedByShareIds
     // drop all the databases created from the share(from ShareMeta.share_from_db_ids),
+    #[logcall::logcall]
     async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -306,12 +301,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn add_share_tenants(
         &self,
         req: AddShareAccountsReq,
     ) -> Result<AddShareAccountsReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -414,12 +408,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn remove_share_tenants(
         &self,
         req: RemoveShareAccountsReq,
     ) -> Result<RemoveShareAccountsReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -530,12 +523,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn grant_share_object(
         &self,
         req: GrantShareObjectReq,
     ) -> Result<GrantShareObjectReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -650,12 +642,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn revoke_share_object(
         &self,
         req: RevokeShareObjectReq,
     ) -> Result<RevokeShareObjectReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -786,12 +777,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn get_share_grant_objects(
         &self,
         req: GetShareGrantObjectReq,
     ) -> Result<GetShareGrantObjectReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let share_name_key = &req.share_name;
 
         let res = get_share_or_err(
@@ -971,12 +961,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         Ok(GetObjectGrantPrivilegesReply { privileges })
     }
 
+    #[logcall::logcall]
     async fn create_share_endpoint(
         &self,
         req: CreateShareEndpointReq,
     ) -> Result<CreateShareEndpointReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -1070,12 +1059,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         }
     }
 
+    #[logcall::logcall]
     async fn upsert_share_endpoint(
         &self,
         req: UpsertShareEndpointReq,
     ) -> Result<UpsertShareEndpointReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -1221,12 +1209,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         })
     }
 
+    #[logcall::logcall]
     async fn drop_share_endpoint(
         &self,
         req: DropShareEndpointReq,
     ) -> Result<DropShareEndpointReply, KVAppError> {
-        debug!(req :? =(&req); "ShareApi: {}", func_name!());
-
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());

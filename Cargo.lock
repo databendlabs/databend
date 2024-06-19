@@ -9451,9 +9451,9 @@ dependencies = [
 
 [[package]]
 name = "logcall"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d369db60a3256a6d47b13adcfff7ce37588d8b670bb3e334fa1cc8886cdfaa9"
+checksum = "ad4135a4976fbbb61d3b1a31e9f8364e7943ad9d943f8ccd91a09286425e704d"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
