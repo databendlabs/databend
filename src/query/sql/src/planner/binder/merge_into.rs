@@ -262,13 +262,20 @@ impl Binder {
         // try add internal_column (_row_id) for source_table
         let mut source_table_index = DUMMY_TABLE_INDEX;
         let mut source_row_id_index = None;
-        self.try_add_internal_column_binding(
-            &source_data,
-            &mut source_context,
-            &mut source_expr,
-            &mut source_table_index,
-            &mut source_row_id_index,
-        )?;
+
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_distributed_merge_into()?
+        {
+            self.try_add_internal_column_binding(
+                &source_data,
+                &mut source_context,
+                &mut source_expr,
+                &mut source_table_index,
+                &mut source_row_id_index,
+            )?;
+        }
 
         // remove stream column.
         source_context
@@ -290,15 +297,6 @@ impl Binder {
                 Arc::new(cte_s_expr.clone()),
                 Arc::new(source_expr),
             );
-        }
-
-        // add all left source columns for read
-        // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = HashSet::<IndexType>::new();
-
-        // add source_row_id_idx
-        if let Some(source_row_id_index) = source_row_id_index {
-            columns_set.insert(source_row_id_index);
         }
 
         let update_or_insert_columns_star =
@@ -380,6 +378,10 @@ impl Binder {
         )?;
 
         let row_id_index = target_row_id_index.expect("can't get target_table row_id");
+
+        // add all left source columns for read
+        // todo: (JackTan25) do column prune after finish "split expr for target and source"
+        let mut columns_set = HashSet::<IndexType>::new();
 
         // add row_id_idx
         if merge_type != MergeIntoType::InsertOnly {

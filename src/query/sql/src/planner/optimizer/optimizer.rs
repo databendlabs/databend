@@ -472,12 +472,18 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         })
     }
 
-    let flag = plan.source_row_id_index.is_none();
-
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
         let mut enable_right_broadcast = false;
+
+        // If source is physical table, use row_id
+        let flag = if let Some(source_row_id_index) = plan.source_row_id_index {
+            new_columns_set.insert(source_row_id_index);
+            false
+        } else {
+            true
+        };
         if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
@@ -498,9 +504,6 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             ..*plan
         })))
     } else {
-        if let Some(source_row_id_index) = plan.source_row_id_index {
-            new_columns_set.remove(&source_row_id_index);
-        }
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
             change_join_order,
