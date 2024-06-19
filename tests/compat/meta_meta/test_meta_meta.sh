@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -o errexit
+
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 echo " === SCRIPT_PATH: $SCRIPT_PATH"
 # go to work tree root
@@ -32,9 +33,9 @@ raft_addr() {
   echo "127.0.0.1:1200$1"
 }
 
-# $0 start_databend_meta $ver $id ...
+# $0 bring_up_databend_meta $ver $id ...
 # The other args are passed to databend-meta
-start_databend_meta() {
+bring_up_databend_meta() {
   local ver="$1"
   local id="$2"
   shift
@@ -78,13 +79,11 @@ leader_meta_ver="$1"
 # The meta follower version runs with leader_meta_ver
 follower_meta_ver="$2"
 
-chmod +x ./bins/current/*
+chmod +x ./bins/current/bin/*
 
 echo " === leader_meta_ver : ${leader_meta_ver}"
 echo " === follower_meta_ver : ${follower_meta_ver}"
-echo " === current meta ver: $(./bins/current/databend-meta --single --cmd ver | tr '\n' ' ')"
-
-mkdir -p ./target/${BUILD_PROFILE}/
+echo " === current meta ver: $(./bins/current/bin/databend-meta --single --cmd ver | tr '\n' ' ')"
 
 if [ ".$follower_meta_ver" != ".current" ]; then
   download_binary "$follower_meta_ver" databend-meta
@@ -97,8 +96,8 @@ kill_proc databend-meta
 
 rm -rf ./.databend || echo " === No .databend folder found, skip"
 
-echo " === Start leader meta service, ver: $leader_meta_ver"
-start_databend_meta "$leader_meta_ver" "1" --single
+echo " === Bring up leader meta service, ver: $leader_meta_ver"
+bring_up_databend_meta "$leader_meta_ver" "1" --single
 
 echo " === Feed data to leader"
 ./bins/current/bin/databend-metabench \
@@ -125,8 +124,8 @@ echo " === Feed more data to leader"
     --grpc-api-address $(grpc_addr 1) \
     > /dev/null
 
-echo " === Start follower meta service, ver: $follower_meta_ver"
-start_databend_meta "$follower_meta_ver" "2" --join "$(raft_addr 1)"
+echo " === Bring up follower meta service, ver: $follower_meta_ver"
+bring_up_databend_meta "$follower_meta_ver" "2" --join "$(raft_addr 1)"
 
 sleep 3
 

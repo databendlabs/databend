@@ -14,7 +14,7 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         path: ./bins/current/bin
-        artifacts: sqllogictests,meta,metactl,metabench
+        artifacts: meta,metactl,metabench
 
     - name: Test compatibility
       shell: bash
