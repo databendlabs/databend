@@ -67,7 +67,7 @@ download_binary() {
 
     echo " === Start to download $fn from $url"
 
-    if [ -f ./bins/$ver/$required_fn ]; then
+    if [ -f ./bins/$ver/bin/$required_fn ]; then
         echo " === binaries exist: $(ls ./bins/$ver/* | tr '\n' ' ')"
         chmod +x ./bins/$ver/*
         return
