@@ -1,15 +1,11 @@
 module.exports = async ({ context, core }) => {
-  const { TITLE, REPORT_WEBHOOK, VERSION } = process.env;
+  const { TITLE, REPORT_WEBHOOK } = process.env;
   if (!TITLE) {
     core.setFailed("TITLE is not set");
     return;
   }
   if (!REPORT_WEBHOOK) {
     core.setFailed("REPORT_WEBHOOK is not set");
-    return;
-  }
-  if (!VERSION) {
-    core.setFailed("VERSION is not set");
     return;
   }
 

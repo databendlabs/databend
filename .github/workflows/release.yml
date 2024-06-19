@@ -648,7 +648,6 @@ jobs:
         uses: actions/github-script@v7
         env:
           REPORT_WEBHOOK: ${{ secrets.META_REPORT_WEBHOOK }}
-          VERSION: ${{ needs.create_release.outputs.version }}
           TITLE: Meta Service chaos tests failed
         with:
           script: |
