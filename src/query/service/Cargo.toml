@@ -38,6 +38,7 @@ arrow-udf-python = { workspace = true, optional = true }
 arrow-udf-wasm = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
+async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
@@ -88,10 +89,10 @@ databend-common-storage = { workspace = true }
 databend-common-storages-delta = { workspace = true }
 databend-common-storages-factory = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
-databend-common-storages-memory = { workspace = true }
 databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
+databend-common-storages-memory = { workspace = true }
 databend-common-storages-null = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
@@ -173,7 +174,6 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
-async-recursion = "1.0.0"
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
