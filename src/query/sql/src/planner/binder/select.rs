@@ -135,6 +135,8 @@ impl Binder {
             }
             // Add recursive cte's columns to cte info
             let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
+            mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
                 let col = ColumnBindingBuilder::new(
                     column.column_name.clone(),
@@ -220,17 +222,12 @@ impl Binder {
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
+        let mut cte_scan_names = Vec::new();
         if cte_name.is_some() {
-            let mut count = 0;
-            self.count_r_cte_scan(&right_expr, &mut count, &mut coercion_types)?;
-            if count == 0 {
+            self.count_r_cte_scan(&right_expr, &mut cte_scan_names, &mut coercion_types)?;
+            if cte_scan_names.is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "Recursive cte should be used in recursive cte".to_string(),
-                ));
-            }
-            if count > 1 {
-                return Err(ErrorCode::SemanticError(
-                    "Currently, only support recursive cte be used in one place".to_string(),
                 ));
             }
         } else {
@@ -283,7 +280,7 @@ impl Binder {
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
-            cte_name,
+            cte_scan_names,
         };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),

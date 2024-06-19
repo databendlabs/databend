@@ -384,7 +384,7 @@ pub trait PhysicalPlanReplacer {
             right_outputs: plan.right_outputs.clone(),
             schema: plan.schema.clone(),
             stat_info: plan.stat_info.clone(),
-            cte_name: plan.cte_name.clone(),
+            cte_scan_names: plan.cte_scan_names.clone(),
         }))
     }
 

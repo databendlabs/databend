@@ -88,6 +88,7 @@ databend-common-storage = { workspace = true }
 databend-common-storages-delta = { workspace = true }
 databend-common-storages-factory = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
+databend-common-storages-memory = { workspace = true }
 databend-common-storages-hive = { workspace = true }
 databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
@@ -172,6 +173,7 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
+async-recursion = "1.0.0"
 
 [dev-dependencies]
 arrow-cast = { workspace = true }

@@ -1,0 +1,14 @@
+control sortmode rowsort
+
+statement ok
+create or replace database db;
+
+statement ok
+use db;
+
+query I
+with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t;
+----
+1
+2
+4

@@ -14,20 +14,27 @@
 
 use std::fmt::Display;
 
+use databend_common_ast::ast::Engine;
 use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRefExt;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::plans::CreateTablePlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub output_schema: DataSchemaRef,
-    pub cte_name: String,
+    pub table_name: String,
     pub stat: PlanStatsInfo,
 }
 
@@ -46,7 +53,7 @@ impl PhysicalPlanBuilder {
         Ok(PhysicalPlan::RecursiveCteScan(RecursiveCteScan {
             plan_id: 0,
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
-            cte_name: recursive_cte_scan.cte_name.clone(),
+            table_name: recursive_cte_scan.table_name.clone(),
             stat: stat_info,
         }))
     }

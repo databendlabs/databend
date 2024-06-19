@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -36,6 +37,7 @@ use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
@@ -47,9 +49,11 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::tenant::Tenant;
@@ -72,6 +76,7 @@ use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CreateTablePlan;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
@@ -402,7 +407,6 @@ impl Binder {
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
         let mut metadata = self.metadata.write();
         let mut columns = cte_info.columns.clone();
@@ -457,10 +461,20 @@ impl Binder {
         if let Some(alias) = alias {
             new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
+
+        let table_alias_name = alias
+            .as_ref()
+            .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
+        let table_name = if let Some(table_alias_name) = table_alias_name {
+            table_alias_name
+        } else {
+            cte_name.to_string()
+        };
+
         Ok((
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
-                cte_name: cte_name.to_string(),
+                table_name,
             }))),
             new_bind_ctx,
         ))
