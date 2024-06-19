@@ -181,6 +181,14 @@ jobs:
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
+  test_compat_meta_meta:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_compat_meta_meta
+        timeout-minutes: 20
+
   test_logs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
