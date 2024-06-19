@@ -28,7 +28,6 @@ use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
@@ -81,15 +80,6 @@ impl Binder {
             scalar_items.push(order.order_by_item.clone())
         }
 
-        let child = if !scalar_items.is_empty() {
-            let eval_scalar_plan = EvalScalar {
-                items: scalar_items,
-            };
-            SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
-        } else {
-            child
-        };
-
         let default_nulls_first = !self
             .ctx
             .get_settings()
@@ -116,7 +106,7 @@ impl Binder {
             });
         }
 
-        let child = if !sort_items.is_empty() {
+        if !sort_items.is_empty() {
             let sort_plan = Sort {
                 items: sort_items,
                 limit: window_plan.limit,
@@ -124,15 +114,17 @@ impl Binder {
                 pre_projection: None,
                 window_partition: window_plan.partition_by.clone(),
             };
-            SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
+            let child = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
+            Ok(SExpr::create_unary(
+                Arc::new(window_plan.into()),
+                Arc::new(child),
+            ))
         } else {
-            child
-        };
-
-        Ok(SExpr::create_unary(
-            Arc::new(window_plan.into()),
-            Arc::new(child),
-        ))
+            Ok(SExpr::create_unary(
+                Arc::new(window_plan.into()),
+                Arc::new(child),
+            ))
+        }
     }
 
     pub(super) fn analyze_window_definition(
