@@ -477,18 +477,18 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         // Inner join shouldn't add `RowNumber` node.
         let mut enable_right_broadcast = false;
 
-        // If source is physical table, use row_id
-        let flag = if let Some(source_row_id_index) = plan.source_row_id_index {
-            new_columns_set.insert(source_row_id_index);
-            false
-        } else {
-            true
-        };
         if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
                 .matches(&join_s_expr)
         {
+            // If source is physical table, use row_id
+            let flag = if let Some(source_row_id_index) = plan.source_row_id_index {
+                new_columns_set.insert(source_row_id_index);
+                false
+            } else {
+                true
+            };
             // Todo(xudong): should consider the cost of shuffle and broadcast.
             // Current behavior is to always use broadcast join.(source table is usually small)
             join_s_expr = merge_source_optimizer.optimize(&join_s_expr, flag)?;
