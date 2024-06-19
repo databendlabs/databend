@@ -58,6 +58,7 @@ use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::DUMMY_TABLE_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
@@ -141,6 +142,59 @@ impl Binder {
         false
     }
 
+    fn try_add_internal_column_binding(
+        &mut self,
+        table: &TableReference,
+        context: &mut BindContext,
+        expr: &mut SExpr,
+        table_index: &mut usize,
+        row_id_index: &mut Option<usize>,
+    ) -> Result<()> {
+        if let TableReference::Table {
+            catalog,
+            database,
+            table,
+            ..
+        } = table
+        {
+            let (_, database_name, table_name) =
+                self.normalize_object_identifier_triple(catalog, database, table);
+
+            // add internal_column (_row_id)
+            *table_index = self
+                .metadata
+                .read()
+                .get_table_index(Some(database_name.as_str()), table_name.as_str())
+                .expect("can't get source_table binding");
+
+            let row_id_column_binding = InternalColumnBinding {
+                database_name: Some(database_name.clone()),
+                table_name: Some(table_name.clone()),
+                internal_column: InternalColumn {
+                    column_name: ROW_ID_COL_NAME.to_string(),
+                    column_type: InternalColumnType::RowId,
+                },
+            };
+
+            let column_binding = context.add_internal_column_binding(
+                &row_id_column_binding,
+                self.metadata.clone(),
+                true,
+            )?;
+
+            let row_id_idx: usize = column_binding.index;
+
+            *expr = SExpr::add_internal_column_index(expr, *table_index, row_id_idx, &None);
+
+            self.metadata
+                .write()
+                .set_table_row_id_index(*table_index, row_id_idx);
+
+            *row_id_index = Some(row_id_idx);
+        }
+        Ok(())
+    }
+
     async fn bind_merge_into_with_join_type(
         &mut self,
         bind_context: &mut BindContext,
@@ -205,6 +259,17 @@ impl Binder {
             .bind_table_reference(bind_context, &source_data)
             .await?;
 
+        // try add internal_column (_row_id) for source_table
+        let mut source_table_index = DUMMY_TABLE_INDEX;
+        let mut source_row_id_index = None;
+        self.try_add_internal_column_binding(
+            &source_data,
+            &mut source_context,
+            &mut source_expr,
+            &mut source_table_index,
+            &mut source_row_id_index,
+        )?;
+
         // remove stream column.
         source_context
             .columns
@@ -230,6 +295,11 @@ impl Binder {
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
         let mut columns_set = HashSet::<IndexType>::new();
+
+        // add source_row_id_idx
+        if let Some(source_row_id_index) = source_row_id_index {
+            columns_set.insert(source_row_id_index);
+        }
 
         let update_or_insert_columns_star =
             if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
@@ -298,36 +368,18 @@ impl Binder {
             }
         }
 
-        // add internal_column (_row_id)
-        let table_index = self
-            .metadata
-            .read()
-            .get_table_index(Some(database_name.as_str()), table_name.as_str())
-            .expect("can't get target_table binding");
-
-        let row_id_column_binding = InternalColumnBinding {
-            database_name: Some(database_name.clone()),
-            table_name: Some(table_name.clone()),
-            internal_column: InternalColumn {
-                column_name: ROW_ID_COL_NAME.to_string(),
-                column_type: InternalColumnType::RowId,
-            },
-        };
-
-        let column_binding = target_context.add_internal_column_binding(
-            &row_id_column_binding,
-            self.metadata.clone(),
-            true,
+        // add internal_column (_row_id) for target_table
+        let mut target_table_index = DUMMY_TABLE_INDEX;
+        let mut target_row_id_index = None;
+        self.try_add_internal_column_binding(
+            &target_table,
+            &mut target_context,
+            &mut target_expr,
+            &mut target_table_index,
+            &mut target_row_id_index,
         )?;
 
-        let row_id_index = column_binding.index;
-
-        target_expr =
-            SExpr::add_internal_column_index(&target_expr, table_index, row_id_index, &None);
-
-        self.metadata
-            .write()
-            .set_table_row_id_index(table_index, row_id_index);
+        let row_id_index = target_row_id_index.expect("can't get target_table row_id");
 
         // add row_id_idx
         if merge_type != MergeIntoType::InsertOnly {
@@ -397,7 +449,10 @@ impl Binder {
             Box::new(IndexMap::new()),
         );
 
-        let column_entries = self.metadata.read().columns_by_table_index(table_index);
+        let column_entries = self
+            .metadata
+            .read()
+            .columns_by_table_index(target_table_index);
         let mut field_index_map = HashMap::<usize, String>::new();
         // if true, read all columns of target table
         if has_update {
@@ -450,12 +505,13 @@ impl Binder {
             columns_set: Box::new(columns_set),
             matched_evaluators,
             unmatched_evaluators,
-            target_table_idx: table_index,
+            target_table_idx: target_table_index,
             field_index_map,
             merge_type,
             distributed: false,
             change_join_order: false,
             row_id_index,
+            source_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
         })

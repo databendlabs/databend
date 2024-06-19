@@ -472,6 +472,8 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         })
     }
 
+    let flag = plan.source_row_id_index.is_none();
+
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
@@ -483,7 +485,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         {
             // Todo(xudong): should consider the cost of shuffle and broadcast.
             // Current behavior is to always use broadcast join.(source table is usually small)
-            join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
+            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, flag)?;
             enable_right_broadcast = true;
         }
         let distributed = !join_s_expr.has_merge_exchange();
@@ -491,7 +493,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             input: Box::new(join_s_expr),
             distributed,
             change_join_order,
-            columns_set: new_columns_set.clone(),
+            columns_set: new_columns_set,
             enable_right_broadcast,
             ..*plan
         })))
