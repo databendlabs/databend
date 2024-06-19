@@ -251,6 +251,7 @@ pub trait PhysicalPlanReplacer {
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
             probe_keys: plan.probe_keys.clone(),
+            is_null_equal: plan.is_null_equal.clone(),
             non_equi_conditions: plan.non_equi_conditions.clone(),
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
