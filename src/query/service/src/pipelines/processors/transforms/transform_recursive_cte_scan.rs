@@ -22,7 +22,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_memory::MemoryTable;
 
 use crate::sessions::QueryContext;

@@ -14,20 +14,13 @@
 
 use std::fmt::Display;
 
-use databend_common_ast::ast::Engine;
 use databend_common_exception::Result;
-use databend_common_expression::infer_schema_type;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::schema::CreateOption;
-use databend_common_meta_app::tenant::Tenant;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::plans::CreateTablePlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {

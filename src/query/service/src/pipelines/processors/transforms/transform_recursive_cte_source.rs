@@ -33,17 +33,18 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::{CreateTablePlan, DropTablePlan};
+use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
 use databend_common_storages_memory::MemoryTable;
 use futures_util::TryStreamExt;
 
-use crate::interpreters::{CreateTableInterpreter, DropTableInterpreter};
+use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::processors::transforms::transform_merge_block::project_block;
-use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
@@ -287,7 +288,7 @@ async fn create_memory_table_for_cte_scan(
             };
             let create_table_interpreter =
                 CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-            create_table_interpreter.execute(ctx.clone()).await?;
+            let _ = create_table_interpreter.execute(ctx.clone()).await?;
         }
         PhysicalPlan::Shuffle(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
