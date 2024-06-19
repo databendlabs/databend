@@ -451,7 +451,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?;
-    let new_columns_set = plan.columns_set.clone();
+    let mut new_columns_set = plan.columns_set.clone();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -498,6 +498,9 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             ..*plan
         })))
     } else {
+        if let Some(source_row_id_index) = plan.source_row_id_index {
+            new_columns_set.remove(&source_row_id_index);
+        }
         Ok(Plan::MergeInto(Box::new(MergeInto {
             input: Box::new(join_s_expr),
             change_join_order,

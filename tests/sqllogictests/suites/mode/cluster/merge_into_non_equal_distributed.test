@@ -64,29 +64,28 @@ target_table: default.default.t1
 ├── matched update: [condition: None,update set a = a (#0)]
 └── unmatched insert: [condition: None,insert into (a) values(CAST(a (#0) AS Int32 NULL))]
 HashJoin
-├── output columns: [t1.a (#1), t1._row_id (#2), t2.a (#0), #_row_number]
+├── output columns: [t1.a (#2), t1._row_id (#3), t2.a (#0), t2._row_id (#1)]
 ├── join type: RIGHT OUTER
 ├── build keys: []
 ├── probe keys: []
-├── filters: [t1.a (#1) < t2.a (#0)]
+├── filters: [t1.a (#2) < t2.a (#0)]
 ├── estimated rows: 15.00
 ├── Exchange(Build)
-│   ├── output columns: [t2.a (#0), #_row_number]
+│   ├── output columns: [t2.a (#0), t2._row_id (#1)]
 │   ├── exchange type: Broadcast
-│   └── MergeIntoAddRowNumber
-│       └── TableScan
-│           ├── table: default.default.t2
-│           ├── output columns: [a (#0)]
-│           ├── read rows: 1
-│           ├── read size: < 1 KiB
-│           ├── partitions total: 1
-│           ├── partitions scanned: 1
-│           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│           ├── push downs: [filters: [], limit: NONE]
-│           └── estimated rows: 1.00
+│   └── TableScan
+│       ├── table: default.default.t2
+│       ├── output columns: [a (#0), _row_id (#1)]
+│       ├── read rows: 1
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 1.00
 └── TableScan(Probe)
     ├── table: default.default.t1
-    ├── output columns: [a (#1), _row_id (#2)]
+    ├── output columns: [a (#2), _row_id (#3)]
     ├── read rows: 15
     ├── read size: < 1 KiB
     ├── partitions total: 3
