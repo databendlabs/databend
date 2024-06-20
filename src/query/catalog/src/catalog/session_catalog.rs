@@ -256,8 +256,8 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_name_by_id(table_id).await
     }
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.inner.get_db_name_by_id(db_id).await
     }
 

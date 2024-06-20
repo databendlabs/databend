@@ -92,13 +92,6 @@ impl StreamTable {
             )
             .await?;
 
-        if table.get_table_info().ident.table_id != self.source_table_id()? {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Base table '{}'.'{}' dropped, cannot read from stream {}",
-                source_database_name, source_table_name, self.info.desc,
-            )));
-        }
-
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table.check_changes_valid(
             &source_database_name,
