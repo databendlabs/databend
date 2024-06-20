@@ -101,6 +101,21 @@ impl MemoryTable {
         }
     }
 
+    pub fn get_blocks(&self) -> Vec<DataBlock> {
+        let data_blocks = self.blocks.read();
+        data_blocks.iter().cloned().collect()
+    }
+
+    pub fn truncate(&self) {
+        let mut blocks = self.blocks.write();
+        blocks.clear();
+    }
+
+    pub fn update(&self, new_blocks: Vec<DataBlock>) {
+        let mut blocks = self.blocks.write();
+        *blocks = new_blocks;
+    }
+
     fn get_read_data_blocks(&self) -> Arc<Mutex<VecDeque<DataBlock>>> {
         let data_blocks = self.blocks.read();
         let mut read_data_blocks = VecDeque::with_capacity(data_blocks.len());
@@ -267,8 +282,7 @@ impl Table for MemoryTable {
 
     #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
-        let mut blocks = self.blocks.write();
-        blocks.clear();
+        self.truncate();
         Ok(())
     }
 }

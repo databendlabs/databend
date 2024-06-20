@@ -34,7 +34,7 @@ use crate::plans::RelOp;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecursiveCteScan {
     pub(crate) fields: Vec<DataField>,
-    pub(crate) cte_name: String,
+    pub(crate) table_name: String,
 }
 
 impl RecursiveCteScan {
@@ -49,7 +49,7 @@ impl RecursiveCteScan {
 
 impl Hash for RecursiveCteScan {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.cte_name.hash(state);
+        self.table_name.hash(state);
         for field in self.fields.iter() {
             field.name().hash(state);
         }

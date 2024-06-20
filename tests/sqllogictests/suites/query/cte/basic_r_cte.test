@@ -1,5 +1,11 @@
 control sortmode rowsort
 
+statement ok
+create or replace database db;
+
+statement ok
+use db;
+
 query I
 WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
@@ -124,3 +130,32 @@ select * from recur;
 
 statement ok
 drop table nk_example_table;
+
+# recursive cte used by multiple times in main query
+query II
+with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t a1, t a2;
+----
+1 1
+1 2
+1 3
+2 1
+2 2
+2 3
+3 1
+3 2
+3 3
+
+
+query I
+with recursive t as (select 1 as x union all select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;
+----
+1
+
+
+# recursive cte scan used by multiple times in recursive part of recursive cte
+query I
+with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t;
+----
+1
+2
+4

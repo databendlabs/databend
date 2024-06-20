@@ -107,6 +107,18 @@ impl FileFormatParams {
         }
     }
 
+    pub fn need_field_default(&self) -> bool {
+        match self {
+            FileFormatParams::Parquet(v) => v.missing_field_as == NullAs::FieldDefault,
+            FileFormatParams::Csv(v) => v.empty_field_as == EmptyFieldAs::FieldDefault,
+            FileFormatParams::NdJson(v) => {
+                v.null_field_as == NullAs::FieldDefault
+                    || v.missing_field_as == NullAs::FieldDefault
+            }
+            _ => true,
+        }
+    }
+
     pub fn try_from_reader(mut reader: FileFormatOptionsReader, old: bool) -> Result<Self> {
         let typ = reader.take_type()?;
         let params = match typ {

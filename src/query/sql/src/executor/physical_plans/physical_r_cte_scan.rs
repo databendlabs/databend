@@ -27,7 +27,7 @@ pub struct RecursiveCteScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub output_schema: DataSchemaRef,
-    pub cte_name: String,
+    pub table_name: String,
     pub stat: PlanStatsInfo,
 }
 
@@ -46,7 +46,7 @@ impl PhysicalPlanBuilder {
         Ok(PhysicalPlan::RecursiveCteScan(RecursiveCteScan {
             plan_id: 0,
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
-            cte_name: recursive_cte_scan.cte_name.clone(),
+            table_name: recursive_cte_scan.table_name.clone(),
             stat: stat_info,
         }))
     }

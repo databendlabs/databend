@@ -168,7 +168,10 @@ pub struct Join {
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
+    // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    // Used for "is (not) distinct from".
+    pub is_null_equal: Vec<usize>,
 }
 
 impl Default for Join {
@@ -184,6 +187,7 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            is_null_equal: Default::default(),
         }
     }
 }

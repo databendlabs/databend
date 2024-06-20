@@ -451,7 +451,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?;
-    let new_columns_set = plan.columns_set.clone();
+    let mut new_columns_set = plan.columns_set.clone();
     if change_join_order
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -476,14 +476,22 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
         let mut enable_right_broadcast = false;
+
         if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
             && merge_source_optimizer
                 .merge_source_matcher
                 .matches(&join_s_expr)
         {
+            // If source is physical table, use row_id
+            let source_has_row_id = if let Some(source_row_id_index) = plan.source_row_id_index {
+                new_columns_set.insert(source_row_id_index);
+                true
+            } else {
+                false
+            };
             // Todo(xudong): should consider the cost of shuffle and broadcast.
             // Current behavior is to always use broadcast join.(source table is usually small)
-            join_s_expr = merge_source_optimizer.optimize(&join_s_expr)?;
+            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, source_has_row_id)?;
             enable_right_broadcast = true;
         }
         let distributed = !join_s_expr.has_merge_exchange();
@@ -491,7 +499,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             input: Box::new(join_s_expr),
             distributed,
             change_join_order,
-            columns_set: new_columns_set.clone(),
+            columns_set: new_columns_set,
             enable_right_broadcast,
             ..*plan
         })))

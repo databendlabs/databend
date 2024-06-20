@@ -1,3 +1,9 @@
+statement ok
+create or replace database db;
+
+statement ok
+use db;
+
 query I
 with recursive t(x) as (select 1 union all select x+1 from t where x < 3) select * from t order by x
 ----

@@ -402,7 +402,6 @@ impl Binder {
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        self.ctx.set_recursive_cte_scan(cte_name, vec![])?;
         let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
         let mut metadata = self.metadata.write();
         let mut columns = cte_info.columns.clone();
@@ -457,10 +456,20 @@ impl Binder {
         if let Some(alias) = alias {
             new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
+
+        let table_alias_name = alias
+            .as_ref()
+            .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
+        let table_name = if let Some(table_alias_name) = table_alias_name {
+            table_alias_name
+        } else {
+            cte_name.to_string()
+        };
+
         Ok((
             SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
                 fields,
-                cte_name: cte_name.to_string(),
+                table_name,
             }))),
             new_bind_ctx,
         ))
