@@ -41,6 +41,7 @@ pub struct MergeInto {
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     // also use for split
     pub row_id_idx: usize,
+    pub source_row_id_idx: Option<usize>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
     pub distributed: bool,

@@ -85,6 +85,7 @@ use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
+#[derive(Clone, Debug)]
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateTablePlan,

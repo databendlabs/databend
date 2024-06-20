@@ -57,59 +57,63 @@ impl CsvDecoder {
     ) -> std::result::Result<(), FileParseError> {
         let empty_filed_as = &self.fmt.params.empty_field_as;
         if col_data.is_empty() {
-            match &self.load_context.default_values {
-                None => {
-                    // query
-                    builder.push_default();
-                }
-                Some(values) => {
-                    let field = &self.load_context.schema.fields()[column_index];
-                    // copy
-                    match empty_filed_as {
-                        EmptyFieldAs::FieldDefault => {
+            if !self.load_context.is_copy {
+                builder.push_default();
+            } else {
+                let field = &self.load_context.schema.fields()[column_index];
+                match empty_filed_as {
+                    EmptyFieldAs::FieldDefault => {
+                        if let Some(values) = &self.load_context.default_values {
                             builder.push(values[column_index].as_ref());
+                        } else {
+                            return Err(FileParseError::ColumnEmptyError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                empty_field_as: empty_filed_as.to_string(),
+                                remedy: "Bug: default_values should not be None.".to_string(),
+                            });
                         }
-                        EmptyFieldAs::Null => {
-                            if !matches!(field.data_type, TableDataType::Nullable(_)) {
-                                return Err(FileParseError::ColumnEmptyError {
-                                    column_index,
-                                    column_name: field.name().to_owned(),
-                                    column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
-                                    remedy: format!(
-                                        "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
-                                        field.name()
-                                    ),
-                                });
-                            }
-                            builder.push_default();
-                        }
-                        EmptyFieldAs::String => match builder {
-                            ColumnBuilder::String(b) => {
-                                b.put_str("");
-                                b.commit_row();
-                            }
-                            ColumnBuilder::Nullable(box NullableColumnBuilder {
-                                builder: ColumnBuilder::String(b),
-                                validity,
-                            }) => {
-                                b.put_str("");
-                                b.commit_row();
-                                validity.push(true);
-                            }
-                            _ => {
-                                let field = &self.load_context.schema.fields()[column_index];
-                                return Err(FileParseError::ColumnEmptyError {
-                                    column_index,
-                                    column_name: field.name().to_owned(),
-                                    column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
-                                    remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
-                                        .to_string(),
-                                });
-                            }
-                        },
                     }
+                    EmptyFieldAs::Null => {
+                        if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                            return Err(FileParseError::ColumnEmptyError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                empty_field_as: empty_filed_as.to_string(),
+                                remedy: format!(
+                                    "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
+                                    field.name()
+                                ),
+                            });
+                        }
+                        builder.push_default();
+                    }
+                    EmptyFieldAs::String => match builder {
+                        ColumnBuilder::String(b) => {
+                            b.put_str("");
+                            b.commit_row();
+                        }
+                        ColumnBuilder::Nullable(box NullableColumnBuilder {
+                            builder: ColumnBuilder::String(b),
+                            validity,
+                        }) => {
+                            b.put_str("");
+                            b.commit_row();
+                            validity.push(true);
+                        }
+                        _ => {
+                            let field = &self.load_context.schema.fields()[column_index];
+                            return Err(FileParseError::ColumnEmptyError {
+                                column_index,
+                                column_name: field.name().to_owned(),
+                                column_type: field.data_type.to_string(),
+                                empty_field_as: empty_filed_as.to_string(),
+                                remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
+                            });
+                        }
+                    },
                 }
             }
             return Ok(());

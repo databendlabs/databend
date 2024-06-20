@@ -44,7 +44,7 @@ impl PipelineBuilder {
                 TransformRecursiveCteScan::create(
                     self.ctx.clone(),
                     output_port.clone(),
-                    r_cte_scan.cte_name.clone(),
+                    r_cte_scan.table_name.clone(),
                 )
             },
             1,

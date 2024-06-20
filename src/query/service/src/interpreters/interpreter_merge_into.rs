@@ -20,6 +20,8 @@ use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -131,12 +133,12 @@ impl MergeIntoInterpreter {
             target_alias,
             matched_evaluators,
             unmatched_evaluators,
-            target_table_idx,
             field_index_map,
             merge_type,
             distributed,
             change_join_order,
             row_id_index,
+            source_row_id_index,
             can_try_update_column_only,
             enable_right_broadcast,
             ..
@@ -224,51 +226,44 @@ impl MergeIntoInterpreter {
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let join_input = builder.build(&input, *columns_set.clone()).await?;
 
-        // find row_id column index
         let join_output_schema = join_input.output_schema()?;
 
         let insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
 
-        let mut row_id_idx = if !insert_only && !target_build_optimization {
-            match meta_data
-                .read()
-                .row_id_index_by_table_index(*target_table_idx)
-            {
-                None => {
-                    return Err(ErrorCode::InvalidRowIdIndex(
-                        "can't get internal row_id_idx when running merge into",
-                    ));
-                }
-                Some(row_id_idx) => row_id_idx,
-            }
-        } else {
-            DUMMY_COLUMN_INDEX
-        };
-
-        let mut found_row_id = false;
+        // find row_id column index
+        let mut row_id_idx = DUMMY_COLUMN_INDEX;
         for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-            if *data_field.name() == row_id_idx.to_string() {
+            if *data_field.name() == row_id_index.to_string() {
                 row_id_idx = idx;
-                found_row_id = true;
                 break;
             }
         }
 
+        let mut source_row_id_idx = None;
         let mut row_number_idx = None;
         if enable_right_broadcast {
-            row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
+            if let Some(source_row_id_index) = source_row_id_index {
+                for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+                    if *data_field.name() == source_row_id_index.to_string() {
+                        source_row_id_idx = Some(idx);
+                        break;
+                    }
+                }
+            } else {
+                row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
+            }
         }
 
-        if !target_build_optimization && !insert_only && !found_row_id {
+        if !target_build_optimization && !insert_only && matches!(row_id_idx, DUMMY_COLUMN_INDEX) {
             // we can't get row_id_idx, throw an exception
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
             ));
         }
 
-        if enable_right_broadcast && row_number_idx.is_none() {
+        if enable_right_broadcast && row_number_idx.is_none() && source_row_id_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
-                "can't get internal row_number_idx when running merge into",
+                "can't get internal row_number_idx/row_id_idx when running merge into",
             ));
         }
 
@@ -392,6 +387,7 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
+                source_row_id_idx,
                 segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
@@ -411,6 +407,7 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
+                source_row_id_idx,
                 segments: segments.clone(),
                 distributed: true,
                 output_schema: if let Some(row_number_idx) = row_number_idx {
@@ -420,9 +417,7 @@ impl MergeIntoInterpreter {
                 } else {
                     DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
-                        databend_common_expression::types::DataType::Number(
-                            databend_common_expression::types::NumberDataType::UInt64,
-                        ),
+                        DataType::Number(NumberDataType::UInt64),
                     )]))
                 },
                 merge_type: merge_type.clone(),
