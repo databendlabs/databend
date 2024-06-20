@@ -273,9 +273,7 @@ fn string_to_format_timestmap(
         .any(|&pattern| format.contains(pattern));
     let res = if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
-        if parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)).is_err() {
-            return Ok((0, true));
-        }
+        parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format))?;
         // Additional checks and adjustments for parsed timestamp
         if parsed.month.is_none() {
             parsed.month = Some(1);

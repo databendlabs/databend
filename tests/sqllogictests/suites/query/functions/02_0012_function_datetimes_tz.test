@@ -463,8 +463,11 @@ select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H'
 ----
 2022-02-04 16:00:00.000000
 
-query T
+statement error 1006
 select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
 ----
 NULL
 
@@ -486,8 +489,11 @@ select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H'
 ----
 2022-02-04 00:00:00.000000
 
-query T
+statement error 1006
 select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
 ----
 NULL
 
@@ -509,8 +515,11 @@ select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H'
 ----
 2022-02-04 08:00:00.000000
 
-query T
+statement error 1006
 select to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
+
+query T
+select try_to_timestamp('2022年02月04日，8时58分59秒', '%Y年%m月%d日，%H%z');
 ----
 NULL
 
