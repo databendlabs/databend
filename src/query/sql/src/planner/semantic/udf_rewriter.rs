@@ -106,9 +106,6 @@ impl UdfRewriter {
                 // Add an EvalScalar for the arguments of Udf.
                 let mut scalar_items = self.udf_arguments.pop_front().unwrap();
                 scalar_items.sort_by_key(|item| item.index);
-
-                println!("scalar_items {:?}", scalar_items);
-
                 let eval_scalar = EvalScalar {
                     items: scalar_items,
                 };
@@ -120,8 +117,6 @@ impl UdfRewriter {
             }
 
             let udf_functions = self.udf_functions.pop_front().unwrap();
-            println!("udf_functions {:?}", udf_functions);
-
             let udf_plan = Udf {
                 items: udf_functions,
                 script_udf: self.script_udf,
