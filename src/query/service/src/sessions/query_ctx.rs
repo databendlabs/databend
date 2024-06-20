@@ -96,9 +96,13 @@ use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetRSTable;
 use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
+use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
@@ -869,18 +873,45 @@ impl TableContext for QueryContext {
         let table = self.shared.get_table(catalog, database, table).await?;
         // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
         // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = if table.engine() == "ICEBERG" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            IcebergTable::try_create(info.to_owned())?.into()
-        } else if table.engine() == "DELTA" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            DeltaTable::try_create(info.to_owned())?.into()
-        } else {
-            table
+        let table: Arc<dyn Table> = match table.engine() {
+            "ICEBERG" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                IcebergTable::try_create(info.to_owned())?.into()
+            }
+            "DELTA" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                DeltaTable::try_create(info.to_owned())?.into()
+            }
+            "STREAM"
+                if table
+                    .get_table_info()
+                    .options()
+                    .get(OPT_KEY_SOURCE_DATABASE_ID)
+                    .is_none() =>
+            {
+                // To be compatible with older versions.
+                let mut info = table.get_table_info().to_owned();
+                let source_db_name = info
+                    .meta
+                    .options
+                    .get(OPT_KEY_DATABASE_NAME)
+                    .ok_or_else(|| ErrorCode::Internal("source database must be set"))?;
+                let catalog = self.get_catalog(catalog).await?;
+                let tenant = self.get_tenant();
+                let db = catalog.get_database(&tenant, source_db_name).await?;
+                let db_id = db.get_db_info().ident.db_id;
+                info.meta
+                    .options
+                    .insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
+                info.meta.options.remove(OPT_KEY_DATABASE_NAME);
+                info.meta.options.remove(OPT_KEY_TABLE_NAME);
+                StreamTable::try_create(info.to_owned())?.into()
+            }
+            _ => table,
         };
         Ok(table)
     }

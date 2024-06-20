@@ -194,15 +194,14 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
+                        let source_database_name =
+                            stream_table.source_database_name(ctl.clone()).await?;
+                        let source_table_name = stream_table.source_table_name(ctl.clone()).await?;
 
                         catalogs.push(ctl_name.as_str());
                         databases.push(db_name.to_owned());
                         names.push(stream_table.name().to_string());
-                        table_name.push(format!(
-                            "{}.{}",
-                            stream_table.source_table_database(),
-                            stream_table.source_table_name()
-                        ));
+                        table_name.push(format!("{}.{}", source_database_name, source_table_name));
                         mode.push(stream_table.mode().to_string());
 
                         if T {
@@ -225,8 +224,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             }
                             comment.push(stream_info.meta.comment.clone());
 
-                            table_version.push(stream_table.offset());
-                            table_id.push(stream_table.source_table_id());
+                            table_version.push(stream_table.offset()?);
+                            table_id.push(stream_table.source_table_id()?);
                             snapshot_location.push(stream_table.snapshot_loc());
 
                             let permit = acquire_task_permit(io_request_semaphore.clone()).await?;

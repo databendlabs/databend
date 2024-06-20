@@ -37,11 +37,10 @@ use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 pub struct RealStreamHandler {}
@@ -107,13 +106,12 @@ impl StreamHandler for RealStreamHandler {
             .await?;
         table.check_changes_valid(&plan.table_database, &plan.table_name, change_desc.seq)?;
 
+        let db = catalog.get_database(&tenant, &plan.table_database).await?;
+        let db_id = db.get_db_info().ident.db_id;
+
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());
-        options.insert(OPT_KEY_TABLE_NAME.to_string(), plan.table_name.clone());
-        options.insert(
-            OPT_KEY_DATABASE_NAME.to_string(),
-            plan.table_database.clone(),
-        );
+        options.insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
         options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
         options.insert(OPT_KEY_TABLE_VER.to_string(), change_desc.seq.to_string());
         if let Some(snapshot_loc) = change_desc.location {
