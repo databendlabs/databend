@@ -41,7 +41,7 @@ use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
@@ -83,8 +83,8 @@ impl StreamTable {
 
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
         let catalog = ctx.get_catalog(self.info.catalog()).await?;
-        let source_table_name = self.source_table_name(catalog.clone()).await?;
-        let source_database_name = self.source_database_name(catalog.clone()).await?;
+        let source_table_name = self.source_table_name(catalog.as_ref()).await?;
+        let source_database_name = self.source_database_name(catalog.as_ref()).await?;
         let table = ctx
             .get_table(
                 self.info.catalog(),
@@ -142,9 +142,17 @@ impl StreamTable {
         Ok(table_id)
     }
 
-    pub async fn source_table_name(&self, catalog: Arc<dyn Catalog>) -> Result<String> {
+    pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
         let source_table_id = self.source_table_id()?;
-        catalog.get_table_name_by_id(source_table_id).await
+        catalog
+            .get_table_name_by_id(source_table_id)
+            .await
+            .and_then(|opt| {
+                opt.ok_or(ErrorCode::UnknownTable(format!(
+                    "Unknown table id: '{}'",
+                    source_table_id
+                )))
+            })
     }
 
     pub fn source_database_id(&self) -> Result<u64> {
@@ -157,15 +165,27 @@ impl StreamTable {
         Ok(database_id)
     }
 
-    pub async fn source_database_name(&self, catalog: Arc<dyn Catalog>) -> Result<String> {
+    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
         match self.source_database_id() {
             Ok(source_database_id) => catalog.get_db_name_by_id(source_database_id).await,
-            Err(e) => self
-                .info
-                .options()
-                .get(OPT_KEY_DATABASE_NAME)
-                .cloned()
-                .ok_or(e),
+            Err(e) => {
+                let source_table_id = self.source_table_id()?;
+                let source_table_meta = catalog
+                    .get_table_meta_by_id(source_table_id)
+                    .await?
+                    .ok_or(e)?;
+                let source_db_id = source_table_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_DATABASE_ID)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Invalid fuse table, table option {} not found",
+                            OPT_KEY_DATABASE_ID
+                        ))
+                    })?;
+                Ok(source_db_id.to_owned())
+            }
         }
     }
 

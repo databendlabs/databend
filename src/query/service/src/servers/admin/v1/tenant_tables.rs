@@ -82,7 +82,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
         };
         for table in tables {
             let create_query = ShowCreateTableInterpreter::show_create_query(
-                catalog.clone(),
+                catalog.as_ref(),
                 database.name(),
                 table.as_ref(),
                 &settings,

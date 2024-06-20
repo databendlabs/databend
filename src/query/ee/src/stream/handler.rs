@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,6 +38,7 @@ use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
@@ -106,8 +108,16 @@ impl StreamHandler for RealStreamHandler {
             .await?;
         table.check_changes_valid(&plan.table_database, &plan.table_name, change_desc.seq)?;
 
-        let db = catalog.get_database(&tenant, &plan.table_database).await?;
-        let db_id = db.get_db_info().ident.db_id;
+        let db_id = table
+            .get_table_info()
+            .options()
+            .get(OPT_KEY_DATABASE_ID)
+            .ok_or_else(|| {
+                ErrorCode::Internal(format!(
+                    "Invalid fuse table, table option {} not found",
+                    OPT_KEY_DATABASE_ID
+                ))
+            })?;
 
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());

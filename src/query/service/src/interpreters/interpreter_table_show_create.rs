@@ -88,9 +88,13 @@ impl Interpreter for ShowCreateTableInterpreter {
                 .unwrap_or(false),
         };
 
-        let create_query =
-            Self::show_create_query(catalog, &self.plan.database, table.as_ref(), &settings)
-                .await?;
+        let create_query = Self::show_create_query(
+            catalog.as_ref(),
+            &self.plan.database,
+            table.as_ref(),
+            &settings,
+        )
+        .await?;
 
         let block = DataBlock::new(
             vec![
@@ -112,7 +116,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
 impl ShowCreateTableInterpreter {
     pub async fn show_create_query(
-        catalog: Arc<dyn Catalog>,
+        catalog: &dyn Catalog,
         database: &str,
         table: &dyn Table,
         settings: &ShowCreateQuerySettings,
@@ -288,12 +292,9 @@ impl ShowCreateTableInterpreter {
         Ok(view_create_sql)
     }
 
-    async fn show_create_stream_query(
-        catalog: Arc<dyn Catalog>,
-        table: &dyn Table,
-    ) -> Result<String> {
+    async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
-        let source_database_name = stream_table.source_database_name(catalog.clone()).await?;
+        let source_database_name = stream_table.source_database_name(catalog).await?;
         let source_table_name = stream_table.source_table_name(catalog).await?;
         let mode = stream_table.mode();
 

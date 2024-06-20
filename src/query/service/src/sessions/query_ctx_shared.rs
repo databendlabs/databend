@@ -385,8 +385,8 @@ impl QueryContextShared {
                 .await?;
 
             let stream = StreamTable::try_from_table(table.as_ref())?;
-            let table_name = stream.source_table_name(catalog.clone()).await?;
-            let database = stream.source_database_name(catalog.clone()).await?;
+            let table_name = stream.source_table_name(catalog.as_ref()).await?;
+            let database = stream.source_database_name(catalog.as_ref()).await?;
             let meta_key = (
                 catalog_name.to_string(),
                 database.to_string(),

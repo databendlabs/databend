@@ -248,12 +248,12 @@ impl Catalog for ImmutableCatalog {
         Ok(res)
     }
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<String> {
-        let table = self
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let table_name = self
             .sys_db_meta
             .get_by_id(&table_id)
-            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
-        Ok(table.name().to_string())
+            .map(|v| v.name().to_string());
+        Ok(table_name)
     }
 
     #[async_backtrace::framed]
