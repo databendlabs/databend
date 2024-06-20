@@ -546,7 +546,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-js"
 version = "0.3.1"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=facdf2c#facdf2cee91db836d95fc0d359ad6d3c712ba86d"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=dfa1390#dfa1390ebb56e2c32405556c1b96f88ab10b5164"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -559,7 +559,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-python"
 version = "0.2.1"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=facdf2c#facdf2cee91db836d95fc0d359ad6d3c712ba86d"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=dfa1390#dfa1390ebb56e2c32405556c1b96f88ab10b5164"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -574,7 +574,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-wasm"
 version = "0.2.2"
-source = "git+https://github.com/datafuse-extras/arrow-udf?rev=facdf2c#facdf2cee91db836d95fc0d359ad6d3c712ba86d"
+source = "git+https://github.com/datafuse-extras/arrow-udf?rev=dfa1390#dfa1390ebb56e2c32405556c1b96f88ab10b5164"
 dependencies = [
  "anyhow",
  "arrow-array",

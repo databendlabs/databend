@@ -386,9 +386,9 @@ rpath = false
 
 [patch.crates-io]
 arrow-format = { git = "https://github.com/Xuanwo/arrow-format", rev = "be633a0" }
-arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "facdf2c" }
-arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "facdf2c" }
-arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "facdf2c" }
+arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
+arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
+arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
