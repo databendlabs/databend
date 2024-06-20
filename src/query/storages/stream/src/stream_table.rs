@@ -41,6 +41,7 @@ use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
@@ -92,6 +93,13 @@ impl StreamTable {
             )
             .await?;
 
+        if table.get_table_info().ident.table_id != self.source_table_id()? {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Base table '{}'.'{}' dropped, cannot read from stream {}",
+                source_database_name, source_table_name, self.info.desc,
+            )));
+        }
+
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table.check_changes_valid(
             &source_database_name,
@@ -134,6 +142,11 @@ impl StreamTable {
         Ok(table_id)
     }
 
+    pub async fn source_table_name(&self, catalog: Arc<dyn Catalog>) -> Result<String> {
+        let source_table_id = self.source_table_id()?;
+        catalog.get_table_name_by_id(source_table_id).await
+    }
+
     pub fn source_database_id(&self) -> Result<u64> {
         let database_id = self
             .info
@@ -144,14 +157,16 @@ impl StreamTable {
         Ok(database_id)
     }
 
-    pub async fn source_table_name(&self, catalog: Arc<dyn Catalog>) -> Result<String> {
-        let source_table_id = self.source_table_id()?;
-        catalog.get_table_name_by_id(source_table_id).await
-    }
-
     pub async fn source_database_name(&self, catalog: Arc<dyn Catalog>) -> Result<String> {
-        let source_database_id = self.source_database_id()?;
-        catalog.get_db_name_by_id(source_database_id).await
+        match self.source_database_id() {
+            Ok(source_database_id) => catalog.get_db_name_by_id(source_database_id).await,
+            Err(e) => self
+                .info
+                .options()
+                .get(OPT_KEY_DATABASE_NAME)
+                .cloned()
+                .ok_or(e),
+        }
     }
 
     #[async_backtrace::framed]

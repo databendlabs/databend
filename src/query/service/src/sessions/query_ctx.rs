@@ -886,31 +886,6 @@ impl TableContext for QueryContext {
                 info.meta.storage_params = Some(sp);
                 DeltaTable::try_create(info.to_owned())?.into()
             }
-            "STREAM"
-                if table
-                    .get_table_info()
-                    .options()
-                    .get(OPT_KEY_SOURCE_DATABASE_ID)
-                    .is_none() =>
-            {
-                // To be compatible with older versions.
-                let mut info = table.get_table_info().to_owned();
-                let source_db_name = info
-                    .meta
-                    .options
-                    .get(OPT_KEY_DATABASE_NAME)
-                    .ok_or_else(|| ErrorCode::Internal("source database must be set"))?;
-                let catalog = self.get_catalog(catalog).await?;
-                let tenant = self.get_tenant();
-                let db = catalog.get_database(&tenant, source_db_name).await?;
-                let db_id = db.get_db_info().ident.db_id;
-                info.meta
-                    .options
-                    .insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
-                info.meta.options.remove(OPT_KEY_DATABASE_NAME);
-                info.meta.options.remove(OPT_KEY_TABLE_NAME);
-                StreamTable::try_create(info.to_owned())?.into()
-            }
             _ => table,
         };
         Ok(table)
