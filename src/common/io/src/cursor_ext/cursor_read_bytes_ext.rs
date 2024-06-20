@@ -26,7 +26,7 @@ pub trait ReadBytesExt {
     fn ignore_byte(&mut self, b: u8) -> bool;
     fn ignore_bytes(&mut self, bs: &[u8]) -> bool;
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> bool;
-    fn ignore_white_spaces(&mut self) -> bool;
+    fn ignore_white_spaces_or_comments(&mut self) -> bool;
     fn ignore_comment(&mut self) -> bool;
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize;
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> usize;
@@ -171,7 +171,7 @@ where T: AsRef<[u8]>
         eq
     }
 
-    fn ignore_white_spaces(&mut self) -> bool {
+    fn ignore_white_spaces_or_comments(&mut self) -> bool {
         let mut ignored = false;
         while (self.ignores(|c| c.is_ascii_whitespace()) > 0) || self.ignore_comment() {
             ignored = true;
