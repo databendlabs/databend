@@ -32,6 +32,10 @@ parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
+iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "def6114b9" }
+iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "def6114b9" }
+iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "def6114b9" }
+
 
 [lints]
 workspace = true

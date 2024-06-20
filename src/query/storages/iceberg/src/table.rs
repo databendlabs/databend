@@ -57,11 +57,9 @@ use crate::table_source::IcebergTableSource;
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
 /// accessor wrapper as a table
-///
-/// TODO: we should use icelake Table instead.
 pub struct IcebergTable {
     info: TableInfo,
-    table: OnceCell<icelake::Table>,
+    table: OnceCell<iceberg::table::Table>,
 }
 
 impl IcebergTable {

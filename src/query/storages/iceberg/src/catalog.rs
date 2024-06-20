@@ -65,6 +65,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -101,6 +102,11 @@ use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_storage::DataOperator;
 use futures::TryStreamExt;
+use iceberg_catalog_hms::HmsCatalog;
+use iceberg_catalog_hms::HmsCatalogConfig;
+use iceberg_catalog_hms::HmsThriftTransport;
+use iceberg_catalog_rest::RestCatalog;
+use iceberg_catalog_rest::RestCatalogConfig;
 use minitrace::func_name;
 use opendal::Metakey;
 
@@ -121,9 +127,30 @@ impl CatalogCreator for IcebergCreator {
             ),
         };
 
-        let data_operator = DataOperator::try_new(&opt.storage_params)?;
+        let iceberg_ctl: Arc<dyn iceberg::Catalog> = match opt.catalog_type() {
+            IcebergCatalogOption::Hms(hms) => {
+                let cfg = HmsCatalogConfig::builder()
+                    .address(hms.address.clone())
+                    .thrift_transport(HmsThriftTransport::Buffered)
+                    .warehouse(hms.warehouse.clone())
+                    .props(hms.props.clone())
+                    .build();
+                let ctl = HmsCatalog::new(cfg)?;
+                Arc::new(ctl)
+            }
+            IcebergCatalogOption::Rest(rest) => {
+                let cfg = RestCatalogConfig::builder()
+                    .uri(rest.uri.clone())
+                    .warehouse(rest.warehouse.clone())
+                    .props(rest.props.clone())
+                    .build();
+                let ctl = RestCatalog::new(cfg)?;
+                Arc::new(ctl)
+            }
+        };
+
         let catalog: Arc<dyn Catalog> =
-            Arc::new(IcebergCatalog::try_create(info.clone(), data_operator)?);
+            Arc::new(IcebergCatalog::try_create(info.clone(), iceberg_ctl)?);
 
         Ok(catalog)
     }
@@ -140,8 +167,8 @@ pub struct IcebergCatalog {
     /// info of this iceberg table.
     info: CatalogInfo,
 
-    /// underlying storage access operator
-    operator: DataOperator,
+    /// iceberg catalogs
+    ctl: Arc<dyn iceberg::Catalog>,
 }
 
 impl IcebergCatalog {
@@ -160,8 +187,8 @@ impl IcebergCatalog {
     /// Such catalog will be seen as an `flatten` catalogs,
     /// a `default` database will be generated directly
     #[minitrace::trace]
-    pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
-        Ok(Self { info, operator })
+    pub fn try_create(info: CatalogInfo, ctl: Arc<dyn iceberg::Catalog>) -> Result<Self> {
+        Ok(Self { info, ctl })
     }
 
     /// list read databases

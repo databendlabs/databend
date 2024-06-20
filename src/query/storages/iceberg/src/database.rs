@@ -35,20 +35,18 @@ use crate::table::IcebergTable;
 
 #[derive(Clone, Debug)]
 pub struct IcebergDatabase {
-    /// catalog this database belongs to
-    ctl_name: String,
-    /// operator pointing to the directory holding iceberg tables
-    db_root: DataOperator,
-    /// database information
+    /// iceberg catalogs
+    ctl: Arc<dyn iceberg::Catalog>,
+
     info: DatabaseInfo,
+    ident: iceberg::NamespaceIdent,
 }
 
 impl IcebergDatabase {
-    /// create a new database, but from reading
-    pub fn create(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
+    pub fn create(ctl: Arc<dyn iceberg::Catalog>, ident: iceberg::NamespaceIdent) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
-            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), db_name),
+            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), ident.encode_in_url()),
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),
                 created_on: chrono::Utc::now(),
@@ -56,11 +54,8 @@ impl IcebergDatabase {
                 ..Default::default()
             },
         };
-        Self {
-            ctl_name: ctl_name.to_string(),
-            db_root,
-            info,
-        }
+
+        Self { ctl, info, ident }
     }
 }
 
