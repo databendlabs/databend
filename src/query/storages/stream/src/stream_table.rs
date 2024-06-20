@@ -155,25 +155,20 @@ impl StreamTable {
             })
     }
 
-    pub fn source_database_id(&self) -> Result<u64> {
-        let database_id = self
+    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+        let source_db_id = self
             .info
             .options()
             .get(OPT_KEY_SOURCE_DATABASE_ID)
-            .ok_or_else(|| ErrorCode::Internal("source database id must be set"))?
-            .parse::<u64>()?;
-        Ok(database_id)
-    }
-
-    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        match self.source_database_id() {
-            Ok(source_database_id) => catalog.get_db_name_by_id(source_database_id).await,
-            Err(e) => {
+            .and_then(|v| v.parse::<u64>().ok());
+        match source_db_id {
+            Some(v) => catalog.get_db_name_by_id(v).await,
+            None => {
                 let source_table_id = self.source_table_id()?;
                 let source_table_meta = catalog
                     .get_table_meta_by_id(source_table_id)
                     .await?
-                    .ok_or(e)?;
+                    .ok_or(ErrorCode::Internal("source database id must be set"))?;
                 let source_db_id = source_table_meta
                     .data
                     .options
