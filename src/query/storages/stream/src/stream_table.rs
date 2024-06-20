@@ -156,20 +156,22 @@ impl StreamTable {
     }
 
     pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let source_db_id = self
+        let source_db_id_opt = self
             .info
             .options()
             .get(OPT_KEY_SOURCE_DATABASE_ID)
-            .and_then(|v| v.parse::<u64>().ok());
-        match source_db_id {
-            Some(v) => catalog.get_db_name_by_id(v).await,
+            .map(|s| s.parse::<u64>().map_err(|e| e.to_string()))
+            .transpose()?;
+
+        let source_db_id = match source_db_id_opt {
+            Some(v) => v,
             None => {
                 let source_table_id = self.source_table_id()?;
                 let source_table_meta = catalog
                     .get_table_meta_by_id(source_table_id)
                     .await?
                     .ok_or(ErrorCode::Internal("source database id must be set"))?;
-                let source_db_id = source_table_meta
+                source_table_meta
                     .data
                     .options
                     .get(OPT_KEY_DATABASE_ID)
@@ -178,10 +180,12 @@ impl StreamTable {
                             "Invalid fuse table, table option {} not found",
                             OPT_KEY_DATABASE_ID
                         ))
-                    })?;
-                Ok(source_db_id.to_owned())
+                    })?
+                    .parse::<u64>()?
             }
-        }
+        };
+
+        catalog.get_db_name_by_id(source_db_id).await
     }
 
     #[async_backtrace::framed]

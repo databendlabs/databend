@@ -229,8 +229,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             }
                             comment.push(stream_info.meta.comment.clone());
 
-                            table_version.push(stream_table.offset()?);
-                            table_id.push(stream_table.source_table_id()?);
+                            table_version.push(stream_table.offset().unwrap_or_default());
+                            table_id.push(stream_table.source_table_id().unwrap_or_default());
                             snapshot_location.push(stream_table.snapshot_loc());
 
                             let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
