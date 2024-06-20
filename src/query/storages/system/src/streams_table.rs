@@ -194,10 +194,14 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
-                        let source_database_name =
-                            stream_table.source_database_name(ctl.as_ref()).await?;
-                        let source_table_name =
-                            stream_table.source_table_name(ctl.as_ref()).await?;
+                        let source_database_name = stream_table
+                            .source_database_name(ctl.as_ref())
+                            .await
+                            .unwrap_or("".to_string());
+                        let source_table_name = stream_table
+                            .source_table_name(ctl.as_ref())
+                            .await
+                            .unwrap_or("".to_string());
 
                         catalogs.push(ctl_name.as_str());
                         databases.push(db_name.to_owned());

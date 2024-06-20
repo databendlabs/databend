@@ -324,10 +324,9 @@ impl Catalog for DatabaseCatalog {
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
         let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
 
-        if let Ok(x) = res {
-            Ok(x)
-        } else {
-            self.mutable_catalog.get_table_name_by_id(table_id).await
+        match res {
+            Ok(Some(x)) => Ok(Some(x)),
+            Ok(None) | Err(_) => self.mutable_catalog.get_table_name_by_id(table_id).await,
         }
     }
 
