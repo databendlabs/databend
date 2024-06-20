@@ -705,8 +705,8 @@ alter table t1 rename to t1_1
 query T
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
-s1
-s2
+s1 (empty)
+s2 (empty)
 
 query IITB
 select a, b, change$action, change$is_update from s1 order by a, b
