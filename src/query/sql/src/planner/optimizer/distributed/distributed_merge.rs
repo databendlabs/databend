@@ -34,7 +34,7 @@ impl MergeSourceOptimizer {
         }
     }
 
-    pub fn optimize(&self, s_expr: &SExpr, flag: bool) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: &SExpr, source_has_row_id: bool) -> Result<SExpr> {
         let left_exchange = s_expr.child(0)?;
         assert_eq!(left_exchange.children.len(), 1);
         let left_exchange_input = left_exchange.child(0)?;
@@ -44,7 +44,15 @@ impl MergeSourceOptimizer {
         let right_exchange_input = right_exchange.child(0)?;
 
         // source is build side
-        let new_join_children = if flag {
+        let new_join_children = if source_has_row_id {
+            vec![
+                Arc::new(left_exchange_input.clone()),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(RelOperator::Exchange(Broadcast)),
+                    Arc::new(right_exchange_input.clone()),
+                )),
+            ]
+        } else {
             vec![
                 Arc::new(left_exchange_input.clone()),
                 Arc::new(SExpr::create_unary(
@@ -53,14 +61,6 @@ impl MergeSourceOptimizer {
                         Arc::new(RelOperator::AddRowNumber(AddRowNumber)),
                         Arc::new(right_exchange_input.clone()),
                     )),
-                )),
-            ]
-        } else {
-            vec![
-                Arc::new(left_exchange_input.clone()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(RelOperator::Exchange(Broadcast)),
-                    Arc::new(right_exchange_input.clone()),
                 )),
             ]
         };

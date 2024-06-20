@@ -483,15 +483,15 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
                 .matches(&join_s_expr)
         {
             // If source is physical table, use row_id
-            let flag = if let Some(source_row_id_index) = plan.source_row_id_index {
+            let source_has_row_id = if let Some(source_row_id_index) = plan.source_row_id_index {
                 new_columns_set.insert(source_row_id_index);
-                false
-            } else {
                 true
+            } else {
+                false
             };
             // Todo(xudong): should consider the cost of shuffle and broadcast.
             // Current behavior is to always use broadcast join.(source table is usually small)
-            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, flag)?;
+            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, source_has_row_id)?;
             enable_right_broadcast = true;
         }
         let distributed = !join_s_expr.has_merge_exchange();

@@ -165,7 +165,7 @@ impl Binder {
                 .metadata
                 .read()
                 .get_table_index(Some(database_name.as_str()), table_name.as_str())
-                .expect("can't get source_table binding");
+                .ok_or_else(|| ErrorCode::Internal("can't get table binding"))?;
 
             let row_id_column_binding = InternalColumnBinding {
                 database_name: Some(database_name.clone()),
@@ -377,7 +377,8 @@ impl Binder {
             &mut target_row_id_index,
         )?;
 
-        let row_id_index = target_row_id_index.expect("can't get target_table row_id");
+        let row_id_index = target_row_id_index
+            .ok_or_else(|| ErrorCode::InvalidRowIdIndex("can't get target_table row_id"))?;
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
