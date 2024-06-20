@@ -40,7 +40,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VE
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 pub struct RealStreamHandler {}
@@ -112,7 +112,7 @@ impl StreamHandler for RealStreamHandler {
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());
         options.insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
-        options.insert(OPT_KEY_TABLE_ID.to_string(), table_id.to_string());
+        options.insert(OPT_KEY_SOURCE_TABLE_ID.to_string(), table_id.to_string());
         options.insert(OPT_KEY_TABLE_VER.to_string(), change_desc.seq.to_string());
         if let Some(snapshot_loc) = change_desc.location {
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);

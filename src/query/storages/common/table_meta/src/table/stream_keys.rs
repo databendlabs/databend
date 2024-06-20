@@ -14,7 +14,7 @@
 
 // Stream table options.
 pub const OPT_KEY_SOURCE_DATABASE_ID: &str = "source_db_id";
-pub const OPT_KEY_TABLE_ID: &str = "table_id";
+pub const OPT_KEY_SOURCE_TABLE_ID: &str = "table_id";
 pub const OPT_KEY_TABLE_VER: &str = "table_version";
 pub const OPT_KEY_MODE: &str = "mode";
 

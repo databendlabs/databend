@@ -44,7 +44,7 @@ use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 pub const STREAM_ENGINE: &str = "STREAM";
@@ -128,7 +128,7 @@ impl StreamTable {
         let table_id = self
             .info
             .options()
-            .get(OPT_KEY_TABLE_ID)
+            .get(OPT_KEY_SOURCE_TABLE_ID)
             .ok_or_else(|| ErrorCode::Internal("source table id must be set"))?
             .parse::<u64>()?;
         Ok(table_id)
