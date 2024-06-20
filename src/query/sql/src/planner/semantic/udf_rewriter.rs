@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::mem;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -108,20 +107,6 @@ impl UdfRewriter {
                 let mut scalar_items = self.udf_arguments.pop_front().unwrap();
                 scalar_items.sort_by_key(|item| item.index);
 
-                // gcd(9, gcd(1, 2))
-                // gcd(1, 2) is a udf function and it will be evaluated in udf plan
-                // let scalar_items = scalar_items
-                //     .iter()
-                //     .filter(|x| {
-                //         if let ScalarExpr::BoundColumnRef(b) = &x.scalar {
-                //             !self.udf_functions_map.contains_key(&b.column.column_name)
-                //         } else {
-                //             true
-                //         }
-                //     })
-                //     .cloned()
-                //     .collect();
-
                 println!("scalar_items {:?}", scalar_items);
 
                 let eval_scalar = EvalScalar {
@@ -166,14 +151,9 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             return Ok(());
         }
 
-        let udf_arguments = Vec::with_capacity(udf.arguments.len());
+        let mut udf_arguments = Vec::with_capacity(udf.arguments.len());
 
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
-            // if let ScalarExpr::UDFCall(_) = arg {
-            //     return Err(ErrorCode::InvalidArgument(
-            //         "the argument of UDF server call can't be a UDF server call",
-            //     ));
-            // }
             self.visit(arg)?;
 
             let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
@@ -235,10 +215,10 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 
         self.udf_functions_map
             .insert(udf.display_name.clone(), replaced_column);
-        self.udf_functions.push(ScalarItem {
+        self.udf_functions.push_back(vec![ScalarItem {
             index,
             scalar: udf.clone().into(),
-        });
+        }]);
 
         Ok(())
     }
