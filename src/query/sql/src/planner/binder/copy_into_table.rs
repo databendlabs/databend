@@ -48,6 +48,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
@@ -153,9 +154,15 @@ impl<'a> Binder {
         );
 
         let stage_schema = infer_table_schema(&required_values_schema)?;
-        let default_values = self
-            .prepare_default_values(bind_context, &required_values_schema)
-            .await?;
+
+        let default_values = if stage_info.file_format_params.need_field_default() {
+            Some(
+                self.prepare_default_values(bind_context, &required_values_schema)
+                    .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(CopyIntoTablePlan {
             catalog_info,
@@ -173,7 +180,7 @@ impl<'a> Binder {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values: Some(default_values),
+                default_values,
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -561,7 +568,17 @@ impl<'a> Binder {
         let mut values = vec![];
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+            let value = evaluator.run(&expr)?;
+            match value {
+                Value::Scalar(scalar) => values.push(scalar.clone()),
+                Value::Column(_) => {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "default value {:?} (of field {}) for missing/empty value is not supported yet when copy into table",
+                        field.default_expr(),
+                        field.name(),
+                    )));
+                }
+            }
         }
         Ok(values)
     }

@@ -1,0 +1,24 @@
+statement ok
+drop table if exists t_uuid
+
+statement ok
+create table t_uuid(id string default uuid(), a int)
+
+statement ok
+remove @data/parquet/unload/uuid
+
+query
+copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
+----
+1 64 377
+
+query error column id doesn't exist
+copy into t_uuid from @data/parquet/unload/uuid file_format = (type = parquet) RETURN_FAILED_ONLY=TRUE
+
+query
+select * from t_uuid
+----
+
+query error not supported
+copy into t_uuid from @data/parquet/unload/uuid file_format = (type = parquet  missing_field_as=field_default)
+
