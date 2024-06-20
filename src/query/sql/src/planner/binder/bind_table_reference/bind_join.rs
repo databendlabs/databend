@@ -235,6 +235,7 @@ impl Binder {
 
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
+        let mut is_null_equal = Vec::new();
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator =
@@ -247,12 +248,19 @@ impl Binder {
                 },
                 false,
             )?;
+            let original_num_conditions = left_conditions.len();
             decorrelator.add_equi_conditions(
                 None,
                 &right_prop.outer_columns,
                 &mut right_conditions,
                 &mut left_conditions,
             )?;
+            if build_side_cache_info.is_some() {
+                let num_conditions = left_conditions.len();
+                for i in original_num_conditions..num_conditions {
+                    is_null_equal.push(i);
+                }
+            }
             if join_type == JoinType::Cross {
                 join_type = JoinType::Inner;
             }
@@ -290,6 +298,7 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            is_null_equal,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
