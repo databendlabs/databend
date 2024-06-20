@@ -32,6 +32,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
+use super::CatalogInfo;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;

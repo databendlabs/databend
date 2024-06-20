@@ -131,19 +131,8 @@ mod catalog_info {
     }
 }
 
-impl CatalogInfo {
-    /// Get the catalog type via catalog info.
-    pub fn catalog_type(&self) -> CatalogType {
-        self.meta.catalog_option.catalog_type()
-    }
-
-    /// Get the catalog name via catalog info.
-    pub fn catalog_name(&self) -> &str {
-        &self.name_ident.catalog_name
-    }
-
-    /// Create a new default catalog info.
-    pub fn new_default() -> CatalogInfo {
+impl Default for CatalogInfo {
+    fn default() -> Self {
         Self {
             id: CatalogId { catalog_id: 0 },
             name_ident: CatalogName {
@@ -156,6 +145,18 @@ impl CatalogInfo {
                 created_on: Default::default(),
             },
         }
+    }
+}
+
+impl CatalogInfo {
+    /// Get the catalog type via catalog info.
+    pub fn catalog_type(&self) -> CatalogType {
+        self.meta.catalog_option.catalog_type()
+    }
+
+    /// Get the catalog name via catalog info.
+    pub fn catalog_name(&self) -> &str {
+        &self.name_ident.catalog_name
     }
 }
 

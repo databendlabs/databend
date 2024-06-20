@@ -213,7 +213,7 @@ impl Catalog for MutableCatalog {
     }
 
     fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+        CatalogInfo::default()
     }
 
     #[async_backtrace::framed]
