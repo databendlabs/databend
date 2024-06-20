@@ -264,12 +264,6 @@ pub trait TableContext: Send + Sync {
         mem_table: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()>;
 
-    fn set_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()>;
-
-    fn get_recursive_cte_scan(&self, name: &str) -> Result<Vec<DataBlock>>;
-
-    fn update_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()>;
-
     fn get_materialized_cte(
         &self,
         idx: (usize, usize),

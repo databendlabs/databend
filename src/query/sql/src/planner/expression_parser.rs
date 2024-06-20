@@ -265,7 +265,7 @@ pub fn parse_default_expr_to_string(
     let expr = scalar.as_expr()?;
 
     // Added columns are not allowed to use expressions,
-    // as the default values will be generated at at each query.
+    // as the default values will be generated at each query.
     if is_add_column && !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
         return Err(ErrorCode::SemanticError(format!(
             "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.",

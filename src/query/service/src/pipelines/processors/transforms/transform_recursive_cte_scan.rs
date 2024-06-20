@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -21,23 +22,26 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_storages_memory::MemoryTable;
 
 use crate::sessions::QueryContext;
 
 pub struct TransformRecursiveCteScan {
     ctx: Arc<QueryContext>,
-    cte_name: String,
+    table: Option<Arc<dyn Table>>,
+    table_name: String,
 }
 
 impl TransformRecursiveCteScan {
     pub fn create(
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
-        cte_name: String,
+        table_name: String,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteScan {
             ctx,
-            cte_name,
+            table: None,
+            table_name,
         })
     }
 }
@@ -49,11 +53,29 @@ impl AsyncSource for TransformRecursiveCteScan {
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let data = self.ctx.get_recursive_cte_scan(&self.cte_name)?;
+        if self.table.is_none() {
+            let table = self
+                .ctx
+                .get_table(
+                    &self.ctx.get_current_catalog(),
+                    &self.ctx.get_current_database(),
+                    &self.table_name,
+                )
+                .await?;
+            self.table = Some(table);
+        }
+        let memory_table = self
+            .table
+            .as_ref()
+            .unwrap()
+            .as_any()
+            .downcast_ref::<MemoryTable>()
+            .unwrap();
+        let data = memory_table.get_blocks();
         if data.is_empty() {
             return Ok(None);
         }
-        self.ctx.update_recursive_cte_scan(&self.cte_name, vec![])?;
+        memory_table.truncate();
         let data = DataBlock::concat(&data)?;
         if data.is_empty() {
             Ok(None)
