@@ -55,9 +55,11 @@ impl ScriptRuntime {
         match lang {
             "javascript" => arrow_udf_js::Runtime::new()
                 .map(|mut runtime| {
-                    runtime.converter.set_arrow_extension_key(EXTENSION_KEY);
                     runtime
-                        .converter
+                        .converter_mut()
+                        .set_arrow_extension_key(EXTENSION_KEY);
+                    runtime
+                        .converter_mut()
                         .set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
                     ScriptRuntime::JavaScript(Arc::new(RwLock::new(runtime)))
                 })

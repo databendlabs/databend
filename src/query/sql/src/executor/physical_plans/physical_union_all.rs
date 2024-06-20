@@ -35,7 +35,7 @@ pub struct UnionAll {
     pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
-    pub cte_name: Option<String>,
+    pub cte_scan_names: Vec<String>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -125,7 +125,7 @@ impl PhysicalPlanBuilder {
             right_outputs,
             schema: DataSchemaRefExt::create(fields),
 
-            cte_name: union_all.cte_name.clone(),
+            cte_scan_names: union_all.cte_scan_names.clone(),
             stat_info: Some(stat_info),
         }))
     }

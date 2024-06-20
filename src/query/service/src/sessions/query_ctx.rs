@@ -964,29 +964,6 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
-    fn set_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()> {
-        let mut ctes_scan = self.shared.recursive_cte_scan.write();
-        ctes_scan.insert(name.to_string(), data);
-        Ok(())
-    }
-
-    fn get_recursive_cte_scan(&self, name: &str) -> Result<Vec<DataBlock>> {
-        let ctes_scan = self.shared.recursive_cte_scan.read();
-        return if let Some(data) = ctes_scan.get(name) {
-            Ok(data.clone())
-        } else {
-            Err(ErrorCode::Internal(format!("Unknown CTE: {}", name)))
-        };
-    }
-
-    fn update_recursive_cte_scan(&self, name: &str, data: Vec<DataBlock>) -> Result<()> {
-        let mut ctes_scan = self.shared.recursive_cte_scan.write();
-        if let Some(old_data) = ctes_scan.get_mut(name) {
-            *old_data = data;
-        }
-        Ok(())
-    }
-
     fn get_materialized_cte(
         &self,
         idx: (IndexType, IndexType),

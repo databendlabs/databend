@@ -1,6 +1,12 @@
 control sortmode rowsort
 
 statement ok
+create or replace database db;
+
+statement ok
+use db;
+
+statement ok
 CREATE OR REPLACE TABLE emp (empno INTEGER,
                   ename VARCHAR,
 				  job VARCHAR,

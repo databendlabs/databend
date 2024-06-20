@@ -16,6 +16,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
@@ -32,6 +33,7 @@ pub struct LoadContext {
     pub schema: TableSchemaRef,
     pub default_values: Option<Vec<Scalar>>,
     pub pos_projection: Option<Vec<usize>>,
+    pub is_copy: bool,
 
     pub file_format_options_ext: FileFormatOptionsExt,
     pub block_compact_thresholds: BlockThresholds,
@@ -62,12 +64,14 @@ impl LoadContext {
             .collect::<Vec<_>>();
         let schema = TableSchemaRefExt::create(fields);
         let default_values = stage_table_info.default_values.clone();
+        let is_copy = ctx.get_query_kind() == QueryKind::CopyIntoTable;
         Ok(Self {
             table_context: ctx,
             block_compact_thresholds,
             schema,
             default_values,
             pos_projection,
+            is_copy,
             file_format_options_ext,
             error_handler: ErrorHandler {
                 on_error_mode,
