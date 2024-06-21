@@ -58,18 +58,18 @@ impl QuotaApi for QuotaMgr {
     async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key()).await?;
         match res {
+            None => Ok(SeqV::new(0, TenantQuota::default())),
             Some(seq_value) => match seq.match_seq(&seq_value) {
+                Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
                 Ok(_) => match prost::Message::decode(seq_value.data.as_slice()) {
+                    Err(_) => Ok(seq_value.into_seqv()?),
                     Ok(pb) => {
                         let v = FromToProto::from_pb(pb)
                             .map_err(|e| ErrorCode::from_string(e.reason))?;
                         Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, v))
                     }
-                    Err(_) => Ok(seq_value.into_seqv()?),
                 },
-                Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
             },
-            None => Ok(SeqV::new(0, TenantQuota::default())),
         }
     }
 
