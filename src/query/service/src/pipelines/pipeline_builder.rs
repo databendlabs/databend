@@ -188,6 +188,12 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => {
                 self.build_add_row_number(add_row_number)
             }
+            PhysicalPlan::MergeIntoSplit(merge_into_split) => {
+                self.build_merge_into_split(merge_into_split)
+            }
+            PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
+                self.build_merge_into_manipulate(merge_into_manipulate)
+            }
 
             // Commit.
             PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),

@@ -173,14 +173,12 @@ impl PhysicalPlanBuilder {
             && !lazy_columns.is_empty()
         {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
-            dbg!("lazy_columns1 = {:?}", &lazy_columns);
             let lazy_columns = lazy_columns
                 .iter()
                 .sorted() // Needs sort because we need to make the order deterministic.
                 .filter(|index| !join_output_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
                 .cloned()
                 .collect::<Vec<_>>();
-            dbg!("lazy_columns2 = {:?}", &lazy_columns);
 
             let mut has_inner_column = false;
             let fetched_fields: Vec<DataField> = lazy_columns
@@ -418,7 +416,6 @@ impl PhysicalPlanBuilder {
             } else {
                 vec![]
             };
-            dbg!("AA schema: {:?}", join_output_schema.clone());
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,

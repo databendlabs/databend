@@ -30,7 +30,6 @@ use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 use databend_common_pipeline_transforms::processors::AsyncTransformer;
 
@@ -40,13 +39,14 @@ use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 
-pub fn build_row_fetcher_pipeline(
+type RowFetcher = Box<dyn Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>>;
+
+pub fn row_fetch_processor(
     ctx: Arc<dyn TableContext>,
-    pipeline: &mut Pipeline,
     row_id_col_offset: usize,
     source: &DataSourcePlan,
     projection: Projection,
-) -> Result<()> {
+) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
         .as_any()
@@ -70,7 +70,7 @@ pub fn build_row_fetcher_pipeline(
                 column_leaves.push(leaves);
             }
             let column_leaves = Arc::new(column_leaves);
-            pipeline.add_transform(|input, output| {
+            Ok(Box::new(move |input, output| {
                 Ok(if block_reader.support_blocking_api() {
                     TransformRowsFetcher::create(
                         input,
@@ -98,11 +98,11 @@ pub fn build_row_fetcher_pipeline(
                         ),
                     )
                 })
-            })
+            }))
         }
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
-            pipeline.add_transform(|input, output| {
+            Ok(Box::new(move |input, output| {
                 Ok(if block_reader.support_blocking_api() {
                     TransformRowsFetcher::create(
                         input,
@@ -130,7 +130,7 @@ pub fn build_row_fetcher_pipeline(
                         ),
                     )
                 })
-            })
+            }))
         }
     }
 }
