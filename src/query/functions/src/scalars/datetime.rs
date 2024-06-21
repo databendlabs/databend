@@ -1621,4 +1621,3 @@ fn months_between(date_a: i32, date_b: i32) -> f64 {
     // Total difference including fractional part
     total_months_diff as f64 + day_fraction
 }
-
