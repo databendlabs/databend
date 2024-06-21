@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::kv_pb_api::KVPbApi;
+use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_app::tenant::TenantQuotaIdent;
@@ -26,7 +28,6 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 use prost;
@@ -58,29 +59,25 @@ impl QuotaApi for QuotaMgr {
         let res = self.kv_api.get_kv(&self.key()).await?;
         match res {
             Some(seq_value) => match seq.match_seq(&seq_value) {
-                Ok(_) => {
-                    match prost::Message::decode(seq_value.data.as_slice()) {
-                        Ok(pb) => {
-                            let v = FromToProto::from_pb(pb)
-                                .map_err(|e| ErrorCode::from_string(e.reason))?;
-                            Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, v))
-                        }
-                        Err(_) => Ok(seq_value.into_seqv()?),
+                Ok(_) => match prost::Message::decode(seq_value.data.as_slice()) {
+                    Ok(pb) => {
+                        let v = FromToProto::from_pb(pb)
+                            .map_err(|e| ErrorCode::from_string(e.reason))?;
+                        Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, v))
                     }
-                }
+                    Err(_) => Ok(seq_value.into_seqv()?),
+                },
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
             },
             None => Ok(SeqV::new(0, TenantQuota::default())),
         }
     }
 
-    // TODO: use pb to replace json
     #[async_backtrace::framed]
     async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
-        let value = serde_json::to_vec(quota)?;
         let res = self
             .kv_api
-            .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
+            .upsert_pb(&UpsertPB::update(self.ident.clone(), quota.clone()).with(seq))
             .await?;
 
         match res.result {
