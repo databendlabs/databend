@@ -37,12 +37,7 @@ fn test_decode_v94_tenant_quota() -> anyhow::Result<()> {
         max_files_per_stage: 4,
         max_users: 5,
     };
-    common::test_load_old(
-        func_name!(),
-        tenant_quota_v94.as_slice(),
-        94,
-        want(),
-    )?;
+    common::test_load_old(func_name!(), tenant_quota_v94.as_slice(), 94, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
