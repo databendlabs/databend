@@ -25,11 +25,11 @@ use crate::MIN_READER_VER;
 use crate::VER;
 
 impl FromToProto for tenant::TenantQuota {
-    type PB = pb::TQuota;
+    type PB = pb::TenantQuota;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::TQuota) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::TenantQuota) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
@@ -42,8 +42,8 @@ impl FromToProto for tenant::TenantQuota {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TQuota, Incompatible> {
-        let p = pb::TQuota {
+    fn to_pb(&self) -> Result<pb::TenantQuota, Incompatible> {
+        let p = pb::TenantQuota {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             max_databases: self.max_databases,
