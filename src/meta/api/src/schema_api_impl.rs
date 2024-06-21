@@ -2435,6 +2435,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>, MetaError> {
+        debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
+
+        let table_id_to_name_key = TableIdToName { table_id };
+
+        let seq_table_name = self.get_pb(&table_id_to_name_key).await?;
+
+        debug!(ident :% =(&table_id_to_name_key); "get_table_name_by_id");
+
+        let table_name = seq_table_name.map(|s| s.data.table_name);
+
+        Ok(table_name)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply, KVAppError> {
         let table_id = req.tb_id;
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
