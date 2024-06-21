@@ -26,7 +26,8 @@ pub trait ReadBytesExt {
     fn ignore_byte(&mut self, b: u8) -> bool;
     fn ignore_bytes(&mut self, bs: &[u8]) -> bool;
     fn ignore_insensitive_bytes(&mut self, bs: &[u8]) -> bool;
-    fn ignore_white_spaces(&mut self) -> bool;
+    fn ignore_white_spaces_or_comments(&mut self) -> bool;
+    fn ignore_comment(&mut self) -> bool;
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize;
     fn keep_read(&mut self, buf: &mut Vec<u8>, f: impl Fn(u8) -> bool) -> usize;
     fn eof(&mut self) -> bool;
@@ -170,8 +171,33 @@ where T: AsRef<[u8]>
         eq
     }
 
-    fn ignore_white_spaces(&mut self) -> bool {
-        self.ignores(|c| c.is_ascii_whitespace()) > 0
+    fn ignore_white_spaces_or_comments(&mut self) -> bool {
+        let mut ignored = false;
+        while (self.ignores(|c| c.is_ascii_whitespace()) > 0) || self.ignore_comment() {
+            ignored = true;
+        }
+        ignored
+    }
+
+    fn ignore_comment(&mut self) -> bool {
+        let remaining_slice = self.remaining_slice();
+        if remaining_slice.len() < 2 {
+            return false;
+        }
+        if remaining_slice.starts_with(b"--") {
+            let to_read = memchr(b'\n', remaining_slice).map_or(remaining_slice.len(), |n| n + 1);
+            self.consume(to_read);
+            true
+        } else if remaining_slice.starts_with(b"/*") {
+            let to_read = remaining_slice
+                .windows(2)
+                .position(|w| w == b"*/")
+                .map_or(remaining_slice.len(), |n| n + 2);
+            self.consume(to_read);
+            true
+        } else {
+            false
+        }
     }
 
     fn until(&mut self, delim: u8, buf: &mut Vec<u8>) -> usize {
