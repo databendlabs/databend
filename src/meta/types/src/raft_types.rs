@@ -71,7 +71,8 @@ pub type Fatal = openraft::error::Fatal<NodeId>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<NodeId>;
 pub type ClientWriteError = openraft::error::ClientWriteError<NodeId, MembershipNode>;
 pub type InitializeError = openraft::error::InitializeError<NodeId, MembershipNode>;
-pub type StreamingError<E> = openraft::error::StreamingError<TypeConfig, E>;
+pub type StreamingError<E = openraft::error::Infallible> =
+    openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<NodeId>;

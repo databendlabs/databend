@@ -278,7 +278,7 @@ opendal = { version = "0.47.0", features = [
 ] }
 # openraft for debugging
 # openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.12", features = [
+openraft = { version = "0.9.13", features = [
     "serde",
     "tracing-log",
     "generic-snapshot-data",

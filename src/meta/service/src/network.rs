@@ -26,23 +26,32 @@ use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_base::runtime;
+use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::error::decompose::DecomposeResult;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
 use databend_common_meta_sled_store::openraft::error::Unreachable;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
+use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_sled_store::openraft::StorageError;
+use databend_common_meta_sled_store::openraft::ToStorageResult;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
+use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::Fatal;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
+use databend_common_meta_types::InstallSnapshotError;
+use databend_common_meta_types::InstallSnapshotRequest;
+use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::NetworkError;
@@ -60,6 +69,7 @@ use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
 use futures::FutureExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -266,11 +276,6 @@ impl Network {
         RPCError::RemoteError(remote_err)
     }
 
-    /// Wrap an error with [`RemoteError`], when building return value for an RPC method.
-    pub(crate) fn to_remote_err<E: Error>(&self, e: E) -> RemoteError<E> {
-        RemoteError::new_with_node(self.target, self.target_node.clone(), e)
-    }
-
     /// Create a new RaftRequest for AppendEntriesRequest,
     /// if it is too large, return `PayloadTooLarge` error
     /// to tell Openraft to split it in to smaller chunks.
@@ -379,14 +384,14 @@ impl Network {
         option: RPCOption,
         target: NodeId,
         tx: mpsc::Sender<SnapshotChunkRequestV003>,
-    ) -> Result<(), StreamingError<Fatal>> {
+    ) -> Result<(), StreamingError> {
         let chunk_size = option.snapshot_chunk_size().unwrap_or(1024 * 1024);
 
         let snapshot_meta = snapshot.meta;
         let db = snapshot.snapshot;
 
         info!(
-            "start to transmit snapshot: {}; db.file_size: {}; db.stat: {}; chunk size:{}",
+            "start to transmit snapshot via v003: {}; db.file_size: {}; db.stat: {}; chunk size:{}",
             snapshot_meta,
             db.file_size(),
             db.stat(),
@@ -462,6 +467,195 @@ impl Network {
 
         Ok(())
     }
+
+    async fn send_snapshot_via_v003(
+        &mut self,
+        vote: Vote,
+        snapshot: Snapshot,
+        cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
+        option: RPCOption,
+    ) -> Result<SnapshotResponse, StreamingError> {
+        info!(id = self.id, target = self.target; "{}", func_name!());
+
+        let target = self.target;
+        let (tx, rx) = mpsc::channel(16);
+        let strm = ReceiverStream::new(rx);
+
+        // Using strm of type `Pin<Box<Stream + Send + 'static>>` result in a higher rank lifetime error
+        // See:
+        // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=8c382b5a6d932aaf81815f3825efd5ed
+        // - https://github.com/rust-lang/rust/issues/87425
+        //
+        // Here we convert it to a concrete type `ReceiverStream` to avoid the error.
+
+        let strm_handle = runtime::spawn_blocking(move || {
+            Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option, target, tx)
+        });
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
+            .await?;
+
+        let grpc_res = client
+            .install_snapshot_v003(strm)
+            .timed(observe_snapshot_send_spent(target))
+            .await;
+
+        info!(
+            "{} resp from: target={}: grpc_result: {:?}",
+            func_name!(),
+            target,
+            grpc_res,
+        );
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target; "install_snapshot failed: {}", e);
+            }
+        }
+
+        let res: Result<SnapshotResponse, StreamingError> = try {
+            let join_res = strm_handle.await;
+            match join_res {
+                Err(e) => {
+                    warn!("Snapshot sending thread error: {}", e);
+                }
+                Ok(strm_res) => {
+                    if let Err(e) = strm_res {
+                        warn!("Snapshot sending thread error: {}", e);
+                        Err(e)?;
+                    }
+                }
+            }
+
+            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+            let snapshot_response = grpc_response.into_inner();
+            let vote = snapshot_response.to_vote()?;
+
+            SnapshotResponse { vote }
+        };
+
+        self.report_metrics_snapshot(res.is_ok());
+        res
+    }
+
+    async fn send_snapshot_via_v1(
+        &mut self,
+        vote: Vote,
+        snapshot: Snapshot,
+        mut cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
+        _option: RPCOption,
+    ) -> Result<SnapshotResponse, StreamingError> {
+        let snapshot_meta = snapshot.meta;
+        let db = snapshot.snapshot;
+
+        let subject_verb = || {
+            (
+                ErrorSubject::Snapshot(Some(snapshot_meta.signature())),
+                ErrorVerb::Read,
+            )
+        };
+
+        let new_chunk = |buf: Vec<u8>, offset: u64, done: bool| {
+            let req = InstallSnapshotRequest {
+                vote,
+                meta: snapshot_meta.clone(),
+                offset,
+                data: buf,
+                done,
+            };
+            SnapshotChunkRequest::new_v1(req)
+        };
+
+        let exporter = DBExporter::new(&db);
+        let mut strm = exporter.export().await.sto_res(subject_verb)?;
+
+        let mut c = std::pin::pin!(cancel);
+        let mut offset = 0;
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection send_snapshot_via_v1 take_client()")
+            .await?;
+
+        while let Some(ent) = strm.try_next().await.sto_res(subject_verb)? {
+            // If canceled, return at once
+            if let Some(err) = c.as_mut().now_or_never() {
+                return Err(err.into());
+            }
+
+            let mut buf = serde_json::to_vec(&ent).map_err(|e| {
+                let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
+                StorageError::from(io_err)
+            })?;
+            buf.push(b'\n');
+
+            let len = buf.len();
+            let req = new_chunk(buf, offset, false);
+            offset += len as u64;
+
+            debug!(chunk_size = len,offset = offset; "sending snapshot v1 chunk");
+
+            let grpc_response = client
+                .install_snapshot_v1(req)
+                .await
+                .map_err(|e| self.status_to_unreachable(e))?;
+
+            let resp = self.parse_snapshot_v1_result(grpc_response)?;
+
+            if resp.vote > vote {
+                // Unfinished, return a response with a higher vote.
+                // The caller checks the vote and return a HigherVote error.
+                return Ok(SnapshotResponse::new(resp.vote));
+            }
+        }
+
+        // last chunk
+
+        let req = new_chunk(vec![], offset, true);
+
+        let grpc_response = client
+            .install_snapshot_v1(req)
+            .await
+            .map_err(|e| self.status_to_unreachable(e))?;
+
+        let resp = self.parse_snapshot_v1_result(grpc_response)?;
+        Ok(SnapshotResponse::new(resp.vote))
+    }
+
+    fn parse_snapshot_v1_result(
+        &self,
+        grpc_response: tonic::Response<RaftReply>,
+    ) -> Result<InstallSnapshotResponse, StreamingError> {
+        let remote_result: Result<InstallSnapshotResponse, RaftError<InstallSnapshotError>> =
+            GrpcHelper::parse_raft_reply(grpc_response).map_err(|serde_err| {
+                new_net_err(&serde_err, || "parse_install_snapshot_v1 reply")
+            })?;
+
+        let snapshot_result = DecomposeResult::<TypeConfig, _, _>::decompose(remote_result)
+            .map_err(|e: RaftError| {
+                warn!(
+                    "target={} install_snapshot_v1 response error: {}",
+                    self.target, e
+                );
+                Unreachable::new(&e)
+            })?;
+
+        let snapshot_response = snapshot_result.map_err(|mismatch| {
+            warn!(
+                mismatch :? = mismatch;
+                "target = {} install_snapshot_v1 mismatch, consider as Unreachable and retry",
+                self.target
+            );
+            Unreachable::new(&mismatch)
+        })?;
+
+        Ok(snapshot_response)
+    }
 }
 
 impl RaftNetwork<TypeConfig> for Network {
@@ -511,7 +705,7 @@ impl RaftNetwork<TypeConfig> for Network {
         self.parse_grpc_resp(grpc_res)
     }
 
-    #[logcall::logcall(err = "debug")]
+    #[logcall::logcall(err = "error")]
     #[minitrace::trace]
     async fn full_snapshot(
         &mut self,
@@ -520,76 +714,62 @@ impl RaftNetwork<TypeConfig> for Network {
         cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
         option: RPCOption,
     ) -> Result<SnapshotResponse, StreamingError<Fatal>> {
-        info!(id = self.id, target = self.target; "{}", func_name!());
+        debug!(id = self.id, target = self.target; "{}", func_name!());
+
+        // dup the cancel future
+        let (tx, mut rx_v003) = tokio::sync::broadcast::channel(1);
+        let mut rx_v001 = tx.subscribe();
+        runtime::spawn(async move {
+            let closed = cancel.await;
+            let _ = tx.send(closed);
+        });
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
-        let target = self.target;
-        let (tx, rx) = mpsc::channel(16);
-        let strm = ReceiverStream::new(rx);
+        let res = self
+            .send_snapshot_via_v003(
+                vote,
+                snapshot.clone(),
+                async move {
+                    rx_v003
+                        .recv()
+                        .await
+                        .unwrap_or_else(|_| ReplicationClosed::new("upstream cancel is closed"))
+                },
+                option.clone(),
+            )
+            .await
+            .map_err(|e| to_streaming_error_with_fatal(e));
 
-        // Using strm of type `Pin<Box<Stream + Send + 'static>>` result in a higher rank lifetime error
-        // See:
-        // - https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=8c382b5a6d932aaf81815f3825efd5ed
-        // - https://github.com/rust-lang/rust/issues/87425
-        //
-        // Here we convert it to a concrete type `ReceiverStream` to avoid the error.
-
-        let strm_handle = runtime::spawn_blocking(move || {
-            Self::snapshot_chunk_stream_v003(vote, snapshot, cancel, option, target, tx)
-        });
-
-        let mut client = self
-            .take_client()
-            .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
-            .await?;
-
-        let res: Result<SnapshotResponse, StreamingError<Fatal>> = try {
-            let grpc_res = client
-                .install_snapshot_v003(strm)
-                .timed(observe_snapshot_send_spent(self.target))
-                .await;
-
-            info!(
-                "{} resp from: target={}: grpc_result: {:?}",
-                func_name!(),
-                self.target,
-                grpc_res,
-            );
-
-            match &grpc_res {
-                Ok(_) => {
-                    self.client.lock().await.replace(client);
-                }
-                Err(e) => {
-                    warn!(target = self.target; "install_snapshot failed: {}", e);
-                }
-            }
-
-            let join_res = strm_handle.await;
-            match join_res {
-                Err(e) => {
-                    warn!("Snapshot sending thread error: {}", e);
-                }
-                Ok(strm_res) => {
-                    if let Err(e) = strm_res {
-                        warn!("Snapshot sending thread error: {}", e);
-                        return Err(e);
-                    }
-                }
-            }
-
-            let grpc_response = grpc_res.map_err(|e| self.status_to_unreachable(e))?;
-
-            let remote_result: Result<SnapshotResponse, Fatal> =
-                GrpcHelper::parse_raft_reply_generic(grpc_response.into_inner())
-                    .map_err(|serde_err| new_net_err(&serde_err, || "parse full_snapshot reply"))?;
-
-            remote_result.map_err(|e| self.to_remote_err(e))?
+        let Err(strm_err) = res else {
+            return res;
         };
 
-        self.report_metrics_snapshot(res.is_ok());
-        res
+        let StreamingError::Unreachable(unreachable) = strm_err else {
+            return Err(strm_err);
+        };
+
+        info!(
+            "full_snapshot_v003: target={} unreachable: {:?}, try send via v1",
+            self.target, unreachable
+        );
+
+        let resp = self
+            .send_snapshot_via_v1(
+                vote,
+                snapshot,
+                async move {
+                    rx_v001
+                        .recv()
+                        .await
+                        .unwrap_or_else(|_| ReplicationClosed::new("upstream cancel is closed"))
+                },
+                option,
+            )
+            .await
+            .map_err(|e| to_streaming_error_with_fatal(e))?;
+
+        Ok(resp)
     }
 
     #[logcall::logcall(err = "debug")]
@@ -685,4 +865,17 @@ fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
 /// Create a function that increases metric value of inflight snapshot sending.
 fn snapshot_send_inflight(target: NodeId) -> impl FnMut(i64) {
     move |i: i64| raft_metrics::network::incr_snapshot_sendto_inflight(&target, i)
+}
+
+fn to_streaming_error_with_fatal(e: StreamingError) -> StreamingError<Fatal> {
+    match e {
+        StreamingError::Closed(e) => StreamingError::Closed(e),
+        StreamingError::StorageError(e) => StreamingError::StorageError(e),
+        StreamingError::Timeout(e) => StreamingError::Timeout(e),
+        StreamingError::Unreachable(e) => StreamingError::Unreachable(e),
+        StreamingError::Network(e) => StreamingError::Network(e),
+        StreamingError::RemoteError(_) => {
+            unreachable!("RemoteError should be handled in the caller")
+        }
+    }
 }

@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
+
 use crate::protobuf::SnapshotChunkRequest;
 use crate::protobuf::SnapshotChunkRequestV003;
 use crate::protobuf::SnapshotChunkV1;
+use crate::protobuf::SnapshotResponseV003;
 use crate::InstallSnapshotRequest;
+use crate::NetworkError;
 use crate::SnapshotMeta;
 use crate::Vote;
 
@@ -61,5 +65,21 @@ impl SnapshotChunkRequestV003 {
             rpc_meta: None,
             chunk,
         }
+    }
+}
+
+impl SnapshotResponseV003 {
+    pub fn new(vote: Vote) -> Self {
+        Self {
+            vote: serde_json::to_string(&vote).unwrap(),
+        }
+    }
+
+    pub fn to_vote(&self) -> Result<Vote, NetworkError> {
+        serde_json::from_str(&self.vote).map_err(|e| {
+            NetworkError::new(
+                &AnyError::new(&e).add_context(|| "when decoding vote from SnapshotResponseV003"),
+            )
+        })
     }
 }
