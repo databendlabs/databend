@@ -257,7 +257,7 @@ impl ReclusterTableInterpreter {
 pub fn build_recluster_physical_plan(
     tasks: ReclusterTasks,
     table_info: TableInfo,
-    catalog_info: CatalogInfo,
+    catalog_info: Arc<CatalogInfo>,
     snapshot: Arc<TableSnapshot>,
     is_distributed: bool,
 ) -> Result<PhysicalPlan> {

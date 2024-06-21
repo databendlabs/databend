@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -40,11 +41,11 @@ use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 pub const STREAM_ENGINE: &str = "STREAM";
@@ -55,49 +56,12 @@ pub enum StreamStatus {
 }
 
 pub struct StreamTable {
-    stream_info: TableInfo,
-
-    table_id: u64,
-    table_name: String,
-    table_database: String,
-    table_version: u64,
-    mode: StreamMode,
-    snapshot_location: Option<String>,
+    info: TableInfo,
 }
 
 impl StreamTable {
-    pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let options = table_info.options();
-        let table_name = options
-            .get(OPT_KEY_TABLE_NAME)
-            .ok_or_else(|| ErrorCode::Internal("table name must be set"))?
-            .clone();
-        let table_database = options
-            .get(OPT_KEY_DATABASE_NAME)
-            .ok_or_else(|| ErrorCode::Internal("table database must be set"))?
-            .clone();
-        let table_id = options
-            .get(OPT_KEY_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
-            .parse::<u64>()?;
-        let table_version = options
-            .get(OPT_KEY_TABLE_VER)
-            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
-            .parse::<u64>()?;
-        let mode = options
-            .get(OPT_KEY_MODE)
-            .and_then(|s| s.parse::<StreamMode>().ok())
-            .unwrap_or(StreamMode::AppendOnly);
-        let snapshot_location = options.get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
-        Ok(Box::new(StreamTable {
-            stream_info: table_info,
-            table_name,
-            table_database,
-            table_id,
-            table_version,
-            mode,
-            snapshot_location,
-        }))
+    pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
+        Ok(Box::new(StreamTable { info }))
     }
 
     pub fn description() -> StorageDescription {
@@ -118,53 +82,110 @@ impl StreamTable {
     }
 
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        let catalog = ctx.get_catalog(self.info.catalog()).await?;
+        let source_table_name = self.source_table_name(catalog.as_ref()).await?;
+        let source_database_name = self.source_database_name(catalog.as_ref()).await?;
         let table = ctx
             .get_table(
-                self.stream_info.catalog(),
-                &self.table_database,
-                &self.table_name,
+                self.info.catalog(),
+                &source_database_name,
+                &source_table_name,
             )
             .await?;
 
-        if table.get_table_info().ident.table_id != self.table_id {
+        if table.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
                 "Base table '{}'.'{}' dropped, cannot read from stream {}",
-                self.table_database, self.table_name, self.stream_info.desc,
+                source_database_name, source_table_name, self.info.desc,
             )));
         }
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table.check_changes_valid(
-            &self.table_database,
-            &self.table_name,
-            self.table_version,
+            &source_database_name,
+            &source_table_name,
+            self.offset()?,
         )?;
 
         Ok(table)
     }
 
-    pub fn offset(&self) -> u64 {
-        self.table_version
+    pub fn offset(&self) -> Result<u64> {
+        let table_version = self
+            .info
+            .options()
+            .get(OPT_KEY_TABLE_VER)
+            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
+            .parse::<u64>()?;
+        Ok(table_version)
     }
 
     pub fn mode(&self) -> StreamMode {
-        self.mode.clone()
+        self.info
+            .options()
+            .get(OPT_KEY_MODE)
+            .and_then(|s| s.parse::<StreamMode>().ok())
+            .unwrap_or(StreamMode::AppendOnly)
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
-        self.snapshot_location.clone()
+        self.info.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
     }
 
-    pub fn source_table_name(&self) -> &str {
-        &self.table_name
+    pub fn source_table_id(&self) -> Result<u64> {
+        let table_id = self
+            .info
+            .options()
+            .get(OPT_KEY_SOURCE_TABLE_ID)
+            .ok_or_else(|| ErrorCode::Internal("source table id must be set"))?
+            .parse::<u64>()?;
+        Ok(table_id)
     }
 
-    pub fn source_table_id(&self) -> u64 {
-        self.table_id
+    pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
+        let source_table_id = self.source_table_id()?;
+        catalog
+            .get_table_name_by_id(source_table_id)
+            .await
+            .and_then(|opt| {
+                opt.ok_or(ErrorCode::UnknownTable(format!(
+                    "Unknown table id: '{}'",
+                    source_table_id
+                )))
+            })
     }
 
-    pub fn source_table_database(&self) -> &str {
-        &self.table_database
+    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+        let source_db_id_opt = self
+            .info
+            .options()
+            .get(OPT_KEY_SOURCE_DATABASE_ID)
+            .map(|s| s.parse::<u64>().map_err(|e| e.to_string()))
+            .transpose()?;
+
+        let source_db_id = match source_db_id_opt {
+            Some(v) => v,
+            None => {
+                let source_table_id = self.source_table_id()?;
+                let source_table_meta = catalog
+                    .get_table_meta_by_id(source_table_id)
+                    .await?
+                    .ok_or(ErrorCode::Internal("source database id must be set"))?;
+                source_table_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_DATABASE_ID)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Invalid fuse table, table option {} not found",
+                            OPT_KEY_DATABASE_ID
+                        ))
+                    })?
+                    .parse::<u64>()?
+            }
+        };
+
+        catalog.get_db_name_by_id(source_db_id).await
     }
 
     #[async_backtrace::framed]
@@ -179,14 +200,14 @@ impl StreamTable {
             v.change_type.clone().unwrap_or(ChangeType::Append)
         });
         fuse_table
-            .do_read_changes_partitions(ctx, push_downs, change_type, &self.snapshot_location)
+            .do_read_changes_partitions(ctx, push_downs, change_type, &self.snapshot_loc())
             .await
     }
 
     #[minitrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
         let base_table = self.source_table(ctx).await?;
-        let status = if base_table.get_table_info().ident.seq == self.table_version {
+        let status = if base_table.get_table_info().ident.seq == self.offset()? {
             StreamStatus::NoData
         } else {
             StreamStatus::MayHaveData
@@ -202,7 +223,7 @@ impl Table for StreamTable {
     }
 
     fn get_table_info(&self) -> &TableInfo {
-        &self.stream_info
+        &self.info
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
@@ -250,11 +271,7 @@ impl Table for StreamTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let table = databend_common_base::runtime::block_on(ctx.get_table(
-            self.stream_info.catalog(),
-            &self.table_database,
-            &self.table_name,
-        ))?;
+        let table = databend_common_base::runtime::block_on(self.source_table(ctx.clone()))?;
         table.read_data(ctx, plan, pipeline, put_cache)
     }
 
@@ -267,7 +284,7 @@ impl Table for StreamTable {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let change_type = change_type.unwrap_or(ChangeType::Append);
         fuse_table
-            .changes_table_statistics(ctx, &self.snapshot_location, change_type)
+            .changes_table_statistics(ctx, &self.snapshot_loc(), change_type)
             .await
     }
 
@@ -297,10 +314,10 @@ impl Table for StreamTable {
         };
         fuse_table
             .get_changes_query(
-                &self.mode,
-                &self.snapshot_location,
+                &self.mode(),
+                &self.snapshot_loc(),
                 table_desc,
-                self.offset(),
+                self.offset()?,
             )
             .await
     }

@@ -854,6 +854,7 @@ pub async fn get_tableinfos_by_ids(
                 name: tbl_names[i].clone(),
                 tenant: tenant_dbname.tenant_name().to_string(),
                 db_type: db_type.clone(),
+                catalog_info: Default::default(),
             };
             tbl_infos.push(Arc::new(tb_info));
         } else {

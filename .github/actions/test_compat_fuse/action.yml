@@ -24,15 +24,15 @@ runs:
       #
       # `meta-ver` is not the target to test, just choose one that is compatible with `<old-query-ver>` and the latest query.
       run: |
-          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.46  1.2.527 base
-          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.241 1.2.527 revoke
-          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.306 1.2.527 rbac
-          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.307 1.2.527 rbac
-          bash ./tests/fuse-compat/test-fuse-compat.sh         1.2.318 1.2.527 rbac
-          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.307 1.2.527 rbac
-          bash ./tests/fuse-compat/test-fuse-forward-compat.sh 1.2.318 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.46  1.2.527 base
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.241 1.2.527 revoke
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.306 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.307 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.318 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.307 1.2.527 rbac
+          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.318 1.2.527 rbac
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
       with:
-        name: fuse-compat
+        name: compat_fuse

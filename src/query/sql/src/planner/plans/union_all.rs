@@ -37,9 +37,10 @@ pub struct UnionAll {
     pub left_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
     // Right of union, output idx and the expected data type
     pub right_outputs: Vec<(IndexType, Option<ScalarExpr>)>,
-    // Recursive cte name
-    // If union is used in recursive cte, it's `Some`.
-    pub cte_name: Option<String>,
+    // Recursive cte scan names
+    // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
+    // The `cte_scan_names` are `m` and `f`
+    pub cte_scan_names: Vec<String>,
 }
 
 impl UnionAll {
@@ -52,10 +53,6 @@ impl UnionAll {
             used_columns.insert(*idx);
         }
         Ok(used_columns)
-    }
-
-    pub fn set_cte_name(&mut self, name: String) {
-        self.cte_name = Some(name);
     }
 }
 

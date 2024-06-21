@@ -27,7 +27,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 
-use super::processor_merge_into_matched_and_split::SourceFullMatched;
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
 use crate::operations::BlockMetaIndex;
 
@@ -157,18 +156,6 @@ impl Processor for MergeIntoSplitProcessor {
                     )));
                     return Ok(());
                 }
-            }
-            //  for distributed execution, if one node matched all source data.
-            //  if we use right join, we will receive a empty block, but we must
-            //  give it to downstream.
-            if data_block.is_empty() {
-                self.output_data_matched_data = Some(data_block.clone());
-                // if a probe block can't match any data of hashtable, it will
-                // give an empty block here? The answer is no. so for right join,
-                // when we get an empty block, it says all source data has been matched
-                let block = data_block.add_meta(Some(Box::new(SourceFullMatched)))?;
-                self.output_data_not_matched_data = Some(block);
-                return Ok(());
             }
 
             let start = Instant::now();

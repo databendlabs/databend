@@ -160,7 +160,7 @@ impl Catalog for FakedCatalog {
         "FakedCatalog".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
     }
 
@@ -210,6 +210,10 @@ impl Catalog for FakedCatalog {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         self.cat.mget_database_names_by_ids(tenant, db_ids).await
+    }
+
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.cat.get_table_name_by_id(table_id).await
     }
 
     async fn get_table(
@@ -778,18 +782,6 @@ impl TableContext for CtxDelegation {
         _idx: (usize, usize),
         _blocks: Arc<RwLock<Vec<DataBlock>>>,
     ) -> Result<()> {
-        todo!()
-    }
-
-    fn set_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
-        todo!()
-    }
-
-    fn get_recursive_cte_scan(&self, _name: &str) -> Result<Vec<DataBlock>> {
-        todo!()
-    }
-
-    fn update_recursive_cte_scan(&self, _name: &str, _data: Vec<DataBlock>) -> Result<()> {
         todo!()
     }
 

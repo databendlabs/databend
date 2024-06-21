@@ -28,18 +28,18 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
 }
 
 impl Binder {
-    // Find all recursive cte scans and update the data type of field in cte scan
+    // Find all recursive cte scans
     #[allow(clippy::only_used_in_recursion)]
     pub fn count_r_cte_scan(
         &mut self,
         expr: &SExpr,
-        count: &mut usize,
+        cte_scan_names: &mut Vec<String>,
         cte_types: &mut Vec<DataType>,
     ) -> Result<()> {
         match expr.plan() {
             RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
-                self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
-                self.count_r_cte_scan(expr.child(1)?, count, cte_types)?;
+                self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
+                self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
             }
 
             RelOperator::ProjectSet(_)
@@ -47,10 +47,10 @@ impl Binder {
             | RelOperator::Udf(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Filter(_) => {
-                self.count_r_cte_scan(expr.child(0)?, count, cte_types)?;
+                self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
             }
             RelOperator::RecursiveCteScan(plan) => {
-                *count += 1_usize;
+                cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
                     cte_types.extend(
                         plan.fields

@@ -29,6 +29,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
+use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::HashJoinState;
@@ -55,6 +56,8 @@ pub struct PipelineBuilder {
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
+
+    pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
 }
 
 impl PipelineBuilder {
@@ -75,6 +78,7 @@ impl PipelineBuilder {
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
+            r_cte_scan_interpreters: vec![],
         }
     }
 
@@ -97,6 +101,7 @@ impl PipelineBuilder {
                 input_join_state: self.join_state,
                 input_probe_schema: self.merge_into_probe_data_fields,
             },
+            r_cte_scan_interpreters: self.r_cte_scan_interpreters,
         })
     }
 

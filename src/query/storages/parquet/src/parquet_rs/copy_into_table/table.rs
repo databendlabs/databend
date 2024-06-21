@@ -147,11 +147,7 @@ impl ParquetTableForCopy {
                                 operator.clone(),
                                 &file_meta_data,
                                 stage_table_info.schema.clone(),
-                                stage_table_info
-                                    .default_values
-                                    .as_ref()
-                                    .expect("default_values must be set for ParquetTableForCopy")
-                                    .clone(),
+                                stage_table_info.default_values.clone(),
                             )?,
                         );
                     }

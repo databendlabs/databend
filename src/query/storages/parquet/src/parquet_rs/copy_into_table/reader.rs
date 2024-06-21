@@ -76,7 +76,7 @@ impl RowGroupReaderForCopy {
         op: Operator,
         file_metadata: &FileMetaData,
         output_schema: TableSchemaRef,
-        default_values: Vec<Scalar>,
+        default_values: Option<Vec<Scalar>>,
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
@@ -125,11 +125,20 @@ impl RowGroupReaderForCopy {
                         )));
                     }
                 }
-                None => Expr::Constant {
-                    span: None,
-                    scalar: default_values[i].clone(),
-                    data_type: to_field.data_type().into(),
-                },
+                None => {
+                    if let Some(default_values) = &default_values {
+                        Expr::Constant {
+                            span: None,
+                            scalar: default_values[i].clone(),
+                            data_type: to_field.data_type().into(),
+                        }
+                    } else {
+                        return Err(ErrorCode::BadDataValueType(format!(
+                            "{} missing column {}",
+                            location, field_name,
+                        )));
+                    }
+                }
             };
             if !matches!(expr, Expr::Constant { .. }) {
                 num_inputs += 1;

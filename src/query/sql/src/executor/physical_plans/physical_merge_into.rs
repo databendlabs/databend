@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::u64::MAX;
 
 use databend_common_exception::ErrorCode;
@@ -59,10 +60,11 @@ pub struct MergeInto {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     // used to record the index of target table's field in merge_source_schema
+    pub source_row_id_idx: Option<usize>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
     pub distributed: bool,
@@ -475,7 +477,7 @@ pub struct MergeIntoAppendNotMatched {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub input_schema: DataSchemaRef,

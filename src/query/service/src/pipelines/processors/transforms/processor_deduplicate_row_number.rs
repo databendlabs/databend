@@ -21,6 +21,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -114,8 +115,8 @@ pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> B
     );
     let value = row_number_col.value.try_downcast::<UInt64Type>().unwrap();
     match value {
-        databend_common_expression::Value::Scalar(scalar) => Buffer::from(vec![scalar]),
-        databend_common_expression::Value::Column(column) => column,
+        Value::Scalar(scalar) => Buffer::from(vec![scalar]),
+        Value::Column(column) => column,
     }
 }
 
