@@ -32,6 +32,7 @@ use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppendEntriesRequest;
@@ -179,7 +180,7 @@ impl RaftServiceImpl {
     async fn do_install_snapshot_v003(
         &self,
         request: Request<Streaming<SnapshotChunkRequestV003>>,
-    ) -> Result<Response<RaftReply>, Status> {
+    ) -> Result<Response<SnapshotResponseV003>, Status> {
         let addr = remote_addr(&request);
 
         let received = self.receive_binary_snapshot(request).await?;
@@ -217,7 +218,8 @@ impl RaftServiceImpl {
 
         let resp = res?;
 
-        GrpcHelper::ok_response(&resp)
+        let resp = SnapshotResponseV003::new(resp.vote);
+        Ok(tonic::Response::new(resp))
     }
 
     /// Receive a single file snapshot in binary chunks.
@@ -355,7 +357,7 @@ impl RaftService for RaftServiceImpl {
     async fn install_snapshot_v003(
         &self,
         request: Request<Streaming<SnapshotChunkRequestV003>>,
-    ) -> Result<Response<RaftReply>, Status> {
+    ) -> Result<Response<SnapshotResponseV003>, Status> {
         let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
         self.do_install_snapshot_v003(request).in_span(root).await
     }

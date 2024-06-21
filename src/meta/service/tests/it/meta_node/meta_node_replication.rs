@@ -324,7 +324,8 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
         .await?;
     let reply = resp.into_inner();
 
-    let resp: SnapshotResponse = serde_json::from_str(&reply.data)?;
+    let vote = reply.to_vote()?;
+    let resp = SnapshotResponse { vote };
 
     assert_eq!(resp.vote, Vote::new_committed(10, 2));
 

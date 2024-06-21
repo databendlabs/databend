@@ -231,6 +231,12 @@ message SnapshotChunkRequestV003 {
   bytes chunk = 20;
 }
 
+// V003 snapshot response
+message SnapshotResponseV003 {
+  // json serialized remote vote
+  string vote = 10;
+}
+
 service RaftService {
 
   // Forward a request to another node.
@@ -244,7 +250,7 @@ service RaftService {
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
   rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
-  rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (RaftReply);
+  rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (SnapshotResponseV003);
   rpc Vote(RaftRequest) returns (RaftReply);
 }
 
