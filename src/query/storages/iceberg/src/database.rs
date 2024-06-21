@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -35,6 +36,11 @@ use crate::table::IcebergTable;
 
 #[derive(Clone, Debug)]
 pub struct IcebergDatabase {
+    /// catalog this database belongs to
+    ctl_info: Arc<CatalogInfo>,
+    /// operator pointing to the directory holding iceberg tables
+    db_root: DataOperator,
+    /// database information
     /// iceberg catalogs
     ctl: Arc<dyn iceberg::Catalog>,
 
@@ -85,7 +91,7 @@ impl Database for IcebergDatabase {
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
         let tbl = IcebergTable::try_create_from_iceberg_catalog(
-            &self.ctl_name,
+            self.ctl_info.clone(),
             self.info.name_ident.database_name(),
             table_name,
             tbl_root,

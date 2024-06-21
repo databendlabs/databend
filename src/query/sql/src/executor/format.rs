@@ -1202,8 +1202,8 @@ fn union_all_to_format_tree(
         to_format_tree(&plan.right, metadata, profs)?,
     ]);
 
-    let root = if let Some(cte_name) = &plan.cte_name {
-        format!("UnionAll(recursive cte: {:?})", cte_name)
+    let root = if !plan.cte_scan_names.is_empty() {
+        "UnionAll(recursive cte)".to_string()
     } else {
         "UnionAll".to_string()
     };

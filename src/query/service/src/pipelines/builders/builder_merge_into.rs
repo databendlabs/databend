@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -48,6 +47,7 @@ use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBloc
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockSerialize;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
+use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
 use crate::pipelines::processors::transforms::AccumulateRowNumber;
@@ -118,9 +118,10 @@ impl PipelineBuilder {
         //  2.2 matched only: rowids and MutationLogs
         //  2.3 insert only: MutationLogs
         self.build_pipeline(input)?;
+        let change_join_order = *change_join_order;
 
         // deserialize MixRowIdKindAndLog
-        if *change_join_order {
+        if change_join_order {
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     Ok(TransformDistributedMergeIntoBlockDeserialize::create(
@@ -134,9 +135,10 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let block_thresholds = table.get_block_thresholds();
 
         // case 1
-        if !*change_join_order {
+        if !change_join_order {
             if matches!(merge_type, MergeIntoType::MatchedOnly) {
                 // we will receive MutationLogs only without row_number.
                 return Ok(());
@@ -186,73 +188,21 @@ impl PipelineBuilder {
             //      output_port_not_matched_data
             //      output_port_log
             // start to append data
-
-            // 1.fill default columns
-            let table_default_schema = &tbl.schema_with_stream().remove_computed_fields();
-            let mut builder = self.main_pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    TransformResortAddOnWithoutSourceSchema::try_create(
-                        self.ctx.clone(),
-                        transform_input_port,
-                        transform_output_port,
-                        Arc::new(DataSchema::from(table_default_schema)),
-                        unmatched.clone(),
-                        tbl.clone(),
-                        Arc::new(DataSchema::from(tbl.schema_with_stream())),
-                    )
-                },
+            // 1. fill default and computed columns
+            self.build_fill_columns_in_merge_into(
+                tbl.clone(),
                 1,
-            )?;
-            builder.add_items(vec![create_dummy_item()]);
-            self.main_pipeline.add_pipe(builder.finalize());
-
-            // 2.fill computed columns
-            let table_computed_schema = &tbl.schema_with_stream().remove_virtual_computed_fields();
-            let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
-            let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
-            if default_schema != computed_schema {
-                builder = self.main_pipeline.add_transform_with_specified_len(
-                    |transform_input_port, transform_output_port| {
-                        TransformAddComputedColumns::try_create(
-                            self.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            default_schema.clone(),
-                            computed_schema.clone(),
-                        )
-                    },
-                    1,
-                )?;
-                builder.add_items(vec![create_dummy_item()]);
-                self.main_pipeline.add_pipe(builder.finalize());
-            }
-
-            // 3. we should avoid too much little block write, because for s3 write, there are too many
-            // little blocks, it will cause high latency.
-            let block_thresholds = table.get_block_thresholds();
-            let mut builder = self.main_pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformCompact::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        BlockCompactor::new(block_thresholds),
-                    )?))
-                },
-                1,
-            )?;
-            builder.add_items(vec![create_dummy_item()]);
-            self.main_pipeline.add_pipe(builder.finalize());
-
-            // 4. cluster sort
-            table.cluster_gen_for_append_with_specified_len(
-                self.ctx.clone(),
-                &mut self.main_pipeline,
-                block_thresholds,
-                1,
-                1,
+                true,
+                false,
+                false,
+                false,
+                unmatched.clone(),
             )?;
 
-            // 5. serialize block
+            // 2. compact blocks and cluster sort
+            self.build_compact_and_cluster_sort_in_merge_into(table, true, false, false, 1, 1)?;
+
+            // 3. serialize block
             let cluster_stats_gen =
                 table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
             let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -270,7 +220,7 @@ impl PipelineBuilder {
             ];
             self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-            // 6. serialize segment
+            // 4. serialize segment
             let serialize_segment_transform = TransformSerializeSegment::new(
                 InputPort::create(),
                 OutputPort::create(),
@@ -361,6 +311,7 @@ impl PipelineBuilder {
             matched,
             field_index_of_input_schema,
             row_id_idx,
+            source_row_id_idx,
             segments,
             distributed,
             merge_type,
@@ -370,6 +321,8 @@ impl PipelineBuilder {
             ..
         } = merge_into;
         let enable_right_broadcast = *enable_right_broadcast;
+        let change_join_order = *change_join_order;
+        let distributed = *distributed;
         self.build_pipeline(input)?;
 
         self.main_pipeline
@@ -469,10 +422,8 @@ impl PipelineBuilder {
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
                     let input_num_columns = input.output_schema()?.num_fields();
-                    assert_eq!(
-                        input.output_schema()?.field(input_num_columns - 1).name(),
-                        ROW_NUMBER_COL_NAME
-                    );
+                    let idx = source_row_id_idx.unwrap_or_else(|| input_num_columns - 1);
+
                     let input_port = InputPort::create();
                     let output_port = OutputPort::create();
                     // project row number column
@@ -482,7 +433,7 @@ impl PipelineBuilder {
                         input_num_columns,
                         self.func_ctx.clone(),
                         vec![BlockOperator::Project {
-                            projection: vec![input_num_columns - 1],
+                            projection: vec![idx],
                         }],
                     ));
                     pipe_items.push(PipeItem {
@@ -510,7 +461,7 @@ impl PipelineBuilder {
         // 1.for matched only, there are no not matched ports
         // 2.for unmatched only/insert only, there are no matched update ports and row_id ports
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
-        if !*distributed {
+        if !distributed {
             // complete pipeline
             if need_match && need_unmatch {
                 assert_eq!(self.main_pipeline.output_len() % 3, 0);
@@ -603,7 +554,7 @@ impl PipelineBuilder {
             }
         }
 
-        let fill_default_len = if !*distributed {
+        let fill_default_len = if !distributed {
             if need_match {
                 // remove first row_id port
                 self.main_pipeline.output_len() - 1
@@ -631,70 +582,20 @@ impl PipelineBuilder {
             }
         };
 
-        // fill default columns
-        let table_default_schema = &table.schema_with_stream().remove_computed_fields();
-        let mut builder = self.main_pipeline.add_transform_with_specified_len(
-            |transform_input_port, transform_output_port| {
-                TransformResortAddOnWithoutSourceSchema::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    Arc::new(DataSchema::from(table_default_schema)),
-                    unmatched.clone(),
-                    tbl.clone(),
-                    Arc::new(DataSchema::from(table.schema_with_stream())),
-                )
-            },
+        // fill default and computed columns
+        self.build_fill_columns_in_merge_into(
+            tbl.clone(),
             fill_default_len,
+            false,
+            distributed,
+            need_match,
+            enable_right_broadcast,
+            unmatched.clone(),
         )?;
 
-        let add_builder_pipe = |mut builder: TransformPipeBuilder, distributed: &bool| -> Pipe {
-            if !*distributed {
-                if need_match {
-                    builder.add_items_prepend(vec![create_dummy_item()]);
-                }
-            } else {
-                if need_match {
-                    // receive row_id
-                    builder.add_items_prepend(vec![create_dummy_item()]);
-                }
-                if enable_right_broadcast {
-                    // receive row_number
-                    builder.add_items(vec![create_dummy_item()]);
-                }
-            }
-            builder.finalize()
-        };
-
-        self.main_pipeline
-            .add_pipe(add_builder_pipe(builder, distributed));
-        // fill computed columns
-        let table_computed_schema = &table.schema_with_stream().remove_virtual_computed_fields();
-        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
-        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
-        if default_schema != computed_schema {
-            builder = self.main_pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    TransformAddComputedColumns::try_create(
-                        self.ctx.clone(),
-                        transform_input_port,
-                        transform_output_port,
-                        default_schema.clone(),
-                        computed_schema.clone(),
-                    )
-                },
-                fill_default_len,
-            )?;
-            self.main_pipeline
-                .add_pipe(add_builder_pipe(builder, distributed));
-        }
-
-        let max_threads = self.settings.get_max_threads()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
-
-        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        // after filling columns, we need to add cluster‘s blocksort if it's a cluster table
         let output_lens = self.main_pipeline.output_len();
-        let serialize_len = if !*distributed {
+        let serialize_len = if !distributed {
             let mid_len = if need_match {
                 // with row_id
                 output_lens - 1
@@ -702,43 +603,20 @@ impl PipelineBuilder {
                 // without row_id
                 output_lens
             };
-
-            // we should avoid too much little block write, because for s3 write, there are too many
-            // little blocks, it will cause high latency.
-            let mut builder = self.main_pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformCompact::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        BlockCompactor::new(block_thresholds),
-                    )?))
-                },
-                mid_len,
-            )?;
-            if need_match {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-            }
-
-            self.main_pipeline.add_pipe(builder.finalize());
-
-            table.cluster_gen_for_append_with_specified_len(
-                self.ctx.clone(),
-                &mut self.main_pipeline,
-                block_thresholds,
-                mid_len,
-                0,
+            self.build_compact_and_cluster_sort_in_merge_into(
+                table, false, need_match, false, mid_len, 0,
             )?;
             mid_len
         } else {
             let (mid_len, last_len) = if need_match && need_unmatch {
-                if !*change_join_order {
+                if !change_join_order {
                     // with row_id and row_number
                     (output_lens - 2, 1)
                 } else {
                     // with row_id
                     (output_lens - 1, 0)
                 }
-            } else if *change_join_order && !need_match && need_unmatch {
+            } else if change_join_order && !need_match && need_unmatch {
                 // insert only
                 (output_lens, 0)
             } else {
@@ -750,44 +628,24 @@ impl PipelineBuilder {
                 // arrive the same result (that's appending only one dummy item)
                 (output_lens - 1, 0)
             };
-
-            // we should avoid too much little block write, because for s3 write, there are too many
-            // little blocks, it will cause high latency.
-            let mut builder = self.main_pipeline.add_transform_with_specified_len(
-                |transform_input_port, transform_output_port| {
-                    Ok(ProcessorPtr::create(TransformCompact::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        BlockCompactor::new(block_thresholds),
-                    )?))
-                },
-                mid_len,
-            )?;
-            if need_match {
-                builder.add_items_prepend(vec![create_dummy_item()]);
-            }
-
-            // need to receive row_number, we should give a dummy item here.
-            if enable_right_broadcast {
-                builder.add_items(vec![create_dummy_item()]);
-            }
-
-            self.main_pipeline.add_pipe(builder.finalize());
-
-            table.cluster_gen_for_append_with_specified_len(
-                self.ctx.clone(),
-                &mut self.main_pipeline,
-                block_thresholds,
+            self.build_compact_and_cluster_sort_in_merge_into(
+                table,
+                false,
+                need_match,
+                enable_right_broadcast,
                 mid_len,
                 last_len,
             )?;
             mid_len
         };
+
         pipe_items.clear();
+        let max_threads = self.settings.get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         if need_match {
             // rowid should be accumulated in main node.
-            if *change_join_order && *distributed {
+            if change_join_order && distributed {
                 pipe_items.push(create_dummy_item())
             } else {
                 pipe_items.push(table.rowid_aggregate_mutator(
@@ -927,7 +785,7 @@ impl PipelineBuilder {
 
         // add distributed_merge_into_block_serialize
         // we will wrap rowid and log as MixRowIdKindAndLog
-        if *distributed && *change_join_order {
+        if distributed && change_join_order {
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     Ok(TransformDistributedMergeIntoBlockSerialize::create(
@@ -936,6 +794,126 @@ impl PipelineBuilder {
                     ))
                 })?;
         }
+        Ok(())
+    }
+
+    fn build_fill_columns_in_merge_into(
+        &mut self,
+        tbl: Arc<dyn Table>,
+        transform_len: usize,
+        is_build_merge_into_append_not_matched: bool,
+        distributed: bool,
+        need_match: bool,
+        enable_right_broadcast: bool,
+        unmatched: UnMatchedExprs,
+    ) -> Result<()> {
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+
+        let add_builder_pipe = |mut builder: TransformPipeBuilder| -> Pipe {
+            if is_build_merge_into_append_not_matched {
+                builder.add_items(vec![create_dummy_item()]);
+            } else if !distributed {
+                if need_match {
+                    builder.add_items_prepend(vec![create_dummy_item()]);
+                }
+            } else {
+                if need_match {
+                    // receive row_id
+                    builder.add_items_prepend(vec![create_dummy_item()]);
+                }
+                if enable_right_broadcast {
+                    // receive row_number
+                    builder.add_items(vec![create_dummy_item()]);
+                }
+            }
+            builder.finalize()
+        };
+
+        // fill default columns
+        let table_default_schema = &table.schema_with_stream().remove_computed_fields();
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                TransformResortAddOnWithoutSourceSchema::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    Arc::new(DataSchema::from(table_default_schema)),
+                    unmatched.clone(),
+                    tbl.clone(),
+                    Arc::new(DataSchema::from(table.schema_with_stream())),
+                )
+            },
+            transform_len,
+        )?;
+        self.main_pipeline.add_pipe(add_builder_pipe(builder));
+
+        // fill computed columns
+        let table_computed_schema = &table.schema_with_stream().remove_virtual_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+        if default_schema != computed_schema {
+            builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    TransformAddComputedColumns::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        default_schema.clone(),
+                        computed_schema.clone(),
+                    )
+                },
+                transform_len,
+            )?;
+            self.main_pipeline.add_pipe(add_builder_pipe(builder));
+        }
+        Ok(())
+    }
+
+    fn build_compact_and_cluster_sort_in_merge_into(
+        &mut self,
+        table: &FuseTable,
+        is_build_merge_into_append_not_matched: bool,
+        need_match: bool,
+        enable_right_broadcast: bool,
+        mid_len: usize,
+        last_len: usize,
+    ) -> Result<()> {
+        let block_thresholds = table.get_block_thresholds();
+        // we should avoid too much little block write, because for s3 write, there are too many
+        // little blocks, it will cause high latency.
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                Ok(ProcessorPtr::create(TransformCompact::try_create(
+                    transform_input_port,
+                    transform_output_port,
+                    BlockCompactor::new(block_thresholds),
+                )?))
+            },
+            mid_len,
+        )?;
+
+        if is_build_merge_into_append_not_matched {
+            builder.add_items(vec![create_dummy_item()]);
+        }
+
+        if need_match {
+            builder.add_items_prepend(vec![create_dummy_item()]);
+        }
+
+        // need to receive row_number, we should give a dummy item here.
+        if enable_right_broadcast {
+            builder.add_items(vec![create_dummy_item()]);
+        }
+        self.main_pipeline.add_pipe(builder.finalize());
+
+        // cluster sort
+        table.cluster_gen_for_append_with_specified_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            mid_len,
+            last_len,
+        )?;
         Ok(())
     }
 }

@@ -165,7 +165,7 @@ impl CatalogCreator for IcebergCreator {
 #[derive(Clone, Debug)]
 pub struct IcebergCatalog {
     /// info of this iceberg table.
-    info: CatalogInfo,
+    info: Arc<CatalogInfo>,
 
     /// iceberg catalogs
     ctl: Arc<dyn iceberg::Catalog>,
@@ -222,7 +222,7 @@ impl Catalog for IcebergCatalog {
     fn name(&self) -> String {
         self.info.name_ident.catalog_name.clone()
     }
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
@@ -246,7 +246,7 @@ impl Catalog for IcebergCatalog {
         let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create(
-            &self.name(),
+            self.info.clone(),
             db_name,
             db_root,
         )))
@@ -301,6 +301,13 @@ impl Catalog for IcebergCatalog {
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in ICEBERG catalog",
         ))
     }
 
