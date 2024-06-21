@@ -23,15 +23,16 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_app::tenant::TenantQuotaIdent;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_types::IntoSeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
-use databend_common_proto_conv::FromToProto;
+use minitrace::func_name;
 
 use super::quota_api::QuotaApi;
+use crate::serde::check_and_upgrade_to_pb;
+use crate::serde::Quota;
 
 pub struct QuotaMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
@@ -60,14 +61,20 @@ impl QuotaApi for QuotaMgr {
             None => Ok(SeqV::new(0, TenantQuota::default())),
             Some(seq_value) => match seq.match_seq(&seq_value) {
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
-                Ok(_) => match prost::Message::decode(seq_value.data.as_slice()) {
-                    Err(_) => Ok(seq_value.into_seqv()?),
-                    Ok(pb) => {
-                        let v = FromToProto::from_pb(pb)
-                            .map_err(|e| ErrorCode::from_string(e.reason))?;
-                        Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, v))
-                    }
-                },
+                Ok(_) => {
+                    let mut quota = Quota::new(func_name!());
+
+                    let u = check_and_upgrade_to_pb(
+                        &mut quota,
+                        &self.key(),
+                        &seq_value,
+                        self.kv_api.as_ref(),
+                    )
+                    .await?;
+
+                    // Keep the original seq.
+                    Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, u.data))
+                }
             },
         }
     }
