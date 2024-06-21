@@ -233,7 +233,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx, plan).await,
+        Plan::MergeInto { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -420,7 +420,8 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     Ok(cascades.memo)
 }
 
-async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
+    let mut plan: MergeInto = s_expr.plan().clone().try_into()?;
     let enable_distributed_merge_into = opt_ctx
         .table_ctx
         .get_settings()
@@ -472,6 +473,8 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         })
     }
 
+    plan.change_join_order = change_join_order;
+    plan.columns_set = new_columns_set;
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
@@ -487,20 +490,22 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             enable_right_broadcast = true;
         }
         let distributed = !join_s_expr.has_merge_exchange();
-        Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: Box::new(join_s_expr),
-            distributed,
-            change_join_order,
-            columns_set: new_columns_set.clone(),
-            enable_right_broadcast,
-            ..*plan
-        })))
+        plan.distributed = distributed;
+        plan.enable_right_broadcast = enable_right_broadcast;
+        Ok(Plan::MergeInto {
+            schema: plan.schema(),
+            s_expr: Box::new(SExpr::create_unary(
+                Arc::new(RelOperator::MergeInto(plan)),
+                Arc::new(join_s_expr),
+            )),
+        })
     } else {
-        Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: Box::new(join_s_expr),
-            change_join_order,
-            columns_set: new_columns_set,
-            ..*plan
-        })))
+        Ok(Plan::MergeInto {
+            schema: plan.schema(),
+            s_expr: Box::new(SExpr::create_unary(
+                Arc::new(RelOperator::MergeInto(plan)),
+                Arc::new(join_s_expr),
+            )),
+        })
     }
 }

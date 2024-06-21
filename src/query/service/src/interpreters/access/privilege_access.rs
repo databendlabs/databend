@@ -33,6 +33,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::MergeInto;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
@@ -911,7 +912,8 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
-            Plan::MergeInto(plan) => {
+            Plan::MergeInto { s_expr, .. } => {
+                let plan: MergeInto = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = &plan.input;
                     match s_expr.get_udfs() {

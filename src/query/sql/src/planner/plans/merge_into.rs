@@ -14,8 +14,10 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_ast::ast::TableAlias;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -27,20 +29,29 @@ use databend_common_expression::FieldIndex;
 use databend_common_meta_types::MetaId;
 
 use crate::binder::MergeIntoType;
+use crate::optimizer::ColumnSet;
+use crate::optimizer::PhysicalProperty;
+use crate::optimizer::RelExpr;
+use crate::optimizer::RelationalProperty;
+use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
+use crate::optimizer::StatInfo;
+use crate::optimizer::Statistics;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct UnmatchedEvaluator {
     pub source_schema: DataSchemaRef,
     pub condition: Option<ScalarExpr>,
     pub values: Vec<ScalarExpr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MatchedEvaluator {
     pub condition: Option<ScalarExpr>,
     // table_schema.idx -> update_expression
@@ -77,6 +88,8 @@ pub struct MergeInto {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub enable_right_broadcast: bool,
+    pub target_table_index: usize,
+    pub lazy_columns: HashSet<usize>,
 }
 
 impl std::fmt::Debug for MergeInto {
@@ -161,5 +174,71 @@ impl MergeInto {
 
     pub fn schema(&self) -> DataSchemaRef {
         self.merge_into_table_schema().unwrap()
+    }
+}
+
+impl Eq for MergeInto {}
+
+impl PartialEq for MergeInto {
+    fn eq(&self, other: &Self) -> bool {
+        self.catalog == other.catalog
+            && self.database == other.database
+            && self.table == other.table
+            && self.table_id == other.table_id
+            && self.input == other.input
+            && self.matched_evaluators == other.matched_evaluators
+            && self.unmatched_evaluators == other.unmatched_evaluators
+            && self.distributed == other.distributed
+            && self.can_try_update_column_only == other.can_try_update_column_only
+    }
+}
+
+impl std::hash::Hash for MergeInto {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.split_idx.hash(state);
+    }
+}
+
+impl Operator for MergeInto {
+    fn rel_op(&self) -> RelOp {
+        RelOp::MergeInto
+    }
+
+    fn arity(&self) -> usize {
+        1
+    }
+
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        Ok(Arc::new(RelationalProperty {
+            output_columns: ColumnSet::new(),
+            outer_columns: ColumnSet::new(),
+            used_columns: ColumnSet::new(),
+            orderings: vec![],
+            partition_orderings: None,
+        }))
+    }
+
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
+    }
+
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        Ok(Arc::new(StatInfo {
+            cardinality: 0.0,
+            statistics: Statistics {
+                precise_cardinality: None,
+                column_stats: Default::default(),
+            },
+        }))
+    }
+
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        Ok(required.clone())
     }
 }
