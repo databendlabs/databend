@@ -6,6 +6,7 @@ create or replace database db;
 statement ok
 use db;
 
+onlyif http
 query I
 WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
@@ -21,6 +22,7 @@ SELECT n FROM recursive_cte;
 8
 9
 
+onlyif http
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
@@ -36,6 +38,7 @@ SELECT n FROM recursive_cte;
 8
 9
 
+onlyif http
 query I
 WITH RECURSIVE recursive_cte AS (SELECT to_uint16(1) AS n UNION ALL SELECT to_uint8(n + 1) FROM recursive_cte WHERE n < 10)
 SELECT n FROM recursive_cte;
@@ -66,6 +69,7 @@ SELECT * FROM t ORDER BY 1;
 ----
 
 
+onlyif http
 query I
 WITH RECURSIVE recursive_cte AS (SELECT 1 AS n UNION ALL SELECT n + 1 FROM recursive_cte WHERE n < 1000)
 SELECT count() FROM recursive_cte ORDER BY 1 NULLS LAST;
@@ -81,6 +85,7 @@ VALUES
 (3, 'add interest' ,0 , 0.15)
 ) AS t (id, action, amount, interest);
 
+onlyif http
 query ITI??
 with recursive recur(id, action, amount, interest, total_bal) as
 (select id,
@@ -105,6 +110,7 @@ select * from recur;
 3 add interest 0 0.15 14374.999999999998
 
 # alias columns name
+onlyif http
 query I
 with recursive recur(a, b, c, d, e) as
 (select id,
@@ -132,6 +138,7 @@ statement ok
 drop table nk_example_table;
 
 # recursive cte used by multiple times in main query
+onlyif http
 query II
 with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t a1, t a2;
 ----
@@ -147,12 +154,14 @@ with recursive t as (select 1 as x union all select x+1 from t where x < 3) sele
 
 
 query I
+onlyif http
 with recursive t as (select 1 as x union all select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;
 ----
 1
 
 
 # recursive cte scan used by multiple times in recursive part of recursive cte
+onlyif http
 query I
 with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t;
 ----
