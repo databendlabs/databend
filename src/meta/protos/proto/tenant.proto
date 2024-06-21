@@ -28,3 +28,23 @@ message TIdent {
   // Resource name
   string name = 2;
 }
+
+message TQuota {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // The max databases can be created in the tenant.
+  uint32 max_databases = 1;
+
+  // The max tables per database can be created in the tenant.
+  uint32 max_tables_per_database = 2;
+
+  // The max stages can be created in the tenant.
+  uint32 max_stages = 3;
+
+  // The max files per stage can be created in the tenant.
+  uint32 max_files_per_stage = 4;
+
+  // The max number of users can be created in the tenant.
+  uint32 max_users = 5;
+}

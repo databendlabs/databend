@@ -96,3 +96,4 @@ mod v090_role_info;
 mod v091_role_user_create_time_info;
 mod v092_orc_format_params;
 mod v093_parquet_format_params;
+mod v094_tenant_quota;
