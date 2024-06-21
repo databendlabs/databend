@@ -71,7 +71,10 @@ impl PipelineBuilder {
         if partition_by.is_empty() {
             self.main_pipeline.try_resize(1)?;
         }
-        let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
+        let mut func = vec![];
+        for function in &window.func {
+            func.push(WindowFunctionInfo::try_create(function, &input_schema)?);
+        }
         // Window
         self.main_pipeline.add_transform(|input, output| {
             // The transform can only be created here, because it cannot be cloned.
