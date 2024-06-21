@@ -154,7 +154,11 @@ impl<T: Number> TransformWindow<T> {
 
     #[inline(always)]
     fn block_at(&self, index: &RowPtr) -> &DataBlock {
-        &self.blocks[index.block - self.first_block].block
+        let access_index = index.block.checked_sub(self.first_block).expect(&format!(
+            "Invalid access: index.block ({}) < first_block ({})",
+            index.block, self.first_block
+        ));
+        &self.blocks[access_index].block
     }
 
     #[inline(always)]
@@ -958,7 +962,9 @@ where T: Number + ResultTypeOfUnary
             });
 
             while self.current_row < self.partition_end {
-                if !self.are_peers(&self.peer_group_start, &self.current_row, false) {
+                if self.is_ranking
+                    && !self.are_peers(&self.peer_group_start, &self.current_row, false)
+                {
                     self.peer_group_start = self.current_row;
                     self.peer_group_end = self.current_row;
                     self.peer_group_ended = false;
