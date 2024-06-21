@@ -149,7 +149,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+        CatalogInfo::default()
     }
 
     #[async_backtrace::framed]

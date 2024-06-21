@@ -171,7 +171,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+        CatalogInfo::default()
     }
 
     #[async_backtrace::framed]
