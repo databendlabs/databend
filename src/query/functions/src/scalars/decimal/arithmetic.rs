@@ -88,7 +88,6 @@ macro_rules! binary_decimal {
             let scale_a = $left.scale();
             let scale_b = $right.scale();
 
-
             // Note: the result scale is always larger than the left scale
             let scale_mul = scale_b + $size.scale - scale_a;
             let multiplier = T::e(scale_mul as u32);
@@ -103,9 +102,27 @@ macro_rules! binary_decimal {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(one);
                 } else if a.is_negative() == b.is_negative() {
-                    result.push((a * multiplier + b / 2).div(b));
+                   match a.do_round_div(b, multiplier) {
+                        Some(t) => result.push(t),
+                        None => {
+                            ctx.set_error(
+                                result.len(),
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
+                            result.push(one);
+                        }
+                   }
                 } else {
-                    result.push((a * multiplier - b / 2).div(b));
+                    match a.do_round_div(b, multiplier) {
+                        Some(t) => result.push(t),
+                        None => {
+                            ctx.set_error(
+                                result.len(),
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
+                            result.push(one);
+                        }
+                   }
                 }
             };
 

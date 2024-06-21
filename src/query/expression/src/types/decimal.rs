@@ -26,6 +26,7 @@ use databend_common_io::display_decimal_256;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use ethnum::AsI256;
+use ethnum::I256;
 use itertools::Itertools;
 use num_traits::NumCast;
 use serde::Deserialize;
@@ -348,6 +349,8 @@ pub trait Decimal:
     fn checked_mul(self, rhs: Self) -> Option<Self>;
     fn checked_rem(self, rhs: Self) -> Option<Self>;
 
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self>;
+
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
@@ -441,6 +444,11 @@ impl Decimal for i128 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
+        let res = (I256::from(self) * I256::from(mul) + I256::from(rhs) / 2) / I256::from(rhs);
+        Some(*res.low())
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -645,6 +653,10 @@ impl Decimal for i256 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
+        self.checked_mul(mul).map(|x| (x + rhs / 2) / rhs)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
