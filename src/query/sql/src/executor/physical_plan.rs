@@ -751,6 +751,7 @@ impl PhysicalPlan {
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_data_source(table_index),
             PhysicalPlan::Udf(plan) => plan.input.try_find_data_source(table_index),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::MergeIntoSplit(plan) => plan.input.try_find_data_source(table_index),
             _ => None,
         }
     }

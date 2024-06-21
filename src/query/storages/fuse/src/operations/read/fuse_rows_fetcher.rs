@@ -172,13 +172,18 @@ where F: RowsFetcher + Send + Sync + 'static
             return Ok(data);
         }
 
-        let row_id_column = data.columns()[self.row_id_col_offset]
+        let entry = &data.columns()[self.row_id_col_offset];
+        let value = entry
             .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), num_rows)
-            .into_number()
-            .unwrap()
-            .into_u_int64()
-            .unwrap();
+            .convert_to_full_column(&entry.data_type, num_rows);
+        let row_id_column = if matches!(entry.data_type, DataType::Number(NumberDataType::UInt64)) {
+            value.into_number().unwrap().into_u_int64().unwrap()
+        } else {
+            // From merge into matched data, the row id column is nullable but has no null value.
+            let value = *value.into_nullable().unwrap();
+            debug_assert!(value.validity.unset_bits() == 0);
+            value.column.into_number().unwrap().into_u_int64().unwrap()
+        };
 
         let fetched_block = self.fetcher.fetch(&row_id_column).await?;
 
