@@ -832,7 +832,7 @@ impl Catalog for FakedCatalog {
         "FakedCatalog".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
     }
 

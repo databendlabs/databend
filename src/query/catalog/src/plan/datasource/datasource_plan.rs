@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
@@ -29,7 +30,7 @@ use crate::table_args::TableArgs;
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataSourcePlan {
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub source_info: DataSourceInfo,
 
     pub output_schema: TableSchemaRef,

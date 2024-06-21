@@ -117,7 +117,7 @@ impl CopyIntoTableMode {
 pub struct CopyIntoTablePlan {
     pub no_file_to_copy: bool,
 
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub database_name: String,
     pub table_name: String,
     pub from_attachment: bool,

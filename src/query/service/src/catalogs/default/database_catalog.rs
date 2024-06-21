@@ -170,8 +170,8 @@ impl Catalog for DatabaseCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        Arc::default()
     }
 
     #[async_backtrace::framed]
