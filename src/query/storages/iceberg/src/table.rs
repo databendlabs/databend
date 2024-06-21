@@ -54,12 +54,17 @@ use tokio::sync::OnceCell;
 use crate::partition::IcebergPartInfo;
 use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
+use crate::IcebergCatalog;
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
 /// accessor wrapper as a table
 pub struct IcebergTable {
     info: TableInfo,
+    ctl: IcebergCatalog,
+    database_name: String,
+    table_name: String,
+
     table: OnceCell<iceberg::table::Table>,
 }
 
@@ -67,8 +72,15 @@ impl IcebergTable {
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
+        let ctl = IcebergCatalog::try_create(&info.catalog_info)?;
+        let (db_name, table_name) = info.desc.split_once(",").ok_or(|| {
+            ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", info.desc))
+        })?;
         Ok(Box::new(Self {
             info,
+            ctl,
+            database_name: db_name.to_string(),
+            table_name: table_name.to_string(),
             table: OnceCell::new(),
         }))
     }
@@ -90,46 +102,41 @@ impl IcebergTable {
         })
     }
 
-    pub async fn load_iceberg_table(dop: DataOperator) -> Result<icelake::Table> {
-        // FIXME: we should implement catalog for icelake.
-        let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-            OperatorCreatorWrapper(dop.clone()),
-        ));
-
-        let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-        icelake_catalog.load_table(&table_id).await.map_err(|err| {
-            ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-        })
+    pub async fn load_iceberg_table(
+        ctl: &IcebergCatalog,
+        database: &str,
+        table_name: &str,
+    ) -> Result<iceberg::table::Table> {
+        let db_ident = iceberg::NamespaceIdent::new(database.to_string());
+        let table = ctl
+            .iceberg_catalog()
+            .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
+            .await
+            .map_err(|err| {
+                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+            })?;
+        Ok(table)
     }
 
-    pub async fn get_schema(table: &icelake::Table) -> Result<TableSchema> {
-        let meta = table.current_table_metadata();
+    pub fn get_schema(table: &iceberg::table::Table) -> Result<TableSchema> {
+        let meta = table.metadata();
 
         // Build arrow schema from iceberg metadata.
-        let arrow_schema: ArrowSchema = meta
-            .schemas
-            .last()
-            .ok_or_else(|| {
-                ErrorCode::ReadTableDataError("Iceberg table schema is empty".to_string())
-            })?
-            .clone()
-            .try_into()
-            .map_err(|e| {
-                ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
-            })?;
+        let arrow_schema: ArrowSchema = meta.current_schema().try_into().map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
+        })?;
         TableSchema::try_from(&arrow_schema)
     }
 
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
-        catalog_info: Arc<CatalogInfo>,
-        database: &str,
+        ctl: IcebergCatalog,
+        database_name: &str,
         table_name: &str,
-        dop: DataOperator,
     ) -> Result<IcebergTable> {
-        let table = Self::load_iceberg_table(dop.clone()).await?;
-        let table_schema = Self::get_schema(&table).await?;
+        let table = Self::load_iceberg_table(&ctl, database_name, table_name).await?;
+        let table_schema = Self::get_schema(&table)?;
 
         // construct table info
         let info = TableInfo {
@@ -140,7 +147,6 @@ impl IcebergTable {
                 schema: Arc::new(table_schema),
                 engine: "iceberg".to_string(),
                 created_on: Utc::now(),
-                storage_params: Some(dop.params()),
                 ..Default::default()
             },
             catalog_info,
@@ -149,24 +155,24 @@ impl IcebergTable {
 
         Ok(Self {
             info,
+            ctl,
+            database_name: database_name.to_string(),
+            table_name: table_name.to_string(),
             table: OnceCell::new_with(Some(table)),
         })
     }
 
-    async fn table(&self) -> Result<&icelake::Table> {
+    async fn table(&self) -> Result<&iceberg::table::Table> {
         self.table
             .get_or_try_init(|| async {
-                let sp = self.get_storage_params()?;
-                let op = DataOperator::try_new(sp)?;
-                // FIXME: we should implement catalog for icelake.
-                let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-                    OperatorCreatorWrapper(op),
-                ));
-
-                let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-                let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
-                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-                })?;
+                let table =
+                    Self::load_iceberg_table(&self.ctl, &self.database_name, &self.table_name)
+                        .await
+                        .map_err(|err| {
+                            ErrorCode::ReadTableDataError(format!(
+                                "Iceberg catalog load failed: {err:?}"
+                            ))
+                        })?;
 
                 Ok(table)
             })

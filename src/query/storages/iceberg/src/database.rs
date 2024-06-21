@@ -33,26 +33,22 @@ use opendal::EntryMode;
 use opendal::Metakey;
 
 use crate::table::IcebergTable;
+use crate::IcebergCatalog;
 
 #[derive(Clone, Debug)]
 pub struct IcebergDatabase {
-    /// catalog this database belongs to
-    ctl_info: Arc<CatalogInfo>,
-    /// operator pointing to the directory holding iceberg tables
-    db_root: DataOperator,
-    /// database information
-    /// iceberg catalogs
-    ctl: Arc<dyn iceberg::Catalog>,
+    ctl: IcebergCatalog,
 
     info: DatabaseInfo,
     ident: iceberg::NamespaceIdent,
 }
 
 impl IcebergDatabase {
-    pub fn create(ctl: Arc<dyn iceberg::Catalog>, ident: iceberg::NamespaceIdent) -> Self {
+    pub fn create(ctl: IcebergCatalog, name: &str) -> Self {
+        let ident = iceberg::NamespaceIdent::new(name.to_string());
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
-            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), ident.encode_in_url()),
+            name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), name),
             meta: DatabaseMeta {
                 engine: "iceberg".to_string(),
                 created_on: chrono::Utc::now(),
@@ -77,24 +73,10 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
-        let path = format!("{table_name}/");
-        let op = self.db_root.operator();
-        // check existence first
-        if !op.stat(&path).await?.mode().is_dir() {
-            return Err(ErrorCode::UnknownTable(format!(
-                "table {table_name} does not exist or is not a valid table"
-            )));
-        }
-
-        let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
-        let table_sp = table_sp.auto_detect().await?;
-        let tbl_root = DataOperator::try_create(&table_sp).await?;
-
         let tbl = IcebergTable::try_create_from_iceberg_catalog(
-            self.ctl_info.clone(),
+            self.ctl.clone(),
             self.info.name_ident.database_name(),
             table_name,
-            tbl_root,
         )
         .await?;
         let tbl = Arc::new(tbl) as Arc<dyn Table>;
@@ -104,16 +86,12 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
+        let table_names = self.ctl.iceberg_catalog().list_tables(self.ident).await?;
+
         let mut tables = vec![];
-        let op = self.db_root.operator();
-        let mut lister = op.lister_with("/").metakey(Metakey::Mode).await?;
-        while let Some(entry) = lister.next().await.transpose()? {
-            let meta = entry.metadata();
-            if meta.mode() != EntryMode::DIR {
-                continue;
-            }
-            let tbl_name = entry.name().trim_end_matches('/');
-            let table = self.get_table(tbl_name).await?;
+
+        for table_name in table_names {
+            let table = self.get_table(&table_name.name).await?;
             tables.push(table);
         }
         Ok(tables)
