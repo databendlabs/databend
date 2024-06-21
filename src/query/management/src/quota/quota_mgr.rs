@@ -30,7 +30,6 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
-use prost;
 
 use super::quota_api::QuotaApi;
 

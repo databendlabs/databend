@@ -28,8 +28,8 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v94_tenant_quota() -> anyhow::Result<()> {
-    let tenant_quota_v94 = vec![8, 1, 16, 2, 24, 3, 32, 4, 40, 5, 160, 6, 94, 168, 6, 24];
+fn test_decode_v95_tenant_quota() -> anyhow::Result<()> {
+    let tenant_quota_v95 = vec![8, 1, 16, 2, 24, 3, 32, 4, 40, 5, 160, 6, 94, 168, 6, 24];
     let want = || TenantQuota {
         max_databases: 1,
         max_tables_per_database: 2,
@@ -37,7 +37,7 @@ fn test_decode_v94_tenant_quota() -> anyhow::Result<()> {
         max_files_per_stage: 4,
         max_users: 5,
     };
-    common::test_load_old(func_name!(), tenant_quota_v94.as_slice(), 94, want())?;
+    common::test_load_old(func_name!(), tenant_quota_v95.as_slice(), 94, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
