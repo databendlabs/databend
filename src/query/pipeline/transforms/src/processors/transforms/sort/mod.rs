@@ -16,6 +16,7 @@ mod cursor;
 mod merger;
 mod rows;
 mod spill;
+mod loser_tree;
 pub mod utils;
 
 pub use cursor::*;

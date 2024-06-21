@@ -1,4 +1,20 @@
-struct LoserTree<T: Ord> {
+// Copyright 2024 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use core::ops::{Deref, DerefMut};
+
+pub struct LoserTree<T: Ord> {
     tree: Vec<Option<usize>>,
     nulls: Vec<bool>,
     data: Vec<T>,
@@ -53,24 +69,25 @@ impl<T: Ord> LoserTree<T> {
             _ => (),
         }
 
-        let mut index = self.tree[0].unwrap();
-        let mut father = (index + self.data.len()) / 2;
-        while father > 0 {
-            if let Some(f_index) = self.tree[father] {
-                if self.nulls[f_index] {
-                    father /= 2;
+        let top = self.tree[0].unwrap();
+        let mut top2 = top;
+        let mut father_loc = (top2 + self.data.len()) / 2;
+        while father_loc > 0 {
+            if let Some(father) = self.tree[father_loc] {
+                if self.nulls[father] {
+                    father_loc /= 2;
                     continue;
                 }
-                if index == self.tree[0].unwrap()
-                    || self.nulls[index]
-                    || self.data[index] > self.data[f_index]
+                if top2 == top
+                    || self.nulls[top2]
+                    || self.data[top2] > self.data[father]
                 {
-                    index = f_index;
+                    top2 = father;
                 }
-                father /= 2;
+                father_loc /= 2;
             }
         }
-        Some(&self.data[index])
+        Some(&self.data[top2])
     }
 
     pub fn peek_mut(&mut self) -> Option<PeekMut<T>> {
@@ -81,28 +98,29 @@ impl<T: Ord> LoserTree<T> {
         }
     }
 
-    fn adjust(&mut self, mut index: usize) {
-        let mut father = (index + self.data.len()) / 2;
-        while father > 0 {
-            match self.tree[father] {
-                Some(f_index) => {
-                    if self.nulls[f_index] {
-                        father /= 2;
+    fn adjust(&mut self, index: usize) {
+        let mut winner: usize = index;
+        let mut father_loc = (winner + self.data.len()) / 2;
+        while father_loc > 0 {
+            match self.tree[father_loc] {
+                Some(father) => {
+                    if self.nulls[father] {
+                        father_loc /= 2;
                         continue;
                     }
-                    if self.nulls[index] || self.data[index] > self.data[f_index] {
-                        self.tree[father] = Some(index);
-                        index = f_index;
+                    if self.nulls[winner] || self.data[winner] > self.data[father] {
+                        self.tree[father_loc] = Some(winner);
+                        winner = father;
                     }
-                    father /= 2;
+                    father_loc /= 2;
                 }
                 None => {
-                    self.tree[father] = Some(index);
+                    self.tree[father_loc] = Some(winner);
                     break;
                 }
             }
         }
-        self.tree[0] = Some(index);
+        self.tree[0] = Some(winner);
     }
 }
 
@@ -148,16 +166,16 @@ mod test {
         assert_eq!(loser_tree.is_empty(), false);
         for i in 2..=9 {
             assert_eq!(loser_tree.len(), 10 - i);
-            assert_eq!(loser_tree.peek(), Some(i).as_ref());
-            assert_eq!(loser_tree.peek(), Some(i).as_ref());
+            assert_eq!(loser_tree.peek(), Some(11-i).as_ref());
+            assert_eq!(loser_tree.peek(), Some(11-i).as_ref());
             if i == 9 {
                 assert_eq!(loser_tree.peek_top2(), None);
                 assert_eq!(loser_tree.peek_top2(), None);
             } else {
-                assert_eq!(loser_tree.peek_top2(), Some(i + 1).as_ref());
-                assert_eq!(loser_tree.peek_top2(), Some(i + 1).as_ref());
+                assert_eq!(loser_tree.peek_top2(), Some(10-i).as_ref());
+                assert_eq!(loser_tree.peek_top2(), Some(10-i).as_ref());
             }
-            assert_eq!(loser_tree.pop(), Some(i).as_ref());
+            assert_eq!(loser_tree.pop(), Some(11-i).as_ref());
         }
 
         assert_eq!(loser_tree.pop(), None);
@@ -168,27 +186,29 @@ mod test {
         assert_eq!(loser_tree.is_empty(), true);
     }
 
+    #[test]
     fn basic_odd() {
         let data = vec![4, 6, 5];
         let mut loser_tree = LoserTree::from(data);
 
-        assert_eq!(loser_tree.pop(), Some(4).as_ref());
         assert_eq!(loser_tree.pop(), Some(6).as_ref());
         assert_eq!(loser_tree.pop(), Some(5).as_ref());
+        assert_eq!(loser_tree.pop(), Some(4).as_ref());
         assert_eq!(loser_tree.pop(), None);
         assert_eq!(loser_tree.pop(), None);
     }
 
+    #[test]
     fn peek_mut() {
-        let data = vec![2, 3, 7];
+        let data = vec![4, 6, 7];
         let mut loser_tree = LoserTree::from(data);
 
-        *loser_tree.peek_mut().unwrap() = 4;
         *loser_tree.peek_mut().unwrap() = 5;
+        *loser_tree.peek_mut().unwrap() = 8;
 
+        assert_eq!(loser_tree.pop(), Some(8).as_ref());
+        assert_eq!(loser_tree.pop(), Some(5).as_ref());
         assert_eq!(loser_tree.pop(), Some(4).as_ref());
-        assert_eq!(loser_tree.pop(), Some(6).as_ref());
-        assert_eq!(loser_tree.pop(), Some(7).as_ref());
         assert_eq!(loser_tree.pop(), None);
     }
 }
