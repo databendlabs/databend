@@ -368,6 +368,13 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",

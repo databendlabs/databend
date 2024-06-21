@@ -321,6 +321,16 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
+
+        match res {
+            Ok(Some(x)) => Ok(Some(x)),
+            Ok(None) | Err(_) => self.mutable_catalog.get_table_name_by_id(table_id).await,
+        }
+    }
+
+    #[async_backtrace::framed]
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.immutable_catalog.get_db_name_by_id(db_id).await;
 

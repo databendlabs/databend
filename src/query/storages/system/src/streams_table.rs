@@ -194,15 +194,25 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
+                        let source_database_name =
+                            stream_table.source_database_name(ctl.as_ref()).await.ok();
+                        let source_table_name =
+                            stream_table.source_table_name(ctl.as_ref()).await.ok();
+                        let source_desc =
+                            if source_table_name.is_none() || source_database_name.is_none() {
+                                None
+                            } else {
+                                Some(format!(
+                                    "{}.{}",
+                                    source_database_name.unwrap(),
+                                    source_table_name.unwrap()
+                                ))
+                            };
 
                         catalogs.push(ctl_name.as_str());
                         databases.push(db_name.to_owned());
                         names.push(stream_table.name().to_string());
-                        table_name.push(format!(
-                            "{}.{}",
-                            stream_table.source_table_database(),
-                            stream_table.source_table_name()
-                        ));
+                        table_name.push(source_desc);
                         mode.push(stream_table.mode().to_string());
 
                         if T {
@@ -225,8 +235,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             }
                             comment.push(stream_info.meta.comment.clone());
 
-                            table_version.push(stream_table.offset());
-                            table_id.push(stream_table.source_table_id());
+                            table_version.push(stream_table.offset().ok());
+                            table_id.push(stream_table.source_table_id().ok());
                             snapshot_location.push(stream_table.snapshot_loc());
 
                             let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
@@ -281,9 +291,9 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 TimestampType::from_data(updated_on),
                 StringType::from_data(mode),
                 StringType::from_data(comment),
-                StringType::from_data(table_name),
-                UInt64Type::from_data(table_id),
-                UInt64Type::from_data(table_version),
+                StringType::from_opt_data(table_name),
+                UInt64Type::from_opt_data(table_id),
+                UInt64Type::from_opt_data(table_version),
                 StringType::from_opt_data(snapshot_location),
                 StringType::from_data(invalid_reason),
                 StringType::from_opt_data(owner),
@@ -294,7 +304,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 StringType::from_data(databases),
                 StringType::from_data(names),
                 StringType::from_data(mode),
-                StringType::from_data(table_name),
+                StringType::from_opt_data(table_name),
             ]))
         }
     }
@@ -312,11 +322,21 @@ impl<const T: bool> StreamsTable<T> {
                 TableField::new("updated_on", TableDataType::Timestamp),
                 TableField::new("mode", TableDataType::String),
                 TableField::new("comment", TableDataType::String),
-                TableField::new("table_name", TableDataType::String),
-                TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new(
+                    "table_name",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
+                TableField::new(
+                    "table_id",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
                 TableField::new(
                     "table_version",
-                    TableDataType::Number(NumberDataType::UInt64),
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
                 ),
                 TableField::new(
                     "snapshot_location",
@@ -334,7 +354,10 @@ impl<const T: bool> StreamsTable<T> {
                 TableField::new("database", TableDataType::String),
                 TableField::new("name", TableDataType::String),
                 TableField::new("mode", TableDataType::String),
-                TableField::new("table_name", TableDataType::String),
+                TableField::new(
+                    "table_name",
+                    TableDataType::Nullable(Box::new(TableDataType::String)),
+                ),
             ])
         }
     }
