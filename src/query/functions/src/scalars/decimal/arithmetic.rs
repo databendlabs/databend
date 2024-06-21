@@ -101,19 +101,8 @@ macro_rules! binary_decimal {
                 if std::intrinsics::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
                     result.push(one);
-                } else if a.is_negative() == b.is_negative() {
-                   match a.do_round_div(b, multiplier) {
-                        Some(t) => result.push(t),
-                        None => {
-                            ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        }
-                   }
                 } else {
-                    match a.do_round_div(b, multiplier) {
+                   match a.do_round_div(b, multiplier) {
                         Some(t) => result.push(t),
                         None => {
                             ctx.set_error(
