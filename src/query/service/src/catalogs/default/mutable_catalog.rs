@@ -212,8 +212,8 @@ impl Catalog for MutableCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        CatalogInfo::default().into()
     }
 
     #[async_backtrace::framed]

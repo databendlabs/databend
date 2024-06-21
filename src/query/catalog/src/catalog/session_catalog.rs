@@ -128,7 +128,7 @@ impl Catalog for SessionCatalog {
         self.inner.name()
     }
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.inner.info()
     }
 
