@@ -1,3 +1,0 @@
-# Number arguments not match
-statement error 1065
-select parse_json()

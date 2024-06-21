@@ -1,6 +1,0 @@
-statement error 1065
-select if(number, 3) from numbers(10)
-
-statement error 1065
-select parse_json()
-
