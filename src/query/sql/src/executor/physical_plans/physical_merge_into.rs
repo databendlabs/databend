@@ -18,6 +18,8 @@ use std::u64::MAX;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -116,8 +118,8 @@ impl PhysicalPlanBuilder {
             merge_type,
             distributed,
             change_join_order,
-            split_idx,
             row_id_index,
+            source_row_id_index,
             can_try_update_column_only,
             enable_right_broadcast,
             lazy_columns,
@@ -156,7 +158,7 @@ impl PhysicalPlanBuilder {
         let mut merge_into_split_idx = None;
         if matches!(merge_type, MergeIntoType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-                if *data_field.name() == split_idx.to_string() {
+                if *data_field.name() == row_id_index.to_string() {
                     merge_into_split_idx = Some(idx);
                     break;
                 }
@@ -223,15 +225,24 @@ impl PhysicalPlanBuilder {
 
         let output_schema = plan.output_schema()?;
 
-        let row_number_idx = if *enable_right_broadcast {
-            Some(output_schema.index_of(ROW_NUMBER_COL_NAME)?)
-        } else {
-            None
+        let mut source_row_id_idx = None;
+        let mut row_number_idx = None;
+        if *enable_right_broadcast {
+            if let Some(source_row_id_index) = source_row_id_index {
+                for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+                    if *data_field.name() == source_row_id_index.to_string() {
+                        source_row_id_idx = Some(idx);
+                        break;
+                    }
+                }
+            } else {
+                row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
+            }
         };
 
-        if *enable_right_broadcast && row_number_idx.is_none() {
+        if *enable_right_broadcast && row_number_idx.is_none() && source_row_id_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
-                "can't get internal row_number_idx when running merge into",
+                "can't get internal row_number_idx or row_id_idx when running merge into",
             ));
         }
 
@@ -381,6 +392,7 @@ impl PhysicalPlanBuilder {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false,
+                source_row_id_idx,
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }))
@@ -399,14 +411,13 @@ impl PhysicalPlanBuilder {
                 } else {
                     DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
-                        databend_common_expression::types::DataType::Number(
-                            databend_common_expression::types::NumberDataType::UInt64,
-                        ),
+                        DataType::Number(NumberDataType::UInt64),
                     )]))
                 },
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now..
+                source_row_id_idx,
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }));

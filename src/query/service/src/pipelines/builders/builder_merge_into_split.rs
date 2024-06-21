@@ -29,7 +29,7 @@ impl PipelineBuilder {
         self.main_pipeline
             .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
 
-        // The MergeIntoType is FullOperation.
+        // The MergeIntoType is FullOperation, use row_id_idx to split
         let mut items = Vec::with_capacity(self.main_pipeline.output_len());
         let output_len = self.main_pipeline.output_len();
         for _ in 0..output_len {

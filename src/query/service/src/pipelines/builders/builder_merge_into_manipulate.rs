@@ -99,10 +99,7 @@ impl PipelineBuilder {
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
                     let input_num_columns = input_schema.num_fields();
-                    assert_eq!(
-                        input_schema.field(input_num_columns - 1).name(),
-                        ROW_NUMBER_COL_NAME
-                    );
+                    let idx = source_row_id_idx.unwrap_or_else(|| input_num_columns - 1);
                     let input_port = InputPort::create();
                     let output_port = OutputPort::create();
                     // project row number column
@@ -112,7 +109,7 @@ impl PipelineBuilder {
                         input_num_columns,
                         self.func_ctx.clone(),
                         vec![BlockOperator::Project {
-                            projection: vec![input_num_columns - 1],
+                            projection: vec![idx],
                         }],
                     ));
                     pipe_items.push(PipeItem {
