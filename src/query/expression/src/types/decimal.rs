@@ -446,7 +446,7 @@ impl Decimal for i128 {
     }
 
     fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
-        if self.is_negative() && rhs.is_negative() {
+        if self.is_negative() == rhs.is_negative() {
             let res = (i256::from(self) * i256::from(mul) + i256::from(rhs) / 2) / i256::from(rhs);
             Some(*res.low())
         } else {
@@ -660,7 +660,7 @@ impl Decimal for i256 {
     }
 
     fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
-        if self.is_negative() && rhs.is_negative() {
+        if self.is_negative() == rhs.is_negative() {
             self.checked_mul(mul).map(|x| (x + rhs / 2) / rhs)
         } else {
             self.checked_mul(mul).map(|x| (x - rhs / 2) / rhs)
