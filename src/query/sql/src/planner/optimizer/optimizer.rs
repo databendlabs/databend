@@ -469,7 +469,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
-            target_tbl_idx: plan.target_table_idx,
+            target_tbl_idx: plan.target_table_index,
         })
     }
 

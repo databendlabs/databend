@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_display;
-mod physical_plan_visitor;
-pub mod physical_plans;
-mod util;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 
-pub mod table_read_plan;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::IndexType;
 
-pub use physical_plan::PhysicalPlan;
-pub use physical_plan_builder::MergeIntoBuildInfo;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use util::*;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergeIntoSplit {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub split_index: IndexType,
+}
+
+impl MergeIntoSplit {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
+}

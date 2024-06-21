@@ -769,7 +769,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
 fn insert_only(merge_plan: &MergeInto) -> bool {
     let meta_data = merge_plan.meta_data.read();
     let target_table_columns: HashSet<usize> = meta_data
-        .columns_by_table_index(merge_plan.target_table_idx)
+        .columns_by_table_index(merge_plan.target_table_index)
         .iter()
         .map(|column| column.index())
         .collect();

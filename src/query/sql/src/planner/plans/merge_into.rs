@@ -73,7 +73,7 @@ pub struct MergeInto {
     pub meta_data: MetadataRef,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
-    pub target_table_idx: usize,
+    pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
     pub merge_type: MergeIntoType,
     pub distributed: bool,
@@ -88,8 +88,7 @@ pub struct MergeInto {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub enable_right_broadcast: bool,
-    pub target_table_index: usize,
-    pub lazy_columns: HashSet<usize>,
+    pub lazy_columns: Option<HashSet<usize>>,
 }
 
 impl std::fmt::Debug for MergeInto {
