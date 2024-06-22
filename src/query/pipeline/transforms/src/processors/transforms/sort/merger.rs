@@ -43,7 +43,7 @@ pub trait SortedStream {
 }
 
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
-pub struct HeapMerger<S, G>
+pub struct Merger<S, G>
 where
     S: SortedStream,
     G: SortdGroup,
@@ -63,7 +63,7 @@ where
     temp_sorted_blocks: Vec<DataBlock>,
 }
 
-impl<S, G> HeapMerger<S, G>
+impl<S, G> Merger<S, G>
 where
     S: SortedStream + Send,
     G: SortdGroup,

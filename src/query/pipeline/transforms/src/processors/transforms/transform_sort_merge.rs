@@ -31,7 +31,7 @@ use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
-use super::sort::HeapMerger;
+use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SortedStream;
 use super::sort::StringConverter;
@@ -162,7 +162,7 @@ impl<R: Rows> TransformSortMerge<R> {
 
         let streams = self.buffer.drain(..).collect::<Vec<_>>();
         let mut result = Vec::with_capacity(size_hint);
-        let mut merger = HeapMerger::<BlockStream, BinaryHeapSort<R>>::create(
+        let mut merger = Merger::<BlockStream, BinaryHeapSort<R>>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),

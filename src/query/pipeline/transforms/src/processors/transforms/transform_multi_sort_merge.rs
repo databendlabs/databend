@@ -40,7 +40,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
 use super::sort::BinaryHeapSort;
-use super::sort::HeapMerger;
+use super::sort::Merger;
 use super::sort::Rows;
 use super::sort::SimpleRows;
 use super::sort::SortedStream;
@@ -212,7 +212,7 @@ impl SortedStream for BlockStream {
 pub struct MultiSortMergeProcessor<R>
 where R: Rows
 {
-    merger: HeapMerger<BlockStream, BinaryHeapSort<R>>,
+    merger: Merger<BlockStream, BinaryHeapSort<R>>,
 
     /// This field is used to drive the processor's state.
     ///
@@ -239,7 +239,7 @@ where R: Rows
             .iter()
             .map(|i| BlockStream::new(i.clone(), remove_order_col))
             .collect::<Vec<_>>();
-        let merger = HeapMerger::create(schema, streams, sort_desc, block_size, limit);
+        let merger = Merger::create(schema, streams, sort_desc, block_size, limit);
         Ok(Self {
             merger,
             inputs,

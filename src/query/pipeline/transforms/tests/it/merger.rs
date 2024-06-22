@@ -27,7 +27,8 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::processors::sort::HeapMerger;
+use databend_common_pipeline_transforms::processors::sort::BinaryHeapSort;
+use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::SimpleRows;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use itertools::Itertools;
@@ -68,7 +69,7 @@ impl SortedStream for TestStream {
     }
 }
 
-type TestMerger = HeapMerger<SimpleRows<Int32Type>, TestStream>;
+type TestMerger = Merger<TestStream,BinaryHeapSort<SimpleRows<Int32Type>>>;
 
 fn prepare_input_and_result(
     data: Vec<Vec<Vec<i32>>>,

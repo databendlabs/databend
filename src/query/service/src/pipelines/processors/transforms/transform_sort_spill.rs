@@ -33,7 +33,8 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::CommonRows;
 use databend_common_pipeline_transforms::processors::sort::DateRows;
-use databend_common_pipeline_transforms::processors::sort::HeapMerger;
+use databend_common_pipeline_transforms::processors::sort::BinaryHeapSort;
+use databend_common_pipeline_transforms::processors::sort::Merger;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::processors::sort::SimpleRows;
 use databend_common_pipeline_transforms::processors::sort::SortSpillMeta;
@@ -80,7 +81,7 @@ pub struct TransformSortSpill<R: Rows> {
 
     /// If `ummerged_blocks.len()` < `num_merge`,
     /// we can use a final merger to merge the last few sorted streams to reduce IO.
-    final_merger: Option<HeapMerger<R, BlockStream>>,
+    final_merger: Option<Merger<BlockStream, BinaryHeapSort<R>>>,
 
     sort_desc: Arc<Vec<SortColumnDescription>>,
 
@@ -278,7 +279,7 @@ where R: Rows + Sync + Send + 'static
         &mut self,
         memory_block: Option<DataBlock>,
         num_streams: usize,
-    ) -> HeapMerger<R, BlockStream> {
+    ) -> Merger<BlockStream, BinaryHeapSort<R>> {
         debug_assert!(num_streams <= self.unmerged_blocks.len() + memory_block.is_some() as usize);
 
         let mut streams = Vec::with_capacity(num_streams);
@@ -296,7 +297,7 @@ where R: Rows + Sync + Send + 'static
             streams.push(stream);
         }
 
-        HeapMerger::<R, BlockStream>::create(
+        Merger::<R, BlockStream>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
