@@ -420,6 +420,7 @@ impl Binder {
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
 
+        // Collect lazy columns.
         let lazy_columns = if matches!(
             merge_type,
             MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
@@ -437,6 +438,24 @@ impl Binder {
                     required_columns.extend(left_used_columns);
                 } else if right_used_columns.is_subset(&target_prop.output_columns) {
                     required_columns.extend(right_used_columns);
+                }
+            }
+            for condition in join.non_equi_conditions.iter() {
+                for column_index in condition.used_columns() {
+                    if target_prop.output_columns.contains(&column_index) {
+                        required_columns.insert(column_index);
+                    }
+                }
+            }
+            for child in join_sexpr.children() {
+                if let RelOperator::Filter(filter) = child.plan() {
+                    for predicate in filter.predicates.iter() {
+                        for column_index in predicate.used_columns() {
+                            if target_prop.output_columns.contains(&column_index) {
+                                required_columns.insert(column_index);
+                            }
+                        }
+                    }
                 }
             }
             required_columns.insert(row_id_index);
