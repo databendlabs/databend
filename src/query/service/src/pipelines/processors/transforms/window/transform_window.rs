@@ -154,10 +154,15 @@ impl<T: Number> TransformWindow<T> {
 
     #[inline(always)]
     fn block_at(&self, index: &RowPtr) -> &DataBlock {
-        let access_index = index.block.checked_sub(self.first_block).expect(&format!(
-            "Invalid access: index.block ({}) < first_block ({})",
-            index.block, self.first_block
-        ));
+        let access_index = index
+            .block
+            .checked_sub(self.first_block)
+            .unwrap_or_else(|| {
+                panic!(
+                    "Invalid access: index.block ({}) < first_block ({})",
+                    index.block, self.first_block
+                )
+            });
         &self.blocks[access_index].block
     }
 
