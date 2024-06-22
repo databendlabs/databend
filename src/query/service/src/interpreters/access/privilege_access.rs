@@ -915,7 +915,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::MergeInto { s_expr, .. } => {
                 let plan: MergeInto = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
-                    let s_expr = &plan.input;
+                    let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {
                         Ok(udfs) => {
                             if !udfs.is_empty() {

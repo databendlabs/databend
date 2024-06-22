@@ -34,7 +34,6 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::SExpr;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
@@ -67,7 +66,6 @@ pub struct MergeInto {
     pub table: String,
     pub target_alias: Option<TableAlias>,
     pub table_id: MetaId,
-    pub input: Box<SExpr>,
     pub bind_context: Box<BindContext>,
     pub columns_set: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
@@ -99,7 +97,6 @@ impl std::fmt::Debug for MergeInto {
             .field("database", &self.database)
             .field("table", &self.table)
             .field("table_id", &self.table_id)
-            .field("join", &self.input)
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
@@ -185,7 +182,6 @@ impl PartialEq for MergeInto {
             && self.database == other.database
             && self.table == other.table
             && self.table_id == other.table_id
-            && self.input == other.input
             && self.matched_evaluators == other.matched_evaluators
             && self.unmatched_evaluators == other.unmatched_evaluators
             && self.distributed == other.distributed

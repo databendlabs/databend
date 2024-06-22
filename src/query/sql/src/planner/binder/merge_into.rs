@@ -543,7 +543,6 @@ impl Binder {
             table_id,
             bind_context: Box::new(bind_ctx),
             meta_data: self.metadata.clone(),
-            input: Box::new(join_sexpr.clone()),
             columns_set: Box::new(columns_set),
             matched_evaluators,
             unmatched_evaluators,

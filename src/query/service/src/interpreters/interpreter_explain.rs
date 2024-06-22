@@ -136,7 +136,7 @@ impl Interpreter for ExplainInterpreter {
                     let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self
-                        .explain_query(&plan.input, &plan.meta_data, &plan.bind_context, &None)
+                        .explain_query(s_expr.child(0)?, &plan.meta_data, &plan.bind_context, &None)
                         .await?;
                     res.extend(input);
                     vec![DataBlock::concat(&res)?]
@@ -181,7 +181,7 @@ impl Interpreter for ExplainInterpreter {
                 Plan::MergeInto { s_expr, .. } => {
                     let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
-                        &plan.input,
+                        s_expr.child(0)?,
                         &plan.meta_data,
                         *plan.columns_set.clone(),
                         true,

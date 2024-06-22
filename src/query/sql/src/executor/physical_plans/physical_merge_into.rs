@@ -98,12 +98,11 @@ impl PhysicalPlanBuilder {
     // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
     pub async fn build_merge_into(
         &mut self,
-        _s_expr: &SExpr,
+        s_expr: &SExpr,
         merge_into: &crate::plans::MergeInto,
     ) -> Result<PhysicalPlan> {
         let crate::plans::MergeInto {
             bind_context,
-            input,
             meta_data,
             columns_set,
             catalog,
@@ -136,7 +135,7 @@ impl PhysicalPlanBuilder {
         columns_set.insert(*row_id_index);
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-        let mut plan = builder.build(input, columns_set.clone()).await?;
+        let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
 
         let join_output_schema = plan.output_schema()?;
         let is_insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
