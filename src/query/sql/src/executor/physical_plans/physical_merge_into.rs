@@ -132,7 +132,6 @@ impl PhysicalPlanBuilder {
         } else {
             *columns_set.clone()
         };
-        columns_set.insert(*row_id_index);
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
@@ -146,6 +145,7 @@ impl PhysicalPlanBuilder {
         }
 
         let row_id_offset = if !is_insert_only {
+            columns_set.insert(*row_id_index);
             join_output_schema.index_of(&row_id_index.to_string())?
         } else {
             DUMMY_COLUMN_INDEX
