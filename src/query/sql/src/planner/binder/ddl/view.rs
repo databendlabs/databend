@@ -169,12 +169,12 @@ impl Binder {
                 .with_column("catalog AS Catalog")
                 .with_column("owner")
                 .with_column("engine")
-                .with_column("created_on AS create_time");
+                .with_column("created_on AS create_time")
+                .with_column("view_query");
         } else {
             select_builder.with_column(format!("name AS `Views_in_{database}`"));
         }
 
-        select_builder.with_column("view_query");
         if *with_history {
             select_builder.with_column("dropped_on AS drop_time");
         }

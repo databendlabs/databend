@@ -52,7 +52,7 @@ async fn check_stream_status(
         .await?;
     let stream = StreamTable::try_from_table(tbl.as_ref())?;
 
-    let table_id = stream.source_table_id();
+    let table_id = stream.source_table_id()?;
     let seqv = catalog
         .get_table_meta_by_id(table_id)
         .await?
@@ -62,7 +62,7 @@ async fn check_stream_status(
         })?;
 
     Ok(StreamStatusResponse {
-        has_data: seqv.seq != stream.offset(),
+        has_data: seqv.seq != stream.offset()?,
         params: params.0,
     })
 }

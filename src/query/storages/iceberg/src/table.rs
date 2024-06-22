@@ -34,6 +34,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -124,7 +125,7 @@ impl IcebergTable {
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
-        catalog: &str,
+        catalog_info: Arc<CatalogInfo>,
         database: &str,
         table_name: &str,
         dop: DataOperator,
@@ -139,12 +140,12 @@ impl IcebergTable {
             name: table_name.to_string(),
             meta: TableMeta {
                 schema: Arc::new(table_schema),
-                catalog: catalog.to_string(),
                 engine: "iceberg".to_string(),
                 created_on: Utc::now(),
                 storage_params: Some(dop.params()),
                 ..Default::default()
             },
+            catalog_info,
             ..Default::default()
         };
 

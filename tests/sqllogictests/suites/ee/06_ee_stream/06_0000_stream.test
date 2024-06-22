@@ -699,15 +699,39 @@ merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when 
 statement ok
 set enable_experimental_merge_into = 0;
 
-# todo(zhyass): if base table is renamed, the stream will be invalid. Maybe we should allow the scene.
 statement ok
 alter table t1 rename to t1_1
 
-query TTT
+query T
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
-s1 Unknown table 't1'
-s2 Unknown table 't1'
+s1 (empty)
+s2 (empty)
+
+query IITB
+select a, b, change$action, change$is_update from s1 order by a, b
+----
+1 1 INSERT 0
+2 2 INSERT 0
+3 3 INSERT 0
+4 4 INSERT 0
 
 statement ok
-DROP DATABASE IF EXISTS test_stream
+alter database test_stream rename to test_stream_1
+
+query TTTT
+select database, name, mode, table_name from system.streams where database='test_stream_1' order by name
+----
+test_stream_1 s1 standard test_stream_1.t1_1
+test_stream_1 s2 append_only test_stream_1.t1_1
+
+query IITB
+select a, b, change$action, change$is_update from test_stream_1.s2 order by a, b
+----
+1 1 INSERT 0
+2 2 INSERT 0
+3 3 INSERT 0
+4 4 INSERT 0
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_1

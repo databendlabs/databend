@@ -52,7 +52,7 @@ impl FuseTable {
         // 3. prepare the request
         //  using the CURRENT version as the base table version
         let base_version = self.table_info.ident.seq;
-        let catalog = ctx.get_catalog(&table_info.meta.catalog).await?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let table_id = table_info.ident.table_id;
         let req = UpdateTableMetaReq {
             table_id,
