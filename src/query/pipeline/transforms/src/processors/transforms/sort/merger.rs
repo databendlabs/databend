@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -23,7 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::utils::find_bigger_child_of_root;
+use super::algorithm::SortdGroup;
 use super::Cursor;
 use super::Rows;
 
@@ -44,15 +43,16 @@ pub trait SortedStream {
 }
 
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
-pub struct HeapMerger<R, S>
+pub struct HeapMerger<S, G>
 where
-    R: Rows,
     S: SortedStream,
+    G: SortdGroup,
+    G::Rows: Rows,
 {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
-    heap: BinaryHeap<Reverse<Cursor<R>>>,
+    sortd_group: G,
     buffer: Vec<DataBlock>,
     pending_streams: VecDeque<usize>,
     batch_size: usize,
@@ -63,10 +63,11 @@ where
     temp_sorted_blocks: Vec<DataBlock>,
 }
 
-impl<R, S> HeapMerger<R, S>
+impl<S, G> HeapMerger<S, G>
 where
-    R: Rows,
     S: SortedStream + Send,
+    G: SortdGroup,
+    G::Rows: Rows,
 {
     pub fn create(
         schema: DataSchemaRef,
@@ -78,14 +79,14 @@ where
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
-        let heap = BinaryHeap::with_capacity(streams.len());
+        let heap = G::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
 
         Self {
             schema,
             unsorted_streams: streams,
-            heap,
+            sortd_group: heap,
             buffer,
             batch_size,
             limit,
@@ -99,7 +100,7 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.heap.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+        (self.sortd_group.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
             || self.limit == Some(0)
     }
 
@@ -119,9 +120,9 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = R::from_column(&col, &self.sort_desc)?;
+                let rows = G::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
-                self.heap.push(Reverse(cursor));
+                self.sortd_group.push(i, Reverse(cursor));
                 self.buffer[i] = block;
             }
         }
@@ -140,9 +141,9 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = R::from_column(&col, &self.sort_desc)?;
+                let rows = G::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
-                self.heap.push(Reverse(cursor));
+                self.sortd_group.push(i,Reverse(cursor));
                 self.buffer[i] = block;
             }
         }
@@ -155,9 +156,9 @@ where
     ///
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
-    fn evaluate_cursor(&mut self, mut cursor: Cursor<R>) -> bool {
+    fn evaluate_cursor(&mut self, mut cursor: Cursor<G::Rows>) -> bool {
         let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
-        if self.heap.len() == 1 {
+        if self.sortd_group.len() == 1 {
             let start = cursor.row_index;
             let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
             self.temp_sorted_num_rows += count;
@@ -165,7 +166,7 @@ where
             self.temp_output_indices
                 .push((cursor.input_index, start, count));
         } else {
-            let next_cursor = &find_bigger_child_of_root(&self.heap).0;
+            let next_cursor = &self.sortd_group.peek_top2().0;
             if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
@@ -201,10 +202,10 @@ where
             // Update the top of the heap.
             // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
             // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-            self.heap.peek_mut().unwrap().0 = cursor;
+            self.sortd_group.update_top(Reverse(cursor));
         } else {
             // Pop the current `cursor`.
-            self.heap.pop();
+            self.sortd_group.pop();
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
@@ -259,7 +260,7 @@ where
         }
 
         // No pending streams now.
-        if self.heap.is_empty() {
+        if self.sortd_group.is_empty() {
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -267,7 +268,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.heap.peek() {
+        while let Some(Reverse(cursor)) = self.sortd_group.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
@@ -296,7 +297,7 @@ where
         }
 
         // No pending streams now.
-        if self.heap.is_empty() {
+        if self.sortd_group.is_empty() {
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -304,7 +305,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.heap.peek() {
+        while let Some(Reverse(cursor)) = self.sortd_group.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }

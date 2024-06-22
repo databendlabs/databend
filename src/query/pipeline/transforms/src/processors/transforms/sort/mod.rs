@@ -17,11 +17,11 @@ mod merger;
 mod rows;
 mod spill;
 mod loser_tree;
-mod loser_tree_merger;
+mod algorithm;
 pub mod utils;
 
 pub use cursor::*;
 pub use merger::*;
 pub use rows::*;
 pub use spill::*;
-pub use loser_tree_merger::LoserTreeMerger;
+pub use algorithm::*;

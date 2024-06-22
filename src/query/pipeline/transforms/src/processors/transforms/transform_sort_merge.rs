@@ -26,6 +26,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
+use super::sort::BinaryHeapSort;
 use super::sort::CommonRows;
 use super::sort::Cursor;
 use super::sort::DateConverter;
@@ -161,7 +162,7 @@ impl<R: Rows> TransformSortMerge<R> {
 
         let streams = self.buffer.drain(..).collect::<Vec<_>>();
         let mut result = Vec::with_capacity(size_hint);
-        let mut merger = HeapMerger::<R, BlockStream>::create(
+        let mut merger = HeapMerger::<BlockStream, BinaryHeapSort<R>>::create(
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
