@@ -50,7 +50,7 @@ impl HashJoinProbeState {
     where
         H::Key: 'a,
     {
-        let has_other_predicate = self
+        let no_other_predicate = self
             .hash_join_state
             .hash_join_desc
             .other_predicate
@@ -65,43 +65,58 @@ impl HashJoinProbeState {
                 }
                 _ => self.inner_join::<_, false, false>(input, keys, hash_table, probe_state),
             },
-            JoinType::Left | JoinType::Full => match has_other_predicate {
-                true => self.left_join::<_, false>(input, keys, hash_table, probe_state),
-                false => {
+            JoinType::Left | JoinType::Full => {
+                if no_other_predicate {
+                    self.left_join::<_, false>(input, keys, hash_table, probe_state)
+                } else {
                     self.left_join_with_conjunct::<_, false>(input, keys, hash_table, probe_state)
                 }
-            },
-            JoinType::LeftSingle => match has_other_predicate {
-                true => self.left_join::<_, true>(input, keys, hash_table, probe_state),
-                false => {
+            }
+            JoinType::LeftSingle => {
+                if no_other_predicate {
+                    self.left_join::<_, true>(input, keys, hash_table, probe_state)
+                } else {
                     self.left_join_with_conjunct::<_, true>(input, keys, hash_table, probe_state)
                 }
-            },
-            JoinType::LeftSemi => match has_other_predicate {
-                true => self.left_semi_join(input, keys, hash_table, probe_state),
-                false => self.left_semi_join_with_conjunct(input, keys, hash_table, probe_state),
-            },
-            JoinType::LeftAnti => match has_other_predicate {
-                true => self.left_anti_join(input, keys, hash_table, probe_state),
-                false => self.left_anti_join_with_conjunct(input, keys, hash_table, probe_state),
-            },
-            JoinType::LeftMark => match has_other_predicate {
-                true => self.left_mark_join(input, keys, hash_table, probe_state),
-                false => self.left_mark_join_with_conjunct(input, keys, hash_table, probe_state),
-            },
+            }
+            JoinType::LeftSemi => {
+                if no_other_predicate {
+                    self.left_semi_join(input, keys, hash_table, probe_state)
+                } else {
+                    self.left_semi_join_with_conjunct(input, keys, hash_table, probe_state)
+                }
+            }
+            JoinType::LeftAnti => {
+                if no_other_predicate {
+                    self.left_anti_join(input, keys, hash_table, probe_state)
+                } else {
+                    self.left_anti_join_with_conjunct(input, keys, hash_table, probe_state)
+                }
+            }
+            JoinType::LeftMark => {
+                if no_other_predicate {
+                    self.left_mark_join(input, keys, hash_table, probe_state)
+                } else {
+                    self.left_mark_join_with_conjunct(input, keys, hash_table, probe_state)
+                }
+            }
             JoinType::Right | JoinType::RightSingle => {
                 self.probe_right_join(input, keys, hash_table, probe_state)
             }
-            JoinType::RightSemi | JoinType::RightAnti => match has_other_predicate {
-                true => self.right_semi_anti_join(input, keys, hash_table, probe_state),
-                false => {
+            JoinType::RightSemi | JoinType::RightAnti => {
+                if no_other_predicate {
+                    self.right_semi_anti_join(input, keys, hash_table, probe_state)
+                } else {
                     self.right_semi_anti_join_with_conjunct(input, keys, hash_table, probe_state)
                 }
-            },
-            JoinType::RightMark => match has_other_predicate {
-                true => self.right_mark_join(input, keys, hash_table, probe_state),
-                false => self.right_mark_join_with_conjunct(input, keys, hash_table, probe_state),
-            },
+            }
+            JoinType::RightMark => {
+                if no_other_predicate {
+                    self.right_mark_join(input, keys, hash_table, probe_state)
+                } else {
+                    self.right_mark_join_with_conjunct(input, keys, hash_table, probe_state)
+                }
+            }
             _ => Err(ErrorCode::Unimplemented(format!(
                 "{} is unimplemented",
                 self.hash_join_state.hash_join_desc.join_type
