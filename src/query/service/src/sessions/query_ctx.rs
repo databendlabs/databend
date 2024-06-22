@@ -41,6 +41,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
@@ -60,12 +61,16 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageFileFormatType;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -74,6 +79,7 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -88,6 +94,7 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::TableContext;
@@ -1176,6 +1183,131 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    #[async_backtrace::framed]
+    async fn load_datalake_schema(
+        &self,
+        kind: &str,
+        sp: &StorageParams,
+    ) -> Result<(TableSchema, String)> {
+        match kind {
+            "iceberg" => {
+                let dop = DataOperator::try_new(sp)?;
+                let table = IcebergTable::load_iceberg_table(dop).await?;
+                Ok((IcebergTable::get_schema(&table).await?, "".to_string()))
+            }
+            "delta" => {
+                let table = DeltaTable::load(sp).await?;
+                DeltaTable::get_meta(&table).await
+            }
+            _ => Err(ErrorCode::Internal("unknown datalake type {}")),
+        }
+    }
+
+    async fn create_stage_table(
+        &self,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        files_to_copy: Option<Vec<StageFileInfo>>,
+        max_column_position: usize,
+    ) -> Result<Arc<dyn Table>> {
+        match stage_info.file_format_params {
+            FileFormatParams::Parquet(..) => {
+                let mut read_options = ParquetReadOptions::default();
+
+                if !self.get_settings().get_enable_parquet_page_index()? {
+                    read_options = read_options.with_prune_pages(false);
+                }
+
+                if !self.get_settings().get_enable_parquet_rowgroup_pruning()? {
+                    read_options = read_options.with_prune_row_groups(false);
+                }
+
+                if !self.get_settings().get_enable_parquet_prewhere()? {
+                    read_options = read_options.with_do_prewhere(false);
+                }
+
+                ParquetRSTable::create(
+                    stage_info.clone(),
+                    files_info,
+                    read_options,
+                    files_to_copy,
+                    self.get_settings(),
+                    self.get_query_kind()
+                )
+                .await?
+            }
+            FileFormatParams::Orc(..) => {
+                let schema = Arc::new(TableSchema::empty());
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                OrcTable::try_create(info).await
+            }
+            FileFormatParams::NdJson(..) => {
+                let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    "_$1", // TODO: this name should be in visible
+                    TableDataType::Variant,
+                )]));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                StageTable::try_create(info)
+            }
+            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
+                if max_column_position == 0 {
+                    let file_type = match stage_info.file_format_params {
+                        FileFormatParams::Csv(..) => "CSV",
+                        FileFormatParams::Tsv(..) => "TSV",
+                        _ => unreachable!(), // This branch should never be reached
+                    };
+
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        file_type
+                    )));
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    duplicated_files_detected: vec![],
+                    is_select: true,
+                    default_values: None,
+                };
+                StageTable::try_create(info)
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    stage_info.file_format_params
+                )));
+            }
+        }
     }
 }
 
