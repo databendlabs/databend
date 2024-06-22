@@ -66,7 +66,6 @@ pub struct MergeInto {
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     // used to record the index of target table's field in merge_source_schema
-    pub source_row_id_idx: Option<usize>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
     pub distributed: bool,
@@ -368,6 +367,7 @@ impl PhysicalPlanBuilder {
             field_index_of_input_schema: field_index_of_input_schema.clone(),
             merge_type: merge_type.clone(),
             row_id_idx: row_id_offset,
+            source_row_id_idx,
             enable_right_broadcast: *enable_right_broadcast,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: join_output_schema.clone(),
@@ -392,7 +392,6 @@ impl PhysicalPlanBuilder {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false,
-                source_row_id_idx,
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }))
@@ -417,7 +416,6 @@ impl PhysicalPlanBuilder {
                 merge_type: merge_type.clone(),
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now..
-                source_row_id_idx,
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }));

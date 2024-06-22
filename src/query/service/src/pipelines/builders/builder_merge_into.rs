@@ -304,7 +304,6 @@ impl PipelineBuilder {
             table_info,
             catalog_info,
             unmatched,
-            source_row_id_idx,
             segments,
             distributed,
             merge_type,

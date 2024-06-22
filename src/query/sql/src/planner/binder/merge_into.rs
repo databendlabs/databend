@@ -422,7 +422,7 @@ impl Binder {
 
         let lazy_columns = if matches!(
             merge_type,
-            MergeIntoType::MatechedOnly | MergeIntoType::FullOperation
+            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
         ) {
             let mut required_columns = HashSet::new();
             let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
@@ -491,10 +491,6 @@ impl Binder {
             Box::new(IndexMap::new()),
         );
 
-        let column_entries = self
-            .metadata
-            .read()
-            .columns_by_table_index(target_table_index);
         let column_entries = self
             .metadata
             .read()

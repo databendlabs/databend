@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -31,7 +32,7 @@ pub struct MergeIntoManipulate {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     // the first option stands for the condition
@@ -42,6 +43,7 @@ pub struct MergeIntoManipulate {
     // merge_type
     pub merge_type: MergeIntoType,
     pub row_id_idx: usize,
+    pub source_row_id_idx: Option<usize>,
     pub enable_right_broadcast: bool,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,

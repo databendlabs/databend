@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -61,7 +60,7 @@ impl PipelineBuilder {
         let (step, need_match, need_unmatch) = match merge_into_manipulate.merge_type {
             MergeIntoType::FullOperation => (2, true, true),
             MergeIntoType::InsertOnly => (1, false, true),
-            MergeIntoType::MatechedOnly => (1, true, false),
+            MergeIntoType::MatchedOnly => (1, true, false),
         };
 
         let tbl = self.ctx.build_table_by_table_info(
@@ -99,7 +98,9 @@ impl PipelineBuilder {
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
                     let input_num_columns = input_schema.num_fields();
-                    let idx = source_row_id_idx.unwrap_or_else(|| input_num_columns - 1);
+                    let idx = merge_into_manipulate
+                        .source_row_id_idx
+                        .unwrap_or_else(|| input_num_columns - 1);
                     let input_port = InputPort::create();
                     let output_port = OutputPort::create();
                     // project row number column

@@ -195,7 +195,7 @@ impl PartialEq for MergeInto {
 
 impl std::hash::Hash for MergeInto {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.split_idx.hash(state);
+        self.row_id_index.hash(state);
     }
 }
 
