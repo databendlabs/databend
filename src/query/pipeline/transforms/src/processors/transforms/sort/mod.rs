@@ -14,7 +14,6 @@
 
 mod cursor;
 mod merger;
-mod merger_base;
 mod rows;
 mod spill;
 mod loser_tree;

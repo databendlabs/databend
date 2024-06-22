@@ -45,9 +45,11 @@ where
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
     tree: LoserTree<Option<Reverse<Cursor<R>>>>,
+    cursor_count: usize,
     buffer: Vec<DataBlock>,
     pending_streams: VecDeque<usize>,
     batch_size: usize,
+    limit: Option<usize>,
 
     temp_sorted_num_rows: usize,
     temp_output_indices: Vec<(usize, usize, usize)>,
@@ -64,6 +66,7 @@ where
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_size: usize,
+        limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
@@ -76,8 +79,10 @@ where
             schema,
             unsorted_streams: streams,
             tree,
+            cursor_count: 0,
             buffer,
             batch_size,
+            limit,
             sort_desc,
             pending_streams: pending_stream,
             temp_sorted_num_rows: 0,
@@ -88,7 +93,8 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        self.tree.peek().unwrap().is_none() && self.temp_sorted_num_rows == 0
+        (self.cursor_count == 0 && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+            || self.limit == Some(0)
     }
 
     #[inline(always)]
@@ -110,6 +116,7 @@ where
                 let rows = R::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
                 self.tree.update(i, Some(Reverse(cursor)));
+                self.cursor_count += 1;
                 self.buffer[i] = block;
             }
         }
@@ -123,8 +130,8 @@ where
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
     fn evaluate_cursor(&mut self, mut cursor: Cursor<R>) -> bool {
-        let max_rows = self.batch_size;
-        if self.tree.len() == 1 {
+        let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
+        if self.cursor_count == 1 {
             let start = cursor.row_index;
             let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
             self.temp_sorted_num_rows += count;
@@ -132,7 +139,7 @@ where
             self.temp_output_indices
                 .push((cursor.input_index, start, count));
         } else {
-            let next_cursor = &self.tree.peek_top2().unwrap().as_ref().unwrap().0;
+            let next_cursor = &self.tree.peek_top2().as_ref().unwrap().0;
             if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
@@ -168,9 +175,10 @@ where
             // Update the top of the heap.
             // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
             // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-            *self.tree.peek_mut().unwrap() = Some(Reverse(cursor));
+            *self.tree.peek_mut() = Some(Reverse(cursor));
         } else {
-            *self.tree.peek_mut().unwrap() = None;
+            *self.tree.peek_mut() = None;
+            self.cursor_count -= 1;
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
@@ -201,6 +209,7 @@ where
         debug_assert_eq!(block.num_rows(), self.temp_sorted_num_rows);
         debug_assert!(block.num_rows() <= self.batch_size);
 
+        self.limit = self.limit.map(|limit| limit - self.temp_sorted_num_rows);
         self.temp_sorted_blocks.clear();
         self.temp_output_indices.clear();
         self.temp_sorted_num_rows = 0;
@@ -224,7 +233,7 @@ where
         }
 
         // No pending streams now.
-        if self.tree.peek().unwrap().is_none() {
+        if self.cursor_count == 0 {
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -232,7 +241,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.tree.peek().unwrap() {
+        while let Some(Reverse(cursor)) = self.tree.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
@@ -247,31 +256,3 @@ where
         Ok(Some(self.build_output()?))
     }
 }
-
-// struct OptionCursor<R>(Option<Cursor<R>>);
-// //type OptionCursor<R> = Option<Cursor<R>>;
-
-// impl<R: Rows> Ord for OptionCursor<R>
-// {
-//     fn cmp(&self, other: &Self) -> Ordering {
-//         match (self, other) {
-//             (None, None) => Ordering::Equal,
-//             (None, Some(_)) => Ordering::Less,
-//             (Some(_), None) => Ordering::Greater,
-//             (Some(a), Some(b)) => Reverse(a).cmp(&Reverse(b)),
-//         }
-//     }
-// }
-
-// impl<R: Rows> PartialEq for OptionCursor<R> {
-//     fn eq(&self, other: &Self) -> bool {
-//         match (self, other) {
-//             (None, None) => true,
-//             (None, Some(_)) => false,
-//             (Some(_), None) => false,
-//             (Some(a), Some(b)) => a.eq(b),
-//         }
-//     }
-// }
-
-// impl<R: Rows> Eq for OptionCursor<R> {}
