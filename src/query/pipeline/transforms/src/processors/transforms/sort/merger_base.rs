@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cursor;
-mod merger;
-mod merger_base;
-mod rows;
-mod spill;
-mod loser_tree;
-mod loser_tree_merger;
-pub mod utils;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+pub trait Merger {
 
-pub use cursor::*;
-pub use merger::*;
-pub use rows::*;
-pub use spill::*;
-pub use loser_tree_merger::LoserTreeMerger;
+    fn next_block(&mut self) -> Result<Option<DataBlock>>;
+
+    fn is_finished(&self) -> bool;
+}

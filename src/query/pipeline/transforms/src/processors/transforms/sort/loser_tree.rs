@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
+use core::ops::DerefMut;
 
 pub struct LoserTree<T: Ord> {
     tree: Vec<Option<usize>>,
@@ -22,13 +23,13 @@ pub struct LoserTree<T: Ord> {
 }
 
 impl<T: Ord> LoserTree<T> {
-    pub fn from(vec: Vec<T>) -> LoserTree<T> {
-        let length = vec.len();
+    pub fn from(data: Vec<T>) -> Self {
+        let length = data.len();
         let mut tree = LoserTree {
             tree: vec![None; length],
             nulls: vec![false; length],
-            data: vec,
-            length: length,
+            data,
+            length,
         };
         for i in 0..tree.data.len() {
             tree.adjust(i)
@@ -42,6 +43,11 @@ impl<T: Ord> LoserTree<T> {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn update(&mut self, i: usize, v: T) {
+        self.data[i] = v;
+        self.adjust(i)
     }
 
     pub fn pop(&mut self) -> Option<&T> {
@@ -78,10 +84,7 @@ impl<T: Ord> LoserTree<T> {
                     father_loc /= 2;
                     continue;
                 }
-                if top2 == top
-                    || self.nulls[top2]
-                    || self.data[top2] > self.data[father]
-                {
+                if top2 == top || self.nulls[top2] || self.data[top2] > self.data[father] {
                     top2 = father;
                 }
                 father_loc /= 2;
@@ -103,6 +106,10 @@ impl<T: Ord> LoserTree<T> {
         let mut father_loc = (winner + self.data.len()) / 2;
         while father_loc > 0 {
             match self.tree[father_loc] {
+                None => {
+                    self.tree[father_loc] = Some(winner);
+                    break;
+                }
                 Some(father) => {
                     if self.nulls[father] {
                         father_loc /= 2;
@@ -113,10 +120,6 @@ impl<T: Ord> LoserTree<T> {
                         winner = father;
                     }
                     father_loc /= 2;
-                }
-                None => {
-                    self.tree[father_loc] = Some(winner);
-                    break;
                 }
             }
         }
@@ -166,16 +169,16 @@ mod test {
         assert_eq!(loser_tree.is_empty(), false);
         for i in 2..=9 {
             assert_eq!(loser_tree.len(), 10 - i);
-            assert_eq!(loser_tree.peek(), Some(11-i).as_ref());
-            assert_eq!(loser_tree.peek(), Some(11-i).as_ref());
+            assert_eq!(loser_tree.peek(), Some(11 - i).as_ref());
+            assert_eq!(loser_tree.peek(), Some(11 - i).as_ref());
             if i == 9 {
                 assert_eq!(loser_tree.peek_top2(), None);
                 assert_eq!(loser_tree.peek_top2(), None);
             } else {
-                assert_eq!(loser_tree.peek_top2(), Some(10-i).as_ref());
-                assert_eq!(loser_tree.peek_top2(), Some(10-i).as_ref());
+                assert_eq!(loser_tree.peek_top2(), Some(10 - i).as_ref());
+                assert_eq!(loser_tree.peek_top2(), Some(10 - i).as_ref());
             }
-            assert_eq!(loser_tree.pop(), Some(11-i).as_ref());
+            assert_eq!(loser_tree.pop(), Some(11 - i).as_ref());
         }
 
         assert_eq!(loser_tree.pop(), None);
