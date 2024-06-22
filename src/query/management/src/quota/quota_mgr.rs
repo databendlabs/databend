@@ -27,6 +27,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use minitrace::func_name;
 
@@ -52,6 +53,8 @@ impl QuotaMgr {
     }
 }
 
+const WRITE_PB: bool = false;
+
 #[async_trait::async_trait]
 impl QuotaApi for QuotaMgr {
     #[async_backtrace::framed]
@@ -62,7 +65,11 @@ impl QuotaApi for QuotaMgr {
             Some(seq_value) => match seq.match_seq(&seq_value) {
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
                 Ok(_) => {
-                    let mut quota = Quota::new(func_name!());
+                    let mut quota = if WRITE_PB {
+                        Quota::new(func_name!())
+                    } else {
+                        Quota::new_limit(func_name!(), 0)
+                    };
 
                     let u = check_and_upgrade_to_pb(
                         &mut quota,
@@ -81,14 +88,25 @@ impl QuotaApi for QuotaMgr {
 
     #[async_backtrace::framed]
     async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
-        let res = self
-            .kv_api
-            .upsert_pb(&UpsertPB::update(self.ident.clone(), quota.clone()).with(seq))
-            .await?;
-
-        match res.result {
-            Some(SeqV { seq: s, .. }) => Ok(s),
-            None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
+        if WRITE_PB {
+            let res = self
+                .kv_api
+                .upsert_pb(&UpsertPB::update(self.ident.clone(), quota.clone()).with(seq))
+                .await?;
+            match res.result {
+                Some(SeqV { seq: s, .. }) => Ok(s),
+                None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
+            }
+        } else {
+            let value = serde_json::to_vec(quota)?;
+            let res = self
+                .kv_api
+                .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
+                .await?;
+            match res.result {
+                Some(SeqV { seq: s, .. }) => Ok(s),
+                None => Err(ErrorCode::TenantQuotaUnknown("Quota does not exist.")),
+            }
         }
     }
 }
