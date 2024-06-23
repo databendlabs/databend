@@ -410,7 +410,7 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         self.parse_grpc_resp(grpc_res)
     }
 
-    #[logcall::logcall(err = "debug")]
+    #[logcall::logcall(err = "debug", input = "")]
     #[minitrace::trace]
     async fn full_snapshot(
         &mut self,
