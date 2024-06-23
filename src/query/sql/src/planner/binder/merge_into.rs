@@ -462,7 +462,9 @@ impl Binder {
 
             let mut lazy_columns = HashSet::new();
             for column in &target_context.columns {
-                if !required_columns.contains(&column.index) {
+                if !required_columns.contains(&column.index)
+                    && column.visibility != Visibility::InVisible
+                {
                     lazy_columns.insert(column.index);
                 }
             }
