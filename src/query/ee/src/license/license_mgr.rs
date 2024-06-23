@@ -61,7 +61,7 @@ impl LicenseManager for RealLicenseManager {
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
             return feature.verify_default(format!(
-                "use of {self} requires an enterprise license. license key is not found for {}",
+                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
                 self.tenant
             ));
         }

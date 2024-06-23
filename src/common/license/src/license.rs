@@ -28,20 +28,20 @@ pub struct ComputeQuota {
 #[derive(Debug, Clone, Eq, Ord, PartialOrd, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClusterQuota {
     pub(crate) max_clusters: Option<usize>,
-    pub(crate) max_nodes_pre_cluster: Option<usize>,
+    pub(crate) max_nodes_per_cluster: Option<usize>,
 }
 
 impl ClusterQuota {
     pub fn un_limit() -> ClusterQuota {
         ClusterQuota {
             max_clusters: None,
-            max_nodes_pre_cluster: None,
+            max_nodes_per_cluster: None,
         }
     }
 
     pub fn limit_clusters(max_clusters: usize) -> ClusterQuota {
         ClusterQuota {
-            max_nodes_pre_cluster: None,
+            max_nodes_per_cluster: None,
             max_clusters: Some(max_clusters),
         }
     }
@@ -49,14 +49,14 @@ impl ClusterQuota {
     pub fn limit_nodes(nodes: usize) -> ClusterQuota {
         ClusterQuota {
             max_clusters: None,
-            max_nodes_pre_cluster: Some(nodes),
+            max_nodes_per_cluster: Some(nodes),
         }
     }
 
     pub fn limit_full(max_clusters: usize, nodes: usize) -> ClusterQuota {
         ClusterQuota {
             max_clusters: Some(max_clusters),
-            max_nodes_pre_cluster: Some(nodes),
+            max_nodes_per_cluster: Some(nodes),
         }
     }
 }
@@ -157,9 +157,9 @@ impl Display for Feature {
                     Some(v) => write!(f, "max_clusters: {}", v)?,
                 };
 
-                match v.max_nodes_pre_cluster {
-                    None => write!(f, "max_nodes_pre_cluster: unlimited,")?,
-                    Some(v) => write!(f, "max_nodes_pre_cluster: {}", v)?,
+                match v.max_nodes_per_cluster {
+                    None => write!(f, "max_nodes_per_cluster: unlimited,")?,
+                    Some(v) => write!(f, "max_nodes_per_cluster: {}", v)?,
                 };
 
                 write!(f, ")")
@@ -175,13 +175,13 @@ impl Feature {
             Feature::ClusterQuota(cluster_quote) => {
                 if matches!(cluster_quote.max_clusters, Some(x) if x > 1) {
                     return Err(ErrorCode::LicenseKeyInvalid(
-                        "no license. only support 1 clusters",
+                        "No license found. The default configuration of Databend Community Edition only supports 1 cluster. To use more clusters, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
                     ));
                 }
 
-                if matches!(cluster_quote.max_nodes_pre_cluster, Some(x) if x > 3) {
+                if matches!(cluster_quote.max_nodes_per_cluster, Some(x) if x > 3) {
                     return Err(ErrorCode::LicenseKeyInvalid(
-                        "no license. only support 3 nodes pre cluster.",
+                        "No license found. The default configuration of Databend Community Edition only supports up to 3 nodes per cluster. To use more nodes per cluster, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
                     ));
                 }
 
@@ -220,15 +220,21 @@ impl Feature {
             (Feature::ClusterQuota(c), Feature::ClusterQuota(v)) => {
                 if let Some(max_clusters) = c.max_clusters {
                     if max_clusters < v.max_clusters.unwrap_or(usize::MAX) {
-                        return Err(ErrorCode::LicenseKeyInvalid("exceeds clusters quota"));
+                        return Err(ErrorCode::LicenseKeyInvalid(format!(
+                            "The number of clusters exceeds the quota specified in the Databend Enterprise Edition license. Maximum allowed: {}, Requested: {}. Please contact Databend to review your licensing options. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                            max_clusters,
+                            v.max_clusters.unwrap_or(usize::MAX)
+                        )));
                     }
                 }
 
-                if let Some(max_nodes_pre_cluster) = c.max_nodes_pre_cluster {
-                    if max_nodes_pre_cluster < v.max_nodes_pre_cluster.unwrap_or(usize::MAX) {
-                        return Err(ErrorCode::LicenseKeyInvalid(
-                            "exceeds max_nodes_pre_cluster quota",
-                        ));
+                if let Some(max_nodes_per_cluster) = c.max_nodes_per_cluster {
+                    if max_nodes_per_cluster < v.max_nodes_per_cluster.unwrap_or(usize::MAX) {
+                        return Err(ErrorCode::LicenseKeyInvalid(format!(
+                            "The number of nodes per cluster exceeds the quota specified in the Databend Enterprise Edition license. Maximum allowed: {}, Requested: {}. Please contact Databend to review your licensing options. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                            max_nodes_per_cluster,
+                            v.max_nodes_per_cluster.unwrap_or(usize::MAX)
+                        )));
                     }
                 }
 
@@ -376,9 +382,9 @@ mod tests {
         assert_eq!(
             Feature::ClusterQuota(ClusterQuota {
                 max_clusters: None,
-                max_nodes_pre_cluster: Some(1),
+                max_nodes_per_cluster: Some(1),
             }),
-            serde_json::from_str::<Feature>("{\"ClusterQuota\":{\"max_nodes_pre_cluster\":1}}")
+            serde_json::from_str::<Feature>("{\"ClusterQuota\":{\"max_nodes_per_cluster\":1}}")
                 .unwrap()
         );
 
