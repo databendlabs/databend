@@ -183,6 +183,7 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>();
 
             let mut has_inner_column = false;
+            let need_wrap_nullable = matches!(merge_type, MergeIntoType::FullOperation);
             let fetched_fields: Vec<DataField> = lazy_columns
                 .iter()
                 .map(|index| {
@@ -193,7 +194,11 @@ impl PhysicalPlanBuilder {
                             has_inner_column = true;
                         }
                     }
-                    DataField::new(&index.to_string(), col.data_type())
+                    let mut data_type = col.data_type();
+                    if need_wrap_nullable {
+                        data_type = data_type.wrap_nullable();
+                    }
+                    DataField::new(&index.to_string(), data_type)
                 })
                 .collect();
 
@@ -217,7 +222,7 @@ impl PhysicalPlanBuilder {
                 row_id_col_offset: row_id_offset,
                 cols_to_fetch,
                 fetched_fields,
-                need_wrap_nullable: matches!(merge_type, MergeIntoType::FullOperation),
+                need_wrap_nullable,
                 stat_info: None,
             });
         }
@@ -274,6 +279,8 @@ impl PhysicalPlanBuilder {
 
             unmatched.push((item.source_schema.clone(), filter, values_exprs))
         }
+
+        dbg!("output_schema = {:?}", &output_schema);
 
         // the first option is used for condition
         // the second option is used to distinct update and delete
