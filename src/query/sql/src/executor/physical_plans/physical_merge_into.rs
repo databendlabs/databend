@@ -280,8 +280,6 @@ impl PhysicalPlanBuilder {
             unmatched.push((item.source_schema.clone(), filter, values_exprs))
         }
 
-        dbg!("output_schema = {:?}", &output_schema);
-
         // the first option is used for condition
         // the second option is used to distinct update and delete
         let mut matched = Vec::with_capacity(matched_evaluators.len());
