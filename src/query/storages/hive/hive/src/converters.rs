@@ -22,6 +22,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -33,7 +34,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::resolve_type_name_by_str;
 use hive_metastore as hms;
 
-use crate::hive_catalog::HIVE_CATALOG;
 use crate::hive_database::HiveDatabase;
 use crate::hive_database::HIVE_DATABASE_ENGINE;
 use crate::hive_table::HIVE_TABLE_ENGINE;
@@ -60,6 +60,7 @@ impl From<hms::Database> for HiveDatabase {
 }
 
 pub fn try_into_table_info(
+    catalog_info: Arc<CatalogInfo>,
     sp: Option<StorageParams>,
     hms_table: hms::Table,
     fields: Vec<hms::FieldSchema>,
@@ -91,7 +92,6 @@ pub fn try_into_table_info(
 
     let meta = TableMeta {
         schema,
-        catalog: HIVE_CATALOG.to_string(),
         engine: HIVE_TABLE_ENGINE.to_owned(),
         engine_options: table_options.into(),
         storage_params: sp,
@@ -113,6 +113,7 @@ pub fn try_into_table_info(
         desc: real_name,
         name: hms_table.table_name.unwrap_or_default().to_string(),
         meta,
+        catalog_info,
         ..Default::default()
     };
 

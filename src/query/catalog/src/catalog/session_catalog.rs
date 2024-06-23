@@ -128,7 +128,7 @@ impl Catalog for SessionCatalog {
         self.inner.name()
     }
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.inner.info()
     }
 
@@ -252,8 +252,12 @@ impl Catalog for SessionCatalog {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.inner.get_table_name_by_id(table_id).await
+    }
+
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.inner.get_db_name_by_id(db_id).await
     }
 

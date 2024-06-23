@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -25,7 +27,7 @@ pub struct DistributedInsertSelect {
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub table_info: TableInfo,
     pub insert_schema: DataSchemaRef,
     pub select_schema: DataSchemaRef,
