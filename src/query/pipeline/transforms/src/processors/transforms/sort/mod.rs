@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod algorithm;
 mod cursor;
+mod loser_tree;
 mod merger;
 mod rows;
 mod spill;
-mod loser_tree;
-mod algorithm;
 pub mod utils;
 
 pub use cursor::*;
 pub use merger::*;
 pub use rows::*;
 pub use spill::*;
-pub use algorithm::*;

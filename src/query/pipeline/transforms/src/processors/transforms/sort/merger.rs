@@ -43,11 +43,11 @@ pub trait SortedStream {
 }
 
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
-pub struct Merger<S, A>
+pub struct Merger<A, S>
 where
-    S: SortedStream,
     A: SortAlgorithm,
     A::Rows: Rows,
+    S: SortedStream,
 {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
@@ -63,11 +63,11 @@ where
     temp_sorted_blocks: Vec<DataBlock>,
 }
 
-impl<S, A> Merger<S, A>
+impl<A, S> Merger<A, S>
 where
-    S: SortedStream + Send,
     A: SortAlgorithm,
     A::Rows: Rows,
+    S: SortedStream + Send,
 {
     pub fn create(
         schema: DataSchemaRef,
@@ -323,6 +323,6 @@ where
     }
 }
 
-pub type HeapMerger<R, S> = Merger<S, HeapSort<R>>;
+pub type HeapMerger<R, S> = Merger<HeapSort<R>, S>;
 
-pub type LoserTreeMerger<R, S> = Merger<S, LoserTreeSort<R>>;
+pub type LoserTreeMerger<R, S> = Merger<LoserTreeSort<R>, S>;
