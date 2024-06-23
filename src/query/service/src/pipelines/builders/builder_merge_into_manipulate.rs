@@ -98,9 +98,13 @@ impl PipelineBuilder {
                     pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
                 } else {
                     let input_num_columns = input_schema.num_fields();
+                    debug_assert!(
+                        merge_into_manipulate.source_row_id_idx.is_some()
+                            || merge_into_manipulate.source_row_number_idx.is_some()
+                    );
                     let idx = merge_into_manipulate
                         .source_row_id_idx
-                        .unwrap_or_else(|| input_num_columns - 1);
+                        .unwrap_or_else(|| merge_into_manipulate.source_row_number_idx.unwrap());
                     let input_port = InputPort::create();
                     let output_port = OutputPort::create();
                     // project row number column

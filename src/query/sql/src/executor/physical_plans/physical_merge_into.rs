@@ -230,7 +230,7 @@ impl PhysicalPlanBuilder {
         let output_schema = plan.output_schema()?;
 
         let mut source_row_id_idx = None;
-        let mut row_number_idx = None;
+        let mut source_row_number_idx = None;
         if *enable_right_broadcast {
             if let Some(source_row_id_index) = source_row_id_index {
                 for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
@@ -240,11 +240,12 @@ impl PhysicalPlanBuilder {
                     }
                 }
             } else {
-                row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
+                source_row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
             }
         };
 
-        if *enable_right_broadcast && row_number_idx.is_none() && source_row_id_idx.is_none() {
+        if *enable_right_broadcast && source_row_number_idx.is_none() && source_row_id_idx.is_none()
+        {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx or row_id_idx when running merge into",
             ));
@@ -373,6 +374,7 @@ impl PhysicalPlanBuilder {
             merge_type: merge_type.clone(),
             row_id_idx: row_id_offset,
             source_row_id_idx,
+            source_row_number_idx,
             enable_right_broadcast: *enable_right_broadcast,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: join_output_schema.clone(),
@@ -408,10 +410,8 @@ impl PhysicalPlanBuilder {
                 unmatched: unmatched.clone(),
                 segments: segments.clone(),
                 distributed: true,
-                output_schema: if let Some(row_number_idx) = row_number_idx {
-                    DataSchemaRef::new(DataSchema::new(vec![
-                        output_schema.fields[row_number_idx].clone(),
-                    ]))
+                output_schema: if let Some(idx) = source_row_number_idx {
+                    DataSchemaRef::new(DataSchema::new(vec![output_schema.fields[idx].clone()]))
                 } else {
                     DataSchemaRef::new(DataSchema::new(vec![DataField::new(
                         ROW_ID_COL_NAME,
