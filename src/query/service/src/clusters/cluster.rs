@@ -38,13 +38,18 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_license::license::ClusterQuota;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::ClusterApi;
 use databend_common_management::ClusterMgr;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
 use databend_common_metrics::cluster::*;
+use databend_common_settings::Settings;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
@@ -399,6 +404,7 @@ impl ClusterDiscovery {
     #[async_backtrace::framed]
     async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
+        heartbeat.check_quota().await?;
         heartbeat.start(node_info);
         Ok(())
     }
@@ -476,6 +482,29 @@ impl ClusterHeartbeat {
 
     fn heartbeat_interval(&self, duration: Duration) -> RangeInclusive<u128> {
         (duration / 3).as_millis()..=((duration / 3) * 2).as_millis()
+    }
+
+    pub async fn check_quota(&mut self) -> Result<()> {
+        let tenant_clusters = self.cluster_api.get_tenant_nodes().await?;
+        let max_nodes = tenant_clusters
+            .values()
+            .map(|nodes| nodes.len())
+            .max()
+            .unwrap_or_default();
+
+        let license_key = self.get_license_key().await?;
+        let license_manager = get_license_manager();
+
+        license_manager.manager.check_enterprise_enabled(
+            license_key,
+            Feature::ClusterQuota(ClusterQuota::limit_full(tenant_clusters.len(), max_nodes)),
+        )
+    }
+
+    async fn get_license_key(&mut self) -> Result<String, ErrorCode> {
+        let settings = Settings::create(Tenant::new_literal(&self.tenant_id));
+        settings.load_changes().await?;
+        unsafe { settings.get_enterprise_license() }
     }
 
     pub fn start(&mut self, node_info: NodeInfo) {

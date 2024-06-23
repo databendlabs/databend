@@ -62,10 +62,7 @@ impl LicenseManager for RealLicenseManager {
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
-            return Err(ErrorCode::LicenseKeyInvalid(format!(
-                "use of {feature} requires an enterprise license. license key is not found for {}",
-                self.tenant
-            )));
+            return feature.verify_default(&self.tenant);
         }
 
         if let Some(v) = self.cache.get(&license_key) {
@@ -154,7 +151,7 @@ impl RealLicenseManager {
 
         let verify_features = l.custom.features.as_ref().unwrap();
         for verify_feature in verify_features {
-            if verify_feature.verify(&feature) {
+            if verify_feature.verify(&feature)? {
                 return Ok(());
             }
         }
