@@ -81,15 +81,14 @@ impl Deref for LicenseManagerSwitch {
     }
 }
 
-pub struct OssLicenseManager {}
+pub struct OssLicenseManager {
+    tenant: String,
+}
 
 impl LicenseManager for OssLicenseManager {
-    fn init(_tenant: String) -> Result<()> {
-        let rm = OssLicenseManager {};
-        let wrapper = LicenseManagerSwitch {
-            manager: Box::new(rm),
-        };
-        GlobalInstance::set(Arc::new(wrapper));
+    fn init(tenant: String) -> Result<()> {
+        let rm = OssLicenseManager { tenant };
+        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         Ok(())
     }
 
@@ -97,10 +96,9 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
-        Err(ErrorCode::LicenseKeyInvalid(
-            "Need Commercial License".to_string(),
-        ))
+    fn check_enterprise_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
+        // oss ignore license key.
+        feature.verify_default(&self.tenant)
     }
 
     fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
