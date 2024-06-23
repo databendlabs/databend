@@ -40,7 +40,7 @@ use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_license::license::ClusterQuota;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::ClusterApi;
 use databend_common_management::ClusterMgr;
 use databend_common_meta_app::tenant::Tenant;
@@ -493,9 +493,8 @@ impl ClusterHeartbeat {
             .unwrap_or_default();
 
         let license_key = self.get_license_key().await?;
-        let license_manager = get_license_manager();
 
-        license_manager.manager.check_enterprise_enabled(
+        LicenseManagerSwitch::instance().check_enterprise_enabled(
             license_key,
             Feature::ClusterQuota(ClusterQuota::limit_full(tenant_clusters.len(), max_nodes)),
         )

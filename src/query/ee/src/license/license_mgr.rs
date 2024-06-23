@@ -23,7 +23,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license::StorageQuota;
 use databend_common_license::license_manager::LicenseManager;
-use databend_common_license::license_manager::LicenseManagerWrapper;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
@@ -49,10 +49,8 @@ impl LicenseManager for RealLicenseManager {
             cache: DashMap::new(),
             public_key: LICENSE_PUBLIC_KEY.to_string(),
         };
-        let wrapper = LicenseManagerWrapper {
-            manager: Box::new(rm),
-        };
-        GlobalInstance::set(Arc::new(wrapper));
+
+        GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         Ok(())
     }
 
@@ -62,6 +60,7 @@ impl LicenseManager for RealLicenseManager {
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
+            // feature.verify_default(&self.tenant)?;
             return feature.verify_default(&self.tenant);
         }
 
