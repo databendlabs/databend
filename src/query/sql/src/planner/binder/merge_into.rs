@@ -269,9 +269,7 @@ impl Binder {
         let mut source_table_index = DUMMY_TABLE_INDEX;
         let mut source_row_id_index = None;
 
-        if settings
-            .get_enable_distributed_merge_into()?
-        {
+        if settings.get_enable_distributed_merge_into()? {
             self.try_add_internal_column_binding(
                 &source_data,
                 &mut source_context,
@@ -423,7 +421,8 @@ impl Binder {
         let lazy_columns = if matches!(
             merge_type,
             MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
-        ) && settings.get_enable_merge_into_row_fetch()? {
+        ) && settings.get_enable_merge_into_row_fetch()?
+        {
             let mut required_columns = HashSet::new();
             let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
             for (left_condition, right_condition) in join
