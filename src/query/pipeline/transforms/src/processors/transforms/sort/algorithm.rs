@@ -20,8 +20,8 @@ use super::utils::find_bigger_child_of_root;
 use super::Cursor;
 use super::Rows;
 
-pub trait SortdGroup
-where <Self as SortdGroup>::Rows: Rows
+pub trait SortAlgorithm
+where <Self as SortAlgorithm>::Rows: Rows
 {
     type Rows;
     fn with_capacity(capacity: usize) -> Self;
@@ -43,9 +43,9 @@ where <Self as SortdGroup>::Rows: Rows
     fn peek_top2(&self) -> &Reverse<Cursor<Self::Rows>>;
 }
 
-pub type BinaryHeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
+pub type HeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
 
-impl<R: Rows> SortdGroup for BinaryHeap<Reverse<Cursor<R>>> {
+impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     type Rows = R;
     fn with_capacity(capacity: usize) -> Self {
         BinaryHeap::with_capacity(capacity)
@@ -81,7 +81,7 @@ pub struct LoserTreeSort<R: Rows> {
     length: usize,
 }
 
-impl<R: Rows> SortdGroup for LoserTreeSort<R> {
+impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     type Rows = R;
     fn with_capacity(capacity: usize) -> Self {
         let data = vec![None; capacity];

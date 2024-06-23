@@ -22,7 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
-use super::algorithm::SortdGroup;
+use super::algorithm::*;
 use super::Cursor;
 use super::Rows;
 
@@ -43,16 +43,16 @@ pub trait SortedStream {
 }
 
 /// A merge sort operator to merge multiple sorted streams and output one sorted stream.
-pub struct Merger<S, G>
+pub struct Merger<S, A>
 where
     S: SortedStream,
-    G: SortdGroup,
-    G::Rows: Rows,
+    A: SortAlgorithm,
+    A::Rows: Rows,
 {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
-    sortd_group: G,
+    sortd_group: A,
     buffer: Vec<DataBlock>,
     pending_streams: VecDeque<usize>,
     batch_size: usize,
@@ -63,11 +63,11 @@ where
     temp_sorted_blocks: Vec<DataBlock>,
 }
 
-impl<S, G> Merger<S, G>
+impl<S, A> Merger<S, A>
 where
     S: SortedStream + Send,
-    G: SortdGroup,
-    G::Rows: Rows,
+    A: SortAlgorithm,
+    A::Rows: Rows,
 {
     pub fn create(
         schema: DataSchemaRef,
@@ -79,7 +79,7 @@ where
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
-        let heap = G::with_capacity(streams.len());
+        let heap = A::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
 
@@ -100,7 +100,9 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.sortd_group.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+        (self.sortd_group.is_empty()
+            && !self.has_pending_stream()
+            && self.temp_sorted_num_rows == 0)
             || self.limit == Some(0)
     }
 
@@ -120,7 +122,7 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = G::Rows::from_column(&col, &self.sort_desc)?;
+                let rows = A::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
                 self.sortd_group.push(i, Reverse(cursor));
                 self.buffer[i] = block;
@@ -141,9 +143,9 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = G::Rows::from_column(&col, &self.sort_desc)?;
+                let rows = A::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
-                self.sortd_group.push(i,Reverse(cursor));
+                self.sortd_group.push(i, Reverse(cursor));
                 self.buffer[i] = block;
             }
         }
@@ -156,7 +158,7 @@ where
     ///
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
-    fn evaluate_cursor(&mut self, mut cursor: Cursor<G::Rows>) -> bool {
+    fn evaluate_cursor(&mut self, mut cursor: Cursor<A::Rows>) -> bool {
         let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
         if self.sortd_group.len() == 1 {
             let start = cursor.row_index;
@@ -320,3 +322,7 @@ where
         Ok(Some(self.build_output()?))
     }
 }
+
+pub type HeapMerger<R, S> = Merger<S, HeapSort<R>>;
+
+pub type LoserTreeMerger<R, S> = Merger<S, LoserTreeSort<R>>;
