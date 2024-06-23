@@ -46,7 +46,6 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
-use crate::plans::JoinType;
 use crate::plans;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -136,7 +135,6 @@ impl PhysicalPlanBuilder {
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
-        let join_type = plan.into_hash_join()?.join_type;
 
         let join_output_schema = plan.output_schema()?;
         let is_insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
@@ -219,7 +217,7 @@ impl PhysicalPlanBuilder {
                 row_id_col_offset: row_id_offset,
                 cols_to_fetch,
                 fetched_fields,
-                need_wrap_nullable: matches!(join_type, JoinType::Right),
+                need_wrap_nullable: matches!(merge_type, MergeIntoType::FullOperation),
                 stat_info: None,
             });
         }

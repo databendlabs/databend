@@ -14,15 +14,18 @@
 
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -46,6 +49,7 @@ pub fn row_fetch_processor(
     row_id_col_offset: usize,
     source: &DataSourcePlan,
     projection: Projection,
+    need_wrap_nullable: bool,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
@@ -83,6 +87,7 @@ pub fn row_fetch_processor(
                             column_leaves.clone(),
                             max_threads,
                         ),
+                        need_wrap_nullable,
                     )
                 } else {
                     TransformRowsFetcher::create(
@@ -96,6 +101,7 @@ pub fn row_fetch_processor(
                             column_leaves.clone(),
                             max_threads,
                         ),
+                        need_wrap_nullable,
                     )
                 })
             }))
@@ -115,6 +121,7 @@ pub fn row_fetch_processor(
                             read_settings,
                             max_threads,
                         ),
+                        need_wrap_nullable,
                     )
                 } else {
                     TransformRowsFetcher::create(
@@ -128,6 +135,7 @@ pub fn row_fetch_processor(
                             read_settings,
                             max_threads,
                         ),
+                        need_wrap_nullable,
                     )
                 })
             }))
@@ -145,6 +153,7 @@ pub trait RowsFetcher {
 pub struct TransformRowsFetcher<F: RowsFetcher> {
     row_id_col_offset: usize,
     fetcher: F,
+    need_wrap_nullable: bool,
 }
 
 #[async_trait::async_trait]
@@ -188,7 +197,11 @@ where F: RowsFetcher + Send + Sync + 'static
         let fetched_block = self.fetcher.fetch(&row_id_column).await?;
 
         for col in fetched_block.columns().iter() {
-            data.add_column(col.clone());
+            if self.need_wrap_nullable {
+                data.add_column(wrap_true_validity(col, num_rows));
+            } else {
+                data.add_column(col.clone());
+            }
         }
 
         Ok(data)
@@ -203,10 +216,26 @@ where F: RowsFetcher + Send + Sync + 'static
         output: Arc<OutputPort>,
         row_id_col_offset: usize,
         fetcher: F,
+        need_wrap_nullable: bool,
     ) -> ProcessorPtr {
         ProcessorPtr::create(AsyncTransformer::create(input, output, Self {
             row_id_col_offset,
             fetcher,
+            need_wrap_nullable,
         }))
+    }
+}
+
+fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
+    let (value, data_type) = (&column.value, &column.data_type);
+    let col = value.convert_to_full_column(data_type, num_rows);
+    if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
+        column.clone()
+    } else {
+        let col = Column::Nullable(Box::new(NullableColumn {
+            column: col,
+            validity: Bitmap::new_trued(num_rows),
+        }));
+        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }
