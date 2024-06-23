@@ -60,8 +60,10 @@ impl LicenseManager for RealLicenseManager {
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
-            // feature.verify_default(&self.tenant)?;
-            return feature.verify_default(&self.tenant);
+            return feature.verify_default(format!(
+                "use of {self} requires an enterprise license. license key is not found for {}",
+                self.tenant
+            ));
         }
 
         if let Some(v) = self.cache.get(&license_key) {

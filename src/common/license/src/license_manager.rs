@@ -98,7 +98,7 @@ impl LicenseManager for OssLicenseManager {
 
     fn check_enterprise_enabled(&self, _license_key: String, feature: Feature) -> Result<()> {
         // oss ignore license key.
-        feature.verify_default(&self.tenant)
+        feature.verify_default("Need Commercial License".to_string())
     }
 
     fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
