@@ -81,13 +81,11 @@ impl Deref for LicenseManagerSwitch {
     }
 }
 
-pub struct OssLicenseManager {
-    tenant: String,
-}
+pub struct OssLicenseManager {}
 
 impl LicenseManager for OssLicenseManager {
-    fn init(tenant: String) -> Result<()> {
-        let rm = OssLicenseManager { tenant };
+    fn init(_tenant: String) -> Result<()> {
+        let rm = OssLicenseManager {};
         GlobalInstance::set(Arc::new(LicenseManagerSwitch::create(Box::new(rm))));
         Ok(())
     }

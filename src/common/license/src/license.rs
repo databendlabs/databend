@@ -170,7 +170,7 @@ impl Display for Feature {
 }
 
 impl Feature {
-    pub fn verify_default(&self, message: String) -> Result<(), ErrorCode> {
+    pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
         match self {
             Feature::ClusterQuota(cluster_quote) => {
                 if matches!(cluster_quote.max_clusters, Some(x) if x > 1) {
@@ -187,7 +187,7 @@ impl Feature {
 
                 Ok(())
             }
-            _ => Err(ErrorCode::LicenseKeyInvalid(message)),
+            _ => Err(ErrorCode::LicenseKeyInvalid(message.into())),
         }
     }
 
