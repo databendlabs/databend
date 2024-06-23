@@ -85,6 +85,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall]
     #[minitrace::trace]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         // Get all outbound share accounts.
         let outbound_accounts = get_outbound_share_infos_by_tenant(self, &req.tenant).await?;
 
@@ -94,6 +96,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall]
     #[minitrace::trace]
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -177,6 +181,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     // drop all the databases created from the share(from ShareMeta.share_from_db_ids),
     #[logcall::logcall]
     async fn drop_share(&self, req: DropShareReq) -> Result<DropShareReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -306,6 +312,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: AddShareAccountsReq,
     ) -> Result<AddShareAccountsReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -413,6 +421,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: RemoveShareAccountsReq,
     ) -> Result<RemoveShareAccountsReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -528,6 +538,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: GrantShareObjectReq,
     ) -> Result<GrantShareObjectReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -647,6 +659,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: RevokeShareObjectReq,
     ) -> Result<RevokeShareObjectReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -782,6 +796,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: GetShareGrantObjectReq,
     ) -> Result<GetShareGrantObjectReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let share_name_key = &req.share_name;
 
         let res = get_share_or_err(
@@ -966,6 +982,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: CreateShareEndpointReq,
     ) -> Result<CreateShareEndpointReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -1064,6 +1082,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: UpsertShareEndpointReq,
     ) -> Result<UpsertShareEndpointReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -1214,6 +1234,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: DropShareEndpointReq,
     ) -> Result<DropShareEndpointReply, KVAppError> {
+        debug!(req :? =(&req); "ShareApi: {}", func_name!());
+
         let name_key = &req.endpoint;
 
         let mut trials = txn_backoff(None, func_name!());
