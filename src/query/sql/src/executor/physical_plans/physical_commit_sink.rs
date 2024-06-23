@@ -30,7 +30,7 @@ pub struct CommitSink {
     pub input: Box<PhysicalPlan>,
     pub snapshot: Arc<TableSnapshot>,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub mutation_kind: MutationKind,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,

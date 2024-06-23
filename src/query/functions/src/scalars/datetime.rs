@@ -20,11 +20,12 @@ use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Days;
-use chrono::ParseError;
+use chrono::MappedLocalTime;
 use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::date_to_string;
@@ -256,7 +257,7 @@ fn string_to_format_timestmap(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,
-) -> Result<(i64, bool), ParseError> {
+) -> Result<(i64, bool), ErrorCode> {
     if format.is_empty() {
         return Ok((0, true));
     }
@@ -271,10 +272,10 @@ fn string_to_format_timestmap(
     let parse_tz = timezone_strftime
         .iter()
         .any(|&pattern| format.contains(pattern));
-    let res = if ctx.func_ctx.parse_datetime_ignore_remainder {
+    if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
-        if parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)).is_err() {
-            return Ok((0, true));
+        if let Err(e) = parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)) {
+            return Err(ErrorCode::BadArguments(format!("{}", e)));
         }
         // Additional checks and adjustments for parsed timestamp
         if parsed.month.is_none() {
@@ -293,27 +294,49 @@ fn string_to_format_timestmap(
         if parsed.second.is_none() {
             parsed.second = Some(0);
         }
+
+        // fn handle_err<T>(result: Result<T, impl ToString>) -> Result<T, ErrorCode> {
+        //     result.map_err(|e| ErrorCode::BadArguments(e.to_string()))
+        // }
         // Convert parsed timestamp to datetime or naive datetime based on parse_tz
         if parse_tz {
             parsed.offset.get_or_insert(0);
             parsed
                 .to_datetime()
-                .map(|res| res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros())
+                .map(|res| (res.timestamp_micros(), false))
+                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+            // handle_err(parsed.to_datetime()).map(|res| (res.timestamp_micros(), false))
         } else {
             parsed
                 .to_naive_datetime_with_offset(0)
-                .map(|res| res.and_utc().timestamp_micros())
+                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
+                    MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
+                    _ => Err(ErrorCode::BadArguments(
+                        "The local time can not map to a single unique result".to_string(),
+                    )),
+                })
+            // handle_err(parsed.to_naive_datetime_with_offset(0))
+            // .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
+            // MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
+            // _ => Err(ErrorCode::BadArguments(
+            // "The local time can not map to a single unique result".to_string(),
+            // )),
+            // })
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
-            .map(|res| res.with_timezone(&ctx.func_ctx.tz.tz).timestamp_micros())
+            .map(|res| (res.timestamp_micros(), false))
+            .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
     } else {
-        NaiveDateTime::parse_from_str(timestamp, format).map(|res| res.and_utc().timestamp_micros())
-    };
-
-    match res {
-        Ok(res) => Ok((res, false)),
-        Err(err) => Err(err),
+        NaiveDateTime::parse_from_str(timestamp, format)
+            .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
+            .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
+                MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
+                _ => Err(ErrorCode::BadArguments(
+                    "The local time can not map to a single unique result".to_string(),
+                )),
+            })
     }
 }
 

@@ -290,7 +290,7 @@ impl UpdateInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
+        catalog_info: Arc<CatalogInfo>,
         query_row_id_col: bool,
         is_distributed: bool,
         ctx: Arc<QueryContext>,

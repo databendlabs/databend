@@ -2123,6 +2123,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             meta: tb_meta.unwrap(),
             tenant: req.tenant.tenant_name().to_string(),
             db_type,
+            catalog_info: Default::default(),
         };
 
         return Ok(Arc::new(tb_info));
@@ -2252,6 +2253,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             meta: tb_meta,
                             tenant: tenant_dbname.tenant_name().to_string(),
                             db_type,
+                            catalog_info: Default::default(),
                         };
 
                         tb_info_list.push(Arc::new(tb_info));
@@ -4983,6 +4985,7 @@ async fn batch_filter_table_info(
             meta: tb_meta,
             tenant: db_ident.tenant_name().to_string(),
             db_type: DatabaseType::NormalDB,
+            catalog_info: Default::default(),
         };
 
         filter_tb_infos.push((Arc::new(tb_info), db_info.ident.db_id));

@@ -123,7 +123,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo;
+    fn info(&self) -> Arc<CatalogInfo>;
 
     /// Database.
 
