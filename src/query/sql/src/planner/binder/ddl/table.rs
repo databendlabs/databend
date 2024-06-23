@@ -537,7 +537,8 @@ impl Binder {
                     Engine::Iceberg => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let (table_schema, _) = self.ctx.load_datalake_schema("iceberg", &sp)?;
+                        let (table_schema, _) =
+                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -547,7 +548,8 @@ impl Binder {
                     Engine::Delta => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let (table_schema, meta) = self.ctx.load_datalake_schema("delta", &sp)?;
+                        let (table_schema, meta) =
+                            self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.

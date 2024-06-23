@@ -40,12 +40,12 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::parquet_rs::read_metadata_async;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_settings::Settings;
 use databend_storages_common_table_meta::table::ChangeType;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
@@ -120,7 +120,7 @@ impl ParquetRSTable {
         read_options: ParquetReadOptions,
         files_to_read: Option<Vec<StageFileInfo>>,
         settings: Arc<Settings>,
-        query_kind: QueryKind
+        query_kind: QueryKind,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {

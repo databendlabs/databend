@@ -1234,9 +1234,9 @@ impl TableContext for QueryContext {
                     read_options,
                     files_to_copy,
                     self.get_settings(),
-                    self.get_query_kind()
+                    self.get_query_kind(),
                 )
-                .await?
+                .await
             }
             FileFormatParams::Orc(..) => {
                 let schema = Arc::new(TableSchema::empty());
