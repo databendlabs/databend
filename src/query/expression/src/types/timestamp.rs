@@ -269,11 +269,14 @@ pub fn string_to_timestamp(
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),
-                Err(_) => Err(ErrorCode::BadArguments("")),
+                Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
             },
             _ => unreachable!(),
         },
-        Err(e) => Err(e),
+        Err(e) => match e.code() {
+            ErrorCode::BAD_BYTES => Err(e),
+            _ => Err(ErrorCode::BadArguments("unexpected argument")),
+        },
     }
 }
 

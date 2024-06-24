@@ -455,10 +455,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
             |val, output, ctx| match string_to_date(val, ctx.func_ctx.tz.tz) {
                 Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("cannot parse to type `DATE`. {}", e),
-                    );
+                    ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
                     output.push(0);
                 }
             },

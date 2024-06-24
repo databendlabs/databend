@@ -253,9 +253,12 @@ pub fn string_to_date(
     match reader.read_date_text(&tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
-            Err(_) => Err(ErrorCode::BadArguments("")),
+            Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
         },
-        Err(e) => Err(e),
+        Err(e) => match e.code() {
+            ErrorCode::BAD_BYTES => Err(e),
+            _ => Err(ErrorCode::BadArguments("unexpected argument")),
+        },
     }
 }
 

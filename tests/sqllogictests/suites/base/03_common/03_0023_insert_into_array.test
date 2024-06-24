@@ -257,7 +257,7 @@ CREATE TABLE t12(id Int, arr Array(Date)) Engine = Fuse
 statement ok
 INSERT INTO t12 (id, arr) VALUES(1, ['2021-01-01', '2022-01-01']), (2, ['1990-12-01', '2030-01-12'])
 
-statement error (?s).*cannot parse to type `DATE`, error is
+statement error (?s).*cannot parse to type `DATE`.
 INSERT INTO t12 (id, arr) VALUES(3, ['1000000-01-01', '2000000-01-01'])
 
 query IT
@@ -281,7 +281,7 @@ CREATE TABLE t13(id Int, arr Array(Timestamp)) Engine = Fuse
 statement ok
 INSERT INTO t13 (id, arr) VALUES(1, ['2021-01-01 01:01:01', '2022-01-01 01:01:01']), (2, ['1990-12-01 10:11:12', '2030-01-12 22:00:00'])
 
-statement error (?s).*cannot parse to type `TIMESTAMP`, error is
+statement error (?s).*cannot parse to type `TIMESTAMP`.
 INSERT INTO t13 (id, arr) VALUES(3, ['1000000-01-01 01:01:01', '2000000-01-01 01:01:01'])
 
 query IT
