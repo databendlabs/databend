@@ -157,9 +157,12 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
             match string_to_timestamp(val, ctx.func_ctx.tz.tz) {
-                Some(ts) => output.push(ts.timestamp_micros()),
-                None => {
-                    ctx.set_error(output.len(), "cannot parse to type `TIMESTAMP`");
+                Ok(ts) => output.push(ts.timestamp_micros()),
+                Err(e) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `TIMESTAMP`, error is {}", e),
+                    );
                     output.push(0);
                 }
             }
@@ -450,9 +453,12 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
     fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(
             |val, output, ctx| match string_to_date(val, ctx.func_ctx.tz.tz) {
-                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
-                None => {
-                    ctx.set_error(output.len(), "cannot parse to type `DATE`");
+                Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                Err(e) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `DATE`, error is {}", e),
+                    );
                     output.push(0);
                 }
             },

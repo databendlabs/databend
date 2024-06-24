@@ -997,8 +997,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val).and_then(|val| string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz)) {
-                Some(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz) {
+                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `DATE`, error is {}", e),
+                        );
+                        output.push(0);
+                    }
+                },
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `DATE`");
                     output.push(0);
@@ -1017,10 +1027,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val)
-                .and_then(|str_value| string_to_date(str_value.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(date) => output.push(date.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_date(val.as_bytes(), ctx.func_ctx.tz.tz) {
+                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                    Err(_) => output.push_null(),
+                },
                 None => output.push_null(),
             }
         }),
@@ -1036,10 +1048,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match as_str(val)
-                .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
-            {
-                Some(ts) => output.push(ts.timestamp_micros()),
+            let val = as_str(val);
+            match val {
+                Some(val) => match string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz) {
+                    Ok(ts) => output.push(ts.timestamp_micros()),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("unable to cast to type `TIMESTAMP`, error is {}", e),
+                        );
+                        output.push(0);
+                    }
+                },
                 None => {
                     ctx.set_error(output.len(), "unable to cast to type `TIMESTAMP`");
                     output.push(0);
@@ -1059,11 +1079,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                         return;
                     }
                 }
-                match as_str(val)
-                    .and_then(|val| string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz))
-                {
-                    Some(ts) => output.push(ts.timestamp_micros()),
-                    None => output.push_null(),
+                let val = as_str(val);
+                match val {
+                    Some(val) => match string_to_timestamp(val.as_bytes(), ctx.func_ctx.tz.tz) {
+                        Ok(ts) => output.push(ts.timestamp_micros()),
+                        Err(_) => {
+                            output.push_null();
+                        }
+                    },
+                    None => {
+                        output.push_null();
+                    }
                 }
             },
         ),
