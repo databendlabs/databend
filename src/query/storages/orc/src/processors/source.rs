@@ -66,6 +66,31 @@ impl ORCSource {
         }
         Ok(())
     }
+
+    async fn next_part(&mut self) -> Result<bool> {
+        let part = match self.table_ctx.get_partition() {
+            Some(part) => part,
+            None => return Ok(false),
+        };
+        let file = OrcFilePartition::from_part(&part)?.clone();
+        let path = file.path.clone();
+
+        let file = OrcChunkReader {
+            operator: self.op.clone(),
+            size: file.size as u64,
+            path: file.path,
+        };
+        let builder = ArrowReaderBuilder::try_new_async(file)
+            .await
+            .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+        let mut reader = builder.build_async();
+        let factory = mem::take(&mut reader.factory).unwrap();
+        let schema = reader.schema();
+        self.check_file_schema(schema, &path)?;
+
+        self.reader = Some((path, factory));
+        Ok(true)
+    }
 }
 
 #[async_trait::async_trait]
@@ -76,46 +101,31 @@ impl AsyncSource for ORCSource {
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.reader.is_none() {
-            let part = match self.table_ctx.get_partition() {
-                Some(part) => part,
-                None => return Ok(None),
-            };
-            let file = OrcFilePartition::from_part(&part)?.clone();
-            let path = file.path.clone();
-
-            let file = OrcChunkReader {
-                operator: self.op.clone(),
-                size: file.size as u64,
-                path: file.path,
-            };
-            let builder = ArrowReaderBuilder::try_new_async(file)
-                .await
-                .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-            let mut reader = builder.build_async();
-            let factory = mem::take(&mut reader.factory).unwrap();
-            let schema = reader.schema();
-            self.check_file_schema(schema, &path)?;
-
-            self.reader = Some((path, factory))
-        }
-        if let Some((path, factory)) = mem::take(&mut self.reader) {
-            let (factory, stripe) = factory
-                .read_next_stripe()
-                .await
-                .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-            match stripe {
-                None => Ok(None),
-                Some(stripe) => {
-                    self.reader = Some((path.clone(), Box::new(factory)));
-                    let meta = Box::new(StripeInMemory { path, stripe });
-                    Ok(Some(DataBlock::empty_with_meta(meta)))
-                }
+        loop {
+            if self.reader.is_none() && !self.next_part().await? {
+                return Ok(None);
             }
-        } else {
-            Err(ErrorCode::Internal(
-                "Bug: ORCSource: should not be called with reader != None.",
-            ))
+            if let Some((path, factory)) = mem::take(&mut self.reader) {
+                let (factory, stripe) = factory
+                    .read_next_stripe()
+                    .await
+                    .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+                match stripe {
+                    None => {
+                        self.reader = None;
+                        continue;
+                    }
+                    Some(stripe) => {
+                        self.reader = Some((path.clone(), Box::new(factory)));
+                        let meta = Box::new(StripeInMemory { path, stripe });
+                        return Ok(Some(DataBlock::empty_with_meta(meta)));
+                    }
+                }
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Bug: ORCSource: should not be called with reader != None.",
+                ));
+            }
         }
     }
 }
