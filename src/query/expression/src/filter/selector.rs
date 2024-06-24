@@ -487,7 +487,7 @@ impl<'a> Selector<'a> {
                     .remove_generics_data_type(generics, &function.signature.return_type);
                 (result, data_type)
             }
-            Expr::FunctionCall {
+            f @ Expr::FunctionCall {
                 span,
                 id,
                 function,
@@ -530,6 +530,7 @@ impl<'a> Selector<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &f.sql_display(),
                     selection,
                 )?;
                 let data_type = self

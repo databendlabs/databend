@@ -170,7 +170,7 @@ impl<'a> Evaluator<'a> {
                 self.eval_and_filters(args, validity, options)
             }
 
-            Expr::FunctionCall {
+            f @ Expr::FunctionCall {
                 span,
                 id,
                 function,
@@ -217,6 +217,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &f.sql_display(),
                     options.selection,
                 )?;
 
@@ -1017,7 +1018,14 @@ impl<'a> Evaluator<'a> {
                     suppress_error: false,
                 };
                 let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
-                ctx.render_error(*span, id.params(), &args, &function.signature.name, None)?;
+                ctx.render_error(
+                    *span,
+                    id.params(),
+                    &args,
+                    &function.signature.name,
+                    &expr.sql_display(),
+                    None,
+                )?;
                 assert_eq!(result.len(), self.data_block.num_rows());
                 return Ok(result);
             }
@@ -1277,7 +1285,7 @@ impl<'a> Evaluator<'a> {
                 Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
 
-            Expr::FunctionCall {
+            f @ Expr::FunctionCall {
                 span,
                 id,
                 function,
@@ -1327,6 +1335,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &f.sql_display(),
                     options.selection,
                 )?;
 
