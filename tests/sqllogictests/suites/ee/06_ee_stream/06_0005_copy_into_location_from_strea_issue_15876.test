@@ -39,8 +39,10 @@ create or replace stage test_stage_15876;
 statement ok
 copy into @test_stage_15876/case1 from s;
 
+# sqllogic_ee parquet and native both write to the same stage
+# we can not assume the count be exactly 0
 query  T
-select $1 from @test_stage_15876/case1;
+select count() > 0 from @test_stage_15876/case1;
 ----
 1
 
@@ -85,11 +87,6 @@ select c from s;
 
 statement ok
 copy into @test_stage_15876/case2 from s;
-
-query  T
-select $1 from @test_stage_15876/case2;
-----
-2
 
 # stream should NOT be consumed yet (txn not ended)
 query T
