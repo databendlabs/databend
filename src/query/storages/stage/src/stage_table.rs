@@ -233,9 +233,9 @@ impl Table for StageTable {
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
     ) -> Result<()> {
-        pipeline.try_resize(1)?;
         let catalog = ctx.get_default_catalog()?;
         if !update_stream_meta_req.is_empty() {
+            pipeline.try_resize(1)?;
             info!("stage table consuming some streams");
             pipeline.add_sink(|input| {
                 Ok(ProcessorPtr::create(AsyncSinker::create(

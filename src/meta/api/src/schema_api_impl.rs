@@ -2979,7 +2979,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(())
     }
 
-
     #[logcall::logcall]
     #[minitrace::trace]
     async fn update_table_meta(
