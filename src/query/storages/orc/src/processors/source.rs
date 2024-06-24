@@ -58,7 +58,7 @@ impl ORCSource {
     }
 
     fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
-        if self.arrow_schema != arrow_schema {
+        if self.arrow_schema.fields != arrow_schema.fields {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
                 self.schema_from, path, self.arrow_schema, arrow_schema
