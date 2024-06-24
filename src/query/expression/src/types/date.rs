@@ -253,7 +253,7 @@ pub fn string_to_date(
     match reader.read_date_text(&tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
-            Err(e) => Err(ErrorCode::BadArguments(format!("{}", e))),
+            Err(_) => Err(ErrorCode::BadArguments("")),
         },
         Err(e) => Err(e),
     }

@@ -1004,7 +1004,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
-                            format!("unable to cast to type `DATE`, error is {}", e),
+                            format!("unable to cast to type `DATE`. {}", e),
                         );
                         output.push(0);
                     }
@@ -1055,7 +1055,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Err(e) => {
                         ctx.set_error(
                             output.len(),
-                            format!("unable to cast to type `TIMESTAMP`, error is {}", e),
+                            format!("unable to cast to type `TIMESTAMP`. {}", e),
                         );
                         output.push(0);
                     }

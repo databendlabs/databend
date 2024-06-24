@@ -161,7 +161,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 Err(e) => {
                     ctx.set_error(
                         output.len(),
-                        format!("cannot parse to type `TIMESTAMP`, error is {}", e),
+                        format!("cannot parse to type `TIMESTAMP`. {}", e),
                     );
                     output.push(0);
                 }
@@ -457,7 +457,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
                 Err(e) => {
                     ctx.set_error(
                         output.len(),
-                        format!("cannot parse to type `DATE`, error is {}", e),
+                        format!("cannot parse to type `DATE`. {}", e),
                     );
                     output.push(0);
                 }

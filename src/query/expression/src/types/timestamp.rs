@@ -269,7 +269,7 @@ pub fn string_to_timestamp(
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),
-                Err(e) => Err(ErrorCode::BadArguments(format!("{}", e))),
+                Err(_) => Err(ErrorCode::BadArguments("")),
             },
             _ => unreachable!(),
         },
