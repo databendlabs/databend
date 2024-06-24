@@ -32,6 +32,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
 
+use super::CatalogInfo;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
@@ -203,6 +204,9 @@ pub struct TableInfo {
 
     pub tenant: String,
 
+    /// The corresponding catalog info of this table.
+    pub catalog_info: Arc<CatalogInfo>,
+
     // table belong to which type of database.
     pub db_type: DatabaseType,
 }
@@ -231,7 +235,6 @@ pub struct TableStatistics {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableMeta {
     pub schema: Arc<TableSchema>,
-    pub catalog: String,
     pub engine: String,
     pub engine_options: BTreeMap<String, String>,
     pub storage_params: Option<StorageParams>,
@@ -341,7 +344,7 @@ impl TableInfo {
     }
 
     pub fn catalog(&self) -> &str {
-        &self.meta.catalog
+        &self.catalog_info.name_ident.catalog_name
     }
 
     pub fn engine(&self) -> &str {
@@ -367,7 +370,6 @@ impl Default for TableMeta {
     fn default() -> Self {
         TableMeta {
             schema: Arc::new(TableSchema::empty()),
-            catalog: "default".to_string(),
             engine: "".to_string(),
             engine_options: BTreeMap::new(),
             storage_params: None,

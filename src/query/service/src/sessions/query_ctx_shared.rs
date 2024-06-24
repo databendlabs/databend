@@ -365,43 +365,48 @@ impl QueryContextShared {
 
     // Cache the source table of a stream table to ensure can get the same table metadata.
     #[async_backtrace::framed]
-    async fn cache_stream_source_table(&self, table: Arc<dyn Table>, catalog: &str) -> Result<()> {
+    async fn cache_stream_source_table(
+        &self,
+        table: Arc<dyn Table>,
+        catalog_name: &str,
+    ) -> Result<()> {
         if table.engine() == "STREAM" {
+            let tenant = self.get_tenant();
+            let catalog = self
+                .catalog_manager
+                .get_catalog(
+                    tenant.tenant_name(),
+                    catalog_name,
+                    self.session.session_ctx.txn_mgr(),
+                )
+                .await?;
+
             let stream = StreamTable::try_from_table(table.as_ref())?;
-            let table_name = stream.source_table_name();
-            let database = stream.source_table_database();
+            let table_name = stream.source_table_name(catalog.as_ref()).await?;
+            let database = stream.source_database_name(catalog.as_ref()).await?;
             let meta_key = (
-                catalog.to_string(),
+                catalog_name.to_string(),
                 database.to_string(),
                 table_name.to_string(),
             );
             let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
             if !already_in_cache {
                 let stream_desc = &stream.get_table_info().desc;
-                let tenant = self.get_tenant();
-                let catalog = self
-                    .catalog_manager
-                    .get_catalog(
-                        tenant.tenant_name(),
-                        catalog,
-                        self.session.session_ctx.txn_mgr(),
-                    )
-                    .await?;
                 let source_table = match catalog.get_stream_source_table(stream_desc)? {
                     Some(source_table) => source_table,
                     None => {
                         let source_table = catalog
-                            .get_table(&tenant, database, table_name)
+                            .get_table(&tenant, &database, &table_name)
                             .await
                             .map_err(|err| {
-                            ErrorCode::IllegalStream(format!(
-                                "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
-                                database,
-                                table_name,
-                                stream_desc,
-                                err.message()
-                            ))
-                        })?;
+                                ErrorCode::IllegalStream(format!(
+                                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                    database,
+                                    table_name,
+                                    stream_desc,
+                                    err.message()
+                                ))
+                            })?;
                         catalog.cache_stream_source_table(
                             stream.get_table_info().clone(),
                             source_table.get_table_info().clone(),

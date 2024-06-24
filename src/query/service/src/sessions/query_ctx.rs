@@ -869,18 +869,20 @@ impl TableContext for QueryContext {
         let table = self.shared.get_table(catalog, database, table).await?;
         // the better place to do this is in the QueryContextShared::get_table_to_cache() method,
         // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = if table.engine() == "ICEBERG" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            IcebergTable::try_create(info.to_owned())?.into()
-        } else if table.engine() == "DELTA" {
-            let sp = get_storage_params_from_options(self, table.options()).await?;
-            let mut info = table.get_table_info().to_owned();
-            info.meta.storage_params = Some(sp);
-            DeltaTable::try_create(info.to_owned())?.into()
-        } else {
-            table
+        let table: Arc<dyn Table> = match table.engine() {
+            "ICEBERG" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                IcebergTable::try_create(info.to_owned())?.into()
+            }
+            "DELTA" => {
+                let sp = get_storage_params_from_options(self, table.options()).await?;
+                let mut info = table.get_table_info().to_owned();
+                info.meta.storage_params = Some(sp);
+                DeltaTable::try_create(info.to_owned())?.into()
+            }
+            _ => table,
         };
         Ok(table)
     }

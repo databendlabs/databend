@@ -251,7 +251,7 @@ http = "1"
 itertools = "0.10.5"
 jsonb = "0.4.0"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.5"
+logcall = "0.1.9"
 match-template = "0.0.1"
 minitrace = { version = "0.6.5", features = ["enable"] }
 minitrace-opentelemetry = "0.6.5"

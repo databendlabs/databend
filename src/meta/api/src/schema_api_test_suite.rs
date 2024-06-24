@@ -357,6 +357,7 @@ impl SchemaApiTestSuite {
             .drop_table_without_tableid_to_name(&b.build().await)
             .await?;
 
+        suite.get_table_name_by_id(&b.build().await).await?;
         suite.get_db_name_by_id(&b.build().await).await?;
         suite.test_sequence(&b.build().await).await?;
 
@@ -5428,6 +5429,41 @@ impl SchemaApiTestSuite {
             {
                 let got = mt.get_table_by_id(1024).await?;
 
+                assert!(got.is_none());
+            }
+        }
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn get_table_name_by_id<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        let tenant_name = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+
+        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+        let table_id;
+
+        info!("--- prepare db and table");
+        {
+            util.create_db().await?;
+            let (tid, _table_meta) = util.create_table().await?;
+            table_id = tid;
+        }
+
+        info!("--- get_table_name_by_id ");
+        {
+            info!("--- get_table_name_by_id ");
+            {
+                let got = mt.get_table_name_by_id(table_id).await?;
+                assert!(got.is_some());
+                assert_eq!(tbl_name.to_owned(), got.unwrap());
+            }
+
+            info!("--- get_table_name_by_id with not exists table_id");
+            {
+                let got = mt.get_table_name_by_id(1024).await?;
                 assert!(got.is_none());
             }
         }
