@@ -96,11 +96,17 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
         let num_parts = part_set.len();
         let mut tasks = Vec::with_capacity(self.max_threads);
         // Fetch blocks in parallel.
+        let part_size = num_parts / self.max_threads;
+        let remainder = num_parts % self.max_threads;
+        let mut begin = 0;
         for i in 0..self.max_threads {
-            let begin = num_parts * i / self.max_threads;
-            let end = num_parts * (i + 1) / self.max_threads;
+            let end = if i < remainder {
+                begin + part_size + 1
+            } else {
+                begin + part_size
+            };
             if begin == end {
-                continue;
+                break;
             }
             let parts = part_set[begin..end]
                 .iter()
@@ -110,7 +116,8 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
                 self.reader.clone(),
                 parts,
                 self.settings,
-            ))
+            ));
+            begin = end;
         }
 
         let num_task = tasks.len();

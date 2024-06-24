@@ -33,6 +33,7 @@ pub struct RowFetch {
     pub cols_to_fetch: Projection,
     pub row_id_col_offset: usize,
     pub fetched_fields: Vec<DataField>,
+    pub need_wrap_nullable: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
