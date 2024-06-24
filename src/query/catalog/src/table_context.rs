@@ -33,14 +33,17 @@ use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
@@ -51,6 +54,7 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::StageFileInfo;
+use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
@@ -318,4 +322,21 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_queued_duration(&self) -> Duration;
     fn set_query_queued_duration(&self, queued_duration: Duration);
+
+    async fn load_datalake_schema(
+        &self,
+        _kind: &str,
+        _sp: &StorageParams,
+    ) -> Result<(TableSchema, String)> {
+        unimplemented!()
+    }
+    async fn create_stage_table(
+        &self,
+        _stage_info: StageInfo,
+        _files_info: StageFilesInfo,
+        _files_to_copy: Option<Vec<StageFileInfo>>,
+        _max_column_position: usize,
+    ) -> Result<Arc<dyn Table>> {
+        unimplemented!()
+    }
 }

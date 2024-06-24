@@ -63,17 +63,8 @@ impl CsvDecoder {
                 let field = &self.load_context.schema.fields()[column_index];
                 match empty_filed_as {
                     EmptyFieldAs::FieldDefault => {
-                        if let Some(values) = &self.load_context.default_values {
-                            builder.push(values[column_index].as_ref());
-                        } else {
-                            return Err(FileParseError::ColumnEmptyError {
-                                column_index,
-                                column_name: field.name().to_owned(),
-                                column_type: field.data_type.to_string(),
-                                empty_field_as: empty_filed_as.to_string(),
-                                remedy: "Bug: default_values should not be None.".to_string(),
-                            });
-                        }
+                        self.load_context
+                            .push_default_value(builder, column_index, true)?;
                     }
                     EmptyFieldAs::Null => {
                         if !matches!(field.data_type, TableDataType::Nullable(_)) {

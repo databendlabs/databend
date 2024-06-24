@@ -72,8 +72,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
-use databend_common_storages_delta::DeltaTable;
-use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
@@ -539,9 +537,8 @@ impl Binder {
                     Engine::Iceberg => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let dop = DataOperator::try_new(&sp)?;
-                        let table = IcebergTable::load_iceberg_table(dop).await?;
-                        let table_schema = IcebergTable::get_schema(&table).await?;
+                        let (table_schema, _) =
+                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -551,8 +548,8 @@ impl Binder {
                     Engine::Delta => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let table = DeltaTable::load(&sp).await?;
-                        let (table_schema, meta) = DeltaTable::get_meta(&table).await?;
+                        let (table_schema, meta) =
+                            self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
