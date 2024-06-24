@@ -2947,7 +2947,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if stream_meta_seq == 0 || stream_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                    UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                    UnknownStreamId::new(req.stream_id, "update_stream_metas"),
                 )));
             }
 
@@ -2957,7 +2957,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         req.stream_id,
                         req.seq,
                         stream_meta_seq,
-                        "update_table_meta",
+                        "update_stream_metas",
                     ),
                 )));
             }

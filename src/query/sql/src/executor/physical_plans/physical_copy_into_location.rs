@@ -19,7 +19,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
 
 use crate::executor::PhysicalPlan;
 use crate::ColumnBinding;
@@ -31,7 +30,6 @@ pub struct CopyIntoLocation {
     pub project_columns: Vec<ColumnBinding>,
     pub input_schema: DataSchemaRef,
     pub to_stage_info: StageTableInfo,
-    pub update_stream_meta_req: Option<Vec<UpdateStreamMetaReq>>,
 }
 
 impl CopyIntoLocation {

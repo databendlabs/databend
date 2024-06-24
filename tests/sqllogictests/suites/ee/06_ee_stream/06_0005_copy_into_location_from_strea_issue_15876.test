@@ -37,12 +37,35 @@ statement ok
 create or replace stage test_stage_15876;
 
 statement ok
-copy into @test_stage_15876 from s;
+copy into @test_stage_15876/case1 from s;
+
+query  T
+select $1 from @test_stage_15876/case1;
+----
+1
 
 # expects empty result set
 query TT
 select c from s;
 ----
+
+statement ok
+insert into t values(1);
+
+# nothing should be copied into stage
+statement ok
+copy into @test_stage_15876/empty from (select c from s where 1 = 0);
+
+query T
+list @test_stage_15876/empty;
+----
+
+# stream should be consumed
+query TT
+select c from s;
+----
+
+
 
 ##################################################################
 # stream should be rr in txn, and be consumed when txn committed #
@@ -61,14 +84,14 @@ select c from s;
 2
 
 statement ok
-copy into @test_stage_15876/check from s;
+copy into @test_stage_15876/case2 from s;
 
 query  T
-select $1 from @test_stage_15876/check;
+select $1 from @test_stage_15876/case2;
 ----
 2
 
-# stream should NOT be consumed yet
+# stream should NOT be consumed yet (txn not ended)
 query T
 select c from s;
 ----
@@ -82,5 +105,51 @@ query ok
 select * from s;
 ----
 
+###############################################################
+# stream should be NOT be consumed in txn failed(auto commit) #
+###############################################################
+
+statement ok
+insert into t values(1);
+
+query TT
+select c from s;
+----
+1
+
+statement error
+copy into @test_stage_15876 from (select c/0 from s);
+
+# stream should NOT be consumed now
+query TT
+select c from s;
+----
+1
 
 
+#############################################################
+# stream should be NOT be consumed if txn failed (explicit) #
+#############################################################
+
+
+# check that stream contains changes
+query TT
+select c from s;
+----
+1
+
+
+statement ok
+begin;
+
+statement error
+copy into @test_stage_15876 from (select c/0 from s);
+
+statement ok
+commit;
+
+# stream should NOT be consumed
+query TT
+select c from s;
+----
+1

@@ -33,8 +33,6 @@ impl PipelineBuilder {
             false,
         )?;
 
-        let update_stream_meta = copy.update_stream_meta_req.clone().unwrap_or_default();
-
         let to_table = StageTable::try_create(copy.to_stage_info.clone())?;
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
@@ -42,7 +40,7 @@ impl PipelineBuilder {
             to_table,
             copy.input_schema.clone(),
             None,
-            update_stream_meta,
+            vec![],
             false,
             AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
