@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::ops::Deref;
-use core::ops::DerefMut;
 use std::cmp::Ordering;
 
 pub struct LoserTree<T: Ord> {
@@ -33,16 +31,15 @@ impl<T: Ord> LoserTree<T> {
     }
 
     pub fn winner(&self) -> usize {
+        debug_assert!(self.ready);
         self.tree[0].unwrap()
     }
 
     pub fn peek(&self) -> &T {
-        debug_assert!(self.ready);
         &self.data[self.winner()]
     }
 
     pub fn peek_top2(&self) -> &T {
-        debug_assert!(self.ready);
         let top = self.winner();
         let mut top2 = top;
         let mut father_loc = (top2 + self.data.len()) / 2;
@@ -55,10 +52,6 @@ impl<T: Ord> LoserTree<T> {
             }
         }
         &self.data[top2]
-    }
-
-    pub fn peek_mut(&mut self) -> PeekMut<T> {
-        PeekMut { tree: self }
     }
 
     pub fn rebuild(&mut self) {
@@ -117,33 +110,6 @@ impl<T: Ord> LoserTree<T> {
     }
 }
 
-pub struct PeekMut<'a, T: 'a + Ord> {
-    tree: &'a mut LoserTree<T>,
-}
-
-impl<T: Ord> Drop for PeekMut<'_, T> {
-    fn drop(&mut self) {
-        debug_assert!(self.tree.ready);
-        let win = self.tree.winner();
-        self.tree.adjust(win)
-    }
-}
-
-impl<T: Ord> Deref for PeekMut<'_, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        let win = self.tree.winner();
-        self.tree.data.get(win).unwrap()
-    }
-}
-
-impl<T: Ord> DerefMut for PeekMut<'_, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        let win = self.tree.winner();
-        self.tree.data.get_mut(win).unwrap()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -173,28 +139,10 @@ mod test {
                 assert_eq!(*loser_tree.peek_top2(), Some(10 - i));
                 assert_eq!(*loser_tree.peek_top2(), Some(10 - i));
             }
-            let i = loser_tree.winner();
-            loser_tree.update(i, None);
+            let win = loser_tree.winner();
+            loser_tree.update(win, None);
         }
         assert_eq!(*loser_tree.peek(), None);
         assert_eq!(*loser_tree.peek_top2(), None);
-    }
-
-    #[test]
-    fn peek_mut() {
-        let data = vec![4, 6, 7];
-        let mut loser_tree = LoserTree::from(data);
-        loser_tree.rebuild();
-
-        assert_eq!(loser_tree.winner(), 2);
-        assert_eq!(*loser_tree.peek_mut(), 7);
-        *loser_tree.peek_mut() = 5;
-
-        assert_eq!(loser_tree.winner(), 1);
-        assert_eq!(*loser_tree.peek_mut(), 6);
-        *loser_tree.peek_mut() = 3;
-
-        assert_eq!(loser_tree.winner(), 2);
-        assert_eq!(*loser_tree.peek_mut(), 5);
     }
 }

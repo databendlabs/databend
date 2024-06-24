@@ -127,7 +127,7 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     }
 
     fn pop(&mut self) {
-        *self.tree.peek_mut() = None;
+        self.tree.update(self.tree.winner(), None);
         self.length -= 1;
     }
 
