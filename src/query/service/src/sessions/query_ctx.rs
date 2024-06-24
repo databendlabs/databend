@@ -726,7 +726,6 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
-            force_scalar: false,
         })
     }
 

@@ -100,9 +100,6 @@ pub struct FunctionContext {
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
-    // used to gen scala default value when loading files
-    // funcs with 0 arg may need to handle it: rand(), uuid()
-    pub force_scalar: bool,
 
     pub openai_api_chat_base_url: String,
     pub openai_api_embedding_base_url: String,
