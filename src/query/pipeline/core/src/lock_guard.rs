@@ -20,6 +20,7 @@ pub trait UnlockApi: Sync + Send {
     fn unlock(&self, revision: u64);
 }
 
+#[derive(Clone)]
 pub struct LockGuard {
     lock_mgr: Arc<dyn UnlockApi>,
     revision: u64,

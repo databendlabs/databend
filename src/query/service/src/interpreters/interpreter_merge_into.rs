@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::u64::MAX;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -35,7 +36,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::LockGuard;
 use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::Exchange;
@@ -46,7 +46,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::MergeInto as MergePlan;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
@@ -92,21 +91,28 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let (physical_plan, lock_guard) = self.build_physical_plan().await?;
+        let physical_plan = self.build_physical_plan().await?;
 
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
 
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         // Execute hook.
         {
+            let hook_lock_opt = if self.plan.lock_guard.is_some() {
+                LockTableOption::NoLock
+            } else {
+                LockTableOption::LockNoRetry
+            };
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
                 MutationKind::MergeInto,
-                LockTableOption::NoLock,
+                hook_lock_opt,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }
@@ -121,7 +127,7 @@ impl Interpreter for MergeIntoInterpreter {
 }
 
 impl MergeIntoInterpreter {
-    pub async fn build_physical_plan(&self) -> Result<(PhysicalPlan, Option<LockGuard>)> {
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let MergePlan {
             bind_context,
             input,
@@ -145,18 +151,6 @@ impl MergeIntoInterpreter {
         } = &self.plan;
         let enable_right_broadcast = *enable_right_broadcast;
         let mut columns_set = columns_set.clone();
-
-        // Add table lock before execution.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                catalog,
-                database,
-                table_name,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
 
         let table = self.ctx.get_table(catalog, database, table_name).await?;
         // check mutability
@@ -469,7 +463,7 @@ impl MergeIntoInterpreter {
             plan_id: u32::MAX,
         }));
         physical_plan.adjust_plan_id(&mut 0);
-        Ok((physical_plan, lock_guard))
+        Ok(physical_plan)
     }
 
     fn transform_scalar_expr2expr(

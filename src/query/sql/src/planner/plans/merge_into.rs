@@ -25,6 +25,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
@@ -78,6 +79,8 @@ pub struct MergeInto {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub enable_right_broadcast: bool,
+
+    pub lock_guard: Option<LockGuard>,
 }
 
 impl std::fmt::Debug for MergeInto {

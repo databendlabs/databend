@@ -570,7 +570,7 @@ impl ExplainInterpreter {
 
     async fn explain_merge_fragments(&self, merge_into: &MergeInto) -> Result<Vec<DataBlock>> {
         let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), merge_into.clone())?;
-        let (plan, _) = interpreter.build_physical_plan().await?;
+        let plan = interpreter.build_physical_plan().await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());

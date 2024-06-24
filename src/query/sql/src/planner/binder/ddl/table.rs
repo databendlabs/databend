@@ -54,6 +54,7 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -107,7 +108,6 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
-use crate::plans::LockTableOption;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -889,6 +889,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
                         ModifyColumnActionInPlan::SetMaskingPolicy(
@@ -904,6 +905,17 @@ impl Binder {
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
                         let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        // try add lock table.
+                        lock_guard = self
+                            .ctx
+                            .clone()
+                            .acquire_table_lock(
+                                &catalog,
+                                &database,
+                                &table,
+                                &LockTableOption::LockWithRetry,
+                            )
+                            .await?;
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)
@@ -922,6 +934,7 @@ impl Binder {
                     database,
                     table,
                     action: action_in_plan,
+                    lock_guard,
                 })))
             }
             AlterTableAction::DropColumn { column } => {

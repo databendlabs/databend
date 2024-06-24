@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_pipeline_core::LockGuard;
+
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -28,7 +30,7 @@ pub struct SubqueryDesc {
     pub outer_columns: ColumnSet,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
@@ -37,4 +39,17 @@ pub struct DeletePlan {
     pub bind_context: Box<BindContext>,
     pub selection: Option<ScalarExpr>,
     pub subquery_desc: Vec<SubqueryDesc>,
+    pub lock_guard: Option<LockGuard>,
+}
+
+impl std::fmt::Debug for DeletePlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Delete")
+            .field("catalog_name", &self.catalog_name)
+            .field("database_name", &self.database_name)
+            .field("table_name", &self.table_name)
+            .field("selection", &self.selection)
+            .field("subquery_desc", &self.subquery_desc)
+            .finish()
+    }
 }

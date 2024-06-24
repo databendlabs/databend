@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
@@ -76,6 +77,18 @@ impl Binder {
                 "should not happen, parser should have report error already",
             ));
         };
+
+        // Add table lock.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
 
         let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
 
@@ -158,6 +171,7 @@ impl Binder {
             bind_context: Box::new(context),
             metadata: self.metadata.clone(),
             subquery_desc,
+            lock_guard,
         };
         Ok(Plan::Update(Box::new(plan)))
     }

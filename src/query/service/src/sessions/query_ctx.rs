@@ -38,6 +38,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -80,7 +81,6 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -321,35 +321,6 @@ impl QueryContext {
 
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
-    }
-
-    pub async fn acquire_table_lock(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
-        lock_opt: &LockTableOption,
-    ) -> Result<Option<LockGuard>> {
-        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
-        if !enabled_table_lock {
-            return Ok(None);
-        }
-
-        let catalog = self.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
-            .await?;
-        if tbl.engine() != "FUSE" {
-            return Ok(None);
-        }
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
-        }
     }
 }
 
@@ -1175,6 +1146,35 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<LockGuard>> {
+        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
+        if !enabled_table_lock {
+            return Ok(None);
+        }
+
+        let catalog = self.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .await?;
+        if tbl.engine() != "FUSE" {
+            return Ok(None);
+        }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
+            LockTableOption::NoLock => Ok(None),
+        }
     }
 }
 

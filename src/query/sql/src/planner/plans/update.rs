@@ -29,6 +29,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -41,7 +42,7 @@ use crate::BindContext;
 use crate::MetadataRef;
 use crate::Visibility;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct UpdatePlan {
     pub catalog: String,
     pub database: String,
@@ -51,6 +52,20 @@ pub struct UpdatePlan {
     pub bind_context: Box<BindContext>,
     pub metadata: MetadataRef,
     pub subquery_desc: Vec<SubqueryDesc>,
+    pub lock_guard: Option<LockGuard>,
+}
+
+impl std::fmt::Debug for UpdatePlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("Update")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("table", &self.table)
+            .field("update_list", &self.update_list)
+            .field("selection", &self.selection)
+            .field("subquery_desc", &self.subquery_desc)
+            .finish()
+    }
 }
 
 impl UpdatePlan {
