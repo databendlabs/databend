@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -35,7 +36,6 @@ use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -89,23 +89,13 @@ impl Interpreter for ReplaceInterpreter {
 
         self.check_on_conflicts()?;
 
-        // Add table lock before execution.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
         // replace
         let (physical_plan, purge_info) = self.build_physical_plan().await?;
         let mut pipeline =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        pipeline.main_pipeline.add_lock_guard(lock_guard);
+        pipeline
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
 
         // purge
         if let Some((files, stage_info)) = purge_info {
