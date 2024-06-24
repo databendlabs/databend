@@ -313,8 +313,8 @@ pub trait SchemaApi: Send + Sync {
 
     fn name(&self) -> String;
 
-    async fn update_stream_meta(
+    async fn update_stream_metas(
         &self,
-        update_stream_meta: &[UpdateStreamMetaReq],
+        update_stream_meta_reqs: &[UpdateStreamMetaReq],
     ) -> Result<(), KVAppError>;
 }

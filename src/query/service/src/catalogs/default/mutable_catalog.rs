@@ -544,7 +544,7 @@ impl Catalog for MutableCatalog {
     }
 
     async fn update_stream_metas(&self, reqs: &[UpdateStreamMetaReq]) -> Result<()> {
-        self.ctx.meta.update_stream_meta(reqs).await?;
+        self.ctx.meta.update_stream_metas(reqs).await?;
         Ok(())
     }
 
