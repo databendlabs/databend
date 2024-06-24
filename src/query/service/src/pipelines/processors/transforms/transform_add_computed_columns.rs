@@ -51,6 +51,15 @@ where Self: Transform
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
+        let me = Self::try_new(ctx, input_schema, output_schema)?;
+        Ok(ProcessorPtr::create(Transformer::create(input, output, me)))
+    }
+
+    pub fn try_new(
+        ctx: Arc<QueryContext>,
+        input_schema: DataSchemaRef,
+        output_schema: DataSchemaRef,
+    ) -> Result<Self> {
         let license_manager = get_license_manager();
         license_manager
             .manager
@@ -89,14 +98,10 @@ where Self: Transform
             }],
         };
 
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            Self {
-                expression_transform,
-                input_len: input_schema.num_fields(),
-            },
-        )))
+        Ok(Self {
+            expression_transform,
+            input_len: input_schema.num_fields(),
+        })
     }
 }
 

@@ -31,6 +31,7 @@ use databend_common_pipeline_core::TransformPipeBuilder;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MergeIntoAddRowNumber;
@@ -72,15 +73,9 @@ impl PipelineBuilder {
         }
         let node_index = *node_index.unwrap() as u16;
         let row_number = Arc::new(AtomicU64::new(0));
-        self.main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformAddRowNumberColumnProcessor::create(
-                    transform_input_port,
-                    transform_output_port,
-                    node_index,
-                    row_number.clone(),
-                )
-            })?;
+        self.main_pipeline.add_transformer(|| {
+            TransformAddRowNumberColumnProcessor::new(node_index, row_number.clone())
+        });
         Ok(())
     }
 
@@ -119,12 +114,7 @@ impl PipelineBuilder {
         // deserialize MixRowIdKindAndLog
         if change_join_order {
             self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    Ok(TransformDistributedMergeIntoBlockDeserialize::create(
-                        transform_input_port,
-                        transform_output_port,
-                    ))
-                })?;
+                .add_transformer(|| TransformDistributedMergeIntoBlockDeserialize {});
         }
 
         let tbl = self
@@ -683,12 +673,7 @@ impl PipelineBuilder {
         // we will wrap rowid and log as MixRowIdKindAndLog
         if distributed && change_join_order {
             self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    Ok(TransformDistributedMergeIntoBlockSerialize::create(
-                        transform_input_port,
-                        transform_output_port,
-                    ))
-                })?;
+                .add_transformer(|| TransformDistributedMergeIntoBlockSerialize {});
         }
         Ok(())
     }

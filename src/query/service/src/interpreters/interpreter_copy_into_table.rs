@@ -297,7 +297,6 @@ impl CopyIntoTableInterpreter {
         Ok(())
     }
 
-    // things should be done when there is no files to be copied
     async fn on_no_files_to_copy(&self) -> Result<PipelineBuildResult> {
         // currently, there is only one thing that we care about:
         //

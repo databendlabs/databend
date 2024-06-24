@@ -30,8 +30,8 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -298,17 +298,15 @@ impl Interpreter for RefreshIndexInterpreter {
         }
         let num_input_columns = input_schema.num_fields();
         let func_ctx = self.ctx.get_function_context()?;
-        build_res.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                func_ctx.clone(),
+        build_res.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
                 }],
-            )))
-        })?;
+                func_ctx.clone(),
+                num_input_columns,
+            )
+        });
 
         // Find the block name column offset in the block.
         let block_name_col = select_columns
@@ -316,7 +314,7 @@ impl Interpreter for RefreshIndexInterpreter {
             .find(|col| col.column_name.eq_ignore_ascii_case(BLOCK_NAME_COL_NAME))
             .ok_or_else(|| {
                 ErrorCode::Internal(
-                    "_block_name should contained in the input of refresh processor",
+                    "_block_name should be contained in the input of refresh processor",
                 )
             })?;
         let block_name_offset = output_schema.index_of(&block_name_col.index.to_string())?;

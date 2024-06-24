@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -64,14 +65,14 @@ impl InsertInterpreter {
         // validate schema
         if select_schema.fields().len() != output_schema.fields().len() {
             return Err(ErrorCode::BadArguments(format!(
-                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
+                "The number of fields in the SELECT statement ({}) does not match the number of fields in the output schema ({})",
                 select_schema.fields().len(),
                 output_schema.fields().len(),
             )));
         }
 
         // check if cast needed
-        let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
+        let cast_needed = select_schema.as_ref() != &DataSchema::from(output_schema.as_ref());
         Ok(cast_needed)
     }
 }
@@ -107,6 +108,7 @@ impl Interpreter for InsertInterpreter {
         table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
+        let main_pipeline = &mut build_res.main_pipeline;
 
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
@@ -144,23 +146,15 @@ impl Interpreter for InsertInterpreter {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
-                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                    .exec_stream(input_context.clone(), main_pipeline)?;
 
                 match StageFileFormatType::from_str(format) {
                     Ok(f) if f.has_inner_schema() => {
                         let dest_schema = self.plan.dest_schema();
                         let func_ctx = self.ctx.get_function_context()?;
-
-                        build_res.main_pipeline.add_transform(
-                            |transform_input_port, transform_output_port| {
-                                TransformRuntimeCastSchema::try_create(
-                                    transform_input_port,
-                                    transform_output_port,
-                                    dest_schema.clone(),
-                                    func_ctx.clone(),
-                                )
-                            },
-                        )?;
+                        build_res.main_pipeline.add_transformer(|| {
+                            TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
+                        });
                     }
                     _ => {}
                 }
@@ -173,22 +167,15 @@ impl Interpreter for InsertInterpreter {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
-                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                    .exec_stream(input_context.clone(), main_pipeline)?;
 
                 if format.get_type().has_inner_schema() {
                     let dest_schema = self.plan.dest_schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
-                    build_res.main_pipeline.add_transform(
-                        |transform_input_port, transform_output_port| {
-                            TransformRuntimeCastSchema::try_create(
-                                transform_input_port,
-                                transform_output_port,
-                                dest_schema.clone(),
-                                func_ctx.clone(),
-                            )
-                        },
-                    )?;
+                    main_pipeline.add_transformer(|| {
+                        TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
+                    });
                 }
             }
             InsertInputSource::SelectPlan(plan) => {

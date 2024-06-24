@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::BlockEntry;
@@ -24,11 +22,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
-
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 
 /// TransformRuntimeCastSchema is used to cast block to the specified schema.
 /// Different from `TransformCastSchema`, it is used at the runtime
@@ -40,20 +33,11 @@ pub struct TransformRuntimeCastSchema {
 impl TransformRuntimeCastSchema
 where Self: Transform
 {
-    pub fn try_create(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
-        insert_schema: DataSchemaRef,
-        func_ctx: FunctionContext,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Transformer::create(
-            input_port,
-            output_port,
-            Self {
-                func_ctx,
-                insert_schema,
-            },
-        )))
+    pub fn new(insert_schema: DataSchemaRef, func_ctx: FunctionContext) -> Self {
+        Self {
+            func_ctx,
+            insert_schema,
+        }
     }
 }
 

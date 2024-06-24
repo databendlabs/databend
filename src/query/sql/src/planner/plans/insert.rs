@@ -52,7 +52,9 @@ pub enum InsertInputSource {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InsertValue {
+    // Scalars of literal values
     Values { rows: Vec<Vec<Scalar>> },
+    // Raw values of clickhouse dialect
     RawValues { data: String, start: usize },
 }
 

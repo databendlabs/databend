@@ -33,6 +33,9 @@ pub struct TransformAddStreamColumns {
 impl TransformAddStreamColumns
 where Self: Transform
 {
+    pub fn new(stream_ctx: StreamContext) -> Self {
+        Self { stream_ctx }
+    }
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
