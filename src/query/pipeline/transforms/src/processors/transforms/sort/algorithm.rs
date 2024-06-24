@@ -132,7 +132,7 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     }
 
     fn update_top(&mut self, item: Reverse<Cursor<Self::Rows>>) {
-        *self.tree.peek_mut() = Some(item)
+        self.tree.update(self.tree.winner(), Some(item))
     }
 
     fn peek(&self) -> Option<&Reverse<Cursor<Self::Rows>>> {

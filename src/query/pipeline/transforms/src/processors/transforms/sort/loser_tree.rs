@@ -14,6 +14,7 @@
 
 use core::ops::Deref;
 use core::ops::DerefMut;
+use std::cmp::Ordering;
 
 pub struct LoserTree<T: Ord> {
     ready: bool,
@@ -73,10 +74,15 @@ impl<T: Ord> LoserTree<T> {
     }
 
     pub fn update(&mut self, i: usize, v: T) {
-        self.data[i] = v;
         if self.ready && self.winner() == i {
-            self.adjust(i)
+            if self.peek().cmp(&v) == Ordering::Equal {
+                self.data[i] = v;
+            } else {
+                self.data[i] = v;
+                self.adjust(i)
+            }
         } else {
+            self.data[i] = v;
             self.ready = false;
         }
     }
@@ -117,7 +123,8 @@ pub struct PeekMut<'a, T: 'a + Ord> {
 
 impl<T: Ord> Drop for PeekMut<'_, T> {
     fn drop(&mut self) {
-        let win = self.tree.tree[0].unwrap();
+        debug_assert!(self.tree.ready);
+        let win = self.tree.winner();
         self.tree.adjust(win)
     }
 }
@@ -125,14 +132,14 @@ impl<T: Ord> Drop for PeekMut<'_, T> {
 impl<T: Ord> Deref for PeekMut<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
-        let win = self.tree.tree[0].unwrap();
+        let win = self.tree.winner();
         self.tree.data.get(win).unwrap()
     }
 }
 
 impl<T: Ord> DerefMut for PeekMut<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
-        let win = self.tree.tree[0].unwrap();
+        let win = self.tree.winner();
         self.tree.data.get_mut(win).unwrap()
     }
 }

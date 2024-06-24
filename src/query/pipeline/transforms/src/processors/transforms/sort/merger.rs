@@ -148,6 +148,7 @@ where
                 self.buffer[i] = block;
             }
         }
+        self.algorithm.rebuild();
         self.pending_streams.extend(continue_pendings);
         Ok(())
     }
