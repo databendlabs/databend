@@ -7,7 +7,7 @@ CREATE TABLE t (k INT null, a INT null, b INT null)
 statement ok
 INSERT INTO t VALUES (1, NULL, NULL), (2, NULL, 1), (3, 1, NULL), (4, 2, 0), (5, 3, 3)
 
-statement error (?s)1006.*divided by zero while evaluating function `divide\(3, 0\)` in expr `3 / t.b (#2)`
+statement error (?s)1006.*divided by zero while evaluating function `divide\(3, 0\)` in expr `3 / t.b \(#2\)`
 SELECT a <> 2 AND 3 / b = 1 FROM t ORDER BY k
 
 query I
@@ -15,7 +15,7 @@ SELECT a FROM t WHERE a <> 2 AND 3 / b = 1 ORDER BY k
 ----
 3
 
-statement error (?s)1006.*divided by zero while evaluating function `divide\(3, 0\)` in expr `3 / t.b (#2)`
+statement error (?s)1006.*divided by zero while evaluating function `divide\(3, 0\)` in expr `3 / t.b \(#2\)`
 SELECT a = 2 OR 3 / b = 1 FROM t ORDER BY k
 
 query I
