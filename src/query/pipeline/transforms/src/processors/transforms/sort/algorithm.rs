@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
@@ -31,6 +32,8 @@ where <Self as SortAlgorithm>::Rows: Rows
     }
 
     fn len(&self) -> usize;
+
+    fn rebuild(&mut self);
 
     fn push(&mut self, index: usize, item: Reverse<Cursor<Self::Rows>>);
 
@@ -54,6 +57,8 @@ impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     fn len(&self) -> usize {
         BinaryHeap::len(self)
     }
+
+    fn rebuild(&mut self) {}
 
     fn push(&mut self, _index: usize, item: Reverse<Cursor<Self::Rows>>) {
         BinaryHeap::push(self, item)
@@ -81,6 +86,23 @@ pub struct LoserTreeSort<R: Rows> {
     length: usize,
 }
 
+impl<R: Rows> fmt::Debug for LoserTreeSort<R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let data = self
+            .tree
+            .data()
+            .iter()
+            .map(|x| x.as_ref().map(|Reverse(cursor)| cursor.row_index))
+            .collect::<Vec<_>>();
+
+        f.debug_struct("LoserTreeSort")
+            .field("tree", &self.tree.tree())
+            .field("data", &data)
+            .field("length", &self.length)
+            .finish()
+    }
+}
+
 impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     type Rows = R;
     fn with_capacity(capacity: usize) -> Self {
@@ -93,6 +115,10 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
 
     fn len(&self) -> usize {
         self.length
+    }
+
+    fn rebuild(&mut self) {
+        self.tree.rebuild()
     }
 
     fn push(&mut self, index: usize, item: Reverse<Cursor<Self::Rows>>) {

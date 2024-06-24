@@ -1,4 +1,4 @@
-// Copyright 2024 Datafuse Labs
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ use core::ops::Deref;
 use core::ops::DerefMut;
 
 pub struct LoserTree<T: Ord> {
+    ready: bool,
     tree: Vec<Option<usize>>,
     data: Vec<T>,
 }
@@ -23,19 +24,11 @@ pub struct LoserTree<T: Ord> {
 impl<T: Ord> LoserTree<T> {
     pub fn from(data: Vec<T>) -> Self {
         let length = data.len();
-        let mut tree = LoserTree {
+        LoserTree {
+            ready: false,
             tree: vec![None; length],
             data,
-        };
-        for i in 0..tree.data.len() {
-            tree.adjust(i)
         }
-        tree
-    }
-
-    pub fn update(&mut self, i: usize, v: T) {
-        self.data[i] = v;
-        self.adjust(i)
     }
 
     pub fn winner(&self) -> usize {
@@ -43,10 +36,12 @@ impl<T: Ord> LoserTree<T> {
     }
 
     pub fn peek(&self) -> &T {
+        debug_assert!(self.ready);
         &self.data[self.winner()]
     }
 
     pub fn peek_top2(&self) -> &T {
+        debug_assert!(self.ready);
         let top = self.winner();
         let mut top2 = top;
         let mut father_loc = (top2 + self.data.len()) / 2;
@@ -63,6 +58,35 @@ impl<T: Ord> LoserTree<T> {
 
     pub fn peek_mut(&mut self) -> PeekMut<T> {
         PeekMut { tree: self }
+    }
+
+    pub fn rebuild(&mut self) {
+        if self.ready {
+            return;
+        }
+        let length = self.data.len();
+        self.tree = vec![None; length];
+        for i in 0..length {
+            self.adjust(i)
+        }
+        self.ready = true
+    }
+
+    pub fn update(&mut self, i: usize, v: T) {
+        self.data[i] = v;
+        if self.ready && self.winner() == i {
+            self.adjust(i)
+        } else {
+            self.ready = false;
+        }
+    }
+
+    pub fn tree(&self) -> &Vec<Option<usize>> {
+        &self.tree
+    }
+
+    pub fn data(&self) -> &Vec<T> {
+        &self.data
     }
 
     fn adjust(&mut self, index: usize) {
@@ -130,6 +154,7 @@ mod test {
             Some(7),
         ];
         let mut loser_tree = LoserTree::from(data);
+        loser_tree.rebuild();
 
         for i in 2..=9 {
             assert_eq!(*loser_tree.peek(), Some(11 - i));
@@ -152,6 +177,7 @@ mod test {
     fn peek_mut() {
         let data = vec![4, 6, 7];
         let mut loser_tree = LoserTree::from(data);
+        loser_tree.rebuild();
 
         assert_eq!(loser_tree.winner(), 2);
         assert_eq!(*loser_tree.peek_mut(), 7);
