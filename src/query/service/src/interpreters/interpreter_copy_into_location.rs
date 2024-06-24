@@ -18,12 +18,14 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFilesInfo;
 use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -45,7 +47,10 @@ impl CopyIntoLocationInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn build_query(&self, query: &Plan) -> Result<SelectInterpreter> {
+    async fn build_query(
+        &self,
+        query: &Plan,
+    ) -> Result<(SelectInterpreter, Vec<UpdateStreamMetaReq>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query {
             Plan::Query {
                 s_expr,
@@ -66,7 +71,9 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        Ok(select_interpreter)
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+
+        Ok((select_interpreter, update_stream_meta))
     }
 
     /// Build a pipeline for local copy into stage.
@@ -77,7 +84,7 @@ impl CopyIntoLocationInterpreter {
         path: &str,
         query: &Plan,
     ) -> Result<PipelineBuildResult> {
-        let query_interpreter = self.build_query(query).await?;
+        let (query_interpreter, update_stream_meta_req) = self.build_query(query).await?;
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
@@ -100,6 +107,7 @@ impl CopyIntoLocationInterpreter {
                 is_select: false,
                 default_values: None,
             },
+            update_stream_meta_req: Some(update_stream_meta_req),
         }));
 
         let mut next_plan_id = 0;
@@ -126,6 +134,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
+
         self.build_local_copy_into_stage_pipeline(
             &self.plan.stage,
             &self.plan.path,

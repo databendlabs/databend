@@ -174,6 +174,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -2924,6 +2925,60 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             }
         }
     }
+
+    #[logcall::logcall]
+    #[minitrace::trace]
+    async fn update_stream_meta(
+        &self,
+        update_stream_meta: &[UpdateStreamMetaReq],
+    ) -> Result<(), KVAppError> {
+        let mut txn_req = TxnRequest {
+            condition: vec![],
+            if_then: vec![],
+            else_then: vec![],
+        };
+
+        for req in update_stream_meta {
+            let stream_id = TableId {
+                table_id: req.stream_id,
+            };
+            let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+                get_pb_value(self, &stream_id).await?;
+
+            if stream_meta_seq == 0 || stream_meta.is_none() {
+                return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                    UnknownStreamId::new(req.stream_id, "update_table_meta"),
+                )));
+            }
+
+            if req.seq.match_seq(stream_meta_seq).is_err() {
+                return Err(KVAppError::AppError(AppError::from(
+                    StreamVersionMismatched::new(
+                        req.stream_id,
+                        req.seq,
+                        stream_meta_seq,
+                        "update_table_meta",
+                    ),
+                )));
+            }
+
+            let mut new_stream_meta = stream_meta.unwrap();
+            new_stream_meta.options = req.options.clone();
+            new_stream_meta.updated_on = Utc::now();
+
+            txn_req
+                .condition
+                .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+            txn_req
+                .if_then
+                .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+        }
+
+        let _ = send_txn(self, txn_req).await?;
+
+        Ok(())
+    }
+
 
     #[logcall::logcall]
     #[minitrace::trace]

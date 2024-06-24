@@ -418,6 +418,7 @@ pub trait PhysicalPlanReplacer {
             project_columns: plan.project_columns.clone(),
             input_schema: plan.input_schema.clone(),
             to_stage_info: plan.to_stage_info.clone(),
+            update_stream_meta_req: plan.update_stream_meta_req.clone(),
         })))
     }
 

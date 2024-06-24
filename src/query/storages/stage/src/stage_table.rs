@@ -15,6 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use async_trait::async_trait;
+use async_trait::unboxed_simple;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -28,13 +31,21 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_sinks::AsyncSink;
+use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_parquet::ParquetTableForCopy;
+use databend_storages_common_table_meta::meta::SnapshotId;
+use log::info;
 use opendal::Operator;
 
 use crate::one_file_partition::OneFilePartition;
@@ -210,5 +221,63 @@ impl Table for StageTable {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
+    }
+
+    fn commit_insertion(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
+        update_stream_meta_req: Vec<UpdateStreamMetaReq>,
+        _overwrite: bool,
+        _prev_snapshot_id: Option<SnapshotId>,
+        _deduplicated_label: Option<String>,
+    ) -> Result<()> {
+        pipeline.try_resize(1)?;
+        let catalog = ctx.get_default_catalog()?;
+        if !update_stream_meta_req.is_empty() {
+            info!("stage table consuming some streams");
+            pipeline.add_sink(|input| {
+                Ok(ProcessorPtr::create(AsyncSinker::create(
+                    input,
+                    StageTableCommitSink {
+                        catalog: catalog.clone(),
+                        update_stream_meta_req: update_stream_meta_req.clone(),
+                    },
+                )))
+            })?;
+        }
+
+        Ok(())
+    }
+}
+
+struct StageTableCommitSink {
+    catalog: Arc<dyn Catalog>,
+    pub update_stream_meta_req: Vec<UpdateStreamMetaReq>,
+}
+
+#[async_trait]
+impl AsyncSink for StageTableCommitSink {
+    const NAME: &'static str = "StageTableCommitSink";
+
+    #[async_backtrace::framed]
+    async fn on_finish(&mut self) -> Result<()> {
+        let start = std::time::Instant::now();
+        info!("commiting stage table");
+        let res = self
+            .catalog
+            .update_stream_metas(&self.update_stream_meta_req)
+            .await;
+        info!(
+            "commit stage table done, time used {:?}, success: {}",
+            start.elapsed(),
+            res.is_ok()
+        );
+        res
+    }
+    #[unboxed_simple]
+    async fn consume(&mut self, _data_block: DataBlock) -> Result<bool> {
+        Ok(false)
     }
 }

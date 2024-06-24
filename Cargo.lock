@@ -4170,6 +4170,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
+ "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-settings",
