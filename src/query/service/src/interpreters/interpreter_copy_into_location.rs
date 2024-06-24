@@ -148,7 +148,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
             )
             .await?;
 
-        // We are got to consuming streams, which are all of the default catalog
+        // We are going to consuming streams, which are all of the default catalog
         let catalog = self.ctx.get_default_catalog()?;
 
         // Add a commit sink to the pipeline does not work, since the pipeline emits result set,
