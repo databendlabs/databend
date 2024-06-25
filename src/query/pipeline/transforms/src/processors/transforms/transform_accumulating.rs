@@ -144,7 +144,6 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
     }
 }
 
-// TODO move the following into its own mod?
 pub trait BlockMetaAccumulatingTransform<B: BlockMetaInfo>: Send + 'static {
     const NAME: &'static str;
 

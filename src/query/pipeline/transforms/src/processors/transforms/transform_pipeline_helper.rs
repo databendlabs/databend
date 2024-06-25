@@ -32,7 +32,7 @@ use crate::processors::Transform;
 use crate::processors::Transformer;
 
 pub trait TransformPipelineHelper {
-    fn try_add_with_builder<F, R>(
+    fn try_add_transform_with_builder<F, R>(
         &mut self,
         f: F,
         create: impl Fn(Arc<InputPort>, Arc<OutputPort>, R) -> Box<dyn Processor>,
@@ -45,7 +45,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> Result<R>,
         R: Transform + 'static,
     {
-        self.try_add_with_builder(f, Transformer::<R>::create)
+        self.try_add_transform_with_builder(f, Transformer::<R>::create)
     }
 
     fn add_transformer<F, R>(&mut self, f: F)
@@ -62,7 +62,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> Result<R>,
         R: AsyncTransform + 'static,
     {
-        self.try_add_with_builder(f, AsyncTransformer::<R>::create)
+        self.try_add_transform_with_builder(f, AsyncTransformer::<R>::create)
     }
 
     fn add_async_transformer<F, R>(&mut self, f: F)
@@ -82,7 +82,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> Result<R>,
         R: AccumulatingTransform + 'static,
     {
-        self.try_add_with_builder(f, AccumulatingTransformer::<R>::create)
+        self.try_add_transform_with_builder(f, AccumulatingTransformer::<R>::create)
     }
 
     fn add_accumulating_transformer<F, R>(&mut self, f: F)
@@ -101,7 +101,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> Result<R>,
         R: AsyncAccumulatingTransform + 'static,
     {
-        self.try_add_with_builder(f, AsyncAccumulatingTransformer::<R>::create)
+        self.try_add_transform_with_builder(f, AsyncAccumulatingTransformer::<R>::create)
     }
 
     fn add_async_accumulating_transformer<F, R>(&mut self, f: F)
@@ -113,7 +113,7 @@ pub trait TransformPipelineHelper {
             .unwrap()
     }
 
-    fn try_add_transformer_with_specified_len<F, R>(
+    fn try_create_transform_pipeline_builder_with_len<F, R>(
         &mut self,
         f: F,
         transform_len: usize,
@@ -124,7 +124,7 @@ pub trait TransformPipelineHelper {
 }
 
 impl TransformPipelineHelper for Pipeline {
-    fn try_add_with_builder<F, R>(
+    fn try_add_transform_with_builder<F, R>(
         &mut self,
         f: F,
         create: impl Fn(Arc<InputPort>, Arc<OutputPort>, R) -> Box<dyn Processor>,
@@ -135,7 +135,7 @@ impl TransformPipelineHelper for Pipeline {
         self.add_transform(|input, output| Ok(ProcessorPtr::create(create(input, output, f()?))))
     }
 
-    fn try_add_transformer_with_specified_len<F, R>(
+    fn try_create_transform_pipeline_builder_with_len<F, R>(
         &mut self,
         f: F,
         transform_len: usize,

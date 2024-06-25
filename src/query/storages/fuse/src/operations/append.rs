@@ -114,7 +114,7 @@ impl FuseTable {
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-            let mut builder = pipeline.try_add_transformer_with_specified_len(
+            let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 move || {
                     Ok(CompoundBlockOperator::new(
                         operators.clone(),
@@ -142,7 +142,7 @@ impl FuseTable {
                 .collect();
             let sort_desc = Arc::new(sort_desc);
 
-            let mut builder = pipeline.try_add_transformer_with_specified_len(
+            let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || Ok(TransformSortPartial::new(None, sort_desc.clone())),
                 specified_mid_len,
             )?;
