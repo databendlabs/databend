@@ -1,0 +1,4 @@
+expects one row that outputs the file unloaded
+1
+expects that the stream s is empty
+0

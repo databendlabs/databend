@@ -47,6 +47,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
+use databend_common_expression::FieldDefaultExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -551,7 +552,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         data_schema: &DataSchemaRef,
-    ) -> Result<Vec<Scalar>> {
+    ) -> Result<Vec<FieldDefaultExpr>> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -561,23 +562,35 @@ impl<'a> Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        let func_ctx = self.ctx.get_function_context()?;
         let input = DataBlock::empty();
+        let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        let mut force_scalar_func_ctx = self.ctx.get_function_context()?;
+        force_scalar_func_ctx.force_scalar = true;
+        let force_scalar_evaluator =
+            Evaluator::new(&input, &force_scalar_func_ctx, &BUILTIN_FUNCTIONS);
 
         let mut values = vec![];
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
             let value = evaluator.run(&expr)?;
             match value {
-                Value::Scalar(scalar) => values.push(scalar.clone()),
-                Value::Column(_) => {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "default value {:?} (of field {}) for missing/empty value is not supported yet when copy into table",
-                        field.default_expr(),
-                        field.name(),
-                    )));
-                }
+                Value::Scalar(scalar) => values.push(FieldDefaultExpr::Const(scalar.clone())),
+                Value::Column(_) => match force_scalar_evaluator.run(&expr)? {
+                    Value::Scalar(_) => {
+                        values.push(FieldDefaultExpr::Expr(
+                            field.default_expr().unwrap().clone(),
+                        ));
+                    }
+                    Value::Column(_) => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "default value {:?} (of field {}) for missing/empty value is not supported when copy into table",
+                            field.default_expr(),
+                            field.name(),
+                        )));
+                    }
+                },
             }
         }
         Ok(values)

@@ -2,7 +2,7 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
-set enable_merge_into_row_fetch = 0;
+set enable_merge_into_row_fetch = 1;
 
 statement ok
 DROP TABLE IF EXISTS employees2;
@@ -39,7 +39,7 @@ target_table: default.default.salaries2
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 └── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
 HashJoin
-├── output columns: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2), salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5)]
+├── output columns: [employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2), salaries2.employee_id (#3), salaries2._row_id (#5)]
 ├── join type: LEFT OUTER
 ├── build keys: [salaries2.employee_id (#3)]
 ├── probe keys: [employees2.employee_id (#0)]
@@ -47,12 +47,11 @@ HashJoin
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.salaries2
-│   ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+│   ├── output columns: [employee_id (#3), _row_id (#5)]
 │   ├── read rows: 4
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
@@ -62,7 +61,6 @@ HashJoin
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 4.00
 
@@ -81,7 +79,7 @@ target_table: default.default.salaries2
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 └── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
 HashJoin
-├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── output columns: [salaries2.employee_id (#3), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
 ├── join type: RIGHT OUTER
 ├── build keys: [employees2.employee_id (#0)]
 ├── probe keys: [salaries2.employee_id (#3)]
@@ -94,17 +92,15 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.salaries2
-    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── output columns: [employee_id (#3), _row_id (#5)]
     ├── read rows: 6
-    ├── read size: < 1 KiB
+    ├── read size: 1.31 KiB
     ├── partitions total: 2
     ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 6.00
 
@@ -124,7 +120,7 @@ target_table: default.default.salaries2
 ├── matched update: [condition: None,update set salary = plus(salaries2.salary (#4), 500.00)]
 └── unmatched insert: [condition: None,insert into (employee_id,salary) values(CAST(employees2.employee_id (#0) AS Int32 NULL),CAST(55000.00 AS Decimal(10, 2) NULL))]
 HashJoin
-├── output columns: [salaries2.employee_id (#3), salaries2.salary (#4), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
+├── output columns: [salaries2.employee_id (#3), salaries2._row_id (#5), employees2.employee_id (#0), employees2.employee_name (#1), employees2.department (#2)]
 ├── join type: RIGHT OUTER
 ├── build keys: [employees2.employee_id (#0)]
 ├── probe keys: [salaries2.employee_id (#3)]
@@ -137,17 +133,15 @@ HashJoin
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 4.00
 └── TableScan(Probe)
     ├── table: default.default.salaries2
-    ├── output columns: [employee_id (#3), salary (#4), _row_id (#5)]
+    ├── output columns: [employee_id (#3), _row_id (#5)]
     ├── read rows: 6
-    ├── read size: < 1 KiB
+    ├── read size: 1.31 KiB
     ├── partitions total: 2
     ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 6.00
 
@@ -182,7 +176,7 @@ target_table: default.default.column_only_optimization_target
 ├── matched update: [condition: None,update set b = t2.b (#1)]
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1._row_id (#4)]
 ├── join type: LEFT OUTER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
@@ -190,7 +184,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.column_only_optimization_target
-│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── output columns: [a (#2), _row_id (#4)]
 │   ├── read rows: 0
 │   ├── read size: 0
 │   ├── partitions total: 0
@@ -219,7 +213,7 @@ target_table: default.default.column_only_optimization_target
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1._row_id (#4)]
 ├── join type: LEFT OUTER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
@@ -227,7 +221,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.column_only_optimization_target
-│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── output columns: [a (#2), _row_id (#4)]
 │   ├── read rows: 0
 │   ├── read size: 0
 │   ├── partitions total: 0
@@ -259,7 +253,7 @@ target_table: default.default.column_only_optimization_target
 ├── matched update: [condition: None,update set b = 'test']
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1._row_id (#4)]
 ├── join type: LEFT OUTER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
@@ -267,7 +261,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.column_only_optimization_target
-│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── output columns: [a (#2), _row_id (#4)]
 │   ├── read rows: 0
 │   ├── read size: 0
 │   ├── partitions total: 0
@@ -296,7 +290,7 @@ target_table: default.default.column_only_optimization_target
 ├── matched update: [condition: None,update set b = concat(t2.b (#1), 'test')]
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
 HashJoin
-├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1.b (#3), t1._row_id (#4)]
+├── output columns: [t2.a (#0), t2.b (#1), t1.a (#2), t1._row_id (#4)]
 ├── join type: LEFT OUTER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
@@ -304,7 +298,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.column_only_optimization_target
-│   ├── output columns: [a (#2), b (#3), _row_id (#4)]
+│   ├── output columns: [a (#2), _row_id (#4)]
 │   ├── read rows: 0
 │   ├── read size: 0
 │   ├── partitions total: 0

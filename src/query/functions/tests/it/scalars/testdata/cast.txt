@@ -1362,7 +1362,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022')
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp('2022')` in expr `to_timestamp('2022')`
+  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022')` in expr `to_timestamp('2022')`
 
 
 
@@ -1370,7 +1370,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('2022-01')
-  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp('2022-01')` in expr `to_timestamp('2022-01')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('2022-01')` in expr `to_timestamp('2022-01')`
 
 
 
@@ -1387,7 +1387,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_TIMESTAMP('A NON-TIMESTAMP STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP` while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `to_timestamp('A NON-TIMESTAMP STR')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `TIMESTAMP`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-TIME' could not be parsed into a valid Date, cause: input contains invalid characters. while evaluating function `to_timestamp('A NON-TIMESTAMP STR')` in expr `to_timestamp('A NON-TIMESTAMP STR')`
 
 
 
@@ -1562,7 +1562,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022')
-  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date('2022')` in expr `to_date('2022')`
+  | ^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022')` in expr `to_date('2022')`
 
 
 
@@ -1570,7 +1570,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('2022-01')
-  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date('2022-01')` in expr `to_date('2022-01')`
+  | ^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('2022-01')` in expr `to_date('2022-01')`
 
 
 
@@ -1587,7 +1587,7 @@ error:
   --> SQL:1:1
   |
 1 | TO_DATE('A NON-DATE STR')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE` while evaluating function `to_date('A NON-DATE STR')` in expr `to_date('A NON-DATE STR')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ cannot parse to type `DATE`. BadBytes. Code: 1046, Text = Date Parsing Error: The value 'A NON-DATE' could not be parsed into a valid Date, cause: input contains invalid characters. while evaluating function `to_date('A NON-DATE STR')` in expr `to_date('A NON-DATE STR')`
 
 
 

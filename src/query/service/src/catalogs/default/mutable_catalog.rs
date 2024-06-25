@@ -101,6 +101,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -540,6 +541,11 @@ impl Catalog for MutableCatalog {
                 db.update_table_meta(req).await
             }
         }
+    }
+
+    async fn update_stream_metas(&self, reqs: &[UpdateStreamMetaReq]) -> Result<()> {
+        self.ctx.meta.update_stream_metas(reqs).await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]

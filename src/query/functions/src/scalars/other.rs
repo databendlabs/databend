@@ -145,10 +145,14 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |ctx| {
             let mut rng = rand::rngs::SmallRng::from_entropy();
-            let rand_nums = (0..ctx.num_rows)
-                .map(|_| rng.gen::<F64>())
-                .collect::<Vec<_>>();
-            Value::Column(rand_nums.into())
+            if ctx.func_ctx.force_scalar {
+                Value::Scalar(rng.gen::<F64>())
+            } else {
+                let rand_nums = (0..ctx.num_rows)
+                    .map(|_| rng.gen::<F64>())
+                    .collect::<Vec<_>>();
+                Value::Column(rand_nums.into())
+            }
         },
     );
 
@@ -224,18 +228,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
-            let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
-            let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
-            offsets.push(0);
+            if ctx.func_ctx.force_scalar {
+                Value::Scalar(Uuid::new_v4().to_string())
+            } else {
+                let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
+                let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
+                offsets.push(0);
 
-            for _ in 0..ctx.num_rows {
-                let value = Uuid::new_v4();
-                offsets.push(offsets.last().unwrap() + 36u64);
-                write!(&mut values, "{:x}", value).unwrap();
+                for _ in 0..ctx.num_rows {
+                    let value = Uuid::new_v4();
+                    offsets.push(offsets.last().unwrap() + 36u64);
+                    write!(&mut values, "{:x}", value).unwrap();
+                }
+
+                let col = StringColumn::new(values.into(), offsets.into());
+                Value::Column(col)
             }
-
-            let col = StringColumn::new(values.into(), offsets.into());
-            Value::Column(col)
         },
     );
 }

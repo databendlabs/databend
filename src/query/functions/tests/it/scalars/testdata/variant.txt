@@ -1625,7 +1625,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
 
 
@@ -1642,7 +1642,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
 
 

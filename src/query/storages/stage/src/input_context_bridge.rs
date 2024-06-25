@@ -25,7 +25,9 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FieldDefaultExpr;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::input_formats::InputContext;
@@ -126,6 +128,26 @@ impl StageTable {
             bop.write(STDIN_FD, buffer)?;
         }
 
+        let default_values = match &self.table_info.default_values {
+            Some(vs) => {
+                let mut default_values = vec![];
+                for v in vs {
+                    match v {
+                        FieldDefaultExpr::Const(s) => default_values.push(s.clone()),
+                        FieldDefaultExpr::Expr(e) => {
+                            // we will remove this impl soon
+                            return Err(ErrorCode::Internal(format!(
+                                "{} as default value not supported when copy into table",
+                                e
+                            )));
+                        }
+                    }
+                }
+                Some(default_values)
+            }
+            None => None,
+        };
+
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             ctx.clone(),
             operator,
@@ -138,7 +160,7 @@ impl StageTable {
             on_error_map,
             self.table_info.is_select,
             projection,
-            self.table_info.default_values.clone(),
+            default_values,
         )?);
         debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
