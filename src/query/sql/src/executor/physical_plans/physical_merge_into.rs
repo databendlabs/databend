@@ -40,8 +40,8 @@ use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
 use crate::executor::physical_plans::MergeIntoSerialize;
-use crate::executor::physical_plans::MergeIntoShuffle;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::physical_plans::RowFetch;
@@ -390,25 +390,18 @@ impl PhysicalPlanBuilder {
             (MergeIntoType::InsertOnly, false) => MergeIntoOp::StandaloneInsertOnly,
         };
 
-        plan = PhysicalPlan::MergeIntoShuffle(Box::new(MergeIntoShuffle {
+        plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
             merge_into_op: merge_into_op.clone(),
         }));
 
-        // if distributed = true && change_join_order = true, it means the target is build side,
-        // in this way, we will do matched operation and not matched operation
-        // locally in every node, and the main node just receive rowids to apply.
-        let segments = if *distributed && !change_join_order {
-            vec![]
-        } else {
-            base_snapshot
-                .segments
-                .clone()
-                .into_iter()
-                .enumerate()
-                .collect()
-        };
+        let segments: Vec<_> = base_snapshot
+            .segments
+            .clone()
+            .into_iter()
+            .enumerate()
+            .collect();
 
         plan = PhysicalPlan::MergeIntoSerialize(Box::new(MergeIntoSerialize {
             plan_id: 0,
@@ -461,6 +454,14 @@ impl PhysicalPlanBuilder {
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }));
+            // if change_join_order = true, it means the target is build side,
+            // in this way, we will do matched operation and not matched operation
+            // locally in every node, and the main node just receive row ids to apply.
+            let segments = if *change_join_order {
+                segments.clone()
+            } else {
+                vec![]
+            };
             PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
@@ -560,7 +561,7 @@ impl MergeIntoOp {
                 }
             }
             MergeIntoOp::DistributedInsertOnly => {
-                // only one row_number port/unmatched port, refer to `builder_merge_into_shuffle`
+                // only one row_number port/unmatched port, refer to `builder_merge_into_organize`
                 assert_eq!(output_len, 1);
                 if enable_right_broadcast {
                     // only one row_number port

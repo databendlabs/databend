@@ -31,7 +31,7 @@ mod builder_merge_into;
 mod builder_merge_into_append_not_matched;
 mod builder_merge_into_manipulate;
 mod builder_merge_into_serialize;
-mod builder_merge_into_shuffle;
+mod builder_merge_into_organize;
 mod builder_merge_into_split;
 mod builder_on_finished;
 mod builder_project;

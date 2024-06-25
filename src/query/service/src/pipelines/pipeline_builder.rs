@@ -206,8 +206,8 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
                 self.build_merge_into_manipulate(merge_into_manipulate)
             }
-            PhysicalPlan::MergeIntoShuffle(merge_into_shuffle) => {
-                self.build_merge_into_shuffle(merge_into_shuffle)
+            PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
+                self.build_merge_into_organize(merge_into_organize)
             }
             PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
                 self.build_merge_into_serialize(merge_into_serialize)

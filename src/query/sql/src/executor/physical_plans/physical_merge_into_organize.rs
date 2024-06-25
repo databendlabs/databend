@@ -19,14 +19,14 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::MergeIntoOp;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoShuffle {
+pub struct MergeIntoOrganize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     // merge_into_operation
     pub merge_into_op: MergeIntoOp,
 }
 
-impl MergeIntoShuffle {
+impl MergeIntoOrganize {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.input.output_schema()
     }

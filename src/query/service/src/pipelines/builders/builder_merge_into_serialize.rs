@@ -51,11 +51,10 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
-        let output_len = self.main_pipeline.output_len();
         let (serialize_len, row_number_len) = merge_into_serialize
             .merge_into_op
             .get_serialize_and_row_number_len(
-                output_len,
+                self.main_pipeline.output_len(),
                 merge_into_serialize.enable_right_broadcast,
             );
 

@@ -52,7 +52,7 @@ use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoManipulate;
 use crate::executor::physical_plans::MergeIntoSerialize;
-use crate::executor::physical_plans::MergeIntoShuffle;
+use crate::executor::physical_plans::MergeIntoOrganize;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -259,7 +259,7 @@ fn to_format_tree(
         PhysicalPlan::MergeIntoManipulate(plan) => {
             format_merge_into_manipulate(plan, metadata, profs)
         }
-        PhysicalPlan::MergeIntoShuffle(plan) => format_merge_into_shuffle(plan, metadata, profs),
+        PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
         PhysicalPlan::MergeIntoSerialize(plan) => {
             format_merge_into_serialize(plan, metadata, profs)
         }
@@ -441,14 +441,14 @@ fn format_merge_into_manipulate(
     ))
 }
 
-fn format_merge_into_shuffle(
-    plan: &MergeIntoShuffle,
+fn format_merge_into_organize(
+    plan: &MergeIntoOrganize,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let child = to_format_tree(&plan.input, metadata, profs)?;
     Ok(FormatTreeNode::with_children(
-        "MergeIntoShuffle".to_string(),
+        "MergeIntoOrganize".to_string(),
         vec![child],
     ))
 }

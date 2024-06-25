@@ -14,17 +14,17 @@
 
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::MergeIntoOp;
-use databend_common_sql::executor::physical_plans::MergeIntoShuffle;
+use databend_common_sql::executor::physical_plans::MergeIntoOrganize;
 
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    // Shuffle outputs and resize row_id
-    pub(crate) fn build_merge_into_shuffle(
+    // Organize outputs and resize row_id
+    pub(crate) fn build_merge_into_organize(
         &mut self,
-        merge_into_shuffle: &MergeIntoShuffle,
+        merge_into_organize: &MergeIntoOrganize,
     ) -> Result<()> {
-        self.build_pipeline(&merge_into_shuffle.input)?;
+        self.build_pipeline(&merge_into_organize.input)?;
 
         // ------------------------------Standalone-------------------------------------------------
         // row_id port0_1               row_id port0_1              row_id port0_1
@@ -68,8 +68,7 @@ impl PipelineBuilder {
 
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
-
-        match merge_into_shuffle.merge_into_op {
+        match merge_into_organize.merge_into_op {
             MergeIntoOp::StandaloneFullOperation => {
                 assert_eq!(self.main_pipeline.output_len() % 3, 0);
                 // merge matched update ports and not matched ports ===> data ports
@@ -79,39 +78,39 @@ impl PipelineBuilder {
                 }
                 self.main_pipeline.resize_partial_one(ranges.clone())?;
                 assert_eq!(self.main_pipeline.output_len() % 2, 0);
-                let shuffle_len = self.main_pipeline.output_len() / 2;
-                for idx in 0..shuffle_len {
+                let row_id_len = self.main_pipeline.output_len() / 2;
+                for idx in 0..row_id_len {
                     rules.push(idx);
-                    rules.push(idx + shuffle_len);
+                    rules.push(idx + row_id_len);
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             }
             MergeIntoOp::StandaloneMatchedOnly => {
-                let shuffle_len = self.main_pipeline.output_len() / 2;
-                for idx in 0..shuffle_len {
+                let row_id_len = self.main_pipeline.output_len() / 2;
+                for idx in 0..row_id_len {
                     rules.push(idx);
-                    rules.push(idx + shuffle_len);
+                    rules.push(idx + row_id_len);
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             }
             MergeIntoOp::StandaloneInsertOnly => {}
             MergeIntoOp::DistributedFullOperation => {
-                let shuffle_len = self.main_pipeline.output_len() / 2;
-                for idx in 0..shuffle_len {
+                let row_id_len = self.main_pipeline.output_len() / 3;
+                for idx in 0..row_id_len {
                     rules.push(idx);
-                    rules.push(idx + shuffle_len);
-                    rules.push(idx + shuffle_len * 2);
+                    rules.push(idx + row_id_len);
+                    rules.push(idx + row_id_len * 2);
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(3)?;
             }
             MergeIntoOp::DistributedMatchedOnly => {
-                let shuffle_len = self.main_pipeline.output_len() / 2;
-                for idx in 0..shuffle_len {
+                let row_id_len = self.main_pipeline.output_len() / 2;
+                for idx in 0..row_id_len {
                     rules.push(idx);
-                    rules.push(idx + shuffle_len);
+                    rules.push(idx + row_id_len);
                 }
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
@@ -126,25 +125,25 @@ impl PipelineBuilder {
 
     fn resize_row_id(&mut self, step: usize) -> Result<()> {
         // resize row_id
-        let resize_len = self.main_pipeline.output_len() / step;
+        let row_id_len = self.main_pipeline.output_len() / step;
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
-        let mut vec = Vec::with_capacity(resize_len);
-        for idx in 0..resize_len {
+        let mut vec = Vec::with_capacity(row_id_len);
+        for idx in 0..row_id_len {
             vec.push(idx);
         }
         ranges.push(vec.clone());
 
         // Standalone: data port(matched update port and unmatched  port)
         // Distributed: matched update port
-        for idx in 0..resize_len {
-            ranges.push(vec![idx + resize_len]);
+        for idx in 0..row_id_len {
+            ranges.push(vec![idx + row_id_len]);
         }
 
         // Distributed: need to resize row_number port/unmatched data port.
         if step == 3 {
             vec.clear();
-            for idx in 0..resize_len {
-                vec.push(idx + resize_len * 2);
+            for idx in 0..row_id_len {
+                vec.push(idx + row_id_len * 2);
             }
             ranges.push(vec);
         }
