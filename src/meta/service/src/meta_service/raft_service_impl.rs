@@ -23,6 +23,7 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::network::snapshot_transport;
+use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
@@ -242,24 +243,17 @@ impl RaftService for RaftServiceImpl {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
 
             let ae_req: AppendEntriesRequest = GrpcHelper::parse_req(request)?;
+            let req_summary = ae_req.summary();
             let raft = &self.meta_node.raft;
 
-            let prev = ae_req.prev_log_id;
-            let last = ae_req.entries.last().map(|x| x.log_id);
-            info!(
-                "RaftServiceImpl::append_entries: start: [{:?}, {:?}]",
-                prev, last
-            );
+            info!("RaftServiceImpl::append_entries: {}", req_summary);
 
             let resp = raft
                 .append_entries(ae_req)
                 .await
                 .map_err(GrpcHelper::internal_err)?;
 
-            info!(
-                "RaftServiceImpl::append_entries: done: [{:?}, {:?}]",
-                prev, last
-            );
+            info!("RaftServiceImpl::append_entries: done: {}", req_summary);
 
             GrpcHelper::ok_response(&resp)
         }
@@ -291,15 +285,15 @@ impl RaftService for RaftServiceImpl {
 
             let v_req: VoteRequest = GrpcHelper::parse_req(request)?;
 
-            let (vote, last_log_id) = (v_req.vote, v_req.last_log_id);
+            let v_req_summary = v_req.summary();
 
-            info!("RaftServiceImpl::vote: start: {:?}", (vote, last_log_id));
+            info!("RaftServiceImpl::vote: start: {}", v_req_summary);
 
             let raft = &self.meta_node.raft;
 
             let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
 
-            info!("RaftServiceImpl::vote: done: {:?}", (vote, last_log_id));
+            info!("RaftServiceImpl::vote: done: {}", v_req_summary);
 
             GrpcHelper::ok_response(&resp)
         }

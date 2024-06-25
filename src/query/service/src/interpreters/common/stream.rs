@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
@@ -30,7 +31,11 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
@@ -62,6 +67,26 @@ pub async fn dml_build_update_stream_req(
         options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
         if let Some(snapshot_loc) = inner_fuse.snapshot_loc().await? {
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
+        }
+
+        // To be compatible with older versions, set source database id.
+        if options.get(OPT_KEY_SOURCE_DATABASE_ID).is_none() {
+            let source_db_id = inner_fuse
+                .get_table_info()
+                .options()
+                .get(OPT_KEY_DATABASE_ID)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Invalid fuse table, table option {} not found",
+                        OPT_KEY_DATABASE_ID
+                    ))
+                })?;
+            options.insert(
+                OPT_KEY_SOURCE_DATABASE_ID.to_owned(),
+                source_db_id.to_string(),
+            );
+            options.remove(OPT_KEY_DATABASE_NAME);
+            options.remove(OPT_KEY_TABLE_NAME);
         }
 
         reqs.push(UpdateStreamMetaReq {

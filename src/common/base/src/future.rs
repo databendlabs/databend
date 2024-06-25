@@ -20,6 +20,7 @@ use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
+use log::debug;
 use log::info;
 use pin_project_lite::pin_project;
 use tokio::time::Instant;
@@ -110,6 +111,19 @@ pub trait TimingFutureExt {
             if total >= threshold {
                 f(total, busy)
             }
+        })
+    }
+
+    /// Log elapsed time(total and busy) in DEBUG level when the future is ready.
+    fn debug_elapsed<'a>(
+        self,
+        ctx: impl fmt::Display + 'a,
+    ) -> TimingFuture<'a, Self, impl Fn(Duration, Duration)>
+    where
+        Self: Future + Sized,
+    {
+        self.timed::<'a>(move |total, busy| {
+            debug!("Elapsed: total: {:?}, busy: {:?}; {}", total, busy, ctx);
         })
     }
 

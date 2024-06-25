@@ -14,6 +14,8 @@
 
 use std::time::Duration;
 
+use deepsize::Context;
+
 use crate::cmd::CmdContext;
 use crate::seq_value::KVMeta;
 use crate::time::Interval;
@@ -38,6 +40,12 @@ pub struct MetaSpec {
     /// For backward compatibility, this field is not serialized if it `None`, as if it does not exist.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) ttl: Option<Interval>,
+}
+
+impl deepsize::DeepSizeOf for MetaSpec {
+    fn deep_size_of_children(&self, _context: &mut Context) -> usize {
+        0
+    }
 }
 
 impl MetaSpec {

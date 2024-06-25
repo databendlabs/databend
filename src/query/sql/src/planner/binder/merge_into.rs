@@ -28,6 +28,7 @@ use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_exception::ErrorCode;
@@ -42,6 +43,7 @@ use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::MatchedEvaluator;
@@ -58,10 +60,11 @@ use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
+use crate::DUMMY_TABLE_INDEX;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MergeIntoType {
-    MatechedOnly,
+    MatchedOnly,
     FullOperation,
     InsertOnly,
 }
@@ -96,12 +99,12 @@ impl Binder {
         let (matched_clauses, unmatched_clauses) = stmt.split_clauses();
         let merge_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
-        let plan = self
+        let s_expr = self
             .bind_merge_into_with_join_type(
                 bind_context,
                 stmt,
                 match merge_type {
-                    MergeIntoType::MatechedOnly => Inner,
+                    MergeIntoType::MatchedOnly => Inner,
                     MergeIntoType::InsertOnly => RightAnti,
                     _ => RightOuter,
                 },
@@ -111,13 +114,17 @@ impl Binder {
             )
             .await?;
 
-        if merge_type == MergeIntoType::InsertOnly && !insert_only(&plan) {
+        let mut merge_into_plan = s_expr.plan().clone().try_into()?;
+        if merge_type == MergeIntoType::InsertOnly && !insert_only(&merge_into_plan) {
             return Err(ErrorCode::SemanticError(
                 "for unmatched clause, then condition and exprs can only have source fields",
             ));
         }
 
-        Ok(Plan::MergeInto(Box::new(plan)))
+        Ok(Plan::MergeInto {
+            schema: merge_into_plan.schema(),
+            s_expr: Box::new(s_expr),
+        })
     }
 
     fn can_try_update_column_only(&self, matched_clauses: &[MatchedClause]) -> bool {
@@ -141,6 +148,59 @@ impl Binder {
         false
     }
 
+    fn try_add_internal_column_binding(
+        &mut self,
+        table: &TableReference,
+        context: &mut BindContext,
+        expr: &mut SExpr,
+        table_index: &mut usize,
+        row_id_index: &mut Option<usize>,
+    ) -> Result<()> {
+        if let TableReference::Table {
+            catalog,
+            database,
+            table,
+            ..
+        } = table
+        {
+            let (_, database_name, table_name) =
+                self.normalize_object_identifier_triple(catalog, database, table);
+
+            // add internal_column (_row_id)
+            *table_index = self
+                .metadata
+                .read()
+                .get_table_index(Some(database_name.as_str()), table_name.as_str())
+                .ok_or_else(|| ErrorCode::Internal("can't get table binding"))?;
+
+            let row_id_column_binding = InternalColumnBinding {
+                database_name: Some(database_name.clone()),
+                table_name: Some(table_name.clone()),
+                internal_column: InternalColumn {
+                    column_name: ROW_ID_COL_NAME.to_string(),
+                    column_type: InternalColumnType::RowId,
+                },
+            };
+
+            let column_binding = context.add_internal_column_binding(
+                &row_id_column_binding,
+                self.metadata.clone(),
+                true,
+            )?;
+
+            let row_id_idx: usize = column_binding.index;
+
+            *expr = SExpr::add_internal_column_index(expr, *table_index, row_id_idx, &None);
+
+            self.metadata
+                .write()
+                .set_table_row_id_index(*table_index, row_id_idx);
+
+            *row_id_index = Some(row_id_idx);
+        }
+        Ok(())
+    }
+
     async fn bind_merge_into_with_join_type(
         &mut self,
         bind_context: &mut BindContext,
@@ -149,7 +209,7 @@ impl Binder {
         matched_clauses: Vec<MatchedClause>,
         unmatched_clauses: Vec<UnmatchedClause>,
         merge_type: MergeIntoType,
-    ) -> Result<MergeInto> {
+    ) -> Result<SExpr> {
         let MergeIntoStmt {
             catalog,
             database,
@@ -160,6 +220,7 @@ impl Binder {
             merge_options,
             ..
         } = stmt;
+        let settings = self.ctx.get_settings();
 
         if merge_options.is_empty() {
             return Err(ErrorCode::BadArguments(
@@ -176,6 +237,21 @@ impl Binder {
 
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table_ident);
+
+        // Add table lock before execution.
+        let lock_guard = if merge_type != MergeIntoType::InsertOnly {
+            self.ctx
+                .clone()
+                .acquire_table_lock(
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?
+        } else {
+            None
+        };
 
         let table = self
             .ctx
@@ -205,6 +281,20 @@ impl Binder {
             .bind_table_reference(bind_context, &source_data)
             .await?;
 
+        // try add internal_column (_row_id) for source_table
+        let mut source_table_index = DUMMY_TABLE_INDEX;
+        let mut source_row_id_index = None;
+
+        if settings.get_enable_distributed_merge_into()? {
+            self.try_add_internal_column_binding(
+                &source_data,
+                &mut source_context,
+                &mut source_expr,
+                &mut source_table_index,
+                &mut source_row_id_index,
+            )?;
+        }
+
         // remove stream column.
         source_context
             .columns
@@ -226,10 +316,6 @@ impl Binder {
                 Arc::new(source_expr),
             );
         }
-
-        // add all left source columns for read
-        // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = HashSet::<IndexType>::new();
 
         let update_or_insert_columns_star =
             if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
@@ -298,36 +384,23 @@ impl Binder {
             }
         }
 
-        // add internal_column (_row_id)
-        let table_index = self
-            .metadata
-            .read()
-            .get_table_index(Some(database_name.as_str()), table_name.as_str())
-            .expect("can't get target_table binding");
-
-        let row_id_column_binding = InternalColumnBinding {
-            database_name: Some(database_name.clone()),
-            table_name: Some(table_name.clone()),
-            internal_column: InternalColumn {
-                column_name: ROW_ID_COL_NAME.to_string(),
-                column_type: InternalColumnType::RowId,
-            },
-        };
-
-        let column_binding = target_context.add_internal_column_binding(
-            &row_id_column_binding,
-            self.metadata.clone(),
-            true,
+        // add internal_column (_row_id) for target_table
+        let mut target_table_index = DUMMY_TABLE_INDEX;
+        let mut target_row_id_index = None;
+        self.try_add_internal_column_binding(
+            &target_table,
+            &mut target_context,
+            &mut target_expr,
+            &mut target_table_index,
+            &mut target_row_id_index,
         )?;
 
-        let row_id_index = column_binding.index;
+        let row_id_index = target_row_id_index
+            .ok_or_else(|| ErrorCode::InvalidRowIdIndex("can't get target_table row_id"))?;
 
-        target_expr =
-            SExpr::add_internal_column_index(&target_expr, table_index, row_id_index, &None);
-
-        self.metadata
-            .write()
-            .set_table_row_id_index(table_index, row_id_index);
+        // add all left source columns for read
+        // todo: (JackTan25) do column prune after finish "split expr for target and source"
+        let mut columns_set = HashSet::<IndexType>::new();
 
         // add row_id_idx
         if merge_type != MergeIntoType::InsertOnly {
@@ -343,10 +416,11 @@ impl Binder {
             right: Box::new(source_data.clone()),
         };
 
+        let target_prop = RelExpr::with_s_expr(&target_expr).derive_relational_prop()?;
         let (join_sexpr, mut bind_ctx) = self
             .bind_merge_into_join(
                 bind_context,
-                target_context,
+                target_context.clone(),
                 source_context,
                 target_expr,
                 source_expr,
@@ -358,6 +432,61 @@ impl Binder {
             let join_column_set = bind_ctx.column_set();
             columns_set = columns_set.union(&join_column_set).cloned().collect();
         }
+
+        // Collect lazy columns.
+        let lazy_columns = if matches!(
+            merge_type,
+            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
+        ) && settings.get_enable_merge_into_row_fetch()?
+        {
+            let mut required_columns = HashSet::new();
+            let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
+            for (left_condition, right_condition) in join
+                .left_conditions
+                .iter()
+                .zip(join.right_conditions.iter())
+            {
+                let left_used_columns = left_condition.used_columns();
+                let right_used_columns = right_condition.used_columns();
+                if left_used_columns.is_subset(&target_prop.output_columns) {
+                    required_columns.extend(left_used_columns);
+                } else if right_used_columns.is_subset(&target_prop.output_columns) {
+                    required_columns.extend(right_used_columns);
+                }
+            }
+            for condition in join.non_equi_conditions.iter() {
+                for column_index in condition.used_columns() {
+                    if target_prop.output_columns.contains(&column_index) {
+                        required_columns.insert(column_index);
+                    }
+                }
+            }
+            for child in join_sexpr.children() {
+                if let RelOperator::Filter(filter) = child.plan() {
+                    for predicate in filter.predicates.iter() {
+                        for column_index in predicate.used_columns() {
+                            if target_prop.output_columns.contains(&column_index) {
+                                required_columns.insert(column_index);
+                            }
+                        }
+                    }
+                }
+            }
+            required_columns.insert(row_id_index);
+
+            let mut lazy_columns = HashSet::new();
+            for column in &target_context.columns {
+                if !required_columns.contains(&column.index)
+                    && column.visibility != Visibility::InVisible
+                {
+                    lazy_columns.insert(column.index);
+                }
+            }
+            self.metadata.write().add_lazy_columns(lazy_columns.clone());
+            Some(lazy_columns)
+        } else {
+            None
+        };
 
         // If the table alias is not None, after the binding phase, the bound columns will have
         // a database of 'None' and the table named as the alias.
@@ -397,10 +526,12 @@ impl Binder {
             Box::new(IndexMap::new()),
         );
 
-        let column_entries = self.metadata.read().columns_by_table_index(table_index);
+        let column_entries = self
+            .metadata
+            .read()
+            .columns_by_table_index(target_table_index);
         let mut field_index_map = HashMap::<usize, String>::new();
         // if true, read all columns of target table
-        let has_update = self.has_update(&matched_clauses);
         if has_update {
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let used_idx = self.find_column_index(&column_entries, field.name())?;
@@ -439,9 +570,7 @@ impl Binder {
             );
         }
 
-        let split_idx = row_id_index;
-
-        Ok(MergeInto {
+        let merge_into = MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
@@ -449,20 +578,28 @@ impl Binder {
             table_id,
             bind_context: Box::new(bind_ctx),
             meta_data: self.metadata.clone(),
-            input: Box::new(join_sexpr.clone()),
             columns_set: Box::new(columns_set),
             matched_evaluators,
             unmatched_evaluators,
-            target_table_idx: table_index,
+            target_table_index,
             field_index_map,
             merge_type,
             distributed: false,
             change_join_order: false,
             row_id_index,
-            split_idx,
+            source_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
-        })
+            lazy_columns,
+            lock_guard,
+        };
+
+        let s_expr = SExpr::create_unary(
+            Arc::new(RelOperator::MergeInto(merge_into)),
+            Arc::new(join_sexpr),
+        );
+
+        Ok(s_expr)
     }
 
     async fn bind_matched_clause<'a>(
@@ -708,7 +845,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
     if matched_len == 0 && unmatched_len > 0 {
         Ok(MergeIntoType::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(MergeIntoType::MatechedOnly)
+        Ok(MergeIntoType::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
         Ok(MergeIntoType::FullOperation)
     } else {
@@ -721,7 +858,7 @@ fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoT
 fn insert_only(merge_plan: &MergeInto) -> bool {
     let meta_data = merge_plan.meta_data.read();
     let target_table_columns: HashSet<usize> = meta_data
-        .columns_by_table_index(merge_plan.target_table_idx)
+        .columns_by_table_index(merge_plan.target_table_index)
         .iter()
         .map(|column| column.index())
         .collect();

@@ -144,7 +144,7 @@ error:
   --> SQL:1:1
   |
 1 | sleep(300.2)
-  | ^^^^^^^^^^^^ The maximum sleep time is 3 seconds. Requested: 300.2s while evaluating function `sleep(300.2)`
+  | ^^^^^^^^^^^^ The maximum sleep time is 3 seconds. Requested: 300.2s while evaluating function `sleep(300.2)` in expr `sleep(to_float64(300.2))`
 
 
 

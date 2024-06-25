@@ -42,16 +42,6 @@ use crate::sql::evaluator::CompoundBlockOperator;
 impl PipelineBuilder {
     pub(crate) fn build_duplicate(&mut self, plan: &Duplicate) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-
-        // Reorder the result for select clause
-        PipelineBuilder::build_result_projection(
-            &self.func_ctx,
-            plan.input.output_schema()?,
-            &plan.project_columns,
-            &mut self.main_pipeline,
-            false,
-        )?;
-
         self.main_pipeline.duplicate(true, plan.n)?;
         Ok(())
     }

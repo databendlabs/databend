@@ -1,0 +1,31 @@
+name: "Test protocol compatibility between databend-meta servers"
+description: "Download old binaries and current binaries, write some data and then read data"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        path: ./bins/current/bin
+        artifacts: meta,metactl,metabench
+
+    - name: Test compatibility
+      shell: bash
+      # test-*.sh <leader-meta-ver> <follower-meta-ver>
+      # 1.2.288 is the first version after 1.2.212 that has built a binary.
+      run: |
+        bash ./tests/compat/meta_meta/test_meta_meta.sh         1.2.288  current
+        bash ./tests/compat/meta_meta/test_meta_meta.sh         current  1.2.288
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: compat_meta_meta

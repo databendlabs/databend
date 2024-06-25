@@ -238,6 +238,7 @@ impl HashJoinProbeState {
             );
         }
 
+        let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
         let mut valids = None;
         if !Self::check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
@@ -246,7 +247,10 @@ impl HashJoinProbeState {
             .iter()
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
-            for (col, _) in probe_keys.iter() {
+            for (index, (col, _)) in probe_keys.iter().enumerate() {
+                if is_null_equal.contains(&index) {
+                    continue;
+                }
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     valids = Some(Bitmap::new_constant(false, input_num_rows));
@@ -257,9 +261,11 @@ impl HashJoinProbeState {
             }
         }
 
-        for (col, ty) in probe_keys.iter_mut() {
-            *col = col.remove_nullable();
-            *ty = ty.remove_nullable();
+        for (index, (col, ty)) in probe_keys.iter_mut().enumerate() {
+            if !is_null_equal.contains(&index) {
+                *col = col.remove_nullable();
+                *ty = ty.remove_nullable();
+            }
         }
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {

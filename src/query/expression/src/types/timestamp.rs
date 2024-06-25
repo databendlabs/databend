@@ -19,6 +19,7 @@ use std::ops::Range;
 use chrono::DateTime;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
@@ -259,17 +260,23 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 }
 
 #[inline]
-pub fn string_to_timestamp(ts_str: impl AsRef<[u8]>, tz: Tz) -> Option<DateTime<Tz>> {
+pub fn string_to_timestamp(
+    ts_str: impl AsRef<[u8]>,
+    tz: Tz,
+) -> databend_common_exception::Result<DateTime<Tz>> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
     match reader.read_timestamp_text(&tz, false) {
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
-                Ok(..) => Some(dt),
-                Err(_) => None,
+                Ok(..) => Ok(dt),
+                Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
             },
             _ => unreachable!(),
         },
-        Err(_) => None,
+        Err(e) => match e.code() {
+            ErrorCode::BAD_BYTES => Err(e),
+            _ => Err(ErrorCode::BadArguments("unexpected argument")),
+        },
     }
 }
 

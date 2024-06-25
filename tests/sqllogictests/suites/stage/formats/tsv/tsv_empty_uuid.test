@@ -1,0 +1,16 @@
+statement ok
+drop table if exists t_uuid
+
+statement ok
+create table t_uuid(id string default uuid(), a int)
+
+statement ok
+remove @data/tsv/unload/uuid
+
+query
+copy into @data/tsv/unload/uuid/ from (select '',1 )  file_format = (type = tsv)
+----
+1 3 3
+
+query
+copy into t_uuid from @data/tsv/unload/uuid file_format = (type = tsv) RETURN_FAILED_ONLY=TRUE

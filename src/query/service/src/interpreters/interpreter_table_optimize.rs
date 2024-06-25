@@ -103,7 +103,7 @@ impl OptimizeTableInterpreter {
         parts: Partitions,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
+        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
