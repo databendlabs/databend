@@ -15,6 +15,10 @@
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,11 +35,18 @@ use crate::chunk_reader_impl::OrcChunkReader;
 use crate::hashable_schema::HashableSchema;
 use crate::orc_file_partition::OrcFilePartition;
 use crate::strip::StripeInMemory;
+use crate::utils::map_orc_error;
 
 pub struct ORCSourceForCopy {
     table_ctx: Arc<dyn TableContext>,
+    scan_progress: Arc<Progress>,
     op: Operator,
-    reader: Option<(String, Box<StripeFactory<OrcChunkReader>>, HashableSchema)>,
+    reader: Option<(
+        String,
+        Box<StripeFactory<OrcChunkReader>>,
+        HashableSchema,
+        usize,
+    )>,
 }
 
 impl ORCSourceForCopy {
@@ -44,9 +55,12 @@ impl ORCSourceForCopy {
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = table_ctx.get_scan_progress();
+
         AsyncSourcer::create(table_ctx.clone(), output, ORCSourceForCopy {
             table_ctx,
             op,
+            scan_progress,
             reader: None,
         })
     }
@@ -58,21 +72,22 @@ impl ORCSourceForCopy {
         };
         let file = OrcFilePartition::from_part(&part)?.clone();
         let path = file.path.clone();
+        let size = file.size;
 
         let file = OrcChunkReader {
             operator: self.op.clone(),
             size: file.size as u64,
             path: file.path,
         };
-        let builder = ArrowReaderBuilder::try_new_async(file).await.map_err(|e| {
-            ErrorCode::StorageOther(format!("fail to read {}: {}", path, e.to_string()))
-        })?;
+        let builder = ArrowReaderBuilder::try_new_async(file)
+            .await
+            .map_err(|e| map_orc_error(e, &path))?;
         let mut reader = builder.build_async();
         let factory = mem::take(&mut reader.factory).unwrap();
         let schema = reader.schema();
         let schema = HashableSchema::try_create(schema)?;
 
-        self.reader = Some((path, factory, schema));
+        self.reader = Some((path, factory, schema, size));
         Ok(true)
     }
 }
@@ -89,18 +104,31 @@ impl AsyncSource for ORCSourceForCopy {
             if self.reader.is_none() && !self.next_part().await? {
                 return Ok(None);
             }
-            if let Some((path, factory, schema)) = mem::take(&mut self.reader) {
+            if let Some((path, factory, schema, size)) = mem::take(&mut self.reader) {
                 let (factory, stripe) = factory
                     .read_next_stripe()
                     .await
                     .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
                 match stripe {
                     None => {
+                        let progress_values = ProgressValues {
+                            rows: 0,
+                            bytes: size,
+                        };
+                        self.scan_progress.incr(&progress_values);
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
                         self.reader = None;
                         continue;
                     }
                     Some(stripe) => {
-                        self.reader = Some((path.clone(), Box::new(factory), schema.clone()));
+                        let progress_values = ProgressValues {
+                            rows: stripe.number_of_rows(),
+                            bytes: 0,
+                        };
+                        self.scan_progress.incr(&progress_values);
+
+                        self.reader = Some((path.clone(), Box::new(factory), schema.clone(), size));
                         let meta = Box::new(StripeInMemory {
                             path,
                             stripe,
