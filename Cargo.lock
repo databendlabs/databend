@@ -1933,15 +1933,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codespan-reporting"
-version = "0.11.1"
-source = "git+https://github.com/brendanzab/codespan?rev=c84116f5#c84116f5a667bfce2aa1e045205c5832cfee1548"
-dependencies = [
- "termcolor",
- "unicode-width",
-]
-
-[[package]]
 name = "color-eyre"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2697,7 +2688,6 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.1.0"
 dependencies = [
- "codespan-reporting",
  "criterion",
  "derive-visitor",
  "enum-as-inner 0.5.1",
@@ -2716,6 +2706,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "rspack-codespan-reporting",
  "serde",
  "serde_json",
  "strsim 0.10.0",
@@ -12585,6 +12576,16 @@ dependencies = [
  "spki 0.7.3",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rspack-codespan-reporting"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc53b3a0e58f509a8b55bde278d44c05879f27a66819346e0fef193c6348e9f8"
+dependencies = [
+ "termcolor",
+ "unicode-width",
 ]
 
 [[package]]
