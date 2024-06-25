@@ -66,7 +66,7 @@ query II
 SELECT p.begin, e.value
 FROM probe0 p ASOF RIGHT JOIN events0 e
 ON p.begin >= e.begin
-ORDER BY ALL
+ORDER BY p.begin ASC
 ----
 1	0
 2	0
