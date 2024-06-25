@@ -1581,14 +1581,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         |(_, _, fields, _)| {
             let (fields_name, fields_type): (Vec<String>, Vec<TypeName>) =
                 fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            if fields_name
-                .iter()
-                .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
-            {
-                return Err(nom::Err::Failure(ErrorKind::Other(
-                    "Invalid tuple field name, only support alphanumeric characters",
-                )));
-            }
+            // if fields_name
+            //     .iter()
+            //     .any(|field_name| !field_name.chars().all(|c| c.is_ascii_alphanumeric()))
+            // {
+            //     return Err(nom::Err::Failure(ErrorKind::Other(
+            //         "Invalid tuple field name, only support alphanumeric characters",
+            //     )));
+            // }
             Ok(TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
