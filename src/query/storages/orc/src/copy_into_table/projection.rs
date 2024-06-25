@@ -56,7 +56,7 @@ impl ProjectionFactory {
         })
     }
     pub fn get(&self, schema: &HashableSchema, location: &str) -> Result<Vec<Expr>> {
-        if let Some(v) = self.projections.get(&schema) {
+        if let Some(v) = self.projections.get(schema) {
             Ok(v.clone())
         } else {
             let v = self
