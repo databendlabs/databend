@@ -26,7 +26,7 @@ pub struct DeleteSource {
     pub parts: Partitions,
     pub filters: Filters,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
     pub snapshot: Arc<TableSnapshot>,

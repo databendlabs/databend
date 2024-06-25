@@ -32,15 +32,11 @@ use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_sql::binder::MergeIntoType;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MergeIntoAddRowNumber;
 use databend_common_sql::executor::physical_plans::MergeIntoAppendNotMatched;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
-use databend_common_storages_fuse::operations::MergeIntoSplitProcessor;
 use databend_common_storages_fuse::operations::RowNumberAndLogSplitProcessor;
 use databend_common_storages_fuse::operations::TransformAddRowNumberColumnProcessor;
 use databend_common_storages_fuse::operations::TransformDistributedMergeIntoBlockDeserialize;
@@ -308,15 +304,10 @@ impl PipelineBuilder {
             table_info,
             catalog_info,
             unmatched,
-            matched,
-            field_index_of_input_schema,
-            row_id_idx,
-            source_row_id_idx,
             segments,
             distributed,
             merge_type,
             change_join_order,
-            can_try_update_column_only,
             enable_right_broadcast,
             ..
         } = merge_into;
@@ -324,23 +315,6 @@ impl PipelineBuilder {
         let change_join_order = *change_join_order;
         let distributed = *distributed;
         self.build_pipeline(input)?;
-
-        self.main_pipeline
-            .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
-
-        // If FullOperation, use row_id_idx to split
-        if matches!(merge_type, MergeIntoType::FullOperation) {
-            let mut items = Vec::with_capacity(self.main_pipeline.output_len());
-            let output_len = self.main_pipeline.output_len();
-            for _ in 0..output_len {
-                let merge_into_split_processor =
-                    MergeIntoSplitProcessor::create(*row_id_idx as u32)?;
-                items.push(merge_into_split_processor.into_pipe_item());
-            }
-
-            self.main_pipeline
-                .add_pipe(Pipe::create(output_len, output_len * 2, items));
-        }
 
         let tbl = self
             .ctx
@@ -366,89 +340,12 @@ impl PipelineBuilder {
             }
             output_len
         };
-        // Handle matched and unmatched data separately.
-        // This is a complete pipeline with matched and not matched clauses, for matched only or unmatched only
-        // we will delicate useless pipeline and processor
-        //                                                                                 +-----------------------------+-+
-        //                                    +-----------------------+     Matched        |                             +-+
-        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
-        //                                    |                       |   |                |                             +-+
-        // +----------------------+           |                       +---+                +-----------------------------+-+
-        // |      MergeInto       +---------->|MergeIntoSplitProcessor|
-        // +----------------------+           |                       +---+                +-----------------------------+
-        //                                    |                       |   | NotMatched     |                             +-+
-        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
-        //                                    +-----------------------+                    |                             +-+
-        //                                                                                 +-----------------------------+
-        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
-        // (0) -> output_port_row_id
-        // (1) -> output_port_updated
 
-        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
-
-        // receive matched data and not matched data parallelly.
-        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
-
-        let (step, need_match, need_unmatch) = match merge_type {
+        let (_, need_match, need_unmatch) = match merge_type {
             MergeIntoType::FullOperation => (2, true, true),
             MergeIntoType::InsertOnly => (1, false, true),
             MergeIntoType::MatchedOnly => (1, true, false),
         };
-
-        for _ in (0..self.main_pipeline.output_len()).step_by(step) {
-            if need_match {
-                let matched_split_processor = MatchedSplitProcessor::create(
-                    self.ctx.clone(),
-                    *row_id_idx,
-                    matched.clone(),
-                    field_index_of_input_schema.clone(),
-                    input.output_schema()?,
-                    Arc::new(DataSchema::from(tbl.schema_with_stream())),
-                    merge_into.target_build_optimization,
-                    *can_try_update_column_only,
-                )?;
-                pipe_items.push(matched_split_processor.into_pipe_item());
-            }
-
-            if need_unmatch {
-                // If merge into doesn't contain right broadcast join, execute insert in local.
-                if !enable_right_broadcast {
-                    let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-                        unmatched.clone(),
-                        input.output_schema()?,
-                        self.func_ctx.clone(),
-                        self.ctx.clone(),
-                    )?;
-                    pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
-                } else {
-                    let input_num_columns = input.output_schema()?.num_fields();
-                    let idx = source_row_id_idx.unwrap_or_else(|| input_num_columns - 1);
-
-                    let input_port = InputPort::create();
-                    let output_port = OutputPort::create();
-                    // project row number column
-                    let proc = ProcessorPtr::create(CompoundBlockOperator::create(
-                        input_port.clone(),
-                        output_port.clone(),
-                        input_num_columns,
-                        self.func_ctx.clone(),
-                        vec![BlockOperator::Project {
-                            projection: vec![idx],
-                        }],
-                    ));
-                    pipe_items.push(PipeItem {
-                        processor: proc,
-                        inputs_port: vec![input_port],
-                        outputs_port: vec![output_port],
-                    })
-                };
-            }
-        }
-        self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.output_len(),
-            get_output_len(&pipe_items),
-            pipe_items.clone(),
-        ));
 
         // the complete pipeline(with matched and unmatched) below:
         // row_id port0_1
@@ -638,11 +535,10 @@ impl PipelineBuilder {
             )?;
             mid_len
         };
-
-        pipe_items.clear();
         let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
+        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
         if need_match {
             // rowid should be accumulated in main node.
             if change_join_order && distributed {

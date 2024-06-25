@@ -325,7 +325,7 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
+        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {

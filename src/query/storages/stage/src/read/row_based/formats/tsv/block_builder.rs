@@ -78,15 +78,8 @@ impl TsvDecoder {
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            match &self.load_context.default_values {
-                None => {
-                    builder.push_default();
-                }
-                Some(values) => {
-                    builder.push(values[column_index].as_ref());
-                }
-            }
-            Ok(())
+            self.load_context
+                .push_default_value(builder, column_index, false)
         } else {
             // todo(youngsofun): optimize this later after refactor.
             let mut cursor = Cursor::new(col_data);

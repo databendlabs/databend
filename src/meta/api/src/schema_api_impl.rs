@@ -58,6 +58,7 @@ use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::app_error::UpdateStreamMetasFailed;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
@@ -174,6 +175,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -260,7 +262,7 @@ pub const ORPHAN_POSTFIX: &str = "orphan";
 /// Thus every type that impl kvapi::KVApi impls SchemaApi.
 #[tonic::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_database(
         &self,
@@ -384,7 +386,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -427,7 +429,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn undrop_database(
         &self,
@@ -531,7 +533,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn rename_database(
         &self,
@@ -673,7 +675,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_database(&self, req: GetDatabaseReq) -> Result<Arc<DatabaseInfo>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -695,7 +697,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(Arc::new(db))
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_database_history(
         &self,
@@ -846,7 +848,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         return Ok(db_info_list);
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_databases(
         &self,
@@ -901,7 +903,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(db_infos)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -1007,7 +1009,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -1056,7 +1058,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(DropIndexReply {})
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -1095,7 +1097,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         })
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -1122,7 +1124,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_indexes(
         &self,
@@ -1168,7 +1170,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(index_metas)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_index_ids_by_table_id(
         &self,
@@ -1207,7 +1209,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(index_ids)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_indexes_by_table_id(
         &self,
@@ -1247,6 +1249,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     // virtual column
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_virtual_column(
         &self,
@@ -1333,6 +1336,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(CreateVirtualColumnReply {})
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn update_virtual_column(
         &self,
@@ -1397,6 +1401,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(UpdateVirtualColumnReply {})
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn drop_virtual_column(
         &self,
@@ -1446,6 +1451,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(DropVirtualColumnReply {})
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_virtual_columns(
         &self,
@@ -1479,7 +1485,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(virtual_column_list)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError> {
         // Make an error if table exists.
@@ -1820,14 +1826,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         handle_undrop_table(self, req).await
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn undrop_table_by_id(
         &self,
@@ -1837,7 +1843,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         handle_undrop_table(self, req).await
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -2034,7 +2040,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table(&self, req: GetTableReq) -> Result<Arc<TableInfo>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -2123,12 +2129,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             meta: tb_meta.unwrap(),
             tenant: req.tenant.tenant_name().to_string(),
             db_type,
+            catalog_info: Default::default(),
         };
 
         return Ok(Arc::new(tb_info));
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table_history(
         &self,
@@ -2252,6 +2259,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             meta: tb_meta,
                             tenant: tenant_dbname.tenant_name().to_string(),
                             db_type,
+                            catalog_info: Default::default(),
                         };
 
                         tb_info_list.push(Arc::new(tb_info));
@@ -2263,7 +2271,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         return Ok(tb_info_list);
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_tables(&self, req: ListTableReq) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -2306,7 +2314,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(tb_infos)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table_by_id(
         &self,
@@ -2320,7 +2328,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(seq_table_meta)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn mget_table_names_by_ids(
         &self,
@@ -2366,7 +2374,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(table_names)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_db_name_by_id(&self, db_id: u64) -> Result<String, KVAppError> {
         debug!(req :? =(&db_id); "SchemaApi: {}", func_name!());
@@ -2387,7 +2395,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(db_name.unwrap().database_name().to_string())
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn mget_database_names_by_ids(
         &self,
@@ -2433,7 +2441,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(db_names)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>, MetaError> {
         debug!(req :? =(&table_id); "SchemaApi: {}", func_name!());
@@ -2510,6 +2518,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     // make table meta visible by:
     // 1. move table id from orphan table id list to table id list
     // 2. set table meta.drop_on as None
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn commit_table_meta(
         &self,
@@ -2678,6 +2687,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table_copied_file_info(
         &self,
@@ -2686,9 +2696,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
-
         let tbid = TableId { table_id };
-
         let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
         if tb_meta_seq == 0 {
@@ -2734,7 +2742,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         })
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn truncate_table(
         &self,
@@ -2844,7 +2852,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(TruncateTableReply {})
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn upsert_table_option(
         &self,
@@ -2919,7 +2927,47 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
+    #[minitrace::trace]
+    async fn update_stream_metas(
+        &self,
+        update_stream_meta_reqs: &[UpdateStreamMetaReq],
+    ) -> Result<(), KVAppError> {
+        if update_stream_meta_reqs.is_empty() {
+            return Ok(());
+        }
+
+        let mut txn_req = TxnRequest {
+            condition: vec![],
+            if_then: vec![],
+            else_then: vec![],
+        };
+
+        append_update_stream_meta_requests(
+            self,
+            &mut txn_req,
+            update_stream_meta_reqs,
+            "update_stream_metas",
+        )
+        .await?;
+
+        let (success, _) = send_txn(self, txn_req).await?;
+
+        if !success {
+            let msg = update_stream_meta_reqs
+                .iter()
+                .map(|req| format!("stream [id {}, seq {} ]", req.stream_id, req.seq))
+                .collect::<Vec<_>>()
+                .join(",");
+            return Err(KVAppError::AppError(AppError::from(
+                UpdateStreamMetasFailed::new(msg),
+            )));
+        } else {
+            Ok(())
+        }
+    }
+
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn update_table_meta(
         &self,
@@ -2988,41 +3036,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_req.if_then.extend(match_operations)
             }
 
-            for req in &req.update_stream_meta {
-                let stream_id = TableId {
-                    table_id: req.stream_id,
-                };
-                let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
-                    get_pb_value(self, &stream_id).await?;
-
-                if stream_meta_seq == 0 || stream_meta.is_none() {
-                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
-                    )));
-                }
-
-                if req.seq.match_seq(stream_meta_seq).is_err() {
-                    return Err(KVAppError::AppError(AppError::from(
-                        StreamVersionMismatched::new(
-                            req.stream_id,
-                            req.seq,
-                            stream_meta_seq,
-                            "update_table_meta",
-                        ),
-                    )));
-                }
-
-                let mut new_stream_meta = stream_meta.unwrap();
-                new_stream_meta.options = req.options.clone();
-                new_stream_meta.updated_on = Utc::now();
-
-                txn_req
-                    .condition
-                    .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-                txn_req
-                    .if_then
-                    .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
-            }
+            append_update_stream_meta_requests(
+                self,
+                &mut txn_req,
+                &req.update_stream_meta,
+                "update_table_meta",
+            )
+            .await?;
 
             if let Some(deduplicated_label) = req.deduplicated_label.clone() {
                 txn_req
@@ -3258,7 +3278,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn set_table_column_mask_policy(
         &self,
@@ -3351,7 +3371,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_table_index(
         &self,
@@ -3461,7 +3481,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn drop_table_index(
         &self,
@@ -3523,7 +3543,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_drop_table_infos(
         &self,
@@ -3746,6 +3766,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(reply)
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_lock_revision(
         &self,
@@ -3816,6 +3837,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(CreateLockRevReply { revision })
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -3879,6 +3901,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(())
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -3926,6 +3949,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(())
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>, KVAppError> {
         let mut reply = vec![];
@@ -3957,7 +3981,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(reply)
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn create_catalog(
         &self,
@@ -4036,7 +4060,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -4055,7 +4079,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(Arc::new(catalog))
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -4131,7 +4155,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(DropCatalogReply {})
     }
 
-    #[logcall::logcall("debug")]
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn list_catalogs(
         &self,
@@ -4184,6 +4208,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(catalog_infos)
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -4230,6 +4255,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
+    #[logcall::logcall]
     #[minitrace::trace]
     async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
@@ -4932,7 +4958,7 @@ fn set_update_expire_operation(
     Ok(())
 }
 
-#[logcall::logcall("debug")]
+#[logcall::logcall(input = "")]
 #[minitrace::trace]
 async fn batch_filter_table_info(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -4983,6 +5009,7 @@ async fn batch_filter_table_info(
             meta: tb_meta,
             tenant: db_ident.tenant_name().to_string(),
             db_type: DatabaseType::NormalDB,
+            catalog_info: Default::default(),
         };
 
         filter_tb_infos.push((Arc::new(tb_info), db_info.ident.db_id));
@@ -4993,7 +5020,7 @@ async fn batch_filter_table_info(
 
 type TableFilterInfoList<'a> = Vec<(&'a TableInfoFilter, &'a Arc<DatabaseInfo>, u64, String)>;
 
-#[logcall::logcall("debug")]
+#[logcall::logcall(input = "")]
 #[minitrace::trace]
 async fn get_gc_table_info(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -5053,7 +5080,7 @@ async fn get_gc_table_info(
     Ok(filter_tb_infos)
 }
 
-#[logcall::logcall("debug")]
+#[logcall::logcall(input = "")]
 #[minitrace::trace]
 async fn do_get_table_history(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
@@ -5776,4 +5803,44 @@ async fn handle_undrop_table(
             }
         }
     }
+}
+
+#[minitrace::trace]
+async fn append_update_stream_meta_requests(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    txn_req: &mut TxnRequest,
+    update_stream_meta: &[UpdateStreamMetaReq],
+    context_msg: impl Into<String>,
+) -> Result<(), KVAppError> {
+    for req in update_stream_meta {
+        let stream_id = TableId {
+            table_id: req.stream_id,
+        };
+        let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+            get_pb_value(kv_api, &stream_id).await?;
+
+        if stream_meta_seq == 0 || stream_meta.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                UnknownStreamId::new(req.stream_id, context_msg),
+            )));
+        }
+
+        if req.seq.match_seq(stream_meta_seq).is_err() {
+            return Err(KVAppError::AppError(AppError::from(
+                StreamVersionMismatched::new(req.stream_id, req.seq, stream_meta_seq, context_msg),
+            )));
+        }
+
+        let mut new_stream_meta = stream_meta.unwrap();
+        new_stream_meta.options = req.options.clone();
+        new_stream_meta.updated_on = Utc::now();
+
+        txn_req
+            .condition
+            .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+        txn_req
+            .if_then
+            .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+    }
+    Ok(())
 }

@@ -28,7 +28,7 @@ pub struct ReclusterSink {
     pub input: Box<PhysicalPlan>,
 
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
 
     pub snapshot: Arc<TableSnapshot>,
     pub remained_blocks: Vec<Arc<BlockMeta>>,

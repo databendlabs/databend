@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,8 +30,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::AsyncSource;
-use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_sources::SyncSource;
+use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::CreateTablePlan;
@@ -56,7 +57,6 @@ pub struct TransformRecursiveCteSource {
     left_outputs: Vec<(IndexType, Option<Expr>)>,
     right_outputs: Vec<(IndexType, Option<Expr>)>,
 
-    executor: Option<PipelinePullingExecutor>,
     recursive_step: usize,
     cte_scan_tables: Vec<Arc<dyn Table>>,
 }
@@ -89,71 +89,85 @@ impl TransformRecursiveCteSource {
                 }
             })
             .collect::<Vec<_>>();
-        AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
+        SyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
             ctx,
             union_plan,
             left_outputs,
             right_outputs,
-            executor: None,
             recursive_step: 0,
             cte_scan_tables: vec![],
         })
     }
 
-    async fn build_union(&mut self) -> Result<()> {
-        if self.ctx.get_settings().get_max_cte_recursive_depth()? < self.recursive_step {
+    async fn execute_r_cte(
+        ctx: Arc<QueryContext>,
+        recursive_step: usize,
+        union_plan: UnionAll,
+    ) -> Result<(Vec<DataBlock>, Vec<Arc<dyn Table>>)> {
+        if ctx.get_settings().get_max_cte_recursive_depth()? < recursive_step {
             return Err(ErrorCode::Internal("Recursive depth is reached"));
         }
-        let plan = if self.recursive_step == 0 {
+        let mut cte_scan_tables = vec![];
+        let plan = if recursive_step == 0 {
             // Find all cte scan in the union right child plan, then create memory table for them.
-            create_memory_table_for_cte_scan(&self.ctx, &self.union_plan.right).await?;
+            create_memory_table_for_cte_scan(&ctx, &union_plan.right).await?;
             // Cache cte scan tables, avoid to get them from catalog every time.
-            for table_name in self.union_plan.cte_scan_names.iter() {
-                let table = self
-                    .ctx
+            for table_name in union_plan.cte_scan_names.iter() {
+                let table = ctx
                     .get_table(
-                        &self.ctx.get_current_catalog(),
-                        &self.ctx.get_current_database(),
+                        &ctx.get_current_catalog(),
+                        &ctx.get_current_database(),
                         table_name,
                     )
                     .await?;
-                self.cte_scan_tables.push(table);
+                cte_scan_tables.push(table);
             }
-            self.union_plan.left.clone()
+            union_plan.left.clone()
         } else {
-            self.union_plan.right.clone()
+            union_plan.right.clone()
         };
-        self.recursive_step += 1;
-        self.ctx.clear_runtime_filter();
-        let build_res = build_query_pipeline_without_render_result_set(&self.ctx, &plan).await?;
-        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+        ctx.clear_runtime_filter();
+        let build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-        self.ctx.set_executor(pulling_executor.get_inner())?;
-        self.executor = Some(pulling_executor);
-        Ok(())
+        ctx.set_executor(pulling_executor.get_inner())?;
+        Ok((
+            PullingExecutorStream::create(pulling_executor)?
+                .try_collect::<Vec<DataBlock>>()
+                .await?,
+            cte_scan_tables,
+        ))
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for TransformRecursiveCteSource {
+impl SyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
-    #[async_trait::unboxed_simple]
-    #[async_backtrace::framed]
-    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+    fn generate(&mut self) -> Result<Option<DataBlock>> {
         let mut res = None;
-        if self.executor.is_none() {
-            self.build_union().await?;
-        }
-        // Todo: improve here to make it streaming.
-        let data = PullingExecutorStream::create(self.executor.take().unwrap())?
-            .try_collect::<Vec<DataBlock>>()
-            .await?;
-        let mut data = if !data.is_empty() {
-            DataBlock::concat(&data)?
-        } else {
-            DataBlock::empty()
+        let mut data = DataBlock::empty();
+        match GlobalIORuntime::instance().block_on(Self::execute_r_cte(
+            self.ctx.clone(),
+            self.recursive_step,
+            self.union_plan.clone(),
+        )) {
+            Ok(res) => {
+                if !res.0.is_empty() {
+                    data = DataBlock::concat(&res.0)?;
+                }
+                if !res.1.is_empty() {
+                    self.cte_scan_tables = res.1;
+                }
+            }
+            Err(e) => {
+                return Err(ErrorCode::Internal(format!(
+                    "Failed to execute recursive cte: {:?}",
+                    e
+                )));
+            }
         };
+        self.recursive_step += 1;
 
         let row_size = data.num_rows();
         if row_size > 0 {
@@ -174,25 +188,32 @@ impl AsyncSource for TransformRecursiveCteSource {
             }
             res = Some(data);
         } else {
+            let ctx = self.ctx.clone();
+            let table_names = self.union_plan.cte_scan_names.clone();
             // Recursive end, remove all tables
-            for table in self.union_plan.cte_scan_names.iter() {
-                let drop_table_plan = DropTablePlan {
-                    if_exists: true,
-                    tenant: Tenant {
-                        tenant: self.ctx.get_tenant().tenant,
-                    },
-                    catalog: self.ctx.get_current_catalog(),
-                    database: self.ctx.get_current_database(),
-                    table: table.clone(),
-                    all: false,
-                };
-                let drop_table_interpreter =
-                    DropTableInterpreter::try_create(self.ctx.clone(), drop_table_plan)?;
-                let _ = drop_table_interpreter.execute2().await?;
-            }
+            let _ = GlobalIORuntime::instance().block_on(drop_tables(ctx, table_names));
         }
         Ok(res)
     }
+}
+
+async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result<()> {
+    for table_name in table_names {
+        let drop_table_plan = DropTablePlan {
+            if_exists: true,
+            tenant: Tenant {
+                tenant: ctx.get_tenant().tenant,
+            },
+            catalog: ctx.get_current_catalog(),
+            database: ctx.get_current_database(),
+            table: table_name.to_string(),
+            all: true,
+        };
+        let drop_table_interpreter =
+            DropTableInterpreter::try_create(ctx.clone(), drop_table_plan)?;
+        drop_table_interpreter.execute2().await?;
+    }
+    Ok(())
 }
 
 #[async_recursion::async_recursion]
@@ -314,6 +335,8 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::MergeInto(_)
         | PhysicalPlan::MergeIntoAppendNotMatched(_)
         | PhysicalPlan::MergeIntoAddRowNumber(_)
+        | PhysicalPlan::MergeIntoSplit(_)
+        | PhysicalPlan::MergeIntoManipulate(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::ReclusterSource(_)

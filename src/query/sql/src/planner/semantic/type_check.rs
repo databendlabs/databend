@@ -93,7 +93,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -3399,7 +3399,7 @@ impl<'a> TypeChecker<'a> {
                 ))
             })?;
 
-        let op = StageTable::get_op(&stage_info).map_err(|err| {
+        let op = init_stage_operator(&stage_info).map_err(|err| {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
         })?;
 
