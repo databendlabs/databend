@@ -21,6 +21,7 @@ INSERT INTO events VALUES
 	(2, 0, 10),
 	(2, 7, 20),
 	(2, 11, 30)
+	(3, 11, 30)
 ;
 
 statement ok
@@ -55,3 +56,9 @@ ORDER BY 1, 2 ASC
 2 1.0 10
 2 2.0 10
 2 3.0 10
+
+SELECT p.key, p.ts, e.value
+FROM 
+	probes p
+ASOF JOIN events e
+ON p.key = e.key AND p.ts >= e.begin ORDER BY 1, 2 ASC

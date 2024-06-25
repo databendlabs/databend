@@ -101,15 +101,16 @@ impl PhysicalPlanBuilder {
             right_column,
         )?;
         let mut ss_expr = s_expr.clone();
-        ss_expr.children[1] = Arc::new(window_plan);
+        ss_expr.children[0] = Arc::new(window_plan);
+        ss_expr.children[1] = Arc::new(s_expr.child(0)?.clone());
         let join_type = match join.join_type {
             JoinType::Asof => Ok(JoinType::Inner),
             JoinType::LeftAsof => Ok(JoinType::Left),
             JoinType::RightAsof => Ok(JoinType::Right),
             _ => Err(ErrorCode::Internal("unsupported join type!")),
         }?;
-        let left_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
+        let left_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
+        let right_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
         let right_required = required
             .1
