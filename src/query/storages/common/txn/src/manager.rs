@@ -91,13 +91,17 @@ impl TxnBuffer {
             .or_default()
             .extend(req.copied_files);
 
-        for stream_meta in req.update_stream_meta.iter() {
+        self.update_stream_metas(&req.update_stream_meta);
+
+        self.deduplicated_labels.extend(req.deduplicated_label);
+    }
+
+    fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
+        for stream_meta in reqs.iter() {
             self.update_stream_meta
                 .entry(stream_meta.stream_id)
                 .or_insert(stream_meta.clone());
         }
-
-        self.deduplicated_labels.extend(req.deduplicated_label);
     }
 }
 
@@ -153,6 +157,11 @@ impl TxnManager {
         self.txn_buffer.update_table_meta(req, table_info);
     }
 
+    pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
+        self.txn_buffer.update_stream_metas(reqs);
+    }
+
+    // for caching stream table to impl the rr semantics
     pub fn upsert_stream_table(&mut self, stream: TableInfo, source: TableInfo) {
         self.txn_buffer
             .stream_tables
