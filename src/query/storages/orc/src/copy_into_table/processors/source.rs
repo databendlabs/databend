@@ -64,9 +64,9 @@ impl ORCSourceForCopy {
             size: file.size as u64,
             path: file.path,
         };
-        let builder = ArrowReaderBuilder::try_new_async(file)
-            .await
-            .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+        let builder = ArrowReaderBuilder::try_new_async(file).await.map_err(|e| {
+            ErrorCode::StorageOther(format!("fail to read {}: {}", path, e.to_string()))
+        })?;
         let mut reader = builder.build_async();
         let factory = mem::take(&mut reader.factory).unwrap();
         let schema = reader.schema();
