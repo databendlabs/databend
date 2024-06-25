@@ -19,7 +19,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, LockResult, PoisonError};
+use std::sync::Arc;
+use std::sync::PoisonError;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
