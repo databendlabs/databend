@@ -137,18 +137,18 @@ impl Binder {
                 }
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
                     let name = &table.name;
-                    let err = match self.name_resolution_ctx.not_found_suggest(table) {
-                        NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
+                    let err_message = match self.name_resolution_ctx.not_found_suggest(table) {
+                        NameResolutionSuggest::Quoted => format!(
                             "Unknown table `{database}`.{name} (unquoted) in catalog '{catalog}'. Did you mean `{name}` (quoted)?",
-                        )),
-                        NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
+                        ),
+                        NameResolutionSuggest::Unqoted => format!(
                             "Unknown table `{database}`.`{name}` (quoted) in catalog '{catalog}'. Did you mean {name} (unquoted)?",
-                        )),
-                        NameResolutionSuggest::None => ErrorCode::UnknownTable(format!(
-                            "Unknown table `{database}`.`{name}` in catalog '{catalog}'"
-                        )),
+                        ),
+                        NameResolutionSuggest::None => {
+                            format!("Unknown table `{database}`.`{name}` in catalog '{catalog}'")
+                        }
                     };
-                    return Err(err.set_span(*span));
+                    return Err(ErrorCode::UnknownTable(err_message).set_span(*span));
                 }
                 return Err(e);
             }
