@@ -61,7 +61,7 @@ impl InputFormatCSV {
         column_index: usize,
         schema: &TableSchemaRef,
         default_values: &Option<Vec<RemoteExpr>>,
-        empty_filed_as: &EmptyFieldAs,
+        empty_field_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             match default_values {
@@ -72,7 +72,7 @@ impl InputFormatCSV {
                 Some(values) => {
                     let field = &schema.fields()[column_index];
                     // copy
-                    match empty_filed_as {
+                    match empty_field_as {
                         EmptyFieldAs::FieldDefault => {
                             input_ctx.push_default_value(values, builder, column_index)?;
                         }
@@ -82,7 +82,7 @@ impl InputFormatCSV {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
+                                    empty_field_as: empty_field_as.to_string(),
                                     remedy: format!(
                                         "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
                                         field.name()
@@ -110,7 +110,7 @@ impl InputFormatCSV {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
+                                    empty_field_as: empty_field_as.to_string(),
                                     remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
                                         .to_string(),
                                 });
@@ -135,7 +135,7 @@ impl InputFormatCSV {
         field_ends: &[usize],
         columns_to_read: &Option<Vec<usize>>,
         default_values: &Option<Vec<RemoteExpr>>,
-        empty_filed_as: &EmptyFieldAs,
+        empty_field_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = columns_to_read {
             for c in columns_to_read {
@@ -153,7 +153,7 @@ impl InputFormatCSV {
                         *c,
                         schema,
                         default_values,
-                        empty_filed_as,
+                        empty_field_as,
                     )?;
                 }
             }
@@ -170,7 +170,7 @@ impl InputFormatCSV {
                     c,
                     schema,
                     default_values,
-                    empty_filed_as,
+                    empty_field_as,
                 )?;
                 field_start = field_end;
             }

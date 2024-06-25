@@ -509,7 +509,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "Invalid option value. EMPTY_FILED_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
+                "Invalid option value. EMPTY_FIELD_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
