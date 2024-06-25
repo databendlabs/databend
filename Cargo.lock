@@ -4024,6 +4024,7 @@ dependencies = [
  "bytes",
  "chrono",
  "dashmap",
+ "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",

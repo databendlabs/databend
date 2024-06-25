@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
