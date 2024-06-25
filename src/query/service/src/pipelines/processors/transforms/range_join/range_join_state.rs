@@ -16,6 +16,7 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -65,10 +66,10 @@ pub struct RangeJoinState {
     pub(crate) ie_join_state: Option<IEJoinState>,
     pub(crate) join_type: JoinType,
     // A bool indicating for tuple in the LHS if they found a match (used in full outer join)
-    pub(crate) left_match: RwLock<Vec<bool>>,
+    pub(crate) left_match: RwLock<MutableBitmap>,
     // A bool indicating for tuple in the RHS if they found a match (used in full outer join)
-    pub(crate) right_match: RwLock<Vec<bool>>,
-    pub(crate) partition_count: RwLock<usize>,
+    pub(crate) right_match: RwLock<MutableBitmap>,
+    pub(crate) partition_count: AtomicU64,
 }
 
 impl RangeJoinState {
@@ -97,9 +98,9 @@ impl RangeJoinState {
             completed_pair: AtomicU64::new(0),
             ie_join_state,
             join_type: range_join.join_type.clone(),
-            left_match: RwLock::new(vec![]),
-            right_match: RwLock::new(vec![]),
-            partition_count: RwLock::new(0),
+            left_match: RwLock::new(MutableBitmap::new()),
+            right_match: RwLock::new(MutableBitmap::new()),
+            partition_count: AtomicU64::new(0),
         }
     }
 
@@ -284,8 +285,8 @@ impl RangeJoinState {
             right_offset = 0;
             left_offset += left_block.num_rows();
         }
-        let mut partition_count = self.partition_count.write();
-        *partition_count = tasks.len();
+        self.partition_count
+            .fetch_add(tasks.len().try_into().unwrap(), atomic::Ordering::SeqCst);
         // Add Fill task
         left_offset = 0;
         right_offset = 0;
@@ -295,8 +296,7 @@ impl RangeJoinState {
                 row_offset.push((left_offset, 0));
                 tasks.push((left_idx, 0));
                 left_offset += left_block.num_rows();
-                let bool_fill = vec![false; left_block.num_rows()];
-                left_match.extend(bool_fill.into_iter());
+                left_match.extend_constant(left_block.num_rows(), false);
             }
         }
         if matches!(self.join_type, JoinType::Right) {
@@ -305,8 +305,7 @@ impl RangeJoinState {
                 row_offset.push((0, right_offset));
                 tasks.push((0, right_idx));
                 right_offset += right_block.num_rows();
-                let bool_fill = vec![false; right_block.num_rows()];
-                right_match.extend(bool_fill.into_iter());
+                right_match.extend_constant(right_block.num_rows(), false);
             }
         }
         Ok(())

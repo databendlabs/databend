@@ -44,6 +44,7 @@ use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
+use crate::pipelines::processors::transforms::wrap_true_validity;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,
@@ -172,109 +173,19 @@ impl IEJoinState {
 
 impl RangeJoinState {
     pub fn ie_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
-        let partition_count = self.partition_count.read();
-        if task_id < *partition_count {
-            self.inner_join(task_id)
+        let partition_count = self.partition_count.load(Ordering::SeqCst) as usize;
+        if task_id < partition_count {
+            let blocks = self.inner_join(task_id);
+            self.completed_pair.fetch_add(1, Ordering::SeqCst);
+            blocks
         } else {
-            Ok(vec![self.fill_outer(task_id)?])
+            if !self.left_match.read().is_empty() {
+                return Ok(vec![self.fill_left_outer(task_id)?]);
+            } else if !self.right_match.read().is_empty() {
+                return Ok(vec![self.fill_right_outer(task_id)?]);
+            }
+            Ok(vec![DataBlock::empty()])
         }
-    }
-
-    pub fn fill_outer(&self, task_id: usize) -> Result<DataBlock> {
-        let partition_count = self.partition_count.read();
-        let mut completed_pair = self.completed_pair.load(Ordering::SeqCst) as usize;
-        while completed_pair < *partition_count {
-            std::thread::sleep(Duration::from_millis(20));
-            completed_pair = self.completed_pair.load(Ordering::SeqCst) as usize;
-        }
-
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let tasks = self.tasks.read();
-        let (left_idx, right_idx) = tasks[task_id];
-        let row_offset = self.row_offset.read();
-        let (left_offset, right_offset) = row_offset[task_id];
-        let left_table = self.left_table.read();
-        let right_table = self.right_table.read();
-        let mut indices = Vec::with_capacity(block_size);
-        let left_match = self.left_match.read();
-        let right_match = self.right_match.read();
-
-        if !left_match.is_empty() {
-            for (i, state) in left_match
-                .iter()
-                .enumerate()
-                .skip(left_offset - 1)
-                .take(left_table[left_idx].num_rows())
-            {
-                if !(*state) {
-                    indices.push((0u32, i as u32, 1usize));
-                }
-            }
-            if indices.is_empty() {
-                return Ok(DataBlock::empty());
-            }
-            let mut left_result_block = DataBlock::take_blocks(
-                &left_table[left_idx..left_idx + 1],
-                &indices,
-                indices.len(),
-            );
-            let nullable_columns = right_table[right_idx]
-                .columns()
-                .iter()
-                .map(|c| BlockEntry {
-                    value: Value::Scalar(Scalar::Null),
-                    data_type: c.data_type.clone(),
-                })
-                .collect::<Vec<_>>();
-            let right_result_block = DataBlock::new(nullable_columns, indices.len());
-            // Merge left_result_block and right_result_block
-            for col in right_result_block.columns() {
-                left_result_block.add_column(col.clone());
-            }
-            for filter in self.other_conditions.iter() {
-                left_result_block = filter_block(left_result_block, filter)?;
-            }
-            return Ok(left_result_block);
-        }
-
-        if !right_match.is_empty() {
-            for (i, state) in right_match
-                .iter()
-                .enumerate()
-                .skip(right_offset - 1)
-                .take(right_table[right_idx].num_rows())
-            {
-                if !(*state) {
-                    indices.push((0u32, i as u32, 1usize));
-                }
-            }
-            if indices.is_empty() {
-                return Ok(DataBlock::empty());
-            }
-            let nullable_columns = left_table[left_idx]
-                .columns()
-                .iter()
-                .map(|c| BlockEntry {
-                    value: Value::Scalar(Scalar::Null),
-                    data_type: c.data_type.clone(),
-                })
-                .collect::<Vec<_>>();
-            let mut left_result_block = DataBlock::new(nullable_columns, indices.len());
-            let right_result_block = DataBlock::take_blocks(
-                &right_table[right_idx..right_idx + 1],
-                &indices,
-                indices.len(),
-            );
-            // Merge left_result_block and right_result_block
-            for col in right_result_block.columns() {
-                left_result_block.add_column(col.clone());
-            }
-            for filter in self.other_conditions.iter() {
-                left_result_block = filter_block(left_result_block, filter)?;
-            }
-            return Ok(left_result_block);
-        }
-        Ok(DataBlock::empty())
     }
 
     pub fn inner_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
@@ -444,17 +355,11 @@ impl RangeJoinState {
                         unsafe { l1_index_column.index_unchecked(j) }
                     {
                         right_buffer.push((-right - 1) as usize - right_offset);
-                        if !right_match.is_empty() {
-                            right_match[(-right - 1) as usize] = true;
-                        }
                     }
                     if let ScalarRef::Number(NumberScalar::Int64(left)) =
                         unsafe { l1_index_column.index_unchecked(*p as usize) }
                     {
                         left_buffer.push((left - 1) as usize - left_offset);
-                        if !left_match.is_empty() {
-                            left_match[(left - 1) as usize] = true;
-                        }
                     }
                 }
                 j += 1;
