@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use opendal::Operator;
 
@@ -150,6 +151,9 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
+            FileFormatParams::Orc(_) => {
+                OrcTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
+            }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_)
                 if settings.get_enable_new_copy_for_text_formats()? == 1 =>
             {
@@ -180,6 +184,9 @@ impl Table for StageTable {
         match stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+            }
+            FileFormatParams::Orc(_) => {
+                OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_)
                 if settings.get_enable_new_copy_for_text_formats()? == 1 =>
