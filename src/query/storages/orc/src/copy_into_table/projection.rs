@@ -106,7 +106,8 @@ impl ProjectionFactory {
                         )?
                     } else {
                         return Err(ErrorCode::BadDataValueType(format!(
-                            "Cannot cast column {} from {:?} to {:?}",
+                            "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
+                            location,
                             field_name,
                             from_field.data_type(),
                             to_field.data_type()
