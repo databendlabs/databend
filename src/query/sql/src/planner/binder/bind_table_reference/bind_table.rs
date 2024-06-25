@@ -28,6 +28,7 @@ use databend_storages_common_table_meta::table::get_change_type;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::BindContext;
+use crate::NameResolutionSuggest;
 
 impl Binder {
     /// Bind a base table.
@@ -136,10 +137,19 @@ impl Binder {
                     .set_span(*span));
                 }
                 if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                    ))
-                    .set_span(*span));
+                    let name = &table.name;
+                    let err = match self.name_resolution_ctx.not_found_suggest(table) {
+                        NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
+                            "Unknown table `{database}`.{name}(unquoted) in catalog '{catalog}'. Did you mean `{name}`(quoted)?",
+                        )),
+                        NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
+                            "Unknown table `{database}`.`{name}`(quoted) in catalog '{catalog}'. Did you mean {name}(unquoted)?",
+                        )),
+                        NameResolutionSuggest::None => ErrorCode::UnknownTable(format!(
+                            "Unknown table `{database}`.`{name}` in catalog '{catalog}'"
+                        )),
+                    };
+                    return Err(err.set_span(*span));
                 }
                 return Err(e);
             }

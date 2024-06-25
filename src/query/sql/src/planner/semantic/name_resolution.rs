@@ -23,6 +23,35 @@ pub struct NameResolutionContext {
     pub deny_column_reference: bool,
 }
 
+pub enum NameResolutionSuggest {
+    None,
+    Quoted,
+    Unqoted,
+}
+
+impl NameResolutionContext {
+    pub fn not_found_suggest(&self, ident: &Identifier) -> NameResolutionSuggest {
+        match (
+            self.unquoted_ident_case_sensitive,
+            self.quoted_ident_case_sensitive,
+            ident.is_quoted(),
+        ) {
+            (false, true, false) => {
+                if ident.name.to_lowercase() != ident.name {
+                    return NameResolutionSuggest::Quoted;
+                }
+            }
+            (true, false, true) => {
+                if ident.name.to_lowercase() != ident.name {
+                    return NameResolutionSuggest::Unqoted;
+                }
+            }
+            (_, _, _) => (),
+        };
+        NameResolutionSuggest::None
+    }
+}
+
 impl Default for NameResolutionContext {
     fn default() -> Self {
         Self {

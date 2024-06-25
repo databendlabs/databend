@@ -35,6 +35,7 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
+use crate::NameResolutionSuggest;
 
 impl Binder {
     pub fn schema_project(
@@ -87,6 +88,8 @@ impl Binder {
             ..
         } = stmt;
 
+        let table_ident = table;
+
         self.init_cte(bind_context, with)?;
 
         let (catalog_name, database_name, table_name) =
@@ -94,7 +97,23 @@ impl Binder {
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
+            .await
+            .map_err(|err| {
+                if err.code() != ErrorCode::UNKNOWN_TABLE {
+                    return err;
+                }
+                let name = &table_ident.name;
+                match self.name_resolution_ctx.not_found_suggest(table_ident) {
+                    NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
+                        "Unknown table {name}(unquoted). Did you mean `{name}`(quoted)?",
+                    )),
+                    NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
+                        "Unknown table `{name}`(quoted). Did you mean {name}(unquoted)?",
+                    )),
+                    NameResolutionSuggest::None => err,
+                }
+            })?;
+
         let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
