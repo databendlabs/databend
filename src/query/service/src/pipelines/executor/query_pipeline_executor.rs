@@ -68,7 +68,7 @@ pub struct QueryPipelineExecutor {
     finished_notify: Arc<WatchNotify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
-    lock_guards: Vec<LockGuard>,
+    lock_guards: Vec<Arc<LockGuard>>,
 }
 
 impl QueryPipelineExecutor {
@@ -173,7 +173,7 @@ impl QueryPipelineExecutor {
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_chain: Mutex<FinishedCallbackChain>,
         settings: ExecutorSettings,
-        lock_guards: Vec<LockGuard>,
+        lock_guards: Vec<Arc<LockGuard>>,
     ) -> Result<Arc<QueryPipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = QueryExecutorTasksQueue::create(threads_num);

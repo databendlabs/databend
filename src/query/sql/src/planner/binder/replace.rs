@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -51,6 +52,18 @@ impl Binder {
 
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
+
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
 
         let table = self
             .ctx
@@ -172,6 +185,7 @@ impl Binder {
             schema,
             source: input_source?,
             delete_when: delete_when.clone(),
+            lock_guard,
         };
 
         Ok(Plan::Replace(Box::new(plan)))

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,7 +29,6 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -77,38 +77,34 @@ impl Interpreter for MergeIntoInterpreter {
         let merge_into: databend_common_sql::plans::MergeInto =
             self.s_expr.plan().clone().try_into()?;
 
-        // Acquire table lock before execution.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                &merge_into.catalog,
-                &merge_into.database,
-                &merge_into.table,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
         // Build physical plan.
         let physical_plan = self.build_physical_plan(&merge_into).await?;
 
         // Build pipeline.
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Execute hook.
         {
+            let hook_lock_opt = if merge_into.lock_guard.is_some() {
+                LockTableOption::NoLock
+            } else {
+                LockTableOption::LockNoRetry
+            };
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
                 merge_into.catalog.clone(),
                 merge_into.database.clone(),
                 merge_into.table.clone(),
                 MutationKind::MergeInto,
-                LockTableOption::NoLock,
+                hook_lock_opt,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }
+
+        build_res
+            .main_pipeline
+            .add_lock_guard(merge_into.lock_guard);
 
         Ok(build_res)
     }
