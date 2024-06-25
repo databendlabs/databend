@@ -1150,6 +1150,11 @@ impl<'a> TypeChecker<'a> {
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr)?;
+
+            if matches!(order, ScalarExpr::ConstantExpr(_)) {
+                continue;
+            }
+
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
