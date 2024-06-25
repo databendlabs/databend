@@ -17,6 +17,8 @@ use databend_common_exception::Result;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoSerialize;
+use super::physical_plans::MergeIntoShuffle;
 use super::physical_plans::MergeIntoSplit;
 use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
@@ -105,6 +107,8 @@ pub trait PhysicalPlanReplacer {
             }
             PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
             PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
+            PhysicalPlan::MergeIntoShuffle(plan) => self.replace_merge_into_shuffle(plan),
+            PhysicalPlan::MergeIntoSerialize(plan) => self.replace_merge_into_serialize(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
@@ -532,6 +536,24 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_merge_into_shuffle(&mut self, plan: &MergeIntoShuffle) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoShuffle(Box::new(MergeIntoShuffle {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_merge_into_serialize(&mut self, plan: &MergeIntoSerialize) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoSerialize(Box::new(
+            MergeIntoSerialize {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
@@ -746,6 +768,12 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoManipulate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoShuffle(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoSerialize(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

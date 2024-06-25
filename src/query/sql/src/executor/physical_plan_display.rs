@@ -20,6 +20,8 @@ use itertools::Itertools;
 
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoSerialize;
+use super::physical_plans::MergeIntoShuffle;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
@@ -115,6 +117,12 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
             PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
                 write!(f, "{}", merge_into_manipulate)?
+            }
+            PhysicalPlan::MergeIntoShuffle(merge_into_shuffle) => {
+                write!(f, "{}", merge_into_shuffle)?
+            }
+            PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
+                write!(f, "{}", merge_into_serialize)?
             }
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
@@ -541,6 +549,18 @@ impl Display for MergeIntoSplit {
 impl Display for MergeIntoManipulate {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoManipulate")
+    }
+}
+
+impl Display for MergeIntoShuffle {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoShuffle")
+    }
+}
+
+impl Display for MergeIntoSerialize {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoSerialize")
     }
 }
 

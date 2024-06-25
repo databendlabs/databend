@@ -24,7 +24,7 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::binder::MergeIntoType;
+use databend_common_sql::executor::physical_plans::MergeIntoOp;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
@@ -108,7 +108,14 @@ impl PipelineBuilder {
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
-            PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
+            PhysicalPlan::MergeInto(v)
+                if !matches!(
+                    v.merge_into_op,
+                    MergeIntoOp::DistributedFullOperation | MergeIntoOp::StandaloneFullOperation
+                ) =>
+            {
+                Ok(None)
+            }
 
             // hided plans in profile
             PhysicalPlan::Shuffle(_) => Ok(None),
@@ -190,14 +197,20 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
                 self.build_merge_into_append_not_matched(merge_into_append_not_matched)
             }
-            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => {
-                self.build_add_row_number(add_row_number)
+            PhysicalPlan::MergeIntoAddRowNumber(merge_into_add_row_number) => {
+                self.build_merge_into_add_row_number(merge_into_add_row_number)
             }
             PhysicalPlan::MergeIntoSplit(merge_into_split) => {
                 self.build_merge_into_split(merge_into_split)
             }
             PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
                 self.build_merge_into_manipulate(merge_into_manipulate)
+            }
+            PhysicalPlan::MergeIntoShuffle(merge_into_shuffle) => {
+                self.build_merge_into_shuffle(merge_into_shuffle)
+            }
+            PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
+                self.build_merge_into_serialize(merge_into_serialize)
             }
 
             // Commit.
