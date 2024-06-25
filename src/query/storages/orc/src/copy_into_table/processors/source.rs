@@ -28,43 +28,27 @@ use orc_rust::async_arrow_reader::StripeFactory;
 use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
+use crate::hashable_schema::HashableSchema;
 use crate::orc_file_partition::OrcFilePartition;
 use crate::strip::StripeInMemory;
 
-pub struct ORCSource {
+pub struct ORCSourceForCopy {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
-    pub(crate) reader: Option<(String, Box<StripeFactory<OrcChunkReader>>)>,
-
-    arrow_schema: arrow_schema::SchemaRef,
-    schema_from: String,
+    reader: Option<(String, Box<StripeFactory<OrcChunkReader>>, HashableSchema)>,
 }
 
-impl ORCSource {
+impl ORCSourceForCopy {
     pub fn try_create(
         output: Arc<OutputPort>,
         table_ctx: Arc<dyn TableContext>,
         op: Operator,
-        arrow_schema: arrow_schema::SchemaRef,
-        schema_from: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(table_ctx.clone(), output, ORCSource {
+        AsyncSourcer::create(table_ctx.clone(), output, ORCSourceForCopy {
             table_ctx,
             op,
             reader: None,
-            arrow_schema,
-            schema_from,
         })
-    }
-
-    fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
-        if self.arrow_schema.fields != arrow_schema.fields {
-            return Err(ErrorCode::TableSchemaMismatch(format!(
-                "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
-                self.schema_from, path, self.arrow_schema, arrow_schema
-            )));
-        }
-        Ok(())
     }
 
     async fn next_part(&mut self) -> Result<bool> {
@@ -86,16 +70,16 @@ impl ORCSource {
         let mut reader = builder.build_async();
         let factory = mem::take(&mut reader.factory).unwrap();
         let schema = reader.schema();
-        self.check_file_schema(schema, &path)?;
+        let schema = HashableSchema::try_create(schema)?;
 
-        self.reader = Some((path, factory));
+        self.reader = Some((path, factory, schema));
         Ok(true)
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for ORCSource {
-    const NAME: &'static str = "ORCSource";
+impl AsyncSource for ORCSourceForCopy {
+    const NAME: &'static str = "ORCSourceForCopy";
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
     #[async_trait::unboxed_simple]
@@ -105,7 +89,7 @@ impl AsyncSource for ORCSource {
             if self.reader.is_none() && !self.next_part().await? {
                 return Ok(None);
             }
-            if let Some((path, factory)) = mem::take(&mut self.reader) {
+            if let Some((path, factory, schema)) = mem::take(&mut self.reader) {
                 let (factory, stripe) = factory
                     .read_next_stripe()
                     .await
@@ -116,11 +100,11 @@ impl AsyncSource for ORCSource {
                         continue;
                     }
                     Some(stripe) => {
-                        self.reader = Some((path.clone(), Box::new(factory)));
+                        self.reader = Some((path.clone(), Box::new(factory), schema.clone()));
                         let meta = Box::new(StripeInMemory {
                             path,
                             stripe,
-                            schema: None,
+                            schema: Some(schema),
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }
