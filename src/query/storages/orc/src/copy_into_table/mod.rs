@@ -14,6 +14,7 @@
 
 mod projection;
 
+mod meta;
 mod processors;
 mod table;
 

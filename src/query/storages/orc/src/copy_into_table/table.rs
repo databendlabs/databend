@@ -30,9 +30,11 @@ use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_storage::init_stage_operator;
 
+use crate::copy_into_table::meta::read_metas_in_parallel_for_copy;
 use crate::copy_into_table::processors::decoder::StripeDecoderForCopy;
 use crate::copy_into_table::processors::source::ORCSourceForCopy;
 use crate::copy_into_table::projection::ProjectionFactory;
+use crate::orc_file_partition::OrcFilePartition;
 use crate::read_partition::read_partitions_simple;
 
 pub struct OrcTableForCopy {}
@@ -44,7 +46,21 @@ impl OrcTableForCopy {
         ctx: Arc<dyn TableContext>,
         _push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        read_partitions_simple(ctx, stage_table_info).await
+        let n = ctx.get_settings().get_max_threads()?;
+        let parts = read_partitions_simple(ctx.clone(), stage_table_info).await?;
+        let projections = Arc::new(ProjectionFactory::try_create(
+            ctx.clone(),
+            stage_table_info.schema.clone(),
+            stage_table_info.default_values.clone(),
+        )?);
+        let op = init_stage_operator(&stage_table_info.stage_info)?;
+        let mut files = vec![];
+        for part in &parts.1.partitions {
+            let file = OrcFilePartition::from_part(part)?.clone();
+            files.push((file.path, file.size as u64))
+        }
+        read_metas_in_parallel_for_copy(&op, &files, n as usize, &projections).await?;
+        Ok(parts)
     }
 
     pub fn do_read_data(
