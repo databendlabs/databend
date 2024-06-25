@@ -51,7 +51,7 @@ pub struct QueryWrapper {
     on_init_callback: Mutex<Option<InitCallback>>,
     on_finished_chain: Mutex<FinishedCallbackChain>,
     #[allow(unused)]
-    lock_guards: Vec<LockGuard>,
+    lock_guards: Vec<Arc<LockGuard>>,
     finish_condvar_wait: Arc<(Mutex<bool>, Condvar)>,
     finished_notify: Arc<WatchNotify>,
 }

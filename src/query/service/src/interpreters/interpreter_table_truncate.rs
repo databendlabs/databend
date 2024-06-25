@@ -14,10 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::interpreters::Interpreter;

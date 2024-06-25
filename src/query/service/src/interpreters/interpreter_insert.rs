@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -29,7 +30,6 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 use log::info;
