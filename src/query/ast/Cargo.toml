@@ -15,7 +15,6 @@ doctest = false
 ignored = ["geos"]
 
 [dependencies]
-rspack-codespan-reporting = "0.11"
 derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
@@ -31,6 +30,7 @@ ordered-float = { workspace = true }
 pratt = "0.4.0"
 pretty = "0.11.3"
 pretty_assertions = "1.3.0"
+rspack-codespan-reporting = "0.11"
 serde = { workspace = true }
 serde_json = { workspace = true }
 strsim = "0.10"
