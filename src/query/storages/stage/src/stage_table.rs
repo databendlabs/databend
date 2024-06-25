@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use opendal::Operator;
 
@@ -52,7 +53,7 @@ pub struct StageTable {
 impl StageTable {
     pub fn try_create(table_info: StageTableInfo) -> Result<Arc<dyn Table>> {
         let table_info_placeholder = TableInfo {
-            // `system.stage` is used to forbidden the user to select * from text files.
+            // `system.stage` is used to forbid the user to select * from text files.
             name: "stage".to_string(),
             ..Default::default()
         }
@@ -149,6 +150,10 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
+
+            FileFormatParams::Orc(_) => {
+                OrcTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
+            }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
                 self.read_partitions_simple(ctx, stage_table_info).await
             }
@@ -179,6 +184,9 @@ impl Table for StageTable {
         match stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
+            }
+            FileFormatParams::Orc(_) => {
+                OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
                 let compact_threshold = ctx.get_read_block_thresholds();

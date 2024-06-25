@@ -196,11 +196,8 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        let use_query = match &plan.stage_table_info.stage_info.file_format_params {
-            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error => true,
-            FileFormatParams::Orc(_) => true,
-            _ => false,
-        };
+        let use_query = matches!(&plan.stage_table_info.stage_info.file_format_params,
+            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error);
 
         if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
