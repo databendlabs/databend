@@ -101,10 +101,10 @@ impl Binder {
                     let name = &table_ident.name;
                     match self.name_resolution_ctx.not_found_suggest(table_ident) {
                         NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table {name}(unquoted). Did you mean `{name}`(quoted)?",
+                            "Unknown table {name} (unquoted). Did you mean `{name}` (quoted)?",
                         )),
                         NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table `{name}`(quoted). Did you mean {name}(unquoted)?",
+                            "Unknown table `{name}` (quoted). Did you mean {name} (unquoted)?",
                         )),
                         NameResolutionSuggest::None => err,
                     }

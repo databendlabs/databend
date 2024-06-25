@@ -139,10 +139,10 @@ impl Binder {
                     let name = &table.name;
                     let err = match self.name_resolution_ctx.not_found_suggest(table) {
                         NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table `{database}`.{name}(unquoted) in catalog '{catalog}'. Did you mean `{name}`(quoted)?",
+                            "Unknown table `{database}`.{name} (unquoted) in catalog '{catalog}'. Did you mean `{name}` (quoted)?",
                         )),
                         NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table `{database}`.`{name}`(quoted) in catalog '{catalog}'. Did you mean {name}(unquoted)?",
+                            "Unknown table `{database}`.`{name}` (quoted) in catalog '{catalog}'. Did you mean {name} (unquoted)?",
                         )),
                         NameResolutionSuggest::None => ErrorCode::UnknownTable(format!(
                             "Unknown table `{database}`.`{name}` in catalog '{catalog}'"
