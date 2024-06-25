@@ -17,8 +17,8 @@ use databend_common_exception::Result;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
@@ -538,10 +538,12 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_merge_into_organize(&mut self, plan: &MergeIntoOrganize) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+        Ok(PhysicalPlan::MergeIntoOrganize(Box::new(
+            MergeIntoOrganize {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
     }
 
     fn replace_merge_into_serialize(&mut self, plan: &MergeIntoSerialize) -> Result<PhysicalPlan> {

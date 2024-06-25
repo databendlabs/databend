@@ -20,8 +20,8 @@ use itertools::Itertools;
 
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;

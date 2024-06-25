@@ -23,8 +23,8 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
