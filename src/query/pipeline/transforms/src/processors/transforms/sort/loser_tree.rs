@@ -59,7 +59,7 @@ impl<T: Ord> LoserTree<T> {
             return;
         }
         let length = self.data.len();
-        self.tree = vec![None; length];
+        self.tree.fill(None);
         for i in 0..length {
             self.adjust(i)
         }
