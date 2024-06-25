@@ -43,7 +43,7 @@ error:
   --> SQL:1:1
   |
 1 | map(['k1','k2'], ['v1','v2','v3'])
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ key list has a different size from value list (2 keys, 3 values) while evaluating function `map(['k1', 'k2'], ['v1', 'v2', 'v3'])`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ key list has a different size from value list (2 keys, 3 values) while evaluating function `map(['k1', 'k2'], ['v1', 'v2', 'v3'])` in expr `map(array('k1', 'k2'), array('v1', 'v2', 'v3'))`
 
 
 
@@ -51,7 +51,7 @@ error:
   --> SQL:1:1
   |
 1 | map(['k1','k1'], ['v1','v2'])
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['k1', 'k1'], ['v1', 'v2'])`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ map keys have to be unique while evaluating function `map(['k1', 'k1'], ['v1', 'v2'])` in expr `map(array('k1', 'k1'), array('v1', 'v2'))`
 
 
 

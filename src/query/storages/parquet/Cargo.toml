@@ -28,6 +28,8 @@ databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -32,7 +34,7 @@ pub struct ReplaceInto {
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub segments: Vec<(usize, Location)>,
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,

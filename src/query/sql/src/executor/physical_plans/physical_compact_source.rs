@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
 use databend_common_expression::ColumnId;
@@ -24,6 +25,6 @@ pub struct CompactSource {
     pub plan_id: u32,
     pub parts: Partitions,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
+    pub catalog_info: Arc<CatalogInfo>,
     pub column_ids: HashSet<ColumnId>,
 }

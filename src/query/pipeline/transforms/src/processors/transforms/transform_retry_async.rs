@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use log::info;
 
 use super::AsyncTransform;
 
@@ -44,7 +45,10 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
 
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let strategy = self.t.retry_strategy();
-        for _ in 0..strategy.retry_times {
+        for i in 0..strategy.retry_times {
+            if i > 0 {
+                info!("Retry {} times for transform {}", i, Self::NAME);
+            }
             match self.t.transform(data.clone()).await {
                 Ok(v) => return Ok(v),
                 Err(e) => {

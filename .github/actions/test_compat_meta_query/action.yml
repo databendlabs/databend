@@ -1,4 +1,4 @@
-name: "Test old metasrv is compatible with new query"
+name: "Test old metasrv is compatible with new query; new meta is compatible with old query"
 description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
 inputs:
   target:

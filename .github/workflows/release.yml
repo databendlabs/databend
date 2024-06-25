@@ -603,7 +603,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   sqlsmith:
-    needs: [create_release, build_default]
+    needs: [create_release, notify]
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     steps:
       - uses: actions/checkout@v4
@@ -626,6 +626,33 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqlsmith
+
+  metachaos:
+    needs: [create_release, notify]
+    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: Download artifacts
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          category: default
+          artifacts: meta,metactl,metaverifier
+      - uses: ./.github/actions/io_delay_chaos
+        timeout-minutes: 20
+      - name: Notify failure
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          REPORT_WEBHOOK: ${{ secrets.META_REPORT_WEBHOOK }}
+          TITLE: Meta Service chaos tests failed
+        with:
+          script: |
+            const script = require('./.github/scripts/notify_failure.js')
+            await script({context, core})
 
   benchmark:
     needs: [create_release, docker_service, notify]

@@ -2,6 +2,9 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+set enable_merge_into_row_fetch = 0;
+
+statement ok
 DROP TABLE IF EXISTS employees2;
 
 statement ok

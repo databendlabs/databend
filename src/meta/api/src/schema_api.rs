@@ -91,6 +91,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -230,6 +231,8 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String, KVAppError>;
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>, MetaError>;
+
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -309,4 +312,9 @@ pub trait SchemaApi: Send + Sync {
     async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
+
+    async fn update_stream_metas(
+        &self,
+        update_stream_meta_reqs: &[UpdateStreamMetaReq],
+    ) -> Result<(), KVAppError>;
 }

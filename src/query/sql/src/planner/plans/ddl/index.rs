@@ -22,7 +22,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_types::MetaId;
 use databend_storages_common_table_meta::meta::Location;
 
-use crate::plans::LockTableOption;
 use crate::plans::Plan;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,5 +81,4 @@ pub struct RefreshTableIndexPlan {
     pub table: String,
     pub index_name: String,
     pub segment_locs: Option<Vec<Location>>,
-    pub lock_opt: LockTableOption,
 }

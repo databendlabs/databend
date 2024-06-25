@@ -357,14 +357,14 @@ impl NestedValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'[')?;
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b']') {
                 break;
             }
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut column.builder, reader)?;
         }
         column.commit_row();
@@ -382,14 +382,14 @@ impl NestedValues {
         let mut set = HashSet::new();
         let map_builder = column.builder.as_tuple_mut().unwrap();
         for idx in 0.. {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if reader.ignore_byte(b'}') {
                 break;
             }
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut map_builder[KEY], reader)?;
             // check duplicate map keys
             let key = map_builder[KEY].pop().unwrap();
@@ -400,9 +400,9 @@ impl NestedValues {
             }
             map_builder[KEY].push(key.as_ref());
             set.insert(key);
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             reader.must_ignore_byte(b':')?;
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(&mut map_builder[VALUE], reader)?;
         }
         column.commit_row();
@@ -416,11 +416,11 @@ impl NestedValues {
     ) -> Result<()> {
         reader.must_ignore_byte(b'(')?;
         for (idx, field) in fields.iter_mut().enumerate() {
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             if idx != 0 {
                 reader.must_ignore_byte(b',')?;
             }
-            let _ = reader.ignore_white_spaces();
+            let _ = reader.ignore_white_spaces_or_comments();
             self.read_field(field, reader)?;
         }
         reader.must_ignore_byte(b')')?;

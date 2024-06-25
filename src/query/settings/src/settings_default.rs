@@ -302,6 +302,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_merge_into_row_fetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable merge into row fetch optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_cte_recursive_depth", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Max recursive depth for recursive cte",
@@ -481,13 +487,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(20),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),

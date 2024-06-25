@@ -187,7 +187,8 @@ impl SubqueryRewriter {
             | RelOperator::CacheScan(_)
             | RelOperator::AddRowNumber(_)
             | RelOperator::Exchange(_)
-            | RelOperator::RecursiveCteScan(_) => Ok(s_expr.clone()),
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::MergeInto(_) => Ok(s_expr.clone()),
         }
     }
 
@@ -529,6 +530,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 }
                 .into();
                 Ok((
@@ -601,6 +603,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -633,6 +636,7 @@ impl SubqueryRewriter {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            is_null_equal: Vec::new(),
         }
         .into();
 

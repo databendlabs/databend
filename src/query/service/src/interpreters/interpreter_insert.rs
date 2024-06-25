@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -29,9 +30,9 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
@@ -210,6 +211,11 @@ impl Interpreter for InsertInterpreter {
                     }
                     _ => unreachable!(),
                 };
+
+                let explain_plan = select_plan
+                    .format(metadata.clone(), Default::default())?
+                    .format_pretty()?;
+                info!("Insert select plan: \n{}", explain_plan);
 
                 let update_stream_meta =
                     dml_build_update_stream_req(self.ctx.clone(), metadata).await?;

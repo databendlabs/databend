@@ -115,7 +115,7 @@ impl Processor for RowNumberAndLogSplitProcessor {
             Ok(Event::NeedConsume)
         } else {
             // 4. we can't pushed data ,so the down stream is not prepared or we have no data at all
-            // we need to make sure only when the all out_pudt_data are empty ,and we start to split
+            // we need to make sure only when the all output_data are empty ,and we start to split
             // datablock held by input_data
             if self.input_port.has_data() {
                 if self.output_data_row_number.is_none() && self.output_data_log.is_none() {

@@ -126,7 +126,7 @@ impl Plan {
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::MergeInto(merge_into) => format_merge_into(merge_into),
+            Plan::MergeInto { s_expr, .. } => format_merge_into(s_expr),
             Plan::Delete(delete) => format_delete(delete),
             Plan::Update(_) => Ok("Update".to_string()),
 
@@ -309,7 +309,8 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
     }
 }
 
-fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
+fn format_merge_into(s_expr: &SExpr) -> Result<String> {
+    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
         .meta_data

@@ -97,6 +97,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input.output_schema()?;
         let mut index = input_schema.num_fields();
         let mut udf_index_map = HashMap::new();
+
         let udf_funcs = udf
             .items
             .iter()

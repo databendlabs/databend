@@ -666,12 +666,16 @@ impl HashJoinBuildState {
         }
         *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
+        let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
         let mut valids = None;
         if build_keys
             .iter()
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
-            for (col, _) in build_keys.iter() {
+            for (index, (col, _)) in build_keys.iter().enumerate() {
+                if is_null_equal.contains(&index) {
+                    continue;
+                }
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
@@ -720,9 +724,11 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        for (col, ty) in build_keys.iter_mut() {
-            *col = col.remove_nullable();
-            *ty = ty.remove_nullable();
+        for (index, (col, ty)) in build_keys.iter_mut().enumerate() {
+            if !is_null_equal.contains(&index) {
+                *col = col.remove_nullable();
+                *ty = ty.remove_nullable();
+            }
         }
 
         match hashtable {

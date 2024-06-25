@@ -1,6 +1,12 @@
 control sortmode rowsort
 
 statement ok
+create or replace database db;
+
+statement ok
+use db;
+
+statement ok
 CREATE OR REPLACE TABLE emp (empno INTEGER,
                   ename VARCHAR,
 				  job VARCHAR,
@@ -98,7 +104,6 @@ SELECT * FROM ctename;
 7369 SMITH
 7566 JONES
 7902 FORD
-
 
 statement ok
 CREATE OR REPLACE VIEW ctenames AS (

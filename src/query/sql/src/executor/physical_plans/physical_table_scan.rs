@@ -578,7 +578,7 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub(crate) fn build_projection<'a>(
+    pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
         columns: impl Iterator<Item = &'a IndexType>,

@@ -16,9 +16,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -29,7 +32,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_storages_fuse::operations::ReclusterTasks;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -73,9 +75,7 @@ impl Interpreter for ReclusterTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let plan = &self.plan;
         let ctx = self.ctx.clone();
-        let settings = ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-        let recluster_timeout_secs = settings.get_recluster_timeout_secs()?;
+        let recluster_timeout_secs = ctx.get_settings().get_recluster_timeout_secs()?;
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
@@ -102,80 +102,46 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let tenant = self.ctx.get_tenant();
-
         let mut times = 0;
         let mut block_count = 0;
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
+        let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
-                    "execution of replace into statement aborted. server is shutting down or the query was killed. table: {}",
+                    "execution of recluster statement aborted. server is shutting down or the query was killed. table: {}",
                     plan.table,
                 );
                 return Err(err);
             }
 
-            // try add lock table.
-            let lock_guard = self
-                .ctx
-                .clone()
-                .acquire_table_lock(
-                    &self.plan.catalog,
-                    &self.plan.database,
-                    &self.plan.table,
-                    &LockTableOption::LockWithRetry,
-                )
-                .await?;
+            let res = self
+                .execute_recluster(catalog.clone(), extras.clone(), &mut block_count)
+                .await;
 
-            let table = catalog
-                .get_table(&tenant, &self.plan.database, &self.plan.table)
-                .await?;
-            // check mutability
-            table.check_mutable()?;
-
-            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let mutator = fuse_table
-                .build_recluster_mutator(ctx.clone(), extras.clone(), plan.limit)
-                .await?;
-            if mutator.is_none() {
-                break;
-            };
-
-            let mutator = mutator.unwrap();
-            if mutator.tasks.is_empty() {
-                break;
+            match res {
+                Ok(is_break) => {
+                    if is_break {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    if plan.is_final
+                        && matches!(
+                            e.code(),
+                            ErrorCode::TABLE_LOCK_EXPIRED
+                                | ErrorCode::TABLE_ALREADY_LOCKED
+                                | ErrorCode::TABLE_VERSION_MISMATCHED
+                                | ErrorCode::UNRESOLVABLE_CONFLICT
+                        )
+                    {
+                        warn!("Execute recluster error: {:?}", e);
+                    } else {
+                        return Err(e);
+                    }
+                }
             }
-            let is_distributed = mutator.is_distributed();
-            block_count += mutator.recluster_blocks_count;
-            let physical_plan = build_recluster_physical_plan(
-                mutator.tasks,
-                table.get_table_info().clone(),
-                catalog.info(),
-                mutator.snapshot,
-                is_distributed,
-            )?;
-
-            let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            assert!(build_res.main_pipeline.is_complete_pipeline()?);
-            build_res.set_max_threads(max_threads);
-
-            let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-
-            let mut pipelines = build_res.sources_pipelines;
-            pipelines.push(build_res.main_pipeline);
-
-            let complete_executor =
-                PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-            ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute()?;
-            // make sure the executor is dropped before the next loop.
-            drop(complete_executor);
-            // make sure the lock guard is dropped before the next loop.
-            drop(lock_guard);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
@@ -215,10 +181,83 @@ impl Interpreter for ReclusterTableInterpreter {
     }
 }
 
+impl ReclusterTableInterpreter {
+    async fn execute_recluster(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        extras: Option<PushDownInfo>,
+        block_count: &mut u64,
+    ) -> Result<bool> {
+        let tenant = self.ctx.get_tenant();
+        // try add lock table.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
+        let table = catalog
+            .get_table(&tenant, &self.plan.database, &self.plan.table)
+            .await?;
+        // check mutability
+        table.check_mutable()?;
+
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let mutator = fuse_table
+            .build_recluster_mutator(self.ctx.clone(), extras.clone(), self.plan.limit)
+            .await?;
+        if mutator.is_none() {
+            return Ok(true);
+        };
+
+        let mutator = mutator.unwrap();
+        if mutator.tasks.is_empty() {
+            return Ok(true);
+        }
+        let is_distributed = mutator.is_distributed();
+        *block_count += mutator.recluster_blocks_count;
+        let physical_plan = build_recluster_physical_plan(
+            mutator.tasks,
+            table.get_table_info().clone(),
+            catalog.info(),
+            mutator.snapshot,
+            is_distributed,
+        )?;
+
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        assert!(build_res.main_pipeline.is_complete_pipeline()?);
+
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        build_res.set_max_threads(max_threads);
+
+        let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+
+        let complete_executor =
+            PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+        self.ctx.set_executor(complete_executor.get_inner())?;
+        complete_executor.execute()?;
+        // make sure the executor is dropped before the next loop.
+        drop(complete_executor);
+        // make sure the lock guard is dropped before the next loop.
+        drop(lock_guard);
+
+        Ok(false)
+    }
+}
+
 pub fn build_recluster_physical_plan(
     tasks: ReclusterTasks,
     table_info: TableInfo,
-    catalog_info: CatalogInfo,
+    catalog_info: Arc<CatalogInfo>,
     snapshot: Arc<TableSnapshot>,
     is_distributed: bool,
 ) -> Result<PhysicalPlan> {

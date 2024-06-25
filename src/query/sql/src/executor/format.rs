@@ -24,17 +24,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
-use super::physical_plans::CacheScan;
-use super::physical_plans::ExpressionScan;
-use super::physical_plans::MergeInto;
-use super::physical_plans::MergeIntoAddRowNumber;
-use super::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
@@ -45,11 +41,17 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
+use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoAddRowNumber;
+use crate::executor::physical_plans::MergeIntoAppendNotMatched;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -251,6 +253,10 @@ fn to_format_tree(
         PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
             format_merge_into_append_not_matched(plan, metadata, profs)
         }
+        PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
+        PhysicalPlan::MergeIntoManipulate(plan) => {
+            format_merge_into_manipulate(plan, metadata, profs)
+        }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
             Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
@@ -401,6 +407,30 @@ fn format_merge_into_append_not_matched(
     let child = to_format_tree(&plan.input, metadata, profs)?;
     Ok(FormatTreeNode::with_children(
         "MergeIntoAppendNotMatched".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_split(
+    plan: &MergeIntoSplit,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoSplit".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_manipulate(
+    plan: &MergeIntoManipulate,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoManipulate".to_string(),
         vec![child],
     ))
 }
@@ -1202,8 +1232,8 @@ fn union_all_to_format_tree(
         to_format_tree(&plan.right, metadata, profs)?,
     ]);
 
-    let root = if let Some(cte_name) = &plan.cte_name {
-        format!("UnionAll(recursive cte: {:?})", cte_name)
+    let root = if !plan.cte_scan_names.is_empty() {
+        "UnionAll(recursive cte)".to_string()
     } else {
         "UnionAll".to_string()
     };
