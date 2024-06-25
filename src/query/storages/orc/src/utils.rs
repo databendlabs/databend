@@ -15,5 +15,5 @@
 use databend_common_exception::ErrorCode;
 use orc_rust::error::OrcError;
 pub fn map_orc_error(e: OrcError, path: &str) -> ErrorCode {
-    ErrorCode::BadBytes(format!("fail to read {}: {}", path, e))
+    ErrorCode::BadBytes(format!("fail to read {}: {:?}", path, e))
 }
