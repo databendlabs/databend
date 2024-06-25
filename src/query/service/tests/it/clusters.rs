@@ -36,6 +36,9 @@ async fn test_single_cluster_discovery() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_remove_invalid_nodes() -> Result<()> {
+    let config = ConfigBuilder::create().build();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
     let config_1 = ConfigBuilder::create()
         .query_flight_address("invalid_address_1")
         .build();

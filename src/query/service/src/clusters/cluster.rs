@@ -501,6 +501,7 @@ impl ClusterHeartbeat {
     }
 
     async fn get_license_key(&mut self) -> Result<String, ErrorCode> {
+        // We must get the license key from settings. It may be in the configuration file.
         let settings = Settings::create(Tenant::new_literal(&self.tenant_id));
         settings.load_changes().await?;
         unsafe { settings.get_enterprise_license() }
