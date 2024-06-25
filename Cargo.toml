@@ -229,7 +229,6 @@ bytes = "1.5.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
-codespan-reporting = "0.11"
 criterion = "0.5"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
@@ -398,6 +397,3 @@ openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev =
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
-# TODO: Use the version from crates.io once
-# https://github.com/brendanzab/codespan/pull/331 is released.
-codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }

@@ -15,7 +15,7 @@ doctest = false
 ignored = ["geos"]
 
 [dependencies]
-codespan-reporting = { workspace = true }
+rspack-codespan-reporting = "0.11"
 derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
