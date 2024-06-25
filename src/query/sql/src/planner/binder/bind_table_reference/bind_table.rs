@@ -131,8 +131,7 @@ impl Binder {
                 }
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     return Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database `{}` in catalog '{catalog}'",
-                        database
+                        "Unknown database `{database}` in catalog '{catalog}'",
                     ))
                     .set_span(*span));
                 }

@@ -81,37 +81,35 @@ impl Binder {
             with,
             catalog,
             database,
-            table,
+            table: table_ident,
             columns,
             source,
             overwrite,
             ..
         } = stmt;
 
-        let table_ident = table;
-
         self.init_cte(bind_context, with)?;
 
         let (catalog_name, database_name, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+            self.normalize_object_identifier_triple(catalog, database, table_ident);
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await
             .map_err(|err| {
-                if err.code() != ErrorCode::UNKNOWN_TABLE {
-                    return err;
+                if err.code() == ErrorCode::UNKNOWN_TABLE {
+                    let name = &table_ident.name;
+                    match self.name_resolution_ctx.not_found_suggest(table_ident) {
+                        NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
+                            "Unknown table {name}(unquoted). Did you mean `{name}`(quoted)?",
+                        )),
+                        NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
+                            "Unknown table `{name}`(quoted). Did you mean {name}(unquoted)?",
+                        )),
+                        NameResolutionSuggest::None => err,
+                    }
                 }
-                let name = &table_ident.name;
-                match self.name_resolution_ctx.not_found_suggest(table_ident) {
-                    NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
-                        "Unknown table {name}(unquoted). Did you mean `{name}`(quoted)?",
-                    )),
-                    NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
-                        "Unknown table `{name}`(quoted). Did you mean {name}(unquoted)?",
-                    )),
-                    NameResolutionSuggest::None => err,
-                }
+                err
             })?;
 
         let schema = self.schema_project(&table.schema(), columns)?;
