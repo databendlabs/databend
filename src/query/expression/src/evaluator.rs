@@ -170,7 +170,7 @@ impl<'a> Evaluator<'a> {
                 self.eval_and_filters(args, validity, options)
             }
 
-            f @ Expr::FunctionCall {
+            Expr::FunctionCall {
                 span,
                 id,
                 function,
@@ -217,7 +217,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
-                    &f.sql_display(),
+                    &expr.sql_display(),
                     options.selection,
                 )?;
 
@@ -1284,8 +1284,7 @@ impl<'a> Evaluator<'a> {
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
-
-            f @ Expr::FunctionCall {
+            Expr::FunctionCall {
                 span,
                 id,
                 function,
@@ -1335,7 +1334,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
-                    &f.sql_display(),
+                    &expr.sql_display(),
                     options.selection,
                 )?;
 

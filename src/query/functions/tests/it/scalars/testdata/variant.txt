@@ -11,7 +11,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('nuLL')
-  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')`
+  | ^^^^^^^^^^^^^^^^^^ expected ident, pos 3 while evaluating function `parse_json('nuLL')` in expr `parse_json('nuLL')`
 
 
 
@@ -28,7 +28,7 @@ error:
   --> SQL:1:1
   |
 1 | parse_json('  ')
-  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')`
+  | ^^^^^^^^^^^^^^^^ EOF while parsing a value, pos 2 while evaluating function `parse_json('  ')` in expr `parse_json('  ')`
 
 
 
@@ -1532,7 +1532,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('123')` in expr `to_boolean(parse_json('123'))`
 
 
 
@@ -1540,7 +1540,7 @@ error:
   --> SQL:1:1
   |
 1 | to_boolean(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ InvalidCast while evaluating function `to_boolean('"abc"')` in expr `to_boolean(parse_json('"abc"'))`
 
 
 
@@ -1557,7 +1557,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('-123'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('-123')` in expr `to_uint64(parse_json('-123'))`
 
 
 
@@ -1565,7 +1565,7 @@ error:
   --> SQL:1:1
   |
 1 | to_uint64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type UInt64 while evaluating function `to_uint64('"abc"')` in expr `to_uint64(parse_json('"abc"'))`
 
 
 
@@ -1591,7 +1591,7 @@ error:
   --> SQL:1:1
   |
 1 | to_int64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Int64 while evaluating function `to_int64('"abc"')` in expr `to_int64(parse_json('"abc"'))`
 
 
 
@@ -1608,7 +1608,7 @@ error:
   --> SQL:1:1
   |
 1 | to_float64(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type Float64 while evaluating function `to_float64('"abc"')` in expr `to_float64(parse_json('"abc"'))`
 
 
 
@@ -1625,7 +1625,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
 
 
@@ -1642,7 +1642,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('"abc"')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
 
 
@@ -2191,7 +2191,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object('k1', 1, 'k1')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object('k1', 1, 'k1')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object('k1', 1, 'k1')` in expr `json_object('k1', 1, 'k1')`
 
 
 
@@ -2199,7 +2199,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object('k1', 1, 'k1', 2)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object('k1', 1, 'k1', 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object('k1', 1, 'k1', 2)` in expr `json_object('k1', 1, 'k1', 2)`
 
 
 
@@ -2207,7 +2207,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object(1, 'k1', 2, 'k2')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object(1, 'k1', 2, 'k2')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object(1, 'k1', 2, 'k2')` in expr `json_object(1, 'k1', 2, 'k2')`
 
 
 
@@ -2348,7 +2348,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null('k1', 1, 'k1')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object_keep_null('k1', 1, 'k1')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ The number of keys and values must be equal while evaluating function `json_object_keep_null('k1', 1, 'k1')` in expr `json_object_keep_null('k1', 1, 'k1')`
 
 
 
@@ -2356,7 +2356,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null('k1', 1, 'k1', 2)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object_keep_null('k1', 1, 'k1', 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Keys have to be unique while evaluating function `json_object_keep_null('k1', 1, 'k1', 2)` in expr `json_object_keep_null('k1', 1, 'k1', 2)`
 
 
 
@@ -2364,7 +2364,7 @@ error:
   --> SQL:1:1
   |
 1 | json_object_keep_null(1, 'k1', 2, 'k2')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object_keep_null(1, 'k1', 2, 'k2')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Key must be a string value while evaluating function `json_object_keep_null(1, 'k1', 2, 'k2')` in expr `json_object_keep_null(1, 'k1', 2, 'k2')`
 
 
 
@@ -3300,7 +3300,7 @@ error:
   --> SQL:1:28
   |
 1 | parse_json('[10, 20, 30]') #> '1'
-  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')`
+  |                            ^^ InvalidKeyPath while evaluating function `get_by_keypath('[10,20,30]', '1')` in expr `get_by_keypath(parse_json('[10, 20, 30]'), '1')`
 
 
 
@@ -4593,7 +4593,7 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - '1'
-  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', '1')` in expr `parse_json('true') - '1'`
 
 
 
@@ -4664,7 +4664,7 @@ error:
   --> SQL:1:20
   |
 1 | parse_json('true') - 1
-  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)`
+  |                    ^ InvalidJsonType while evaluating function `minus('true', 1)` in expr `parse_json('true') - to_int32(1)`
 
 
 
