@@ -96,20 +96,20 @@ impl Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await
-            .map_err(|err| {
-                if err.code() == ErrorCode::UNKNOWN_TABLE {
+            .map_err(|err| match err.code() {
+                _ => err,
+                ErrorCode::UNKNOWN_TABLE => {
                     let name = &table_ident.name;
                     match self.name_resolution_ctx.not_found_suggest(table_ident) {
+                        NameResolutionSuggest::None => err,
                         NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
                             "Unknown table {name} (unquoted). Did you mean `{name}` (quoted)?",
                         )),
                         NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
                             "Unknown table `{name}` (quoted). Did you mean {name} (unquoted)?",
                         )),
-                        NameResolutionSuggest::None => err,
                     }
                 }
-                err
             })?;
 
         let schema = self.schema_project(&table.schema(), columns)?;
