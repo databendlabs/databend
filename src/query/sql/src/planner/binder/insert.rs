@@ -97,7 +97,6 @@ impl Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await
             .map_err(|err| match err.code() {
-                _ => err,
                 ErrorCode::UNKNOWN_TABLE => {
                     let name = &table_ident.name;
                     match self.name_resolution_ctx.not_found_suggest(table_ident) {
@@ -110,6 +109,7 @@ impl Binder {
                         )),
                     }
                 }
+                _ => err,
             })?;
 
         let schema = self.schema_project(&table.schema(), columns)?;
