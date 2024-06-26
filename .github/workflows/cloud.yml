@@ -14,7 +14,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: gcp
+  RUNNER_PROVIDER: aws
 
 jobs:
   info:
@@ -45,7 +45,7 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     strategy:
       matrix:
         include:
@@ -69,7 +69,7 @@ jobs:
   docker:
     needs: [info, build]
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -132,5 +132,5 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: gcp
+      runner_provider: aws
       target: ${{ needs.info.outputs.target }}
