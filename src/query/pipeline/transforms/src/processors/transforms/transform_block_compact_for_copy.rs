@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use tokio::time::Instant;
 
 use super::Compactor;
 
@@ -95,8 +96,17 @@ impl Compactor for BlockCompactorForCopy {
                 .thresholds
                 .check_large_enough(accumulated_rows_new, accumulated_bytes_new)
             {
+                let start = Instant::now();
+                let n = blocks.len();
                 // avoid call concat_blocks for each new block
                 let merged = DataBlock::concat(blocks)?;
+                log::info!(
+                    "concat {} blocks ({} rows, {} bytes ) using {} secs",
+                    n,
+                    self.accumulated_rows,
+                    self.accumulated_bytes,
+                    start.elapsed().as_secs_f32()
+                );
                 blocks.clear();
                 self.accumulated_rows = 0;
                 self.accumulated_bytes = 0;

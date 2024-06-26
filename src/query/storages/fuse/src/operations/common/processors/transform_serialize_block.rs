@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::table::Table;
@@ -279,6 +280,8 @@ impl Processor for TransformSerializeBlock {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
 
+                let start = Instant::now();
+                let rows = block.num_rows();
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
@@ -290,6 +293,12 @@ impl Processor for TransformSerializeBlock {
                             }
                         })?;
 
+                log::info!(
+                    "serialize block of {} rows to {} bytes use {} secs",
+                    rows,
+                    serialized.size,
+                    start.elapsed().as_secs_f32()
+                );
                 self.state = State::Serialized { serialized, index };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
