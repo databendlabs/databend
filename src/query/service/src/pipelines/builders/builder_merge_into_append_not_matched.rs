@@ -66,11 +66,9 @@ impl PipelineBuilder {
                 })?;
         }
 
-        let tbl = self.ctx.build_table_by_table_info(
-            &merge_into_append_not_macted.catalog_info,
-            &merge_into_append_not_macted.table_info,
-            None,
-        )?;
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(&merge_into_append_not_macted.table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
         let cluster_stats_gen =

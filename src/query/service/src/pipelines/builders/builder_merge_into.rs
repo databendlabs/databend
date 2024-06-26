@@ -79,10 +79,9 @@ impl PipelineBuilder {
     pub(crate) fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
         self.build_pipeline(&merge_into.input)?;
 
-        let tbl = self.ctx.build_table_by_table_info(
-            &merge_into.table_info,
-            None,
-        )?;
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(&merge_into.table_info, None)?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();

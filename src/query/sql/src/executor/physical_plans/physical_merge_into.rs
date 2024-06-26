@@ -402,7 +402,6 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             input: Box::new(plan),
             table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
             unmatched: unmatched.clone(),
             segments: segments.clone(),
             distributed: *distributed,
