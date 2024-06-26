@@ -87,11 +87,12 @@ impl AccumulatingTransform for StripeDecoderForCopy {
         let projection = self.projections.get(&schema, &stripe.path)?;
         let start = Instant::now();
 
-        let decoder = NaiveStripeDecoder::new(stripe.stripe, schema.arrow_schema.clone(), 8192)
+        let decoder = NaiveStripeDecoder::new(stripe.stripe, schema.arrow_schema.clone(), 100000)
             .map_err(|e| map_orc_error(e, &stripe.path))?;
         let batches: Result<Vec<RecordBatch>, _> = decoder.into_iter().collect();
         let batches = batches.map_err(|e| map_orc_error(e, &stripe.path))?;
         let mut blocks = vec![];
+        let mut rows = 0;
         for batch in batches {
             let (block, _) = DataBlock::from_record_batch(schema.data_schema.as_ref(), &batch)?;
             let block = self.project(block, &projection)?;
@@ -101,11 +102,13 @@ impl AccumulatingTransform for StripeDecoderForCopy {
                     error: None,
                 })
             }
+            rows += blocks.len();
             blocks.push(block);
         }
         log::info!(
-            "decode {} blocks use {} secs",
+            "decode {} blocks {} rows use {} secs",
             blocks.len(),
+            rows,
             start.elapsed().as_secs_f32()
         );
         Ok(blocks)

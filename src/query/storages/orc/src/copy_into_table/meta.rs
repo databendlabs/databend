@@ -34,6 +34,11 @@ pub async fn read_metas_in_parallel_for_copy(
     if file_infos.is_empty() {
         return Ok(());
     }
+    if num_threads > 0 {
+        // not let it run
+        return Ok(());
+        return;
+    }
     let num_files = file_infos.len();
 
     let mut tasks = Vec::with_capacity(num_threads);
