@@ -339,6 +339,7 @@ impl<'a> SelectRewriter<'a> {
                     name,
                     args,
                     params: vec![],
+                    window_ignore_null: None,
                     window: None,
                     lambda: None,
                 },

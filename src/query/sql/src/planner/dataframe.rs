@@ -182,6 +182,7 @@ impl Dataframe {
                     name: Identifier::from_name(None, "count"),
                     args: vec![],
                     params: vec![],
+                    window_ignore_null: None,
                     window: None,
                     lambda: None,
                 },

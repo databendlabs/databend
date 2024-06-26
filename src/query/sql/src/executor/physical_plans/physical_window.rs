@@ -130,6 +130,7 @@ pub struct LagLeadFunctionDesc {
     pub arg: usize,
     pub return_type: DataType,
     pub default: LagLeadDefault,
+    pub ignore_null: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -137,6 +138,7 @@ pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
     pub arg: usize,
     pub return_type: DataType,
+    pub ignore_null: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -303,6 +305,7 @@ impl PhysicalPlanBuilder {
                         ))
                     }?,
                     default: new_default,
+                    ignore_null: lag_lead.ignore_null,
                 })
             }
 
@@ -316,6 +319,7 @@ impl PhysicalPlanBuilder {
                         "Window's nth_value function argument must be a BoundColumnRef".to_string(),
                     ))
                 }?,
+                ignore_null: func.ignore_null,
             }),
             WindowFuncType::Ntile(func) => WindowFunction::Ntile(NtileFunctionDesc {
                 n: func.n,

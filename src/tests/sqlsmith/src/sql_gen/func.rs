@@ -58,6 +58,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             func_sig.args_type,
             None,
             None,
+            None,
         )
     }
 
@@ -361,7 +362,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         };
 
-        self.gen_func(name, params, args_type, None, None)
+        self.gen_func(name, params, args_type, None, None, None)
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
@@ -574,7 +575,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.gen_window()
         };
 
-        self.gen_func(name, params, args_type, window, None)
+        self.gen_func(name, params, args_type, None, window, None)
     }
 
     pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
@@ -589,12 +590,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     vec![]
                 };
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                self.gen_func(name.to_string(), vec![], args_type, None, window, None)
             }
             DataType::Number(NumberDataType::Float64) => {
                 let float = ["percent_rank", "cume_dist"];
                 let name = float[self.rng.gen_range(0..=1)].to_string();
-                self.gen_func(name, vec![], vec![], window, None)
+                self.gen_func(name, vec![], vec![], None, window, None)
             }
             _ => {
                 let name = [
@@ -614,7 +615,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     vec![ty]
                 };
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                let ignore_null = [Some(true), Some(false)];
+                let ignore_null = ignore_null[self.rng.gen_range(0..=1)];
+                self.gen_func(
+                    name.to_string(),
+                    vec![],
+                    args_type,
+                    ignore_null,
+                    window,
+                    None,
+                )
             }
         }
     }
@@ -718,7 +728,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         self.bound_columns = current_bound_columns;
         self.is_join = current_is_join;
 
-        self.gen_func(name, vec![], args_type, None, Some(lambda))
+        self.gen_func(name, vec![], args_type, None, None, Some(lambda))
     }
 
     fn gen_func(
@@ -726,6 +736,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         name: String,
         params: Vec<Literal>,
         args_type: Vec<DataType>,
+        window_ignore_null: Option<bool>,
         window: Option<Window>,
         lambda: Option<Lambda>,
     ) -> Expr {
@@ -772,6 +783,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 name,
                 args,
                 params,
+                window_ignore_null,
                 window,
                 lambda,
             },

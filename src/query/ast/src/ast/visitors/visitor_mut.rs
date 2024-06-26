@@ -241,6 +241,7 @@ pub trait VisitorMut: Sized {
         _name: &mut Identifier,
         args: &mut Vec<Expr>,
         params: &mut Vec<Expr>,
+        _window_respect_null: &mut Option<bool>,
         over: &mut Option<Window>,
         lambda: &mut Option<Lambda>,
     ) {

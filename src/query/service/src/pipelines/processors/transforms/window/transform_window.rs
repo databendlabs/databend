@@ -562,6 +562,8 @@ impl<T: Number> TransformWindow<T> {
                     let value = &block.get_by_offset(ll.arg).value;
                     value.index(self.frame_start.row).unwrap().to_owned()
                 };
+                // TODO: ignore null should do some processing
+                if ll.ignore_null {}
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
@@ -592,6 +594,8 @@ impl<T: Number> TransformWindow<T> {
                     let col = block.get_by_offset(func.arg).to_column(block.num_rows());
                     col.index(cur.row).unwrap().to_owned()
                 };
+                // TODO: ignore null should do some processing
+                if func.ignore_null {}
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
             }

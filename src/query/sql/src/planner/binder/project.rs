@@ -495,6 +495,7 @@ impl Binder {
                     lambda: lambda.cloned(),
                     distinct: false,
                     params: vec![],
+                    window_ignore_null: None,
                     window: None,
                 },
             };

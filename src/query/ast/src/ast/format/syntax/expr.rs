@@ -252,6 +252,7 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 distinct,
                 args,
                 params,
+                window_ignore_null,
                 window,
                 lambda,
             } = func;
@@ -295,9 +296,18 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 })
                 .append(RcDoc::text(")"))
                 .append(if let Some(window) = window {
-                    RcDoc::text(" OVER (")
-                        .append(RcDoc::text(window.to_string()))
-                        .append(")")
+                    if let Some(ignore_null) = window_ignore_null {
+                        if ignore_null {
+                            RcDoc::text(" IGNORE NULLS ")
+                        } else {
+                            RcDoc::text(" RESPECT NULLS ")
+                        }
+                        .append("OVER (")
+                    } else {
+                        RcDoc::text(" OVER (")
+                    }
+                    .append(RcDoc::text(window.to_string()))
+                    .append(")")
                 } else {
                     RcDoc::nil()
                 })

@@ -448,6 +448,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         name: &'ast Identifier,
         args: &'ast [Expr],
         params: &'ast [Expr],
+        _window_respect_null: &'ast Option<bool>,
         _over: &'ast Option<Window>,
         _lambda: &'ast Option<Lambda>,
     ) {

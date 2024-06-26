@@ -420,6 +420,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(*span, "array_distinct"),
                             args: vec![array_expr],
                             params: vec![],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                             distinct: false,
@@ -434,6 +435,7 @@ impl<'a> TypeChecker<'a> {
                                 name: Identifier::from_name(*span, "contains"),
                                 args: args.iter().copied().cloned().collect(),
                                 params: vec![],
+                                window_ignore_null: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -681,6 +683,7 @@ impl<'a> TypeChecker<'a> {
                                     name: Identifier::from_name(*span, "eq"),
                                     args: vec![*operand.clone(), c.clone()],
                                     params: vec![],
+                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -730,6 +733,7 @@ impl<'a> TypeChecker<'a> {
                         name,
                         args,
                         params,
+                        window_ignore_null,
                         window,
                         lambda,
                     },
@@ -842,7 +846,12 @@ impl<'a> TypeChecker<'a> {
                         ))
                         .set_span(*span));
                     }
-                    let func = self.resolve_general_window_function(*span, func_name, &args)?;
+                    let func = self.resolve_general_window_function(
+                        *span,
+                        func_name,
+                        &args,
+                        window_ignore_null,
+                    )?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)?
@@ -1405,6 +1414,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         args: &[&Expr],
+        window_ignore_null: &Option<bool>,
     ) -> Result<WindowFuncType> {
         if matches!(
             self.bind_context.expr_context,
@@ -1447,13 +1457,23 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_window_function = false;
 
+        // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
+        // (i.e. a NULL value will be returned if the expression contains a NULL value and it is the first value in the expression).
+        let ignore_null = if let Some(ignore_null) = window_ignore_null {
+            *ignore_null
+        } else {
+            false
+        };
+
         match func_name {
-            "lag" | "lead" => {
-                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
-            }
-            "first_value" | "first" | "last_value" | "last" | "nth_value" => {
-                self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
-            }
+            "lag" | "lead" => self.resolve_lag_lead_window_function(
+                func_name,
+                &arguments,
+                &arg_types,
+                ignore_null,
+            ),
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
+                .resolve_nth_value_window_function(func_name, &arguments, &arg_types, ignore_null),
             "ntile" => self.resolve_ntile_window_function(&arguments),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {func_name}"
@@ -1466,6 +1486,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[ScalarExpr],
         arg_types: &[DataType],
+        ignore_null: bool,
     ) -> Result<WindowFuncType> {
         if args.is_empty() || args.len() > 3 {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -1525,6 +1546,7 @@ impl<'a> TypeChecker<'a> {
             offset: offset.unsigned_abs(),
             default: cast_default,
             return_type: Box::new(return_type),
+            ignore_null,
         }))
     }
 
@@ -1533,6 +1555,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[ScalarExpr],
         arg_types: &[DataType],
+        ignore_null: bool,
     ) -> Result<WindowFuncType> {
         Ok(match func_name {
             "first_value" | "first" => {
@@ -1547,6 +1570,7 @@ impl<'a> TypeChecker<'a> {
                     n: Some(1),
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
             "last_value" | "last" => {
@@ -1561,6 +1585,7 @@ impl<'a> TypeChecker<'a> {
                     n: None,
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
             _ => {
@@ -1595,6 +1620,7 @@ impl<'a> TypeChecker<'a> {
                     n: Some(n),
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
         })
@@ -2922,6 +2948,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_null"),
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                         },
@@ -2938,6 +2965,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_error"),
                             args: vec![arg_x.clone()],
                             params: vec![],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                         },
@@ -2957,6 +2985,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "is_not_error"),
                             args: vec![(*arg).clone()],
                             params: vec![],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                         },
@@ -3000,6 +3029,7 @@ impl<'a> TypeChecker<'a> {
                             name: Identifier::from_name(span, "assume_not_null"),
                             args: vec![(*arg).clone()],
                             params: vec![],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                         },
@@ -4153,6 +4183,7 @@ impl<'a> TypeChecker<'a> {
                             name,
                             args,
                             params,
+                            window_ignore_null,
                             window,
                             lambda,
                         },
@@ -4166,6 +4197,7 @@ impl<'a> TypeChecker<'a> {
                             .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
                             .collect::<Result<Vec<Expr>>>()?,
                         params: params.clone(),
+                        window_ignore_null: *window_ignore_null,
                         window: window.clone(),
                         lambda: if let Some(lambda) = lambda {
                             Some(Lambda {

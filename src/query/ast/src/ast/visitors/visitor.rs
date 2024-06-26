@@ -227,6 +227,7 @@ pub trait Visitor<'ast>: Sized {
         _name: &'ast Identifier,
         args: &'ast [Expr],
         params: &'ast [Expr],
+        _window_respect_null: &'ast Option<bool>,
         over: &'ast Option<Window>,
         lambda: &'ast Option<Lambda>,
     ) {

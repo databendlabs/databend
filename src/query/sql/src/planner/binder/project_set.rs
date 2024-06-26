@@ -59,6 +59,7 @@ impl SrfCollector {
             name,
             args,
             params,
+            window_ignore_null,
             window,
             lambda,
         } = func;
@@ -76,6 +77,7 @@ impl SrfCollector {
                     name: name.clone(),
                     args: args.to_vec(),
                     params: params.to_vec(),
+                    window_ignore_null: *window_ignore_null,
                     window: window.clone(),
                     lambda: lambda.clone(),
                 },
