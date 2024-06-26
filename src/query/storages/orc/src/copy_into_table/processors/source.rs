@@ -111,21 +111,27 @@ impl AsyncSource for ORCSourceForCopy {
                     .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
                 match stripe {
                     None => {
-                        let progress_values = ProgressValues {
-                            rows: 0,
-                            bytes: size,
-                        };
-                        self.scan_progress.incr(&progress_values);
-                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
+                        // let progress_values = ProgressValues {
+                        //     rows: 0,
+                        //     bytes: size,
+                        // };
+                        // self.scan_progress.incr(&progress_values);
+                        // Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
                         Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
                         self.reader = None;
                         continue;
                     }
                     Some(stripe) => {
+                        let bytes = stripe.stream_map().inner.values().map(|b| b.len()).sum();
                         let progress_values = ProgressValues {
                             rows: stripe.number_of_rows(),
-                            bytes: 0,
+                            bytes,
                         };
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
+                        log::info!(
+                            "read new stripe of {} rows and {bytes} bytes from {path}",
+                            stripe.number_of_rows()
+                        );
                         self.scan_progress.incr(&progress_values);
 
                         self.reader = Some((path.clone(), Box::new(factory), schema.clone(), size));

@@ -59,8 +59,7 @@ impl ProjectionFactory {
         if let Some(v) = self.projections.get(schema) {
             Ok(v.clone())
         } else {
-            let v = self
-                .try_create_projection(schema.clone(), location)?;
+            let v = self.try_create_projection(schema.clone(), location)?;
             self.projections.insert(schema.clone(), v.clone());
             Ok(v)
         }

@@ -60,7 +60,7 @@ impl FuseTable {
                 })?;
             }
             AppendMode::Copy => {
-                pipeline.try_resize(1)?;
+                // pipeline.try_resize(10)?;
                 pipeline.add_transform(|transform_input_port, transform_output_port| {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
@@ -68,7 +68,7 @@ impl FuseTable {
                         BlockCompactorForCopy::new(block_thresholds),
                     )?))
                 })?;
-                pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
+                // pipeline.try_resize(ctx.get_settings().get_max_threads()? as usize)?;
             }
         }
 

@@ -92,7 +92,7 @@ impl OrcTableForCopy {
             |output| ORCSourceForCopy::try_create(output, ctx.clone(), operator.clone()),
             num_source,
         )?;
-        pipeline.try_resize(max_threads)?;
+        pipeline.resize(max_threads, true)?;
         let projections = Arc::new(ProjectionFactory::try_create(
             ctx.clone(),
             stage_table_info.schema.clone(),
