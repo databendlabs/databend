@@ -47,9 +47,7 @@ use crate::sessions::QueryContext;
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {
     pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
-        let to_table =
-            self.ctx
-                .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
+        let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
         let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(input)?;

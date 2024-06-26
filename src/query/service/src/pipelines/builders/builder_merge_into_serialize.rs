@@ -39,11 +39,9 @@ impl PipelineBuilder {
         // For matched data port and unmatched port, do serialize
         // For row_number port, create dummy
 
-        let tbl = self.ctx.build_table_by_table_info(
-            &merge_into_serialize.catalog_info,
-            &merge_into_serialize.table_info,
-            None,
-        )?;
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(&merge_into_serialize.table_info, None)?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
