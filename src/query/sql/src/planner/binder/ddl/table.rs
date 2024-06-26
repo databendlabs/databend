@@ -495,7 +495,7 @@ impl Binder {
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -515,7 +515,7 @@ impl Binder {
                 let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -974,9 +974,8 @@ impl Binder {
                 limit,
             } => {
                 let push_downs = if let Some(expr) = selection {
-                    let (_, mut context) = self
-                        .bind_table_reference(bind_context, table_reference)
-                        .await?;
+                    let (_, mut context) =
+                        self.bind_table_reference(bind_context, table_reference)?;
 
                     let mut scalar_binder = ScalarBinder::new(
                         &mut context,
@@ -1006,7 +1005,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::FlashbackTo { point } => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant,
                     catalog,
@@ -1107,7 +1106,7 @@ impl Binder {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge { before } => {
                 let p = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                    let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None

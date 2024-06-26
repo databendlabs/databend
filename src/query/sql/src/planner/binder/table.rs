@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -75,8 +76,7 @@ use crate::ColumnEntry;
 use crate::IndexType;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn bind_dummy_table(
+    pub fn bind_dummy_table(
         &mut self,
         bind_context: &BindContext,
         select_list: &Vec<SelectTarget>,
@@ -137,9 +137,8 @@ impl Binder {
             false,
         );
 
-        let (s_expr, mut bind_context) = self
-            .bind_base_table(bind_context, "system", table_index, None)
-            .await?;
+        let (s_expr, mut bind_context) =
+            self.bind_base_table(bind_context, "system", table_index, None)?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -175,8 +174,7 @@ impl Binder {
         Ok(cte_scan)
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_cte(
+    pub(crate) fn bind_cte(
         &mut self,
         span: Span,
         bind_context: &mut BindContext,
@@ -202,9 +200,8 @@ impl Binder {
             window_definitions: DashMap::new(),
         };
 
-        let (s_expr, mut res_bind_context) = self
-            .bind_query(&mut new_bind_context, &cte_info.query)
-            .await?;
+        let (s_expr, mut res_bind_context) =
+            self.bind_query(&mut new_bind_context, &cte_info.query)?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -240,8 +237,7 @@ impl Binder {
     }
 
     // Bind materialized cte
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_m_cte(
+    pub(crate) fn bind_m_cte(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -250,9 +246,8 @@ impl Binder {
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
         let new_bind_context = if cte_info.used_count == 0 {
-            let (cte_s_expr, cte_bind_ctx) = self
-                .bind_cte(*span, bind_context, table_name, alias, cte_info)
-                .await?;
+            let (cte_s_expr, cte_bind_ctx) =
+                self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
             self.ctes_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
@@ -289,8 +284,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_r_cte_scan(
+    pub(crate) fn bind_r_cte_scan(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -370,8 +364,7 @@ impl Binder {
         ))
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_r_cte(
+    pub(crate) fn bind_r_cte(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -387,32 +380,27 @@ impl Binder {
                     ));
                 }
                 self.set_bind_recursive_cte(true);
-                let (union_s_expr, mut new_bind_ctx) = self
-                    .bind_set_operator(
-                        bind_context,
-                        &set_expr.left,
-                        &set_expr.right,
-                        &set_expr.op,
-                        &set_expr.all,
-                        Some(cte_name.to_string()),
-                    )
-                    .await?;
+                let (union_s_expr, mut new_bind_ctx) = self.bind_set_operator(
+                    bind_context,
+                    &set_expr.left,
+                    &set_expr.right,
+                    &set_expr.op,
+                    &set_expr.all,
+                    Some(cte_name.to_string()),
+                )?;
                 self.set_bind_recursive_cte(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
-            _ => {
-                return Err(ErrorCode::SyntaxException(
-                    "Recursive CTE must contain a UNION(ALL) query".to_string(),
-                ));
-            }
+            _ => Err(ErrorCode::SyntaxException(
+                "Recursive CTE must contain a UNION(ALL) query".to_string(),
+            )),
         }
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_base_table(
+    pub(crate) fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -479,8 +467,7 @@ impl Binder {
         ))
     }
 
-    #[async_backtrace::framed]
-    pub async fn resolve_data_source(
+    pub fn resolve_data_source(
         &self,
         _tenant: &str,
         catalog_name: &str,
@@ -489,40 +476,39 @@ impl Binder {
         navigation: Option<&TimeNavigation>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
-        // Resolve table with ctx
-        // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
-        // we will invoke here twice for t1, so in the past, we use catalog every time to get the
-        // newest snapshot, we can't get consistent snapshot
-        let mut table_meta = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
+        databend_common_base::runtime::block_on(async move {
+            // Resolve table with ctx
+            // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
+            // we will invoke here twice for t1, so in the past, we use catalog every time to get the
+            // newest snapshot, we can't get consistent snapshot
+            let mut table_meta = self
+                .ctx
+                .get_table(catalog_name, database_name, table_name)
+                .await?;
 
-        if let Some(desc) = navigation {
-            table_meta = table_meta.navigate_to(desc, abort_checker).await?;
-        }
-        Ok(table_meta)
+            if let Some(desc) = navigation {
+                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
+            }
+            Ok(table_meta)
+        })
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_temporal_clause(
+    pub(crate) fn resolve_temporal_clause(
         &self,
         bind_context: &mut BindContext,
         temporal: &Option<TemporalClause>,
     ) -> Result<Option<TimeNavigation>> {
         match temporal {
             Some(TemporalClause::TimeTravel(point)) => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Some(TimeNavigation::TimeTravel(point)))
             }
             Some(TemporalClause::Changes(interval)) => {
                 let end = match &interval.end_point {
-                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp)?),
                     None => None,
                 };
-                let at = self
-                    .resolve_data_travel_point(bind_context, &interval.at_point)
-                    .await?;
+                let at = self.resolve_data_travel_point(bind_context, &interval.at_point)?;
                 Ok(Some(TimeNavigation::Changes {
                     append_only: interval.append_only,
                     at,
@@ -534,8 +520,7 @@ impl Binder {
         }
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_data_travel_point(
+    pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
@@ -621,19 +606,28 @@ impl Binder {
                 catalog,
                 database,
                 name,
-            } => {
-                let (catalog, database, name) =
-                    self.normalize_object_identifier_triple(catalog, database, name);
-                let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-                if stream.engine() != "STREAM" {
-                    return Err(ErrorCode::TableEngineNotSupported(format!(
-                        "{database}.{name} is not STREAM",
-                    )));
-                }
-                let info = stream.get_table_info().clone();
-                Ok(NavigationPoint::StreamInfo(info))
-            }
+            } => self.resolve_stream_data_travel_point(catalog, database, name),
         }
+    }
+
+    fn resolve_stream_data_travel_point(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        name: &Identifier,
+    ) -> Result<NavigationPoint> {
+        let (catalog, database, name) =
+            self.normalize_object_identifier_triple(catalog, database, name);
+        databend_common_base::runtime::block_on(async move {
+            let stream = self.ctx.get_table(&catalog, &database, &name).await?;
+            if stream.engine() != "STREAM" {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{database}.{name} is not STREAM",
+                )));
+            }
+            let info = stream.get_table_info().clone();
+            Ok(NavigationPoint::StreamInfo(info))
+        })
     }
 
     #[async_backtrace::framed]

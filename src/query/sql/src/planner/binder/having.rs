@@ -57,8 +57,7 @@ impl Binder {
         Ok(scalar)
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind_having(
+    pub fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
         having: ScalarExpr,

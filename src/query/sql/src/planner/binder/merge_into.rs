@@ -277,9 +277,8 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (mut source_expr, mut source_context) = self
-            .bind_table_reference(bind_context, &source_data)
-            .await?;
+        let (mut source_expr, mut source_context) =
+            self.bind_table_reference(bind_context, &source_data)?;
 
         // try add internal_column (_row_id) for source_table
         let mut source_table_index = DUMMY_TABLE_INDEX;
@@ -373,9 +372,8 @@ impl Binder {
         // Todo: (JackTan25) Maybe we can remove bind target_table
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
-        let (mut target_expr, mut target_context) = self
-            .bind_table_reference(bind_context, &target_table)
-            .await?;
+        let (mut target_expr, mut target_context) =
+            self.bind_table_reference(bind_context, &target_table)?;
 
         if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
             if let RelOperator::Scan(scan) = target_expr.plan() {
