@@ -27,7 +27,6 @@ use databend_common_expression::DataSchema;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 use databend_common_storage::init_stage_operator;
 
 use crate::copy_into_table::meta::read_metas_in_parallel_for_copy;
@@ -101,15 +100,13 @@ impl OrcTableForCopy {
         let output_data_schema = Arc::new(DataSchema::from(stage_table_info.schema()));
         pipeline.add_transform(|input, output| {
             let transformer = StripeDecoderForCopy::try_create(
+                input,
+                output,
                 ctx.clone(),
                 projections.clone(),
                 output_data_schema.clone(),
             )?;
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                input,
-                output,
-                transformer,
-            )))
+            Ok(ProcessorPtr::create(Box::new(transformer)))
         })?;
         Ok(())
     }
