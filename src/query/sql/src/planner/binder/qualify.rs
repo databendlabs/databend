@@ -40,8 +40,7 @@ use crate::Binder;
 impl Binder {
     /// Analyze window in qualify clause, this will rewrite window functions.
     /// See `WindowRewriter` for more details.
-    #[async_backtrace::framed]
-    pub async fn analyze_window_qualify<'a>(
+    pub fn analyze_window_qualify(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -63,8 +62,7 @@ impl Binder {
         Ok(scalar)
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind_qualify(
+    pub fn bind_qualify(
         &mut self,
         bind_context: &mut BindContext,
         qualify: ScalarExpr,

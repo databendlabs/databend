@@ -100,7 +100,7 @@ impl<'a> Binder {
             )
             .await?;
 
-        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table)?;
 
         context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(

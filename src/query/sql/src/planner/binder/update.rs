@@ -90,7 +90,7 @@ impl Binder {
             )
             .await?;
 
-        let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table)?;
 
         let table = self
             .ctx

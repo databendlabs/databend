@@ -54,9 +54,8 @@ use crate::BindContext;
 use crate::ScalarExpr;
 
 impl Binder {
-    /// Bind a table function.
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_table_function(
+    /// Bind a table function.3
+    pub(crate) fn bind_table_function(
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
@@ -104,19 +103,16 @@ impl Binder {
                 window_list: None,
                 qualify: None,
             };
-            let (srf_expr, mut bind_context) = self
-                .bind_select(bind_context, &select_stmt, &[], None)
-                .await?;
+            let (srf_expr, mut bind_context) =
+                self.bind_select(bind_context, &select_stmt, &[], None)?;
 
-            return self
-                .extract_srf_table_function_columns(
-                    &mut bind_context,
-                    span,
-                    &func_name,
-                    srf_expr,
-                    alias,
-                )
-                .await;
+            return self.extract_srf_table_function_columns(
+                &mut bind_context,
+                span,
+                &func_name,
+                srf_expr,
+                alias,
+            );
         }
 
         let mut scalar_binder = ScalarBinder::new(
@@ -128,22 +124,65 @@ impl Binder {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
+        let table_args = bind_table_args(&mut scalar_binder, params, named_params)?;
 
         if func_name.name.eq_ignore_ascii_case("result_scan") {
-            let query_id = parse_result_scan_args(&table_args)?;
-            if query_id.is_empty() {
-                return Err(ErrorCode::InvalidArgument("The `RESULT_SCAN` function requires a 'query_id' parameter. Please specify a valid query ID.")
-                    .set_span(*span));
+            self.bind_result_scan(bind_context, span, alias, &table_args)
+        } else {
+            // Other table functions always reside is default catalog
+            let table_meta: Arc<dyn TableFunction> = self
+                .catalogs
+                .get_default_catalog(self.ctx.txn_mgr())?
+                .get_table_function(&func_name.name, table_args)?;
+            let table = table_meta.as_table();
+            let table_alias_name = if let Some(table_alias) = alias {
+                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            } else {
+                None
+            };
+            let table_index = self.metadata.write().add_table(
+                CATALOG_DEFAULT.to_string(),
+                "system".to_string(),
+                table.clone(),
+                table_alias_name,
+                false,
+                false,
+                false,
+                false,
+            );
+
+            let (s_expr, mut bind_context) =
+                self.bind_base_table(bind_context, "system", table_index, None)?;
+            if let Some(alias) = alias {
+                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }
-            let kv_store = UserApiProvider::instance().get_meta_store_client();
-            let meta_key = self.ctx.get_result_cache_key(&query_id);
-            if meta_key.is_none() {
-                return Err(ErrorCode::EmptyData(format!(
-                    "`RESULT_SCAN` failed: No cache key found in current session for query ID '{}'.",
-                    query_id
-                )).set_span(*span));
-            }
+            Ok((s_expr, bind_context))
+        }
+    }
+
+    fn bind_result_scan(
+        &mut self,
+        bind_context: &mut BindContext,
+        span: &Span,
+        alias: &Option<TableAlias>,
+        table_args: &TableArgs,
+    ) -> Result<(SExpr, BindContext)> {
+        let query_id = parse_result_scan_args(table_args)?;
+        if query_id.is_empty() {
+            return Err(ErrorCode::InvalidArgument("The `RESULT_SCAN` function requires a 'query_id' parameter. Please specify a valid query ID.")
+                .set_span(*span));
+        }
+        let kv_store = UserApiProvider::instance().get_meta_store_client();
+        let meta_key = self.ctx.get_result_cache_key(&query_id);
+        if meta_key.is_none() {
+            return Err(ErrorCode::EmptyData(format!(
+                "`RESULT_SCAN` failed: No cache key found in current session for query ID '{}'.",
+                query_id
+            ))
+            .set_span(*span));
+        }
+
+        databend_common_base::runtime::block_on(async move {
             let result_cache_mgr = ResultCacheMetaManager::create(kv_store, 0);
             let meta_key = meta_key.unwrap();
             let (table_schema, block_raw_data) = match result_cache_mgr
@@ -180,49 +219,17 @@ impl Binder {
                 false,
             );
 
-            let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index, None)
-                .await?;
+            let (s_expr, mut bind_context) =
+                self.bind_base_table(bind_context, "system", table_index, None)?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }
             Ok((s_expr, bind_context))
-        } else {
-            // Other table functions always reside is default catalog
-            let table_meta: Arc<dyn TableFunction> = self
-                .catalogs
-                .get_default_catalog(self.ctx.txn_mgr())?
-                .get_table_function(&func_name.name, table_args)?;
-            let table = table_meta.as_table();
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-            } else {
-                None
-            };
-            let table_index = self.metadata.write().add_table(
-                CATALOG_DEFAULT.to_string(),
-                "system".to_string(),
-                table.clone(),
-                table_alias_name,
-                false,
-                false,
-                false,
-                false,
-            );
-
-            let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index, None)
-                .await?;
-            if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-            }
-            Ok((s_expr, bind_context))
-        }
+        })
     }
 
     /// Extract the srf inner tuple fields as columns.
-    #[async_backtrace::framed]
-    async fn extract_srf_table_function_columns(
+    fn extract_srf_table_function_columns(
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
@@ -310,8 +317,7 @@ impl Binder {
     }
 
     /// Bind a lateral table function.
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_lateral_table_function(
+    pub(crate) fn bind_lateral_table_function(
         &mut self,
         parent_context: &mut BindContext,
         child: SExpr,
@@ -349,9 +355,7 @@ impl Binder {
                         },
                     };
                     let srfs = vec![srf.clone()];
-                    let srf_expr = self
-                        .bind_project_set(&mut bind_context, &srfs, child)
-                        .await?;
+                    let srf_expr = self.bind_project_set(&mut bind_context, &srfs, child)?;
 
                     if let Some((_, srf_result)) = bind_context.srfs.remove(&srf.to_string()) {
                         let column_binding =
@@ -393,25 +397,24 @@ impl Binder {
                                 &func_name,
                                 flatten_expr,
                                 alias,
-                            )
-                            .await?;
+                            )?;
 
                         // add left table columns.
                         let mut new_columns = parent_context.columns.clone();
                         new_columns.extend_from_slice(&bind_context.columns);
                         bind_context.columns = new_columns;
 
-                        return Ok((new_expr, bind_context));
+                        Ok((new_expr, bind_context))
                     } else {
-                        return Err(ErrorCode::Internal("Failed to bind project_set for lateral join. This may indicate an issue with the SRF (Set Returning Function) processing or an internal logic error.")
-                            .set_span(*span));
+                        Err(ErrorCode::Internal("Failed to bind project_set for lateral join. This may indicate an issue with the SRF (Set Returning Function) processing or an internal logic error.")
+                            .set_span(*span))
                     }
                 } else {
-                    return Err(ErrorCode::InvalidArgument(format!(
+                    Err(ErrorCode::InvalidArgument(format!(
                         "The function '{}' is not supported for lateral joins. Lateral joins currently support only Set Returning Functions (SRFs).",
                         func_name
                     ))
-                    .set_span(*span));
+                        .set_span(*span))
                 }
             }
             _ => unreachable!(),
@@ -453,7 +456,7 @@ fn parse_table_function_args(
                 "Invalid named parameters for 'flatten': {}, valid parameters are: [input, path, outer, recursive, mode]",
                 invalid_names,
             ))
-            .set_span(*span));
+                .set_span(*span));
         }
 
         if !params.is_empty() {
