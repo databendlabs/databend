@@ -26,14 +26,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::parse_computed_expr;
 
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::ProcessorPtr;
 use crate::sessions::QueryContext;
 
 pub struct TransformAddComputedColumns {
@@ -44,17 +40,6 @@ pub struct TransformAddComputedColumns {
 impl TransformAddComputedColumns
 where Self: Transform
 {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
-    ) -> Result<ProcessorPtr> {
-        let me = Self::try_new(ctx, input_schema, output_schema)?;
-        Ok(ProcessorPtr::create(Transformer::create(input, output, me)))
-    }
-
     pub fn try_new(
         ctx: Arc<QueryContext>,
         input_schema: DataSchemaRef,
