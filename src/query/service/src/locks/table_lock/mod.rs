@@ -59,7 +59,7 @@ impl Lock for TableLock {
         &self,
         ctx: Arc<dyn TableContext>,
         should_retry: bool,
-    ) -> Result<Option<LockGuard>> {
+    ) -> Result<Option<Arc<LockGuard>>> {
         self.lock_mgr.try_lock(ctx, self, should_retry).await
     }
 }

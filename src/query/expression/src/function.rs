@@ -574,6 +574,7 @@ impl<'a> EvalContext<'a> {
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        expr_name: &str,
         selection: Option<&[u32]>,
     ) -> Result<()> {
         if self.suppress_error {
@@ -608,10 +609,12 @@ impl<'a> EvalContext<'a> {
                     .join(", ");
 
                 let err_msg = if params.is_empty() {
-                    format!("{error} while evaluating function `{func_name}({args})`")
+                    format!(
+                        "{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`"
+                    )
                 } else {
                     format!(
-                        "{error} while evaluating function `{func_name}({params})({args})`",
+                        "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
                         params = params.iter().join(", ")
                     )
                 };

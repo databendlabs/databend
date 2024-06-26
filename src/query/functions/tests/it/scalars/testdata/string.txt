@@ -2075,7 +2075,7 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`
 
 
 
@@ -2183,7 +2183,7 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`
 
 
 
@@ -2353,7 +2353,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')` in expr `lpad('', to_uint64(1), '')`
 
 
 
@@ -2391,7 +2391,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')` in expr `lpad('hi', to_uint64(2000000), '?')`
 
 
 
@@ -2423,7 +2423,7 @@ error:
   --> SQL:1:1
   |
 1 | lpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')` in expr `lpad(a, to_uint64(b), c)`
 
 
 
@@ -2467,7 +2467,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad('', 1, '')
-  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')`
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')` in expr `rpad('', to_uint64(1), '')`
 
 
 
@@ -2505,7 +2505,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad('hi', 2000000, '?')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')` in expr `rpad('hi', to_uint64(2000000), '?')`
 
 
 
@@ -2537,7 +2537,7 @@ error:
   --> SQL:1:1
   |
 1 | rpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')` in expr `rpad(a, to_uint64(b), c)`
 
 
 
@@ -3068,7 +3068,7 @@ error:
   --> SQL:1:1
   |
 1 | repeat('3', 1000001)
-  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)`
+  | ^^^^^^^^^^^^^^^^^^^^ Too many times to repeat: (1000001), maximum is: 1000000 while evaluating function `repeat('3', 1000001)` in expr `repeat('3', to_uint64(1000001))`
 
 
 
@@ -3257,7 +3257,7 @@ error:
   --> SQL:1:1
   |
 1 | space(2000000)
-  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)`
+  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)` in expr `space(to_uint64(2000000))`
 
 
 

@@ -15,10 +15,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::plans::LockTableOption;
 use log::info;
 use log::warn;
 
@@ -123,12 +123,6 @@ impl HookOperator {
             table: self.table.to_owned(),
         };
 
-        hook_refresh(
-            self.ctx.clone(),
-            pipeline,
-            refresh_desc,
-            self.lock_opt.clone(),
-        )
-        .await;
+        hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
     }
 }

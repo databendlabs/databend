@@ -28,6 +28,7 @@ use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_exception::ErrorCode;
@@ -236,6 +237,21 @@ impl Binder {
 
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table_ident);
+
+        // Add table lock before execution.
+        let lock_guard = if merge_type != MergeIntoType::InsertOnly {
+            self.ctx
+                .clone()
+                .acquire_table_lock(
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?
+        } else {
+            None
+        };
 
         let table = self
             .ctx
@@ -575,6 +591,7 @@ impl Binder {
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
             lazy_columns,
+            lock_guard,
         };
 
         let s_expr = SExpr::create_unary(

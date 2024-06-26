@@ -17,6 +17,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::TableExt;
@@ -31,7 +32,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_storages_fuse::operations::ReclusterTasks;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;

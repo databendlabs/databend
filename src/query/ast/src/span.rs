@@ -86,13 +86,13 @@ pub fn merge_span(lhs: Span, rhs: Span) -> Span {
 }
 
 pub fn pretty_print_error(source: &str, labels: Vec<(Range, String)>) -> String {
-    use codespan_reporting::diagnostic::Diagnostic;
-    use codespan_reporting::diagnostic::Label;
-    use codespan_reporting::files::SimpleFile;
-    use codespan_reporting::term;
-    use codespan_reporting::term::termcolor::Buffer;
-    use codespan_reporting::term::Chars;
-    use codespan_reporting::term::Config;
+    use rspack_codespan_reporting::diagnostic::Diagnostic;
+    use rspack_codespan_reporting::diagnostic::Label;
+    use rspack_codespan_reporting::files::SimpleFile;
+    use rspack_codespan_reporting::term;
+    use rspack_codespan_reporting::term::termcolor::Buffer;
+    use rspack_codespan_reporting::term::Chars;
+    use rspack_codespan_reporting::term::Config;
 
     let mut writer = Buffer::no_color();
     let file = SimpleFile::new("SQL", source);
