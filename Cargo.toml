@@ -322,7 +322,7 @@ openraft = { version = "0.9.12", features = [
 
 # Observability
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.5"
+logcall = "0.1.9"
 minitrace = { version = "0.6.6", features = ["enable"] }
 minitrace-opentelemetry = "0.6.6"
 opentelemetry = { version = "0.23", features = ["trace", "logs"] }
