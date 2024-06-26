@@ -38,6 +38,8 @@ use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSerialize;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::physical_plans::RowFetch;
@@ -62,11 +64,10 @@ pub struct MergeInto {
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
-    // used to record the index of target table's field in merge_source_schema
-    pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
+    pub merge_into_op: MergeIntoOp,
+    pub need_match: bool,
     pub distributed: bool,
-    pub merge_type: MergeIntoType,
     pub change_join_order: bool,
     pub target_build_optimization: bool,
     pub enable_right_broadcast: bool,
@@ -375,6 +376,21 @@ impl PhysicalPlanBuilder {
             unmatched_schema: join_output_schema.clone(),
         }));
 
+        let merge_into_op = match (merge_type, distributed) {
+            (MergeIntoType::FullOperation, true) => MergeIntoOp::DistributedFullOperation,
+            (MergeIntoType::FullOperation, false) => MergeIntoOp::StandaloneFullOperation,
+            (MergeIntoType::MatchedOnly, true) => MergeIntoOp::DistributedMatchedOnly,
+            (MergeIntoType::MatchedOnly, false) => MergeIntoOp::StandaloneMatchedOnly,
+            (MergeIntoType::InsertOnly, true) => MergeIntoOp::DistributedInsertOnly,
+            (MergeIntoType::InsertOnly, false) => MergeIntoOp::StandaloneInsertOnly,
+        };
+
+        plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
+            plan_id: 0,
+            input: Box::new(plan.clone()),
+            merge_into_op: merge_into_op.clone(),
+        }));
+
         let segments: Vec<_> = base_snapshot
             .segments
             .clone()
@@ -382,15 +398,29 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
+        plan = PhysicalPlan::MergeIntoSerialize(Box::new(MergeIntoSerialize {
+            plan_id: 0,
+            input: Box::new(plan),
+            table_info: table_info.clone(),
+            catalog_info: catalog_.info(),
+            unmatched: unmatched.clone(),
+            segments: segments.clone(),
+            distributed: *distributed,
+            change_join_order: *change_join_order,
+            merge_into_op: merge_into_op.clone(),
+            need_match: !is_insert_only,
+            enable_right_broadcast: *enable_right_broadcast,
+        }));
+
         let commit_input = if !distributed {
             PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(plan.clone()),
                 table_info: table_info.clone(),
                 unmatched,
-                segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
-                merge_type: merge_type.clone(),
+                merge_into_op: merge_into_op.clone(),
+                need_match: !is_insert_only,
                 change_join_order: *change_join_order,
                 target_build_optimization: false,
                 plan_id: u32::MAX,
@@ -401,7 +431,6 @@ impl PhysicalPlanBuilder {
                 input: Box::new(plan.clone()),
                 table_info: table_info.clone(),
                 unmatched: unmatched.clone(),
-                segments: segments.clone(),
                 distributed: true,
                 output_schema: if let Some(idx) = source_row_number_idx {
                     DataSchemaRef::new(DataSchema::new(vec![output_schema.fields[idx].clone()]))
@@ -411,15 +440,16 @@ impl PhysicalPlanBuilder {
                         DataType::Number(NumberDataType::UInt64),
                     )]))
                 },
-                merge_type: merge_type.clone(),
+                merge_into_op: merge_into_op.clone(),
+                need_match: !is_insert_only,
                 change_join_order: *change_join_order,
-                target_build_optimization: false, // we don't support for distributed mode for now..
+                target_build_optimization: false, // we don't support for distributed mode for now.
                 plan_id: u32::MAX,
                 enable_right_broadcast: *enable_right_broadcast,
             }));
             // if change_join_order = true, it means the target is build side,
             // in this way, we will do matched operation and not matched operation
-            // locally in every node, and the main node just receive rowids to apply.
+            // locally in every node, and the main node just receive row ids to apply.
             let segments = if *change_join_order {
                 segments.clone()
             } else {
@@ -449,7 +479,7 @@ impl PhysicalPlanBuilder {
             input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            // let's use update first, we will do some optimizeations and select exact strategy
+            // let's use update first, we will do some optimizations and select exact strategy
             mutation_kind: MutationKind::Update,
             update_stream_meta: merge_into_build_info.update_stream_meta,
             merge_meta: false,
@@ -488,4 +518,50 @@ pub struct MergeIntoAppendNotMatched {
     pub merge_type: MergeIntoType,
     pub change_join_order: bool,
     pub segments: Vec<(usize, Location)>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum MergeIntoOp {
+    StandaloneMatchedOnly,
+    StandaloneFullOperation,
+    StandaloneInsertOnly,
+    DistributedMatchedOnly,
+    DistributedFullOperation,
+    DistributedInsertOnly,
+}
+
+impl MergeIntoOp {
+    pub fn get_serialize_and_row_number_len(
+        &self,
+        output_len: usize,
+        enable_right_broadcast: bool,
+    ) -> (usize, usize) {
+        match self {
+            MergeIntoOp::StandaloneFullOperation
+            | MergeIntoOp::StandaloneMatchedOnly
+            | MergeIntoOp::DistributedMatchedOnly => (output_len - 1, 0), /* remove first row_id port */
+            MergeIntoOp::StandaloneInsertOnly => (output_len, 0),
+            MergeIntoOp::DistributedFullOperation => {
+                if enable_right_broadcast {
+                    // remove first row_id port and last row_number port
+                    (output_len - 2, 1)
+                } else {
+                    // remove first row_id port
+                    (output_len - 1, 0)
+                }
+            }
+            MergeIntoOp::DistributedInsertOnly => {
+                // only one row_number port/unmatched port, refer to `builder_merge_into_organize`
+                assert_eq!(output_len, 1);
+                if enable_right_broadcast {
+                    // only one row_number port
+                    // use (0, 0) instead of (0, 1) to avoid appending many dummy items
+                    (0, 0)
+                } else {
+                    // only one unmatched port
+                    (1, 0)
+                }
+            }
+        }
+    }
 }

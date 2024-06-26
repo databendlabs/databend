@@ -23,6 +23,8 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -126,6 +128,8 @@ pub enum PhysicalPlan {
     MergeIntoAddRowNumber(Box<MergeIntoAddRowNumber>),
     MergeIntoSplit(Box<MergeIntoSplit>),
     MergeIntoManipulate(Box<MergeIntoManipulate>),
+    MergeIntoOrganize(Box<MergeIntoOrganize>),
+    MergeIntoSerialize(Box<MergeIntoSerialize>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -331,6 +335,16 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::MergeIntoOrganize(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoSerialize(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
             PhysicalPlan::CommitSink(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -444,6 +458,8 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
             PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
+            PhysicalPlan::MergeIntoOrganize(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSerialize(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
@@ -500,6 +516,8 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoOrganize(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSerialize(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -563,6 +581,8 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
             PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
+            PhysicalPlan::MergeIntoOrganize(_) => "MergeIntoOrganize".to_string(),
+            PhysicalPlan::MergeIntoSerialize(_) => "MergeIntoSerialize".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
@@ -641,6 +661,10 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoManipulate(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::MergeIntoOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoSerialize(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -697,6 +721,8 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::MergeIntoSplit(_)
             | PhysicalPlan::MergeIntoManipulate(_)
+            | PhysicalPlan::MergeIntoOrganize(_)
+            | PhysicalPlan::MergeIntoSerialize(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
