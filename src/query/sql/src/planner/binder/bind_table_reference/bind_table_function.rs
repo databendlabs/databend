@@ -54,7 +54,7 @@ use crate::BindContext;
 use crate::ScalarExpr;
 
 impl Binder {
-    /// Bind a table function.3
+    /// Bind a table function.
     pub(crate) fn bind_table_function(
         &mut self,
         bind_context: &mut BindContext,
