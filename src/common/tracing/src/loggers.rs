@@ -101,10 +101,16 @@ impl OpenTelemetryLogger {
         config: &OTLPEndpointConfig,
         labels: &BTreeMap<String, String>,
     ) -> Self {
+        let endpoint = if !config.endpoint.trim_end_matches('/').ends_with("/v1/logs") {
+            format!("{}/v1/logs", config.endpoint)
+        } else {
+            config.endpoint.clone()
+        };
+
         let exporter = match config.protocol {
             OTLPProtocol::Grpc => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::Grpc,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
@@ -121,7 +127,7 @@ impl OpenTelemetryLogger {
             }
             OTLPProtocol::Http => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::HttpBinary,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
