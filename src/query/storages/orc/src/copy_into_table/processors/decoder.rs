@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_array::RecordBatch;
 use databend_common_catalog::query_kind::QueryKind;
@@ -84,6 +85,7 @@ impl AccumulatingTransform for StripeDecoderForCopy {
             .unwrap();
         let schema = stripe.schema.expect("schema not none");
         let projection = self.projections.get(&schema, &stripe.path)?;
+        let start = Instant::now();
 
         let decoder = NaiveStripeDecoder::new(stripe.stripe, schema.arrow_schema.clone(), 8192)
             .map_err(|e| map_orc_error(e, &stripe.path))?;
@@ -101,6 +103,11 @@ impl AccumulatingTransform for StripeDecoderForCopy {
             }
             blocks.push(block);
         }
+        log::info!(
+            "decode {} blocks use {} secs",
+            blocks.len(),
+            start.elapsed().as_secs_f32()
+        );
         Ok(blocks)
     }
 }
