@@ -143,12 +143,7 @@ pub fn init_logging(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
-                    opentelemetry::InstrumentationLibrary::new(
-                        trace_name,
-                        None::<&'static str>,
-                        None::<&'static str>,
-                        None,
-                    ),
+                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
                 )
             });
             (rt, reporter)

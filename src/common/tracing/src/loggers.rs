@@ -156,12 +156,7 @@ impl OpenTelemetryLogger {
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let library = Arc::new(InstrumentationLibrary::new(
-            name.to_string(),
-            None::<&str>,
-            None::<&str>,
-            None,
-        ));
+        let library = Arc::new(InstrumentationLibrary::builder(name.to_string()).build());
         Self {
             name: name.to_string(),
             category: category.to_string(),
@@ -183,18 +178,16 @@ impl log::Log for OpenTelemetryLogger {
 
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
-        let config = provider.config();
-        let builder = opentelemetry::logs::LogRecord::builder()
-            .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
-            .with_severity_text(log_record.level().as_str())
-            .with_body(AnyValue::from(log_record.args().to_string()));
-        let record = builder.build();
+        let mut record = opentelemetry_sdk::logs::LogRecord::default();
+        record.observed_timestamp = Some(SystemTime::now());
+        record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
+        record.severity_text = Some(log_record.level().as_str().into());
+        record.body = Some(AnyValue::from(log_record.args().to_string()));
+
         for processor in provider.log_processors() {
             let record = record.clone();
             let data = opentelemetry_sdk::export::logs::LogData {
                 record,
-                resource: config.resource.clone(),
                 instrumentation: self.instrumentation_library().clone(),
             };
             processor.emit(data);
