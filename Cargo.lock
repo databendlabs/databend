@@ -2686,14 +2686,13 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "criterion",
  "derive-visitor",
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
- "geos",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -9752,9 +9751,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19d9bd7c509d9caa22fbe52612af7fcf77e3988a646a7bcc0738767b8615d33b"
+checksum = "197d538cd69839d49a593c8c72df44291b0ea3296ecc0c85529002c53c8fbc6f"
 dependencies = [
  "minitrace-macro",
  "minstant",
@@ -9767,9 +9766,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22157883acc4c810151c39d1e0a8fe49d58a81f6c2dbd2065a8e9a5d362f4d23"
+checksum = "14efd4b574325fcb981bce1ac700b9ccf071ec2eb94f7a6a6b583a84f228ba47"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -9779,9 +9778,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93049deae054b608f3d99a4041e050425914cc9ecfc6bb89f7fd6739b5965634"
+checksum = "fabb581e91af60aab44f6d49ee70646c87162ad25224cd6184ae67cfca08db05"
 dependencies = [
  "futures",
  "log",
