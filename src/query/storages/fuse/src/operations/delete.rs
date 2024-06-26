@@ -251,6 +251,7 @@ impl FuseTable {
             self.schema_with_stream(),
             &push_down,
             self.bloom_index_cols(),
+            None,
         )?;
 
         if let Some(inverse) = filters.map(|f| f.inverted_filter) {

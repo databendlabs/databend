@@ -23,12 +23,14 @@ use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::network::snapshot_transport;
+use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV2;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
@@ -37,8 +39,10 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
+use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
 use futures::TryStreamExt;
+use log::info;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
@@ -238,13 +242,18 @@ impl RaftService for RaftServiceImpl {
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
 
-            let ae_req = GrpcHelper::parse_req(request)?;
+            let ae_req: AppendEntriesRequest = GrpcHelper::parse_req(request)?;
+            let req_summary = ae_req.summary();
             let raft = &self.meta_node.raft;
+
+            info!("RaftServiceImpl::append_entries: {}", req_summary);
 
             let resp = raft
                 .append_entries(ae_req)
                 .await
                 .map_err(GrpcHelper::internal_err)?;
+
+            info!("RaftServiceImpl::append_entries: done: {}", req_summary);
 
             GrpcHelper::ok_response(&resp)
         }
@@ -274,10 +283,17 @@ impl RaftService for RaftServiceImpl {
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
 
-            let v_req = GrpcHelper::parse_req(request)?;
+            let v_req: VoteRequest = GrpcHelper::parse_req(request)?;
+
+            let v_req_summary = v_req.summary();
+
+            info!("RaftServiceImpl::vote: start: {}", v_req_summary);
+
             let raft = &self.meta_node.raft;
 
             let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
+
+            info!("RaftServiceImpl::vote: done: {}", v_req_summary);
 
             GrpcHelper::ok_response(&resp)
         }

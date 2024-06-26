@@ -14,11 +14,15 @@
 
 use std::collections::HashSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
+use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::EmptyMapType;
 use databend_common_expression::types::GenericType;
@@ -27,11 +31,18 @@ use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
+use databend_common_expression::ValueRef;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -228,6 +239,122 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         |map, _| map.len() as u64,
     );
+
+    registry.register_function_factory("map_delete", |_, args_type| {
+        if args_type.len() < 2 {
+            return None;
+        }
+
+        let map_key_type = match args_type[0].remove_nullable() {
+            DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+                Some(type_tuple[0].clone())
+            }
+            DataType::EmptyMap => None,
+            _ => return None,
+        };
+
+        if let Some(map_key_type) = map_key_type {
+            for arg_type in args_type.iter().skip(1) {
+                if arg_type != &map_key_type {
+                    return None;
+                }
+            }
+        } else {
+            let key_type = &args_type[1];
+            if !key_type.is_boolean()
+                && !key_type.is_string()
+                && !key_type.is_numeric()
+                && !key_type.is_decimal()
+                && !key_type.is_date_or_date_time()
+            {
+                return None;
+            }
+            for arg_type in args_type.iter().skip(2) {
+                if arg_type != key_type {
+                    return None;
+                }
+            }
+        }
+
+        let return_type = args_type[0].clone();
+
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "map_delete".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: return_type.clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    FunctionDomain::Domain(args_domain[0].clone())
+                }),
+                eval: Box::new(move |args, _ctx| {
+                    let input_length = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let mut output_map_builder =
+                        ColumnBuilder::with_capacity(&return_type, input_length.unwrap_or(1));
+
+                    for idx in 0..(input_length.unwrap_or(1)) {
+                        let input_map_sref = match &args[0] {
+                            ValueRef::Scalar(map) => map.clone(),
+                            ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
+                        };
+
+                        match &input_map_sref {
+                            ScalarRef::Null | ScalarRef::EmptyMap => {
+                                output_map_builder.push_default();
+                            }
+                            ScalarRef::Map(col) => {
+                                let mut delete_key_list = HashSet::new();
+
+                                for input_key_item in args.iter().skip(1) {
+                                    let input_key = match &input_key_item {
+                                        ValueRef::Scalar(scalar) => scalar.clone(),
+                                        ValueRef::Column(col) => unsafe {
+                                            col.index_unchecked(idx)
+                                        },
+                                    };
+
+                                    delete_key_list.insert(input_key.to_owned());
+                                }
+
+                                let inner_builder_type = match input_map_sref.infer_data_type() {
+                                    DataType::Map(box typ) => typ,
+                                    _ => unreachable!(),
+                                };
+
+                                let mut filtered_kv_builder =
+                                    ColumnBuilder::with_capacity(&inner_builder_type, col.len());
+
+                                let input_map: KvColumn<AnyType, AnyType> =
+                                    MapType::try_downcast_scalar(&input_map_sref).unwrap();
+
+                                input_map.iter().for_each(|(map_key, map_value)| {
+                                    if !delete_key_list.contains(&map_key.to_owned()) {
+                                        filtered_kv_builder.push(ScalarRef::Tuple(vec![
+                                            map_key.clone(),
+                                            map_value.clone(),
+                                        ]));
+                                    }
+                                });
+                                output_map_builder
+                                    .push(ScalarRef::Map(filtered_kv_builder.build()));
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+
+                    match input_length {
+                        Some(_) => Value::Column(output_map_builder.build()),
+                        None => Value::Scalar(output_map_builder.build_scalar()),
+                    }
+                }),
+            },
+        }))
+    });
 
     registry.register_2_arg_core::<EmptyMapType, GenericType<0>, BooleanType, _, _>(
         "map_contains_key",

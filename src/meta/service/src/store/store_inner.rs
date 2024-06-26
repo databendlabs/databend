@@ -46,7 +46,6 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogId;
 use databend_common_meta_types::Membership;
-use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
@@ -578,7 +577,10 @@ impl StoreInner {
         ns
     }
 
-    pub async fn get_node_raft_endpoint(&self, node_id: &NodeId) -> Result<Endpoint, MetaError> {
+    pub async fn get_node_raft_endpoint(
+        &self,
+        node_id: &NodeId,
+    ) -> Result<Endpoint, MetaNetworkError> {
         let endpoint = self
             .get_node(node_id)
             .await

@@ -308,7 +308,7 @@ pub enum Statement {
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
 
-    // sequence
+    // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
 
@@ -317,12 +317,9 @@ pub enum Statement {
         priority: Priority,
         object_id: String,
     },
-}
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct StatementWithFormat {
-    pub(crate) stmt: Statement,
-    pub(crate) format: Option<String>,
+    // System actions
+    System(SystemStmt),
 }
 
 impl Statement {
@@ -727,6 +724,23 @@ impl Display for Statement {
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
             }
+            Statement::System(stmt) => write!(f, "{stmt}")?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct StatementWithFormat {
+    pub(crate) stmt: Statement,
+    pub(crate) format: Option<String>,
+}
+
+impl Display for StatementWithFormat {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.stmt)?;
+        if let Some(format) = &self.format {
+            write!(f, " FORMAT {}", format)?;
         }
         Ok(())
     }

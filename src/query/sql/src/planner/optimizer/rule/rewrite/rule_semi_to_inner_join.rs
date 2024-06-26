@@ -132,7 +132,9 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         | RelOperator::Scan(_)
         | RelOperator::CteScan(_)
         | RelOperator::AsyncFunction(_)
-        | RelOperator::Join(_) => {}
+        | RelOperator::Join(_)
+        | RelOperator::RecursiveCteScan(_)
+        | RelOperator::MergeInto(_) => {}
     }
     Ok(())
 }

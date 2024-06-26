@@ -11,14 +11,13 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-expression = { path = "../../query/expression" }
-databend-common-io = { path = "../../common/io" }
-databend-common-meta-app = { path = "../app" }
-databend-common-meta-types = { path = "../types" }
-databend-common-protos = { path = "../protos" }
-
 chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }
+databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-protos = { workspace = true }
 enumflags2 = { workspace = true }
 minitrace = { workspace = true }
 num = "0.4.0"
@@ -32,3 +31,6 @@ anyhow = { workspace = true }
 convert_case = { version = "0.6.0" }
 maplit = "1.0.2"
 pretty_assertions = "1.3.0"
+
+[lints]
+workspace = true

@@ -187,11 +187,6 @@ impl FromToProto for mt::TableMeta {
             reason: "TableMeta.schema can not be None".to_string(),
         })?;
 
-        let catalog = if p.catalog.is_empty() {
-            "default".to_string()
-        } else {
-            p.catalog
-        };
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {
             indexes.insert(name, mt::TableIndex::from_pb(index)?);
@@ -199,7 +194,6 @@ impl FromToProto for mt::TableMeta {
 
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
-            catalog,
             engine: p.engine,
             engine_options: p.engine_options,
             storage_params: match p.storage_params {
@@ -243,7 +237,6 @@ impl FromToProto for mt::TableMeta {
         let p = pb::TableMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            catalog: self.catalog.clone(),
             schema: Some(self.schema.to_pb()?),
             engine: self.engine.clone(),
             engine_options: self.engine_options.clone(),

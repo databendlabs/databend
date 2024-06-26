@@ -83,7 +83,6 @@ fn test_decode_v44_table_meta() -> anyhow::Result<()> {
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "default".to_string(),
         engine: "44".to_string(),
         storage_params: None,
         part_prefix: "".to_string(),

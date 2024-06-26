@@ -35,11 +35,13 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
+use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Exchange;
+use crate::plans::MergeInto;
 use crate::plans::ProjectSet;
 use crate::plans::Udf;
 use crate::plans::Window;
@@ -103,6 +105,8 @@ pub enum RelOp {
     AddRowNumber,
     Udf,
     AsyncFunction,
+    RecursiveCteScan,
+    MergeInto,
 
     // Pattern
     Pattern,
@@ -130,7 +134,9 @@ pub enum RelOperator {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
+    MergeInto(MergeInto),
 }
 
 impl Operator for RelOperator {
@@ -155,7 +161,9 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
             RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
+            RelOperator::MergeInto(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -180,7 +188,9 @@ impl Operator for RelOperator {
             RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
             RelOperator::CacheScan(rel_op) => rel_op.arity(),
             RelOperator::Udf(rel_op) => rel_op.arity(),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
+            RelOperator::MergeInto(rel_op) => rel_op.arity(),
         }
     }
 
@@ -205,7 +215,9 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::MergeInto(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -230,7 +242,9 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::MergeInto(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -255,7 +269,9 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::MergeInto(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -324,7 +340,13 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::RecursiveCteScan(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
             RelOperator::AsyncFunction(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::MergeInto(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -394,7 +416,13 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
+            RelOperator::RecursiveCteScan(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
             RelOperator::AsyncFunction(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::MergeInto(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -733,6 +761,20 @@ impl TryFrom<RelOperator> for Udf {
     }
 }
 
+impl TryFrom<RelOperator> for RecursiveCteScan {
+    type Error = ErrorCode;
+
+    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
+        if let RelOperator::RecursiveCteScan(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to RecursiveCteScan",
+                value.rel_op()
+            )))
+        }
+    }
+}
 impl From<AsyncFunction> for RelOperator {
     fn from(value: AsyncFunction) -> Self {
         Self::AsyncFunction(value)
@@ -748,6 +790,26 @@ impl TryFrom<RelOperator> for AsyncFunction {
         } else {
             Err(ErrorCode::Internal(format!(
                 "Cannot downcast {:?} to AsyncFunction",
+                value.rel_op()
+            )))
+        }
+    }
+}
+
+impl From<MergeInto> for RelOperator {
+    fn from(v: MergeInto) -> Self {
+        Self::MergeInto(v)
+    }
+}
+
+impl TryFrom<RelOperator> for MergeInto {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::MergeInto(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to MergeInto",
                 value.rel_op()
             )))
         }

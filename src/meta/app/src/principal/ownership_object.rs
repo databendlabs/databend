@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::KeyCodec;
 
@@ -60,6 +62,26 @@ impl OwnershipObject {
     //
     // This issue is introduced in https://github.com/drmingdrmer/databend/blob/7681763dc54306e55b5e0326af0510292d244be3/src/query/management/src/role/role_mgr.rs#L86
     const DEFAULT_CATALOG: &'static str = "default";
+}
+
+impl fmt::Display for OwnershipObject {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+        match self {
+            OwnershipObject::Database {
+                ref catalog_name,
+                ref db_id,
+            } => write!(f, "'{}'.'{}'.*", catalog_name, db_id),
+            OwnershipObject::Table {
+                ref catalog_name,
+                ref db_id,
+                ref table_id,
+            } => {
+                write!(f, "'{}'.'{}'.'{}'", catalog_name, db_id, table_id)
+            }
+            OwnershipObject::UDF { name } => write!(f, "UDF {name}"),
+            OwnershipObject::Stage { name } => write!(f, "STAGE {name}"),
+        }
+    }
 }
 
 impl KeyCodec for OwnershipObject {

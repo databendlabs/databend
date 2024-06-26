@@ -14,17 +14,16 @@ test = true
 storage-hdfs = []
 
 [dependencies]
-databend-common-ast = { path = "../../query/ast" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../../query/expression" }
-databend-common-io = { path = "../../common/io" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-types = { path = "../types" }
-
 anyerror = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cron = "0.12.0"
+databend-common-ast = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-types = { workspace = true }
 enumflags2 = { workspace = true }
 hex = "0.4.3"
 itertools = { workspace = true }
@@ -47,5 +46,7 @@ ignored = ["num-traits"]
 
 [build-dependencies]
 databend-common-building = { path = "../../common/building" }
-
 tonic-build = { workspace = true }
+
+[lints]
+workspace = true

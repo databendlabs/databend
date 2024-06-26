@@ -22,6 +22,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
+use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -60,6 +62,7 @@ use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -96,6 +99,7 @@ pub enum PhysicalPlan {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    RecursiveCteScan(RecursiveCteScan),
 
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
@@ -120,6 +124,8 @@ pub enum PhysicalPlan {
     MergeInto(Box<MergeInto>),
     MergeIntoAppendNotMatched(Box<MergeIntoAppendNotMatched>),
     MergeIntoAddRowNumber(Box<MergeIntoAddRowNumber>),
+    MergeIntoSplit(Box<MergeIntoSplit>),
+    MergeIntoManipulate(Box<MergeIntoManipulate>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -240,6 +246,10 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
+            PhysicalPlan::RecursiveCteScan(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
             PhysicalPlan::MaterializedCte(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -307,6 +317,16 @@ impl PhysicalPlan {
                 plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoSplit(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoManipulate(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -422,6 +442,8 @@ impl PhysicalPlan {
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
+            PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
@@ -441,6 +463,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(v) => v.plan_id,
             PhysicalPlan::ChunkMerge(v) => v.plan_id,
             PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
+            PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
         }
     }
 
@@ -471,9 +494,12 @@ impl PhysicalPlan {
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::ExpressionScan(plan) => plan.output_schema(),
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
+            PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -504,6 +530,7 @@ impl PhysicalPlan {
                 DataSourceInfo::StageSource(_) => "StageScan".to_string(),
                 DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
                 DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+                DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
             },
             PhysicalPlan::AsyncFunction(_) => "AsyncFunction".to_string(),
             PhysicalPlan::Filter(_) => "Filter".to_string(),
@@ -533,12 +560,15 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
             PhysicalPlan::MergeIntoAppendNotMatched(_) => "MergeIntoAppendNotMatched".to_string(),
+            PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
+            PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
+            PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
+            PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
-            PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
             PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
@@ -568,7 +598,8 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::AsyncFunction(_)
-            | PhysicalPlan::UpdateSource(_) => Box::new(std::iter::empty()),
+            | PhysicalPlan::UpdateSource(_)
+            | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -604,6 +635,10 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
+            PhysicalPlan::MergeIntoSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoManipulate(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
@@ -660,10 +695,13 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoAddRowNumber(_)
             | PhysicalPlan::MergeIntoAppendNotMatched(_)
+            | PhysicalPlan::MergeIntoSplit(_)
+            | PhysicalPlan::MergeIntoManipulate(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::CteScan(_)
+            | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
             | PhysicalPlan::UpdateSource(_)
@@ -677,6 +715,44 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkMerge(_)
             | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
+        }
+    }
+
+    pub fn try_find_data_source(&self, table_index: usize) -> Option<&DataSourcePlan> {
+        match self {
+            PhysicalPlan::TableScan(scan) => {
+                if let Some(index) = scan.table_index
+                    && index == table_index
+                {
+                    Some(&scan.source)
+                } else {
+                    None
+                }
+            }
+            PhysicalPlan::HashJoin(hash_join) => {
+                let left = hash_join.probe.try_find_data_source(table_index);
+                if left.is_some() {
+                    return left;
+                }
+                let right = hash_join.build.try_find_data_source(table_index);
+                right
+            }
+            PhysicalPlan::Filter(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::EvalScalar(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Window(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Sort(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Limit(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Exchange(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                plan.input.try_find_data_source(table_index)
+            }
+            PhysicalPlan::ProjectSet(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::RowFetch(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Udf(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::MergeIntoSplit(plan) => plan.input.try_find_data_source(table_index),
+            _ => None,
         }
     }
 
@@ -829,9 +905,10 @@ impl PhysicalPlan {
                 format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
             }
             PhysicalPlan::UnionAll(v) => v
-                .pairs
+                .left_outputs
                 .iter()
-                .map(|(l, r)| format!("#{} <- #{}", l, r))
+                .zip(v.right_outputs.iter())
+                .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
                 .join(", "),
             PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
             _ => String::new(),

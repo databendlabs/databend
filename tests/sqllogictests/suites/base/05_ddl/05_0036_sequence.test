@@ -69,6 +69,25 @@ select nextval(seq);
 ----
 9
 
+query I
+select nextval(seq) + 20 from numbers(5);
+----
+30
+31
+32
+33
+34
+
+query B
+select cast(nextval(seq) as float);
+----
+15.0
+
+query I
+select sum(nextval(seq)) from numbers(10);
+----
+205
+
 statement ok
 INSERT INTO tmp select nextval(seq) from numbers(1000000);
 

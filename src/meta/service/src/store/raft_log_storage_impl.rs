@@ -15,20 +15,28 @@
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::ops::RangeBounds;
+use std::time::Duration;
 
+use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io;
+use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_meta_sled_store::openraft::storage::LogFlushed;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
+use databend_common_meta_sled_store::openraft::EntryPayload;
 use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
+use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::LogState;
 use databend_common_meta_sled_store::openraft::OptionalSend;
+use databend_common_meta_sled_store::openraft::RaftLogId;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_types::Entry;
 use databend_common_meta_types::LogId;
+use databend_common_meta_types::Membership;
 use databend_common_meta_types::StorageError;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
+use deepsize::DeepSizeOf;
 use log::debug;
 use log::error;
 use log::info;
@@ -39,22 +47,79 @@ use crate::store::ToStorageError;
 
 impl RaftLogReader<TypeConfig> for RaftStore {
     #[minitrace::trace]
+    async fn limited_get_log_entries(
+        &mut self,
+        mut start: u64,
+        end: u64,
+    ) -> Result<Vec<Entry>, StorageError> {
+        let chunk_size = 8;
+        let max_size = 2 * 1024 * 1024;
+
+        let mut res = Vec::with_capacity(64);
+        let mut total_size = 0;
+
+        while start < end {
+            let chunk_end = std::cmp::min(start + chunk_size, end);
+            let entries = self.try_get_log_entries(start..chunk_end).await?;
+
+            for ent in entries {
+                let size = match &ent.payload {
+                    EntryPayload::Blank => 0,
+                    EntryPayload::Normal(log_entry) => log_entry.deep_size_of(),
+                    EntryPayload::Membership(_) => std::mem::size_of::<Membership>(),
+                };
+
+                debug!(
+                    "RaftStore::limited_get_log_entries: got log: log_id: {}, size: {}",
+                    ent.get_log_id(),
+                    size
+                );
+
+                res.push(ent);
+                total_size += size;
+
+                if total_size >= max_size {
+                    info!(
+                        "RaftStore::limited_get_log_entries: too many logs, early return: entries cnt: {}, total size: {}, res: [{}, {}]",
+                        res.len(),
+                        total_size,
+                        res.first().map(|x| x.get_log_id()).unwrap(),
+                        res.last().map(|x| x.get_log_id()).unwrap(),
+                    );
+
+                    return Ok(res);
+                }
+            }
+
+            start = chunk_end;
+        }
+
+        Ok(res)
+    }
+
+    #[minitrace::trace]
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
         &mut self,
         range: RB,
     ) -> Result<Vec<Entry>, StorageError> {
         debug!(
-            "try_get_log_entries: self.id={}, range: {:?}",
+            "RaftStore::try_get_log_entries: self.id={}, range: {:?}",
             self.id, range
         );
 
-        match self
+        let res = self
             .log
             .read()
             .await
-            .range_values(range)
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
-        {
+            .range_values(range.clone())
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read);
+
+        debug!(
+            "RaftStore::try_get_log_entries: done: self.id={}, range: {:?}",
+            self.id, range
+        );
+
+        match res {
             Ok(entries) => Ok(entries),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
@@ -136,16 +201,19 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
-        info!(id = self.id, hs :? =(hs); "save_vote");
+        info!(id = self.id; "RaftStore::save_vote({}): start", hs);
 
-        match self
+        let res = self
             .raft_state
             .write()
             .await
             .save_vote(hs)
             .await
-            .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
-        {
+            .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write);
+
+        info!(id = self.id; "RaftStore::save_vote({}): done", hs);
+
+        match res {
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("save_vote", true);
                 Err(err)
@@ -181,14 +249,25 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         I: IntoIterator<Item = Entry> + OptionalSend,
         I::IntoIter: OptionalSend,
     {
-        // TODO: it is bad: allocates a new vec.
+        let mut first = None;
+        let mut last = None;
+
         let entries = entries
             .into_iter()
             .map(|x| {
-                info!("append_to_log: {}", x.log_id);
+                if first.is_none() {
+                    first = Some(x.log_id);
+                }
+                last = Some(x.log_id);
                 x
             })
             .collect::<Vec<_>>();
+
+        info!(
+            "RaftStore::append([{}, {}]): start",
+            first.display(),
+            last.display()
+        );
 
         let res = match self.log.write().await.append(entries).await {
             Err(err) => {
@@ -200,21 +279,30 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
         callback.log_io_completed(res.map_err(|e| io::Error::new(ErrorKind::InvalidData, e)));
 
+        info!(
+            "RaftStore::append([{}, {}]): done",
+            first.display(),
+            last.display()
+        );
+
         Ok(())
     }
 
     #[minitrace::trace]
     async fn truncate(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id; "truncate: {}", log_id);
+        info!(id = self.id; "RaftStore::truncate({}): start", log_id);
 
-        match self
+        let res = self
             .log
             .write()
             .await
             .range_remove(log_id.index..)
             .await
-            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
-        {
+            .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete);
+
+        info!(id = self.id; "RaftStore::truncate({}): done", log_id);
+
+        match res {
             Ok(_) => Ok(()),
             Err(err) => {
                 raft_metrics::storage::incr_raft_storage_fail("delete_conflict_logs_since", true);
@@ -225,7 +313,21 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
     #[minitrace::trace]
     async fn purge(&mut self, log_id: LogId) -> Result<(), StorageError> {
-        info!(id = self.id, log_id :? =(&log_id); "purge upto: start");
+        let curr_purged = self
+            .log
+            .write()
+            .await
+            .get_last_purged()
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)?;
+
+        let purge_range = (curr_purged.next_index(), log_id.index);
+        let purge_range_str = format!("({},{}]", purge_range.0, purge_range.1);
+
+        info!(
+            id = self.id,
+            curr_purged :? =(&curr_purged),
+            upto_log_id :? =(&log_id);
+            "RaftStore::purge({}): start", purge_range_str);
 
         if let Err(err) = self
             .log
@@ -239,7 +341,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             return Err(err);
         };
 
-        info!(id = self.id, log_id :? =(&log_id); "purge_logs_upto: Done: set_last_purged()");
+        info!(id = self.id, log_id :? =(&log_id); "RaftStore::purge({}): Done: set_last_purged()", purge_range_str);
 
         let log = self.log.write().await.clone();
 
@@ -254,16 +356,46 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         databend_common_base::runtime::spawn({
             let id = self.id;
             async move {
-                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Start: asynchronous range_remove()");
+                info!(id = id, log_id :? =(&log_id); "RaftStore::purge({}): Start: asynchronous one by one remove", purge_range_str);
 
-                let res = log.range_remove(..=log_id.index).await;
+                let mut removed_cnt = 0;
+                let mut removed_size = 0;
+                let curr = curr_purged.next_index();
+                for i in curr..=log_id.index {
+                    let res = log.logs().remove_no_return(&i, true).await;
 
-                if let Err(err) = res {
-                    error!(id = id, log_id :? =(&log_id); "purge_logs_upto: in asynchronous error: {}", err);
-                    raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
+                    let removed = match res {
+                        Ok(r) => r,
+                        Err(err) => {
+                            error!(id = id, log_index :% =i;
+                                "RaftStore::purge({}): in asynchronous error: {}", purge_range_str, err);
+                            raft_metrics::storage::incr_raft_storage_fail("purge_logs_upto", true);
+                            return;
+                        }
+                    };
+
+                    if let Some(size) = removed {
+                        removed_cnt += 1;
+                        removed_size += size;
+                    } else {
+                        error!(id = id, log_index :% =i;
+                            "RaftStore::purge({}): in asynchronous error: not found, maybe removed by other thread; quit this thread", purge_range_str);
+                        return;
+                    }
+
+                    if i % 100 == 0 {
+                        info!(id = id, log_index :% =i,
+                            removed_cnt = removed_cnt,
+                            removed_size = removed_size,
+                            avg_removed_size = removed_size / (removed_cnt+1);
+                            "RaftStore::purge({}): asynchronous removed log", purge_range_str);
+                    }
+
+                    // Do not block for too long if there are many keys to delete.
+                    tokio::time::sleep(Duration::from_millis(2)).await;
                 }
 
-                info!(id = id, log_id :? =(&log_id); "purge_logs_upto: Done: asynchronous range_remove()");
+                info!(id = id, upto_log_id :? =(&log_id); "RaftStore::purge({}): Done: asynchronous one by one remove", purge_range_str);
             }
         });
 

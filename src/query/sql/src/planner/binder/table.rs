@@ -21,13 +21,13 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
-use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
@@ -37,15 +37,12 @@ use databend_common_exception::Result;
 use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -53,8 +50,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_parquet::ParquetRSTable;
-use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
@@ -70,6 +65,8 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
+use crate::plans::RecursiveCteScan;
+use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -118,93 +115,10 @@ impl Binder {
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-
-        let table = match stage_info.file_format_params {
-            FileFormatParams::Parquet(..) => {
-                let mut read_options = ParquetReadOptions::default();
-
-                if !table_ctx.get_settings().get_enable_parquet_page_index()? {
-                    read_options = read_options.with_prune_pages(false);
-                }
-
-                if !table_ctx
-                    .get_settings()
-                    .get_enable_parquet_rowgroup_pruning()?
-                {
-                    read_options = read_options.with_prune_row_groups(false);
-                }
-
-                if !table_ctx.get_settings().get_enable_parquet_prewhere()? {
-                    read_options = read_options.with_do_prewhere(false);
-                }
-
-                ParquetRSTable::create(
-                    table_ctx.clone(),
-                    stage_info.clone(),
-                    files_info,
-                    read_options,
-                    files_to_copy,
-                )
-                .await?
-            }
-            FileFormatParams::NdJson(..) => {
-                let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                    "_$1", // TODO: this name should be in visible
-                    TableDataType::Variant,
-                )]));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_values: None,
-                };
-                StageTable::try_create(info)?
-            }
-            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
-                let max_column_position = self.metadata.read().get_max_column_position();
-                if max_column_position == 0 {
-                    let file_type = match stage_info.file_format_params {
-                        FileFormatParams::Csv(..) => "CSV",
-                        FileFormatParams::Tsv(..) => "TSV",
-                        _ => unreachable!(), // This branch should never be reached
-                    };
-
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
-                        file_type
-                    )));
-                }
-
-                let mut fields = vec![];
-                for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(
-                        &format!("_${}", i),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ));
-                }
-
-                let schema = Arc::new(TableSchema::new(fields));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_values: None,
-                };
-                StageTable::try_create(info)?
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
-                    stage_info.file_format_params
-                )));
-            }
-        };
+        let max_column_position = self.metadata.read().get_max_column_position();
+        let table = table_ctx
+            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
             Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
@@ -376,6 +290,128 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte_scan(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        cte_name: &str,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut metadata = self.metadata.write();
+        let mut columns = cte_info.columns.clone();
+        for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
+            columns[index].column_name = column_name.clone();
+        }
+        for col in columns.iter() {
+            // Expand a number type to a higher precision to avoid overflow
+            // (Because the output type of recursive cte is the left of the union)
+            let expand_data_type = match *col.data_type {
+                DataType::Number(NumberDataType::UInt8)
+                | DataType::Number(NumberDataType::UInt16)
+                | DataType::Number(NumberDataType::UInt32) => {
+                    Box::new(DataType::Number(NumberDataType::UInt64))
+                }
+                DataType::Number(NumberDataType::Int8)
+                | DataType::Number(NumberDataType::Int16)
+                | DataType::Number(NumberDataType::Int32) => {
+                    Box::new(DataType::Number(NumberDataType::Int64))
+                }
+                _ => col.data_type.clone(),
+            };
+            let idx = metadata.add_derived_column(
+                col.column_name.clone(),
+                *expand_data_type.clone(),
+                None,
+            );
+            new_bind_ctx.columns.push(
+                ColumnBindingBuilder::new(
+                    col.column_name.clone(),
+                    idx,
+                    expand_data_type,
+                    Visibility::Visible,
+                )
+                .table_name(col.table_name.clone())
+                .build(),
+            )
+        }
+        let mut fields = Vec::with_capacity(cte_info.columns.len());
+        for col in new_bind_ctx.columns.iter() {
+            fields.push(DataField::new(
+                col.index.to_string().as_str(),
+                *col.data_type.clone(),
+            ));
+        }
+        // Update the cte_info of the recursive cte
+        self.ctes_map
+            .entry(cte_name.to_string())
+            .and_modify(|cte_info| {
+                cte_info.columns = new_bind_ctx.columns.clone();
+            });
+        if let Some(alias) = alias {
+            new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+
+        let table_alias_name = alias
+            .as_ref()
+            .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
+        let table_name = if let Some(table_alias_name) = table_alias_name {
+            table_alias_name
+        } else {
+            cte_name.to_string()
+        };
+
+        Ok((
+            SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
+                fields,
+                table_name,
+            }))),
+            new_bind_ctx,
+        ))
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_r_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        cte_name: &str,
+        alias: &Option<TableAlias>,
+    ) -> Result<(SExpr, BindContext)> {
+        // Recursive cte's query must be a union(all)
+        match &cte_info.query.body {
+            SetExpr::SetOperation(set_expr) => {
+                if set_expr.op != SetOperator::Union {
+                    return Err(ErrorCode::SyntaxException(
+                        "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                    ));
+                }
+                self.set_bind_recursive_cte(true);
+                let (union_s_expr, mut new_bind_ctx) = self
+                    .bind_set_operator(
+                        bind_context,
+                        &set_expr.left,
+                        &set_expr.right,
+                        &set_expr.op,
+                        &set_expr.all,
+                        Some(cte_name.to_string()),
+                    )
+                    .await?;
+                self.set_bind_recursive_cte(false);
+                if let Some(alias) = alias {
+                    new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                }
+                Ok((union_s_expr, new_bind_ctx.clone()))
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "Recursive CTE must contain a UNION(ALL) query".to_string(),
+                ));
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
@@ -515,7 +551,7 @@ impl Binder {
                     &[],
                     false,
                 )?;
-                let box (scalar, _) = type_checker.resolve(expr).await?;
+                let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
@@ -553,7 +589,7 @@ impl Binder {
                     &[],
                     false,
                 )?;
-                let box (scalar, _) = type_checker.resolve(expr).await?;
+                let box (scalar, _) = type_checker.resolve(expr)?;
                 let scalar_expr = scalar.as_expr()?;
 
                 let (new_expr, _) = ConstantFolder::fold(

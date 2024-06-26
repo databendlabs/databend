@@ -13,13 +13,15 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-meta-types = { path = "../types" }
-
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+databend-common-meta-types = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

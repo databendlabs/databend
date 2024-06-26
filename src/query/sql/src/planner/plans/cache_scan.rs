@@ -103,6 +103,7 @@ impl Operator for CacheScan {
             outer_columns: Default::default(),
             used_columns: Default::default(),
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

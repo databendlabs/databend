@@ -10,14 +10,12 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-databend-common-exception = { path = "../exception" }
-
+[dependencies]
+databend-common-exception = { workspace = true }
 ndarray = "0.15.6"
-
-[build-dependencies]
-
-[features]
 
 [dev-dependencies]
 approx = "0.5.1"
+
+[lints]
+workspace = true

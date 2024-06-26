@@ -36,7 +36,6 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
@@ -70,7 +69,7 @@ async fn apply_block_pruning(
     let segment_locs = table_snapshot.segments.clone();
     let segment_locs = create_segment_location_vector(segment_locs, None);
 
-    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols)?
+    FusePruner::create(&ctx, dal, schema, push_down, bloom_index_cols, None)?
         .read_pruning(segment_locs)
         .await
 }
@@ -526,7 +525,6 @@ async fn test_block_pruner() -> Result<()> {
         table: test_tbl_name.to_string(),
         index_name: index_name.clone(),
         segment_locs: None,
-        lock_opt: LockTableOption::LockWithRetry,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;

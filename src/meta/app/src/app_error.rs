@@ -384,6 +384,20 @@ impl MultiStmtTxnCommitFailed {
     }
 }
 
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UpdateStreamMetasFailed: {message}")]
+pub struct UpdateStreamMetasFailed {
+    message: String,
+}
+
+impl crate::app_error::UpdateStreamMetasFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
@@ -680,14 +694,16 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
-pub struct UnknownShareTable {
+#[error(
+    "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
+)]
+pub struct CannotAccessShareTable {
     pub tenant: String,
     pub share_name: String,
     pub table_name: String,
 }
 
-impl UnknownShareTable {
+impl CannotAccessShareTable {
     pub fn new(
         tenant: impl Into<String>,
         share_name: impl Into<String>,
@@ -1148,7 +1164,7 @@ pub enum AppError {
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
-    UnknownShareTable(#[from] UnknownShareTable),
+    CannotAccessShareTable(#[from] CannotAccessShareTable),
 
     #[error(transparent)]
     WrongShare(#[from] WrongShare),
@@ -1228,6 +1244,9 @@ pub enum AppError {
     // sequence
     #[error(transparent)]
     SequenceError(#[from] SequenceError),
+
+    #[error(transparent)]
+    UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1325,6 +1344,8 @@ impl AppErrorMessage for StreamVersionMismatched {}
 impl AppErrorMessage for UnknownStreamId {}
 
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
+
+impl AppErrorMessage for UpdateStreamMetasFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
@@ -1436,10 +1457,10 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
-impl AppErrorMessage for UnknownShareTable {
+impl AppErrorMessage for CannotAccessShareTable {
     fn message(&self) -> String {
         format!(
-            "unknown share table {} of share {}.{}",
+            "cannot access to share table {} from share {}.{}",
             self.table_name, self.tenant, self.share_name
         )
     }
@@ -1723,7 +1744,9 @@ impl From<AppError> for ErrorCode {
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
-            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
+            AppError::CannotAccessShareTable(err) => {
+                ErrorCode::CannotAccessShareTable(err.message())
+            }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())
@@ -1769,6 +1792,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UnresolvableConflict(err.message())
             }
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
+            AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
         }
     }
 }

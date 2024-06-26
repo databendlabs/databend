@@ -292,6 +292,15 @@ pub enum DecimalDomain {
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
+impl DecimalDomain {
+    pub fn decimal_size(&self) -> DecimalSize {
+        match self {
+            DecimalDomain::Decimal128(_, size) => *size,
+            DecimalDomain::Decimal256(_, size) => *size,
+        }
+    }
+}
+
 #[derive(
     Debug,
     Clone,
@@ -338,6 +347,8 @@ pub trait Decimal:
     fn checked_div(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
     fn checked_rem(self, rhs: Self) -> Option<Self>;
+
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -432,6 +443,16 @@ impl Decimal for i128 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
+        if self.is_negative() == rhs.is_negative() {
+            let res = (i256::from(self) * i256::from(mul) + i256::from(rhs) / 2) / i256::from(rhs);
+            Some(*res.low())
+        } else {
+            let res = (i256::from(self) * i256::from(mul) - i256::from(rhs) / 2) / i256::from(rhs);
+            Some(*res.low())
+        }
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -636,6 +657,14 @@ impl Decimal for i256 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
+        if self.is_negative() == rhs.is_negative() {
+            self.checked_mul(mul).map(|x| (x + rhs / 2) / rhs)
+        } else {
+            self.checked_mul(mul).map(|x| (x - rhs / 2) / rhs)
+        }
     }
 
     fn min_for_precision(to_precision: u8) -> Self {

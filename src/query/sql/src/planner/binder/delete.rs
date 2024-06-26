@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::TableReference;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -47,7 +48,7 @@ impl<'a> Binder {
         scalar_binder: &mut ScalarBinder<'_>,
     ) -> Result<(Option<ScalarExpr>, Vec<SubqueryDesc>)> {
         Ok(if let Some(expr) = filter {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let (scalar, _) = scalar_binder.bind(expr)?;
             let mut subquery_desc = vec![];
             self.subquery_desc(&scalar, table_expr, &mut subquery_desc)
                 .await?;
@@ -87,6 +88,18 @@ impl<'a> Binder {
             ));
         };
 
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
         let (table_expr, mut context) = self.bind_table_reference(bind_context, table).await?;
 
         context.allow_internal_columns(false);
@@ -122,6 +135,7 @@ impl<'a> Binder {
             bind_context: Box::new(context.clone()),
             selection,
             subquery_desc,
+            lock_guard,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }

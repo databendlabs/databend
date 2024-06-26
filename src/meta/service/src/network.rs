@@ -15,16 +15,13 @@
 use std::error::Error;
 use std::fmt::Display;
 use std::future::Future;
-use std::sync::Arc;
 use std::time::Duration;
 
-use anyerror::func_name;
 use anyerror::AnyError;
-use async_trait::async_trait;
 use backon::BackoffBuilder;
 use backon::ExponentialBuilder;
-use databend_common_base::containers::ItemManager;
-use databend_common_base::containers::Pool;
+use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::future::TimingFutureExt;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
@@ -46,6 +43,7 @@ use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::InstallSnapshotResponse;
 use databend_common_meta_types::MembershipNode;
+use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::NetworkError;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RPCError;
@@ -60,41 +58,16 @@ use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
 use log::debug;
+use log::error;
 use log::info;
 use log::warn;
 use openraft::RaftNetwork;
-use tonic::client::GrpcService;
-use tonic::transport::channel::Channel;
+use tokio::sync::Mutex;
 
 use crate::metrics::raft_metrics;
 use crate::raft_client::RaftClient;
 use crate::raft_client::RaftClientApi;
 use crate::store::RaftStore;
-
-#[derive(Debug)]
-struct ChannelManager {}
-
-#[async_trait]
-impl ItemManager for ChannelManager {
-    type Key = String;
-    type Item = Channel;
-    type Error = tonic::transport::Error;
-
-    #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
-    async fn build(&self, addr: &Self::Key) -> Result<Channel, tonic::transport::Error> {
-        tonic::transport::Endpoint::new(addr.clone())?
-            .connect()
-            .await
-    }
-
-    #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
-    async fn check(&self, mut ch: Channel) -> Result<Channel, tonic::transport::Error> {
-        futures::future::poll_fn(|cx| ch.poll_ready(cx)).await?;
-        Ok(ch)
-    }
-}
 
 #[derive(Debug, Clone)]
 pub(crate) struct Backoff {
@@ -138,10 +111,10 @@ impl Backoff {
 impl Default for Backoff {
     fn default() -> Self {
         Self {
-            back_off_ratio: 2.0,
-            back_off_min_delay: Duration::from_secs(1),
-            back_off_max_delay: Duration::from_secs(60),
-            back_off_chances: 3,
+            back_off_ratio: 1.5,
+            back_off_min_delay: Duration::from_millis(50),
+            back_off_max_delay: Duration::from_millis(1_000),
+            back_off_chances: 10,
         }
     }
 }
@@ -150,17 +123,13 @@ impl Default for Backoff {
 pub struct Network {
     sto: RaftStore,
 
-    conn_pool: Arc<Pool<ChannelManager>>,
-
     backoff: Backoff,
 }
 
 impl Network {
     pub fn new(sto: RaftStore) -> Network {
-        let mgr = ChannelManager {};
         Network {
             sto,
-            conn_pool: Arc::new(Pool::new(mgr, Duration::from_millis(50))),
             backoff: Backoff::default(),
         }
     }
@@ -181,51 +150,104 @@ pub struct NetworkConnection {
     /// The endpoint of the target node.
     endpoint: Endpoint,
 
-    sto: RaftStore,
+    client: Mutex<Option<RaftClient>>,
 
-    conn_pool: Arc<Pool<ChannelManager>>,
+    sto: RaftStore,
 
     backoff: Backoff,
 }
 
 impl NetworkConnection {
+    /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
     #[minitrace::trace]
-    pub async fn make_client(&mut self) -> Result<RaftClient, Unreachable> {
-        let target = self.target;
+    pub async fn new_client(&self, addr: &str) -> Result<RaftClient, tonic::transport::Error> {
+        info!(id = self.id; "Raft NetworkConnection connect: target={}: {}", self.target, addr);
 
-        let endpoint = self
-            .sto
-            .get_node_raft_endpoint(&target)
-            .await
-            .map_err(|e| {
-                let any_err = AnyError::new(&e)
-                    .add_context(|| format!("{} target: {}", func_name!(), self.target));
-                Unreachable::new(&any_err)
-            })?;
+        let channel = tonic::transport::Endpoint::new(addr.to_string())?
+            .connect()
+            .debug_elapsed(format!(
+                "Raft NetworkConnection new_client: connect target: {}",
+                self.target
+            ))
+            .await?;
 
-        let addr = format!("http://{}", endpoint);
+        let client = RaftClientApi::new(self.target, self.endpoint.clone(), channel);
 
-        debug!(id = self.id; "connect: target={}: {}", target, addr);
+        info!(
+            "Raft NetworkConnection connected to: target={}: {}",
+            self.target, addr
+        );
 
-        match self.conn_pool.get(&addr).await {
-            Ok(channel) => {
-                let client = RaftClientApi::new(target, endpoint.clone(), channel);
-                debug!("connected: target={}: {}", target, addr);
+        Ok(client)
+    }
 
-                self.endpoint = endpoint;
+    /// Take the last used client or create a new one.
+    #[logcall::logcall(err = "debug")]
+    #[minitrace::trace]
+    async fn take_client(&mut self) -> Result<RaftClient, Unreachable> {
+        let mut client = self.client.lock().await;
 
-                Ok(client)
-            }
-            Err(err) => {
-                raft_metrics::network::incr_connect_failure(&target, &endpoint.to_string());
-                let any_err = AnyError::new(&err).add_context(|| {
-                    format!("{} target: {}, addr: {}", func_name!(), self.target, addr)
-                });
+        if let Some(c) = client.take() {
+            return Ok(c);
+        }
 
-                Err(Unreachable::new(&any_err))
+        let n = 3;
+        for _i in 0..n {
+            let endpoint = self
+                .lookup_target_address()
+                .debug_elapsed(format!(
+                    "Raft NetworkConnection take_client lookup_target_address: target: {}",
+                    self.target
+                ))
+                .await
+                .map_err(|e| {
+                    let any_err = AnyError::new(&e).add_context(|| {
+                        format!(
+                            "Raft NetworkConnection fail to lookup target address: target={}",
+                            self.target
+                        )
+                    });
+                    warn!("{}", any_err);
+                    Unreachable::new(&any_err)
+                })?;
+
+            self.endpoint = endpoint;
+
+            let addr = format!("http://{}", self.endpoint);
+
+            let res = self.new_client(&addr).await;
+            match res {
+                Ok(c) => {
+                    return Ok(c);
+                }
+                Err(e) => {
+                    warn!(
+                        "Raft NetworkConnection fail to connect: target={}: addr={}: {}",
+                        self.target, &addr, e
+                    );
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
             }
         }
+
+        let any_err = AnyError::error(format!(
+            "Raft NetworkConnection fail to connect: target={}, retry={}",
+            self.target, n
+        ));
+        error!("{}", any_err);
+
+        Err(Unreachable::new(&any_err))
+    }
+
+    async fn lookup_target_address(&self) -> Result<Endpoint, MetaNetworkError> {
+        debug!(
+            "Raft NetworkConnection lookup target address: start: target={}",
+            self.target
+        );
+        let endpoint = self.sto.get_node_raft_endpoint(&self.target).await?;
+
+        Ok(endpoint)
     }
 
     pub(crate) fn report_metrics_snapshot(&self, success: bool) {
@@ -249,7 +271,13 @@ impl NetworkConnection {
     where
         E: std::error::Error,
     {
+        let start = Instant::now();
         let raft_req = GrpcHelper::encode_raft_request(rpc).map_err(|e| Unreachable::new(&e))?;
+        debug!(
+            "Raft NetworkConnection: new_append_entries_raft_req() encode_raft_request: target={}, elapsed={:?}",
+            self.target,
+            start.elapsed()
+        );
 
         if raft_req.data.len() <= GrpcConfig::advisory_encoding_size() {
             return Ok(raft_req);
@@ -350,13 +378,16 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             "send_append_entries",
         );
 
-        let mut client = self.make_client().await?;
-
         let raft_req = self.new_append_entries_raft_req(&rpc)?;
         let req = GrpcHelper::traced_req(raft_req);
 
         let bytes = req.get_ref().data.len() as u64;
         raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection append_entries take_client()")
+            .await?;
 
         let grpc_res = client
             .append_entries(req)
@@ -367,16 +398,25 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             self.target, grpc_res
         );
 
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target, rpc = rpc.summary(); "append_entries failed: {}", e);
+            }
+        }
+
         self.parse_grpc_resp(grpc_res)
     }
 
-    #[logcall::logcall(err = "debug")]
+    #[logcall::logcall(err = "debug", input = "")]
     #[minitrace::trace]
     async fn full_snapshot(
         &mut self,
         vote: Vote,
         snapshot: Snapshot,
-        cancel: impl Future<Output = ReplicationClosed> + Send,
+        cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
         option: RPCOption,
     ) -> Result<SnapshotResponse, StreamingError<Fatal>> {
         // This implementation just delegates to `Chunked::send_snapshot`,
@@ -404,13 +444,16 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
 
         let _g = snapshot_send_inflight(self.target).counter_guard();
 
-        let mut client = self.make_client().await?;
-
         let bytes = rpc.data.len() as u64;
         raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
         let v1_req = SnapshotChunkRequest::new_v1(rpc);
         let req = databend_common_tracing::inject_span_to_tonic_request(v1_req);
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
+            .await?;
 
         let grpc_res = client
             .install_snapshot_v1(req)
@@ -421,6 +464,15 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
             "install_snapshot resp target={}: {:?}",
             self.target, grpc_res
         );
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target; "install_snapshot failed: {}", e);
+            }
+        }
 
         let res = self.parse_grpc_resp(grpc_res);
         self.report_metrics_snapshot(res.is_ok());
@@ -437,8 +489,6 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
     ) -> Result<VoteResponse, RPCError<RaftError>> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
-        let mut client = self.make_client().await?;
-
         let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
 
         let req = GrpcHelper::traced_req(raft_req);
@@ -446,8 +496,22 @@ impl RaftNetwork<TypeConfig> for NetworkConnection {
         let bytes = req.get_ref().data.len() as u64;
         raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection vote take_client()")
+            .await?;
+
         let grpc_res = client.vote(req).await;
         info!("vote: resp from target={} {:?}", self.target, grpc_res);
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target, rpc = rpc.summary(); "vote failed: {}", e);
+            }
+        }
 
         self.parse_grpc_resp(grpc_res)
     }
@@ -478,9 +542,9 @@ impl RaftNetworkFactory<TypeConfig> for Network {
             target,
             target_node: node.clone(),
             sto: self.sto.clone(),
-            conn_pool: self.conn_pool.clone(),
             backoff: self.backoff.clone(),
             endpoint: Default::default(),
+            client: Default::default(),
         }
     }
 }

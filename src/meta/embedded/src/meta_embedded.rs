@@ -92,7 +92,7 @@ impl MetaEmbedded {
     /// Initialize a global embedded meta store.
     /// The data in `path` won't be removed after program exit.
     pub async fn init_global_meta_store(path: String) -> Result<(), MetaStorageError> {
-        databend_common_meta_sled_store::init_sled_db(path);
+        databend_common_meta_sled_store::init_sled_db(path, 64 * 1024 * 1024 * 1024);
 
         {
             let mut m = GLOBAL_META_EMBEDDED.as_ref().lock().await;

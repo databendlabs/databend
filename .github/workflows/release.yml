@@ -39,64 +39,13 @@ jobs:
       - name: Bump version
         id: bump
         uses: actions/github-script@v7
+        env:
+          STABLE: "${{ inputs.stable }}"
+          TAG: "${{ inputs.tag }}"
         with:
           script: |
-            if (context.ref.startsWith("refs/tags/")) {
-              let tag = context.ref.replace("refs/tags/", "");
-              core.setOutput('tag', tag);
-              core.info(`Tag event triggered by ${tag}.`);
-              return
-            }
-            if ("${{ inputs.stable }}" == "true") {
-              if ("${{ inputs.tag }}") {
-                // trigger stable release by workflow_dispatch with a tag
-                let tag = "${{ inputs.tag }}";
-                let result = /v(\d+)\.(\d+)\.(\d+)-nightly/g.exec(tag);
-                if (result === null) {
-                  core.setFailed(`The tag ${tag} to stablize is invalid, ignoring`);
-                  return
-                }
-                let major = result[1];
-                let minor = result[2];
-                let patch = result[3];
-                let stable_tag = `v${major}.${minor}.${patch}`;
-                core.setOutput('tag', stable_tag);
-                let ref = await github.rest.git.getRef({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  ref: `tags/${tag}`,
-                });
-                core.setOutput('sha', ref.data.object.sha);
-                core.info(`Stable release ${stable_tag} from ${tag} (${ref.data.object.sha})`);
-              } else {
-                core.setFailed("Stable release must be triggered with a nightly tag")
-              }
-            } else {
-              if ("${{ inputs.tag }}") {
-                let tag = "${{ inputs.tag }}";
-                core.setOutput('tag', tag);
-                core.info(`Release create manually with tag ${tag}`);
-              } else {
-                let releases = await github.rest.repos.listReleases({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  per_page: 1,
-                });
-                let tag = releases.data[0].tag_name;
-                let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
-                if (result === null) {
-                  core.setFailed(`The previous tag ${tag} is invalid, ignoring`);
-                  return
-                }
-                let major = result[1];
-                let minor = result[2];
-                let patch = (parseInt(result[3]) + 1).toString();
-                let next_tag = `v${major}.${minor}.${patch}-nightly`;
-                core.setOutput('tag', next_tag);
-                core.setOutput('sha', context.sha);
-                core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
-              }
-            }
+            const script = require('./.github/scripts/bump_version.js')
+            await script({ github, context, core })
       - name: Create release
         env:
           # we need workflow:write permission to create release if there were any workflow changes
@@ -173,7 +122,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
-          artifacts: sqllogictests,sqlsmith,metactl,meta,query
+          artifacts: sqllogictests,sqlsmith,query,meta,metactl,metaverifier
       - name: Basic Sqllogic Test
         if: matrix.target != 'aarch64-unknown-linux-musl'
         shell: bash
@@ -370,7 +319,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
@@ -378,7 +327,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/linux/arm64
       - name: Set up QEMU
@@ -441,9 +390,6 @@ jobs:
         service:
           - meta
           - query
-        distro:
-          - debian
-          - distroless
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -478,7 +424,6 @@ jobs:
         id: tags
         uses: actions/github-script@v7
         env:
-          DISTRO: ${{ matrix.distro }}
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
@@ -486,19 +431,15 @@ jobs:
         with:
           script: |
             const version = process.env.VERSION;
-            const distro = process.env.DISTRO;
             const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
             const stable = process.env.STABLE;
             let tags = [];
             for (const repo of repos) {
-              tags.push(`${repo}:${version}-${distro}`);
-              if (distro === 'debian') {
-                tags.push(`${repo}:${version}`);
-                if (stable === 'true') {
-                  tags.push(`${repo}:latest`);
-                } else {
-                  tags.push(`${repo}:nightly`);
-                }
+              tags.push(`${repo}:${version}`);
+              if (stable === 'true') {
+                tags.push(`${repo}:latest`);
+              } else {
+                tags.push(`${repo}:nightly`);
               }
             }
             core.setOutput('tags', tags.join(','));
@@ -509,7 +450,7 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           platforms: linux/amd64,linux/arm64
           context: .
-          file: ./docker/${{ matrix.distro }}/${{ matrix.service }}.Dockerfile
+          file: ./docker/service/${{ matrix.service }}.Dockerfile
 
   distribution:
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
@@ -542,7 +483,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ steps.target.outputs.target }}
-          category: udf
+          category: default
           artifacts: metactl,meta,query
           path: distro/bin
       - name: Build Packages
@@ -589,6 +530,8 @@ jobs:
     if: always()
     needs:
       - create_release
+      - build_default
+      - build_udf
       - publish
       - docker_all_in_one
       - docker_service
@@ -600,65 +543,13 @@ jobs:
       - name: Notify Release
         uses: actions/github-script@v7
         env:
-          JOBS_STATUS: ${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled')|| (contains(needs.*.result, 'canceled') && 'canceled') || 'success' }}
+          JOBS_STATUS: ${{ join(needs.*.result, ',') }}
           REPORT_WEBHOOK: ${{ secrets.RELEASE_REPORT_WEBHOOK }}
           VERSION: ${{ needs.create_release.outputs.version }}
         with:
           script: |
-            const { JOBS_STATUS, REPORT_WEBHOOK, VERSION } = process.env;
-            if (!REPORT_WEBHOOK) {
-              core.setFailed("REPORT_WEBHOOK is not set");
-              return;
-            }
-            if (!VERSION) {
-              core.setFailed("VERSION is not set");
-              return;
-            }
-            const reportData = {
-              msg_type: "post",
-              content: {
-                post: {
-                  en_us: {
-                    title: `[Release] ${VERSION}`,
-                    content: [
-                      [
-                        {
-                          tag: "text",
-                          text: `Build result: ${JOBS_STATUS}`,
-                        },
-                      ],
-                      [
-                        {
-                          tag: "a",
-                          text: "Workflow Details",
-                          href: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-                        },
-                        {
-                          tag: "text",
-                          text: " | ",
-                        },
-                        {
-                          tag: "a",
-                          text: "Release Notes",
-                          href: `https://github.com/datafuselabs/databend/releases/tag/${VERSION}`,
-                        },
-                      ],
-                    ],
-                  },
-                },
-              },
-            };
-            await fetch(REPORT_WEBHOOK, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(reportData),
-            });
-            if (JOBS_STATUS !== "success") {
-              core.setFailed("Release failed");
-              return;
-            }
+            const script = require('./.github/scripts/notify_release.js')
+            await script({context, core})
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
@@ -712,7 +603,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   sqlsmith:
-    needs: [create_release, build_default]
+    needs: [create_release, notify]
     runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     steps:
       - uses: actions/checkout@v4
@@ -723,6 +614,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
+          category: default
           artifacts: meta,query,sqlsmith
       - name: Run sqlsmith
         timeout-minutes: 60
@@ -734,6 +626,33 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqlsmith
+
+  metachaos:
+    needs: [create_release, notify]
+    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create_release.outputs.sha }}
+      - name: Download artifacts
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          category: default
+          artifacts: meta,metactl,metaverifier
+      - uses: ./.github/actions/io_delay_chaos
+        timeout-minutes: 20
+      - name: Notify failure
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          REPORT_WEBHOOK: ${{ secrets.META_REPORT_WEBHOOK }}
+          TITLE: Meta Service chaos tests failed
+        with:
+          script: |
+            const script = require('./.github/scripts/notify_failure.js')
+            await script({context, core})
 
   benchmark:
     needs: [create_release, docker_service, notify]

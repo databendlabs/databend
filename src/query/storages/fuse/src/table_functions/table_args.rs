@@ -53,25 +53,25 @@ pub fn parse_db_tb_args(table_args: &TableArgs, func_name: &str) -> Result<(Stri
     Ok((db, tbl))
 }
 
-pub fn parse_db_tb_ssid_args(
+pub fn parse_db_tb_opt_args(
     table_args: &TableArgs,
     func_name: &str,
 ) -> Result<(String, String, Option<String>)> {
     let args = table_args.expect_all_positioned(func_name, None)?;
     match args.len() {
         3 => {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            let snapshot_id = string_value(&args[2])?;
-            Ok((db, tbl, Some(snapshot_id)))
+            let arg1 = string_value(&args[0])?;
+            let arg2 = string_value(&args[1])?;
+            let arg3 = string_value(&args[2])?;
+            Ok((arg1, arg2, Some(arg3)))
         }
         2 => {
-            let db = string_value(&args[0])?;
-            let tbl = string_value(&args[1])?;
-            Ok((db, tbl, None))
+            let arg1 = string_value(&args[0])?;
+            let arg2 = string_value(&args[1])?;
+            Ok((arg1, arg2, None))
         }
         _ => Err(ErrorCode::BadArguments(format!(
-            "expecting <database>, <table_name> and <snapshot_id> (as string literals), but got {:?}",
+            "expecting <database>, <table_name> and <opt_arg> (as string literals), but got {:?}",
             args
         ))),
     }

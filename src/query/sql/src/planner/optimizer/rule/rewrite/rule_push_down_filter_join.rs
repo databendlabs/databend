@@ -195,7 +195,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
         return Ok((false, s_expr.clone()));
     }
 
-    if !matches!(join.join_type, JoinType::Full) {
+    if !matches!(join.join_type, JoinType::Full) && join.is_null_equal.is_empty() {
         // Infer new predicate and push down filter.
         for (left_condition, right_condition) in join
             .left_conditions

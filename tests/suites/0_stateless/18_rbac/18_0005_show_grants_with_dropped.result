@@ -1,47 +1,52 @@
 === review init role3 grants ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
-OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
 UPDATE,DELETE default.c_r2.t2  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === drop table c_r2.t2 ===
 === drop c_r2.t2 once ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
-OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === create same name table c_r2.t2 ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
-OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
 SELECT default.c_r2.t2  ROLE role3 GRANT SELECT ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === drop c_r2.t2 twice ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
-OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === test database drop ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
-OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
+OWNERSHIP c_r  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
 UPDATE,DELETE default.c_r2.t2  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === drop database c_r , c_r2 ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
@@ -59,9 +64,10 @@ UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_sch
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
 SELECT,INSERT c_r2  ROLE role3 GRANT SELECT,INSERT ON 'default'.'c_r2'.* TO ROLE `role3`
 SELECT default.system.one  ROLE role3 GRANT SELECT ON 'default'.'system'.'one' TO ROLE `role3`
-SELECT,OWNERSHIP default.c_r.t  ROLE role3 GRANT SELECT,OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
+SELECT default.c_r.t  ROLE role3 GRANT SELECT ON 'default'.'c_r'.'t' TO ROLE `role3`
 UPDATE,DELETE default.c_r1.t1  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r1'.'t1' TO ROLE `role3`
 UPDATE,DELETE default.c_r2.t2  ROLE role3 GRANT UPDATE,DELETE ON 'default'.'c_r2'.'t2' TO ROLE `role3`
+OWNERSHIP default.c_r.t  ROLE role3 GRANT OWNERSHIP ON 'default'.'c_r'.'t' TO ROLE `role3`
 === drop database c_r, c_r2, re-create c_r, c_r2 ===
 UPDATE information_schema  ROLE role3 GRANT UPDATE ON 'default'.'information_schema'.* TO ROLE `role3`
 INSERT c_r1  ROLE role3 GRANT INSERT ON 'default'.'c_r1'.* TO ROLE `role3`
@@ -72,6 +78,7 @@ SELECT,INSERT	*.*	NULL	ROLE	role1	GRANT SELECT,INSERT ON *.* TO ROLE `role1`
 SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
 SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
 INSERT c_r1  ROLE role3
+OWNERSHIP c_r1  ROLE account_admin
 SELECT,INSERT	*.*	NULL	USER	u1	GRANT SELECT,INSERT ON *.* TO 'u1'@'%'
 Need Err:
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Grant] is required on *.* for user 'u1'@'%' with roles [role1,role2]

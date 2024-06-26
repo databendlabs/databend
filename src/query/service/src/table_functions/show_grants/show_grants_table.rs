@@ -36,8 +36,10 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::GrantEntry;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -52,6 +54,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use itertools::Itertools;
 
 const SHOW_GRANTS: &str = "show_grants";
 
@@ -266,14 +269,16 @@ async fn show_account_grants(
     let tenant = ctx.get_tenant();
     let current_user = ctx.get_current_user()?;
     let has_grant_priv = ctx
-        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant)
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Grant, false)
         .await
         .is_ok();
 
+    let user_api = UserApiProvider::instance();
+
     // TODO: add permission check on reading user grants
-    let (grant_to, name, identity, grant_set) = match grant_type {
+    let (grant_to, name, identity, grant_set, roles) = match grant_type {
         "user" => {
-            let user = UserApiProvider::instance()
+            let user = user_api
                 .get_user(&tenant, UserIdentity::new(name, "%"))
                 .await?;
             if current_user.identity().username != name && !has_grant_priv {
@@ -291,10 +296,16 @@ async fn show_account_grants(
                 user.name.to_string(),
                 user.identity().display().to_string(),
                 user.grants,
+                None,
             )
         }
         "role" => {
-            if !current_user.grants.roles().contains(&name.to_string()) && !has_grant_priv {
+            let current_user_roles = ctx.get_all_effective_roles().await?;
+            let effective_roles_names: Vec<String> = current_user_roles
+                .iter()
+                .map(|role| role.name.to_string())
+                .collect();
+            if !effective_roles_names.contains(&name.to_string()) && !has_grant_priv {
                 let mut roles = current_user.grants.roles();
                 roles.sort();
                 return Err(ErrorCode::PermissionDenied(format!(
@@ -303,14 +314,22 @@ async fn show_account_grants(
                     roles.join(",")
                 )));
             }
-            let role_info = UserApiProvider::instance()
-                .get_role(&tenant, name.to_string())
+
+            let role_info = user_api.get_role(&tenant, name.to_string()).await?;
+            let related_roles = RoleCacheManager::instance()
+                .find_related_roles(&tenant, &role_info.grants.roles())
                 .await?;
+            let mut roles: Vec<String> = related_roles
+                .iter()
+                .map(|role| role.name.to_string())
+                .collect();
+            roles.push(name.to_string());
             (
                 "ROLE".to_string(),
                 name.to_string(),
                 format!("ROLE `{}`", role_info.identity()),
                 role_info.grants,
+                Some(roles),
             )
         }
         _ => {
@@ -322,23 +341,27 @@ async fn show_account_grants(
     };
 
     // TODO: display roles list instead of the inherited roles
-    let user_roles = RoleCacheManager::instance()
+    let related_roles = RoleCacheManager::instance()
         .find_related_roles(&tenant, &grant_set.roles())
         .await?;
 
-    let grant_entries = user_roles
+    let roles: Vec<String> = if let Some(roles) = roles {
+        roles
+    } else {
+        related_roles
+            .iter()
+            .map(|role| role.name.to_string())
+            .sorted()
+            .collect()
+    };
+
+    let grant_entries = related_roles
         .into_iter()
         .map(|role| role.grants)
         .fold(grant_set, |a, b| a | b)
         .entries();
 
     let mut grant_list: Vec<String> = Vec::new();
-
-    // must split with two hashmap, hashmap key is catalog name.
-    // maybe contain: default.db1 and default.db2.t,
-    // It will re-write the exists key.
-    let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
-    let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
 
     fn get_priv_str(grant_entry: &GrantEntry) -> String {
         if grant_entry.has_all_available_privileges() {
@@ -352,63 +375,124 @@ async fn show_account_grants(
     let mut object_id = vec![];
     let mut object_name = vec![];
     let mut privileges = vec![];
+    // must split with two hashmap, hashmap key is catalog name.
+    // maybe contain: default.db1 and default.db2.t,
+    // It will re-write the exists key.
+    let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
+    let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
+
     for grant_entry in grant_entries {
         let object = grant_entry.object();
-        match object {
-            GrantObject::TableById(catalog_name, db_id, table_id) => {
-                let privileges_str = get_priv_str(&grant_entry);
-                if let Some(tables_id_priv) = catalog_table_ids.get(catalog_name) {
-                    let mut tables_id_priv = tables_id_priv.clone();
-                    tables_id_priv.push((*db_id, *table_id, privileges_str));
-                    catalog_table_ids.insert(catalog_name.clone(), tables_id_priv.clone());
-                } else {
-                    catalog_table_ids.insert(catalog_name.clone(), vec![(
-                        *db_id,
-                        *table_id,
-                        privileges_str,
-                    )]);
+        let privilege = get_priv_str(&grant_entry);
+        // Ownership will list ownerships kv
+        if privilege.to_lowercase() != "ownership" {
+            match object {
+                GrantObject::TableById(catalog_name, db_id, table_id) => {
+                    let privileges_str = get_priv_str(&grant_entry);
+                    if let Some(tables_id_priv) = catalog_table_ids.get_mut(catalog_name) {
+                        tables_id_priv.push((*db_id, *table_id, privileges_str));
+                    } else {
+                        catalog_table_ids.insert(catalog_name.clone(), vec![(
+                            *db_id,
+                            *table_id,
+                            privileges_str,
+                        )]);
+                    }
+                }
+                GrantObject::DatabaseById(catalog_name, db_id) => {
+                    let privileges_str = get_priv_str(&grant_entry);
+                    if let Some(dbs_id_priv) = catalog_db_ids.get_mut(catalog_name) {
+                        dbs_id_priv.push((*db_id, privileges_str));
+                    } else {
+                        catalog_db_ids.insert(catalog_name.clone(), vec![(*db_id, privileges_str)]);
+                    }
+                }
+                GrantObject::Database(catalog_name, database_name) => {
+                    object_name.push(format!("{}.{}.*", catalog_name, database_name));
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Table(catalog_name, database_name, table_name) => {
+                    object_name.push(format!("{}.{}.{}", catalog_name, database_name, table_name));
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Stage(stage_name) => {
+                    object_name.push(stage_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::UDF(udf_name) => {
+                    object_name.push(udf_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
+                GrantObject::Global => {
+                    // grant all on *.* to a
+                    object_name.push("*.*".to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
             }
-            GrantObject::DatabaseById(catalog_name, db_id) => {
-                let privileges_str = get_priv_str(&grant_entry);
-                if let Some(dbs_id_priv) = catalog_db_ids.get(catalog_name) {
-                    let mut dbs_id_priv = dbs_id_priv.clone();
-                    dbs_id_priv.push((*db_id, privileges_str));
-                    catalog_db_ids.insert(catalog_name.clone(), dbs_id_priv.clone());
-                } else {
-                    catalog_db_ids.insert(catalog_name.clone(), vec![(*db_id, privileges_str)]);
+        }
+    }
+
+    // If roles contains account_admin, it means this role has all roles.
+    // No need to display ownership.
+    if !roles.contains(&"account_admin".to_string()) {
+        let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+        // let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
+        // let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
+        for ownership in ownerships {
+            if roles.contains(&ownership.data.role) {
+                match ownership.data.object {
+                    OwnershipObject::Database {
+                        catalog_name,
+                        db_id,
+                    } => {
+                        let privileges_str = "OWNERSHIP".to_string();
+                        if let Some(dbs_id_priv) = catalog_db_ids.get_mut(&catalog_name) {
+                            dbs_id_priv.push((db_id, privileges_str));
+                        } else {
+                            catalog_db_ids
+                                .insert(catalog_name.clone(), vec![(db_id, privileges_str)]);
+                        }
+                    }
+                    OwnershipObject::Table {
+                        catalog_name,
+                        db_id,
+                        table_id,
+                    } => {
+                        let privileges_str = "OWNERSHIP".to_string();
+                        if let Some(tables_id_priv) = catalog_table_ids.get_mut(&catalog_name) {
+                            tables_id_priv.push((db_id, table_id, privileges_str));
+                        } else {
+                            catalog_table_ids.insert(catalog_name.clone(), vec![(
+                                db_id,
+                                table_id,
+                                privileges_str,
+                            )]);
+                        }
+                    }
+                    OwnershipObject::Stage { name } => {
+                        object_name.push(name.to_string());
+                        object_id.push(None);
+                        privileges.push("OWNERSHIP".to_string());
+                        grant_list
+                            .push(format!("GRANT OWNERSHIP ON STAGE {} TO {}", name, identity));
+                    }
+                    OwnershipObject::UDF { name } => {
+                        object_name.push(name.to_string());
+                        object_id.push(None);
+                        privileges.push("OWNERSHIP".to_string());
+                        grant_list.push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
+                    }
                 }
-            }
-            GrantObject::Database(catalog_name, database_name) => {
-                object_name.push(format!("{}.{}.*", catalog_name, database_name));
-                object_id.push(None);
-                privileges.push(get_priv_str(&grant_entry));
-                grant_list.push(format!("{} TO {}", grant_entry, identity));
-            }
-            GrantObject::Table(catalog_name, database_name, table_name) => {
-                object_name.push(format!("{}.{}.{}", catalog_name, database_name, table_name));
-                object_id.push(None);
-                privileges.push(get_priv_str(&grant_entry));
-                grant_list.push(format!("{} TO {}", grant_entry, identity));
-            }
-            GrantObject::Stage(stage_name) => {
-                object_name.push(stage_name.to_string());
-                object_id.push(None);
-                privileges.push(get_priv_str(&grant_entry));
-                grant_list.push(format!("{} TO {}", grant_entry, identity));
-            }
-            GrantObject::UDF(udf_name) => {
-                object_name.push(udf_name.to_string());
-                object_id.push(None);
-                privileges.push(get_priv_str(&grant_entry));
-                grant_list.push(format!("{} TO {}", grant_entry, identity));
-            }
-            GrantObject::Global => {
-                // grant all on *.* to a
-                object_name.push("*.*".to_string());
-                object_id.push(None);
-                privileges.push(get_priv_str(&grant_entry));
-                grant_list.push(format!("{} TO {}", grant_entry, identity));
             }
         }
     }
@@ -481,10 +565,11 @@ async fn show_object_grant(
     db_name: &str,
 ) -> Result<Option<DataBlock>> {
     let tenant = ctx.get_tenant();
-    let roles = UserApiProvider::instance().get_roles(&tenant).await?;
+    let user_api = UserApiProvider::instance();
+    let roles = user_api.get_roles(&tenant).await?;
     let visibility_checker = ctx.get_visibility_checker().await?;
     let current_user = ctx.get_current_user()?.identity().username;
-    let (object, object_id, object_name) = match grant_type {
+    let (object, owner_object, object_id, object_name) = match grant_type {
         "table" => {
             let catalog = ctx.get_catalog(catalog_name).await?;
             let db_id = catalog
@@ -508,6 +593,11 @@ async fn show_object_grant(
             }
             (
                 GrantObject::TableById(catalog_name.to_string(), db_id, table_id),
+                OwnershipObject::Table {
+                    catalog_name: catalog_name.to_string(),
+                    db_id,
+                    table_id,
+                },
                 Some(table_id),
                 name,
             )
@@ -529,6 +619,10 @@ async fn show_object_grant(
             }
             (
                 GrantObject::DatabaseById(catalog_name.to_string(), db_id),
+                OwnershipObject::Database {
+                    catalog_name: catalog_name.to_string(),
+                    db_id,
+                },
                 Some(db_id),
                 name,
             )
@@ -540,7 +634,14 @@ async fn show_object_grant(
                     name, current_user
                 )));
             }
-            (GrantObject::UDF(name.to_string()), None, name)
+            (
+                GrantObject::UDF(name.to_string()),
+                OwnershipObject::UDF {
+                    name: name.to_string(),
+                },
+                None,
+                name,
+            )
         }
         "stage" => {
             if !visibility_checker.check_stage_visibility(name) {
@@ -549,7 +650,14 @@ async fn show_object_grant(
                     name, current_user
                 )));
             }
-            (GrantObject::Stage(name.to_string()), None, name)
+            (
+                GrantObject::Stage(name.to_string()),
+                OwnershipObject::Stage {
+                    name: name.to_string(),
+                },
+                None,
+                name,
+            )
         }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -570,6 +678,15 @@ async fn show_object_grant(
             }
         }
     }
+
+    let ownerships = user_api.role_api(&tenant).get_ownerships().await?;
+    for ownership in ownerships {
+        if ownership.data.object == owner_object {
+            privileges.push("OWNERSHIP".to_string());
+            names.push(ownership.data.role);
+        }
+    }
+
     let object_ids = vec![object_id; privileges.len()];
     let object_names = vec![object_name; privileges.len()];
     let grant_tos: Vec<String> = vec!["ROLE".to_string(); privileges.len()];

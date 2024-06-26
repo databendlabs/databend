@@ -29,7 +29,6 @@ use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::expr::ExprElement;
 use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
@@ -413,10 +412,6 @@ impl Expr {
             "DATE_SUB",
             "DATE_TRUNC",
         ]
-    }
-
-    fn affix(&self) -> Affix {
-        ExprElement::from(self.clone()).affix()
     }
 }
 
@@ -803,7 +798,17 @@ impl Display for Literal {
                 write!(f, "{}", display_decimal_256(*value, *scale))
             }
             Literal::Float64(val) => {
-                write!(f, "{val}")
+                if val.is_infinite() {
+                    if val.is_sign_positive() {
+                        write!(f, "'+INFINITY'::FLOAT64")
+                    } else {
+                        write!(f, "'-INFINITY'::FLOAT64")
+                    }
+                } else if val.is_nan() {
+                    write!(f, "'NaN'::FLOAT64")
+                } else {
+                    write!(f, "{val}")
+                }
             }
             Literal::String(val) => {
                 write!(f, "{}", QuotedString(val, '\''))

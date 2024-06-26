@@ -10,24 +10,20 @@ bench = false
 name = "parquet2"
 
 [dependencies]
+async-stream = { version = "0.3.3", optional = true }
+brotli = { version = "^3.3", optional = true }
 bytes = { workspace = true }
+flate2 = { version = "^1.0", optional = true, default-features = false }
+futures = { version = "0.3", optional = true }
+lz4 = { version = "1.24", optional = true }
+opendal = { workspace = true }
 parquet-format-safe = "0.2"
 seq-macro = { version = "0.3", default-features = false }
-streaming-decompression = "0.1"
-
-async-stream = { version = "0.3.3", optional = true }
-futures = { version = "0.3", optional = true }
-
-brotli = { version = "^3.3", optional = true }
-flate2 = { version = "^1.0", optional = true, default-features = false }
-lz4 = { version = "1.24", optional = true }
 serde = { version = "^1.0", optional = true, features = ["derive"] }
 snap = { version = "^1.1", optional = true }
-zstd = { version = "^0.12", optional = true, default-features = false }
-
+streaming-decompression = "0.1"
 xxhash-rust = { version = "0.8", optional = true, features = ["xxh64"] }
-
-opendal = { workspace = true }
+zstd = { version = "^0.12", optional = true, default-features = false }
 
 [dev-dependencies]
 criterion = { workspace = true }

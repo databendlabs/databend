@@ -60,6 +60,10 @@ mod physical_merge_into;
 pub use physical_merge_into::*;
 mod physical_merge_into_add_row_number;
 pub use physical_merge_into_add_row_number::MergeIntoAddRowNumber;
+mod physical_merge_into_manipulate;
+pub use physical_merge_into_manipulate::MergeIntoManipulate;
+mod physical_merge_into_split;
+pub use physical_merge_into_split::MergeIntoSplit;
 mod physical_project_set;
 pub use physical_project_set::ProjectSet;
 mod physical_range_join;
@@ -96,7 +100,11 @@ pub use physical_union_all::UnionAll;
 mod physical_window;
 pub use physical_window::*;
 mod physical_copy_into_location;
+mod physical_r_cte_scan;
+pub use physical_r_cte_scan::RecursiveCteScan;
+
 mod physical_udf;
+
 pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;

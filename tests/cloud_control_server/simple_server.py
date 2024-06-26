@@ -313,6 +313,7 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         print("ShowTaskRuns", request)
         task_runs = [item for sublist in TASK_RUN_DB.values() for item in sublist]
         task_runs = sorted(task_runs, key=lambda x: x.run_id)
+        num_results = len(task_runs)
 
         if len(request.task_name) > 0:
             print("Limiting task_name to", request.task_name)
@@ -325,7 +326,6 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
             task_runs = task_runs[: request.result_limit]
             if request.result_limit < num_results:
                 num_results = request.result_limit
-        num_results = len(task_runs)
         # pagination
         start_index = 0
         page_size = 2

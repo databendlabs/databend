@@ -56,6 +56,7 @@ impl Operator for MaterializedCte {
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings: None,
         }))
     }
 

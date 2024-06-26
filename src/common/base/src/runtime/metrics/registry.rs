@@ -68,7 +68,7 @@ struct GlobalMetric {
     pub name: String,
     pub help: String,
     pub metric: Box<dyn Metric>,
-    pub creator: Box<dyn Fn(usize) -> Box<dyn Metric>>,
+    pub creator: Box<dyn Fn(usize) -> Box<dyn Metric> + Send>,
 }
 
 struct GlobalRegistryInner {
@@ -79,10 +79,6 @@ struct GlobalRegistryInner {
 pub struct GlobalRegistry {
     inner: Mutex<GlobalRegistryInner>,
 }
-
-unsafe impl Send for GlobalRegistry {}
-
-unsafe impl Sync for GlobalRegistry {}
 
 impl GlobalRegistry {
     pub fn create() -> GlobalRegistry {

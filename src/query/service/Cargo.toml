@@ -29,88 +29,16 @@ io-uring = [
 enable_queries_executor = []
 
 [dependencies]
-# Workspace dependencies
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-ast = { path = "../ast" }
-databend-common-base = { path = "../../common/base" }
-databend-common-cache = { path = "../../common/cache" }
-databend-common-catalog = { path = "../catalog" }
-databend-common-compress = { path = "../../common/compress" }
-databend-common-config = { path = "../config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-formats = { path = "../formats" }
-databend-common-functions = { path = "../functions" }
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-hashtable = { path = "../../common/hashtable" }
-databend-common-http = { path = "../../common/http" }
-databend-common-io = { path = "../../common/io" }
-databend-common-management = { path = "../management" }
-databend-common-meta-api = { path = "../../meta/api" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-script = { path = "../script" }
-
-databend-common-cloud-control = { path = "../../common/cloud_control" }
-databend-common-license = { path = "../../common/license" }
-databend-common-meta-embedded = { path = "../../meta/embedded" }
-databend-common-meta-kvapi = { path = "../../meta/kvapi" }
-databend-common-meta-store = { path = "../../meta/store" }
-databend-common-meta-types = { path = "../../meta/types" }
-databend-common-metrics = { path = "../../common/metrics" }
-databend-common-openai = { path = "../../common/openai" }
-databend-common-pipeline-core = { path = "../pipeline/core" }
-databend-common-pipeline-sinks = { path = "../pipeline/sinks" }
-databend-common-pipeline-sources = { path = "../pipeline/sources" }
-databend-common-pipeline-transforms = { path = "../pipeline/transforms" }
-databend-common-settings = { path = "../settings" }
-databend-common-sharing = { path = "../sharing" }
-databend-common-sql = { path = "../sql" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-storages-delta = { path = "../storages/delta" }
-databend-common-storages-factory = { path = "../storages/factory" }
-databend-common-storages-fuse = { path = "../storages/fuse" }
-databend-common-storages-hive = { path = "../storages/hive/hive" }
-databend-common-storages-iceberg = { path = "../storages/iceberg" }
-databend-common-storages-information-schema = { path = "../storages/information_schema" }
-databend-common-storages-null = { path = "../storages/null" }
-databend-common-storages-parquet = { path = "../storages/parquet" }
-databend-common-storages-result-cache = { path = "../storages/result_cache" }
-databend-common-storages-share = { path = "../storages/share" }
-databend-common-storages-stage = { path = "../storages/stage" }
-databend-common-storages-stream = { path = "../storages/stream" }
-databend-common-storages-system = { path = "../storages/system" }
-databend-common-storages-view = { path = "../storages/view" }
-databend-common-tracing = { path = "../../common/tracing" }
-databend-common-users = { path = "../users" }
-databend-enterprise-aggregating-index = { path = "../ee_features/aggregating_index" }
-databend-enterprise-background-service = { path = "../ee_features/background_service" }
-databend-enterprise-data-mask-feature = { path = "../ee_features/data_mask" }
-databend-enterprise-inverted-index = { path = "../ee_features/inverted_index" }
-databend-enterprise-stream-handler = { path = "../ee_features/stream_handler" }
-databend-enterprise-vacuum-handler = { path = "../ee_features/vacuum_handler" }
-databend-enterprise-virtual-column = { path = "../ee_features/virtual_column" }
-databend-storages-common-blocks = { path = "../storages/common/blocks" }
-databend-storages-common-cache = { path = "../storages/common/cache" }
-databend-storages-common-cache-manager = { path = "../storages/common/cache_manager" }
-databend-storages-common-index = { path = "../storages/common/index" }
-databend-storages-common-io = { path = "../storages/common/io" }
-databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
-databend-storages-common-txn = { path = "../storages/common/txn" }
-jsonb = { workspace = true }
-
-# GitHub dependencies
-
-# Crates.io dependencies
-arrow-udf-js = { workspace = true }
-arrow-udf-python = { package = "arrow-udf-python", git = "https://github.com/datafuse-extras/arrow-udf", rev = "d0a21f0", optional = true }
-arrow-udf-wasm = { workspace = true }
-
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
+arrow-udf-js = { workspace = true }
+arrow-udf-python = { workspace = true, optional = true }
+arrow-udf-wasm = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
+async-recursion = "1.0.0"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
@@ -123,6 +51,73 @@ chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
 ctor = "0.1.26"
 dashmap = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-cache = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-cloud-control = { workspace = true }
+databend-common-compress = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-formats = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-hashtable = { workspace = true }
+databend-common-http = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-license = { workspace = true }
+databend-common-management = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-embedded = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-openai = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sinks = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
+databend-common-pipeline-transforms = { workspace = true }
+databend-common-script = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-sharing = { workspace = true }
+databend-common-sql = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-storages-delta = { workspace = true }
+databend-common-storages-factory = { workspace = true }
+databend-common-storages-fuse = { workspace = true }
+databend-common-storages-hive = { workspace = true }
+databend-common-storages-iceberg = { workspace = true }
+databend-common-storages-information-schema = { workspace = true }
+databend-common-storages-memory = { workspace = true }
+databend-common-storages-null = { workspace = true }
+databend-common-storages-orc = { workspace = true }
+databend-common-storages-parquet = { workspace = true }
+databend-common-storages-result-cache = { workspace = true }
+databend-common-storages-share = { workspace = true }
+databend-common-storages-stage = { workspace = true }
+databend-common-storages-stream = { workspace = true }
+databend-common-storages-system = { workspace = true }
+databend-common-storages-view = { workspace = true }
+databend-common-tracing = { workspace = true }
+databend-common-users = { workspace = true }
+databend-enterprise-aggregating-index = { workspace = true }
+databend-enterprise-background-service = { workspace = true }
+databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-stream-handler = { workspace = true }
+databend-enterprise-vacuum-handler = { workspace = true }
+databend-enterprise-virtual-column = { workspace = true }
+databend-storages-common-blocks = { workspace = true }
+databend-storages-common-cache = { workspace = true }
+databend-storages-common-cache-manager = { workspace = true }
+databend-storages-common-index = { workspace = true }
+databend-storages-common-io = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+databend-storages-common-txn = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 flatbuffers = { workspace = true }
@@ -134,6 +129,7 @@ http = { workspace = true }
 humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = { workspace = true }
+jsonb = { workspace = true }
 jwt-simple = "0.11.0"
 log = { workspace = true }
 lz4 = "1.24.0"
@@ -181,8 +177,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
-ordered-float = { workspace = true }
-
 criterion = { workspace = true }
 goldenfile = "1.4"
 hex = "0.4.3"
@@ -190,6 +184,7 @@ jwt-simple = "0.12"
 maplit = "1.0.2"
 mysql_async = { workspace = true }
 num = "0.4.0"
+ordered-float = { workspace = true }
 p256 = "0.13"
 pretty_assertions = "1.3.0"
 reqwest = { workspace = true }
@@ -201,7 +196,10 @@ url = "2.3.1"
 wiremock = "0.6"
 
 [build-dependencies]
-databend-common-building = { path = "../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["match-template", "md-5"]

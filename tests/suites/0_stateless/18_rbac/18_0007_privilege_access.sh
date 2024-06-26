@@ -26,6 +26,10 @@ echo 'create role `test-role2`' | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t20_0012" | $BENDSQL_CLIENT_CONNECT
 echo "create table t20_0012(c int not null)" | $BENDSQL_CLIENT_CONNECT
 
+echo "=== check list user's local stage ==="
+echo "list @~" | $TEST_USER_CONNECT
+echo "=== no err ==="
+
 ## show tables
 echo "show databases" | $TEST_USER_CONNECT
 

@@ -35,12 +35,12 @@ pub async fn bind_table_args(
 ) -> Result<TableArgs> {
     let mut args = Vec::with_capacity(params.len());
     for arg in params.iter() {
-        args.push(scalar_binder.bind(arg).await?.0);
+        args.push(scalar_binder.bind(arg)?.0);
     }
 
     let mut named_args = Vec::with_capacity(named_params.len());
     for (name, arg) in named_params.iter() {
-        named_args.push((name.clone(), scalar_binder.bind(arg).await?.0));
+        named_args.push((name.clone(), scalar_binder.bind(arg)?.0));
     }
 
     let positioned_args = args
@@ -63,10 +63,20 @@ pub async fn bind_table_args(
         .into_iter()
         .map(|(name, scalar)| match scalar {
             ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) => Ok((name.name.clone(), value)),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "Unsupported table named argument type: {:?}",
-                scalar
-            ))),
+            _ => {
+                let expr = scalar.as_expr()?;
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
+                match expr {
+                    databend_common_expression::Expr::Constant { scalar, .. } => {
+                        Ok((name.name.clone(), scalar))
+                    }
+                    _ => Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported table argument type: {:?}",
+                        scalar
+                    ))),
+                }
+            }
         })
         .collect::<Result<HashMap<_, _>>>()?;
 

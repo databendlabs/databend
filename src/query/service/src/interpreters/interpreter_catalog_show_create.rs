@@ -58,14 +58,16 @@ impl Interpreter for ShowCreateCatalogInterpreter {
         let name = catalog.name();
         let info = catalog.info();
 
-        let (catalog_type, option) = match info.meta.catalog_option {
+        let (catalog_type, option) = match &info.meta.catalog_option {
             CatalogOption::Default => (String::from("default"), String::new()),
             CatalogOption::Hive(op) => (
                 String::from("hive"),
                 format!(
                     "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
                     op.address,
-                    op.storage_params.unwrap_or(Box::new(StorageParams::None))
+                    op.storage_params
+                        .clone()
+                        .unwrap_or(Box::new(StorageParams::None))
                 ),
             ),
             CatalogOption::Iceberg(op) => (

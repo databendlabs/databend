@@ -222,6 +222,7 @@ impl Operator for Aggregate {
             outer_columns,
             used_columns,
             orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

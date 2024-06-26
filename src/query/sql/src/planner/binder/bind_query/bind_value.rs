@@ -175,8 +175,7 @@ impl ExpressionScanContext {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_values(
+    pub(crate) fn bind_values(
         &mut self,
         bind_context: &mut BindContext,
         span: Span,
@@ -191,7 +190,6 @@ impl Binder {
             values,
             Some(&mut self.expression_scan_context),
         )
-        .await
     }
 
     fn check_values_semantic(span: Span, values: &[Vec<AExpr>]) -> Result<()> {
@@ -253,6 +251,7 @@ impl Binder {
                     if !used {
                         join.left_conditions.remove(index);
                         join.right_conditions.remove(index);
+                        join.is_null_equal.retain(|&x| x != index);
                     }
                 }
 
@@ -382,7 +381,7 @@ impl Binder {
     }
 }
 
-pub async fn bind_values(
+pub fn bind_values(
     ctx: Arc<dyn TableContext>,
     name_resolution_ctx: &NameResolutionContext,
     metadata: MetadataRef,
@@ -415,7 +414,7 @@ pub async fn bind_values(
 
     for (row_idx, row) in values.iter().enumerate() {
         for (column_idx, expr) in row.iter().enumerate() {
-            let (scalar, data_type) = scalar_binder.bind(expr).await?;
+            let (scalar, data_type) = scalar_binder.bind(expr)?;
             let used_columns = scalar.used_columns();
             if !used_columns.is_empty() {
                 if let Some(expression_scan_info) = expression_scan_info.as_ref() {

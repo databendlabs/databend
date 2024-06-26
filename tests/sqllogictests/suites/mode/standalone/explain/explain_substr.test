@@ -1,0 +1,68 @@
+statement ok
+create or replace table t1(c string)
+
+statement ok
+insert into t1 values ('abc'), ('abd')
+
+statement ok
+insert into t1 values ('xyy'), ('xyz')
+
+# expects that range pruning prunes 1 block: "range pruning: 2 to 1"
+query T
+explain select * from t1 where substr(c, 1, 2) = 'ab'
+----
+Filter
+├── output columns: [t1.c (#0)]
+├── filters: [is_true(substr(t1.c (#0), 1, 2) = 'ab')]
+├── estimated rows: 0.80
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [c (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(substr(t1.c (#0), 1, 2) = 'ab')], limit: NONE]
+    └── estimated rows: 4.00
+
+query T
+explain select * from t1 where substr(c, 2, 2) = 'ab'
+----
+Filter
+├── output columns: [t1.c (#0)]
+├── filters: [is_true(substr(t1.c (#0), 2, 2) = 'ab')]
+├── estimated rows: 0.80
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [c (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2>]
+    ├── push downs: [filters: [is_true(substr(t1.c (#0), 2, 2) = 'ab')], limit: NONE]
+    └── estimated rows: 4.00
+
+# expects that range pruning prunes 1 block: "range pruning: 2 to 1"
+query T
+explain select * from t1 where left(c, 2) = 'ab'
+----
+Filter
+├── output columns: [t1.c (#0)]
+├── filters: [is_true(left(t1.c (#0), 2) = 'ab')]
+├── estimated rows: 0.80
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [c (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(left(t1.c (#0), 2) = 'ab')], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+drop table t1 all
+

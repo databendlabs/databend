@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -147,8 +148,15 @@ impl Session {
     #[async_backtrace::framed]
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
-        let session = self.clone();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
+        self.create_query_context_with_cluster(cluster)
+    }
+
+    pub fn create_query_context_with_cluster(
+        self: &Arc<Self>,
+        cluster: Arc<Cluster>,
+    ) -> Result<Arc<QueryContext>> {
+        let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster)?;
 
         self.session_ctx
@@ -254,7 +262,9 @@ impl Session {
 
     #[async_backtrace::framed]
     pub async fn unset_current_role(&self) -> Result<()> {
-        self.privilege_mgr().set_current_role(None).await
+        self.privilege_mgr()
+            .set_current_role(Some("public".to_string()))
+            .await
     }
 
     // Returns all the roles the current session has. If the user have been granted restricted_role,
@@ -275,21 +285,28 @@ impl Session {
         &self,
         object: &GrantObject,
         privilege: UserPrivilegeType,
+        check_current_role_only: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr()
-            .validate_privilege(object, privilege)
+            .validate_privilege(object, privilege, check_current_role_only)
             .await
     }
 
     #[async_backtrace::framed]
-    pub async fn has_ownership(&self, object: &OwnershipObject) -> Result<bool> {
+    pub async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(true);
         }
-        self.privilege_mgr().has_ownership(object).await
+        self.privilege_mgr()
+            .has_ownership(object, check_current_role_only)
+            .await
     }
 
     #[async_backtrace::framed]

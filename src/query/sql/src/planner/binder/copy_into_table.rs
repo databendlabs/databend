@@ -47,7 +47,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
+use databend_common_expression::FieldDefaultExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
@@ -87,7 +89,7 @@ impl<'a> Binder {
         match &stmt.src {
             CopyIntoTableSource::Location(location) => {
                 let mut plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, false)
                     .await?;
 
                 // for copy from location, collect files explicitly
@@ -105,7 +107,7 @@ impl<'a> Binder {
                     .set_max_column_position(max_column_position.max_pos);
                 let (select_list, location, alias) = check_transform_query(query)?;
                 let plan = self
-                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .bind_copy_into_table_common(bind_context, stmt, location, true)
                     .await?;
 
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
@@ -119,6 +121,7 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
         location: &FileLocation,
+        is_transform: bool,
     ) -> Result<CopyIntoTablePlan> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
@@ -152,15 +155,22 @@ impl<'a> Binder {
         );
 
         let stage_schema = infer_table_schema(&required_values_schema)?;
-        let default_values = self
-            .prepare_default_values(bind_context, &required_values_schema)
-            .await?;
+
+        let default_values = if stage_info.file_format_params.need_field_default() {
+            Some(
+                self.prepare_default_values(bind_context, &required_values_schema)
+                    .await?,
+            )
+        } else {
+            None
+        };
 
         Ok(CopyIntoTablePlan {
             catalog_info,
             database_name,
             table_name,
             validation_mode,
+            is_transform,
             no_file_to_copy: false,
             from_attachment: false,
             force: stmt.force,
@@ -171,7 +181,7 @@ impl<'a> Binder {
                 files_to_copy: None,
                 duplicated_files_detected: vec![],
                 is_select: false,
-                default_values: Some(default_values),
+                default_values,
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -190,9 +200,13 @@ impl<'a> Binder {
         bind_ctx: &BindContext,
         plan: CopyIntoTablePlan,
     ) -> Result<Plan> {
-        if let FileFormatParams::Parquet(fmt) = &plan.stage_table_info.stage_info.file_format_params
-            && fmt.missing_field_as == NullAs::Error
-        {
+        let use_query = match &plan.stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(fmt) if fmt.missing_field_as == NullAs::Error => true,
+            FileFormatParams::Orc(_) => true,
+            _ => false,
+        };
+
+        if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
@@ -336,6 +350,7 @@ impl<'a> Binder {
             validation_mode: ValidationMode::None,
 
             enable_distributed: false,
+            is_transform: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -369,9 +384,7 @@ impl<'a> Binder {
             .await?;
 
         // Generate an analyzed select list with from context
-        let select_list = self
-            .normalize_select_list(&mut from_context, select_list)
-            .await?;
+        let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
         for item in select_list.items.iter() {
             if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
@@ -539,7 +552,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         data_schema: &DataSchemaRef,
-    ) -> Result<Vec<Scalar>> {
+    ) -> Result<Vec<FieldDefaultExpr>> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -549,14 +562,36 @@ impl<'a> Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        let func_ctx = self.ctx.get_function_context()?;
         let input = DataBlock::empty();
+        let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        let mut force_scalar_func_ctx = self.ctx.get_function_context()?;
+        force_scalar_func_ctx.force_scalar = true;
+        let force_scalar_evaluator =
+            Evaluator::new(&input, &force_scalar_func_ctx, &BUILTIN_FUNCTIONS);
 
         let mut values = vec![];
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+            let value = evaluator.run(&expr)?;
+            match value {
+                Value::Scalar(scalar) => values.push(FieldDefaultExpr::Const(scalar.clone())),
+                Value::Column(_) => match force_scalar_evaluator.run(&expr)? {
+                    Value::Scalar(_) => {
+                        values.push(FieldDefaultExpr::Expr(
+                            field.default_expr().unwrap().clone(),
+                        ));
+                    }
+                    Value::Column(_) => {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "default value {:?} (of field {}) for missing/empty value is not supported when copy into table",
+                            field.default_expr(),
+                            field.name(),
+                        )));
+                    }
+                },
+            }
         }
         Ok(values)
     }

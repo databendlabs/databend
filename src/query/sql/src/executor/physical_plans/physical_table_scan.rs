@@ -179,16 +179,14 @@ impl PhysicalPlanBuilder {
                 let internal_column = INTERNAL_COLUMN_FACTORY
                     .get_internal_column(ROW_ID_COL_NAME)
                     .unwrap();
-                let index = self
+                if let Some(index) = self
                     .metadata
                     .read()
-                    .row_id_index_by_table_index(scan.table_index);
-                debug_assert!(index.is_some());
-                // Safe to unwrap: if lazy_columns is not empty, the `analyze_lazy_materialization` have been called
-                // and the row_id index of the table_index has been generated.
-                let index = index.unwrap();
-                entry.insert(index);
-                project_internal_columns.insert(index, internal_column);
+                    .row_id_index_by_table_index(scan.table_index)
+                {
+                    entry.insert(index);
+                    project_internal_columns.insert(index, internal_column);
+                }
             }
         }
 
@@ -580,7 +578,7 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub(crate) fn build_projection<'a>(
+    pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
         columns: impl Iterator<Item = &'a IndexType>,

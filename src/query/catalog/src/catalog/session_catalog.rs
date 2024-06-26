@@ -87,6 +87,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -128,7 +129,7 @@ impl Catalog for SessionCatalog {
         self.inner.name()
     }
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.inner.info()
     }
 
@@ -252,8 +253,12 @@ impl Catalog for SessionCatalog {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.inner.get_table_name_by_id(table_id).await
+    }
+
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.inner.get_db_name_by_id(db_id).await
     }
 
@@ -365,6 +370,18 @@ impl Catalog for SessionCatalog {
                 Ok(UpdateTableMetaReply {
                     share_table_info: None,
                 })
+            }
+            TxnState::Fail => unreachable!(),
+        }
+    }
+
+    async fn update_stream_metas(&self, update_stream_metas: &[UpdateStreamMetaReq]) -> Result<()> {
+        let state = self.txn_mgr.lock().state();
+        match state {
+            TxnState::AutoCommit => self.inner.update_stream_metas(update_stream_metas).await,
+            TxnState::Active => {
+                self.txn_mgr.lock().update_stream_metas(update_stream_metas);
+                Ok(())
             }
             TxnState::Fail => unreachable!(),
         }

@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       build_profile:
-        description: 'Build profile, debug or release'
+        description: "Build profile, debug or release"
         type: string
         required: true
-        default: 'debug'
+        default: "debug"
       runner_provider:
-        description: 'Self-hosted runner provider, aws or gcp'
+        description: "Self-hosted runner provider, aws or gcp"
         type: string
         required: true
-        default: 'aws'
+        default: "aws"
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -79,7 +79,7 @@ jobs:
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-udf_server
+          name: test-sqllogic-standalone-udf-server
 
   standalone_cloud:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -124,7 +124,7 @@ jobs:
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.dirs }}-${{ matrix.handler }}
+          name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}
 
   cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -177,3 +177,27 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-stage-${{ matrix.storage }}
+
+  standalone_no_table_meta_cache:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    strategy:
+      fail-fast: false
+      matrix:
+        dirs:
+          - "no_table_meta_cache"
+        handler:
+          - "http"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handler }}
+          storage-format: all
+          enable_table_meta_cache: false
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-no-table-meta-cache-${{ matrix.dirs }}-${{ matrix.handler }}

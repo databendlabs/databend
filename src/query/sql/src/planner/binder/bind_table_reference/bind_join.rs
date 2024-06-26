@@ -235,6 +235,7 @@ impl Binder {
 
         let right_prop = RelExpr::with_s_expr(&right_child).derive_relational_prop()?;
         let mut is_lateral = false;
+        let mut is_null_equal = Vec::new();
         if !right_prop.outer_columns.is_empty() {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let mut decorrelator =
@@ -247,12 +248,19 @@ impl Binder {
                 },
                 false,
             )?;
+            let original_num_conditions = left_conditions.len();
             decorrelator.add_equi_conditions(
                 None,
                 &right_prop.outer_columns,
                 &mut right_conditions,
                 &mut left_conditions,
             )?;
+            if build_side_cache_info.is_some() {
+                let num_conditions = left_conditions.len();
+                for i in original_num_conditions..num_conditions {
+                    is_null_equal.push(i);
+                }
+            }
             if join_type == JoinType::Cross {
                 join_type = JoinType::Inner;
             }
@@ -290,6 +298,7 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
+            is_null_equal,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
@@ -697,8 +706,8 @@ impl<'a> JoinConditionResolver<'a> {
         // Only equi-predicate can be exploited by common join algorithms(e.g. sort-merge join, hash join).
 
         let mut added = if let Some((left, right)) = split_equivalent_predicate_expr(predicate) {
-            let (left, _) = scalar_binder.bind(&left).await?;
-            let (right, _) = scalar_binder.bind(&right).await?;
+            let (left, _) = scalar_binder.bind(&left)?;
+            let (right, _) = scalar_binder.bind(&right)?;
             self.add_equi_conditions(left, right, left_join_conditions, right_join_conditions)?
         } else {
             false
@@ -708,7 +717,7 @@ impl<'a> JoinConditionResolver<'a> {
                 .add_other_conditions(predicate, other_join_conditions)
                 .await?;
             if !added {
-                let (predicate, _) = scalar_binder.bind(predicate).await?;
+                let (predicate, _) = scalar_binder.bind(predicate)?;
                 non_equi_conditions.push(predicate);
             }
         }
@@ -842,7 +851,7 @@ impl<'a> JoinConditionResolver<'a> {
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
         );
-        let (predicate, _) = scalar_binder.bind(predicate).await?;
+        let (predicate, _) = scalar_binder.bind(predicate)?;
         let predicate_used_columns = predicate.used_columns();
         let (left_columns, right_columns) = self.left_right_columns()?;
         match self.join_op {

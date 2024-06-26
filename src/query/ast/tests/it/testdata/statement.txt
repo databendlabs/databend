@@ -926,7 +926,7 @@ Explain {
 ---------- Input ----------
 explain pipeline select a from t1 ignore_result;
 ---------- Output ---------
-EXPLAIN PIPELINE SELECT a FROM t1
+EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
@@ -10237,7 +10237,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -10282,7 +10282,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -10570,7 +10570,7 @@ CreateRole {
 ---------- Input ----------
 create user `a'a` identified by '123'
 ---------- Output ---------
-CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
@@ -12846,7 +12846,7 @@ COPY INTO mytable
     FROM '@~/mybucket/my data.csv'
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12899,7 +12899,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12966,7 +12966,7 @@ COPY INTO mytable
     size_limit=10
     max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13042,7 +13042,7 @@ COPY INTO mytable
     size_limit=10
     max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13120,7 +13120,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13200,7 +13200,7 @@ COPY INTO mytable
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13270,7 +13270,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13325,7 +13325,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13388,7 +13388,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13607,7 +13607,7 @@ CopyIntoLocation(
 ---------- Input ----------
 COPY INTO mytable
     FROM 's3://mybucket/data.csv'
-    CREDENTIALS = (
+    CONNECTION = (
         AWS_KEY_ID = 'access_key'
         AWS_SECRET_KEY = 'secret_key'
     )
@@ -13619,7 +13619,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13697,7 +13697,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13763,7 +13763,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13829,7 +13829,7 @@ COPY INTO mytable
     )
     force=true;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13896,7 +13896,7 @@ COPY INTO mytable
     size_limit=10
     disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13970,7 +13970,7 @@ COPY INTO books FROM 's3://databend/books.csv'
     )
     FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -18950,7 +18950,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -18972,7 +18972,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
         ),
     },
 )
@@ -19763,7 +19763,7 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -19818,7 +19818,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {

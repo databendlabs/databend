@@ -19,6 +19,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::physical_plans::AsyncFunction;
+use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -110,7 +112,14 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
                 write!(f, "{}", merge_into_row_id_apply)?
             }
             PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
+            PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
+            PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
+                write!(f, "{}", merge_into_manipulate)?
+            }
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
+                write!(f, "{}", recursive_cte_scan)?
+            }
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
@@ -520,6 +529,18 @@ impl Display for MergeIntoAddRowNumber {
 impl Display for MergeIntoAppendNotMatched {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoAppendNotMatched")
+    }
+}
+
+impl Display for MergeIntoSplit {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoSplit")
+    }
+}
+
+impl Display for MergeIntoManipulate {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoManipulate")
     }
 }
 

@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -31,7 +32,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::StageTable;
 use log::debug;
@@ -167,6 +167,7 @@ impl CopyIntoTableInterpreter {
             validation_mode: plan.validation_mode.clone(),
             project_columns,
             source,
+            is_transform: plan.is_transform,
         }));
 
         if plan.enable_distributed {

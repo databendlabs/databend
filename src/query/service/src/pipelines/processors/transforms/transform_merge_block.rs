@@ -16,28 +16,37 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_channel::Receiver;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Value;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_sql::IndexType;
 
 pub struct TransformMergeBlock {
     finished: bool,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
+    func_ctx: FunctionContext,
 
     input_data: Option<DataBlock>,
     output_data: Option<DataBlock>,
     left_schema: DataSchemaRef,
     right_schema: DataSchemaRef,
-    pairs: Vec<(String, String)>,
+
+    left_outputs: Vec<(IndexType, Option<Expr>)>,
+    right_outputs: Vec<(IndexType, Option<Expr>)>,
 
     receiver: Receiver<DataBlock>,
     receiver_result: Option<DataBlock>,
@@ -45,80 +54,29 @@ pub struct TransformMergeBlock {
 
 impl TransformMergeBlock {
     pub fn try_create(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         left_schema: DataSchemaRef,
         right_schema: DataSchemaRef,
-        pairs: Vec<(String, String)>,
+        left_outputs: Vec<(IndexType, Option<Expr>)>,
+        right_outputs: Vec<(IndexType, Option<Expr>)>,
         receiver: Receiver<DataBlock>,
     ) -> Result<Box<dyn Processor>> {
         Ok(Box::new(TransformMergeBlock {
             finished: false,
             input,
             output,
+            func_ctx: ctx.get_function_context()?,
             input_data: None,
             output_data: None,
             left_schema,
             right_schema,
-            pairs,
+            left_outputs,
             receiver,
             receiver_result: None,
+            right_outputs,
         }))
-    }
-
-    fn project_block(&self, block: DataBlock, is_left: bool) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        let columns = self
-            .pairs
-            .iter()
-            .map(|(left, right)| {
-                if is_left {
-                    Ok(block
-                        .get_by_offset(self.left_schema.index_of(left)?)
-                        .clone())
-                } else {
-                    // If block from right, check if block schema matches self scheme(left schema)
-                    // If unmatched, covert block columns types or report error
-                    self.check_type(left, right, &block)
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(DataBlock::new(columns, num_rows))
-    }
-
-    fn check_type(
-        &self,
-        left_name: &str,
-        right_name: &str,
-        block: &DataBlock,
-    ) -> Result<BlockEntry> {
-        let left_field = self.left_schema.field_with_name(left_name)?;
-        let left_data_type = left_field.data_type();
-
-        let right_field = self.right_schema.field_with_name(right_name)?;
-        let right_data_type = right_field.data_type();
-
-        let index = self.right_schema.index_of(right_name)?;
-
-        if left_data_type == right_data_type {
-            return Ok(block.get_by_offset(index).clone());
-        }
-
-        if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
-            let origin_column = block.get_by_offset(index).clone();
-            let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-            let value = origin_column.value.as_ref();
-            for idx in 0..block.num_rows() {
-                let scalar = value.index(idx).unwrap();
-                builder.push(scalar);
-            }
-            let col = builder.build();
-            Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
-        } else {
-            Err(ErrorCode::IllegalDataType(
-                "The data type on both sides of the union does not match",
-            ))
-        }
     }
 }
 
@@ -176,16 +134,41 @@ impl Processor for TransformMergeBlock {
 
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
+            let left_data = project_block(
+                &self.func_ctx,
+                input_data,
+                &self.left_schema,
+                &self.right_schema,
+                &self.left_outputs,
+                &self.right_outputs,
+                true,
+            )?;
             if let Some(receiver_result) = self.receiver_result.take() {
                 self.output_data = Some(DataBlock::concat(&[
-                    self.project_block(input_data, true)?,
-                    self.project_block(receiver_result, false)?,
+                    left_data,
+                    project_block(
+                        &self.func_ctx,
+                        receiver_result,
+                        &self.left_schema,
+                        &self.right_schema,
+                        &self.left_outputs,
+                        &self.right_outputs,
+                        false,
+                    )?,
                 ])?);
             } else {
-                self.output_data = Some(self.project_block(input_data, true)?);
+                self.output_data = Some(left_data);
             }
         } else if let Some(receiver_result) = self.receiver_result.take() {
-            self.output_data = Some(self.project_block(receiver_result, false)?);
+            self.output_data = Some(project_block(
+                &self.func_ctx,
+                receiver_result,
+                &self.left_schema,
+                &self.right_schema,
+                &self.left_outputs,
+                &self.right_outputs,
+                false,
+            )?);
         }
 
         Ok(())
@@ -201,5 +184,86 @@ impl Processor for TransformMergeBlock {
             self.finished = true;
         }
         Ok(())
+    }
+}
+
+pub fn project_block(
+    func_ctx: &FunctionContext,
+    block: DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+    left_outputs: &[(IndexType, Option<Expr>)],
+    right_outputs: &[(IndexType, Option<Expr>)],
+    is_left: bool,
+) -> Result<DataBlock> {
+    let num_rows = block.num_rows();
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+    let columns = left_outputs
+        .iter()
+        .zip(right_outputs.iter())
+        .map(|(left, right)| {
+            if is_left {
+                if let Some(expr) = &left.1 {
+                    let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                    Ok(column)
+                } else {
+                    Ok(block
+                        .get_by_offset(left_schema.index_of(&left.0.to_string())?)
+                        .clone())
+                }
+            } else if let Some(expr) = &right.1 {
+                let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
+                Ok(column)
+            } else if left.1.is_some() {
+                Ok(block
+                    .get_by_offset(right_schema.index_of(&right.0.to_string())?)
+                    .clone())
+            } else {
+                check_type(
+                    &left.0.to_string(),
+                    &right.0.to_string(),
+                    &block,
+                    left_schema,
+                    right_schema,
+                )
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataBlock::new(columns, num_rows))
+}
+
+fn check_type(
+    left_name: &str,
+    right_name: &str,
+    block: &DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+) -> Result<BlockEntry> {
+    let left_field = left_schema.field_with_name(left_name)?;
+    let left_data_type = left_field.data_type();
+
+    let right_field = right_schema.field_with_name(right_name)?;
+    let right_data_type = right_field.data_type();
+
+    let index = right_schema.index_of(right_name)?;
+
+    if left_data_type == right_data_type {
+        return Ok(block.get_by_offset(index).clone());
+    }
+
+    if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+        let origin_column = block.get_by_offset(index).clone();
+        let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
+        let value = origin_column.value.as_ref();
+        for idx in 0..block.num_rows() {
+            let scalar = value.index(idx).unwrap();
+            builder.push(scalar);
+        }
+        let col = builder.build();
+        Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
+    } else {
+        Err(ErrorCode::IllegalDataType(
+            "The data type on both sides of the union does not match",
+        ))
     }
 }

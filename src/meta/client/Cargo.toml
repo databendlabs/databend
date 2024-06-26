@@ -14,16 +14,15 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-base = { path = "../../common/base" }
-databend-common-grpc = { path = "../../common/grpc" }
-databend-common-meta-api = { path = "../api" }
-databend-common-meta-kvapi = { path = "../kvapi" }
-databend-common-meta-types = { path = "../types" }
-databend-common-metrics = { path = "../../common/metrics" }
-databend-common-tracing = { path = "../../common/tracing" }
-
 anyerror = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-grpc = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -39,11 +38,13 @@ serde_json = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
-databend-common-exception = { path = "../../common/exception" }
-databend-common-meta-app = { path = "../app" }
-
 anyhow = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-meta-app = { workspace = true }
 rand = { workspace = true }
 
 [build-dependencies]
-databend-common-building = { path = "../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true

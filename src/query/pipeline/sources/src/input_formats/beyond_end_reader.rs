@@ -50,7 +50,8 @@ impl BeyondEndReader {
             let mut stream = operator
                 .reader(&self.path)
                 .await?
-                .into_bytes_stream(offset..);
+                .into_bytes_stream(offset..)
+                .await?;
 
             let mut num_read_total = 0;
             loop {

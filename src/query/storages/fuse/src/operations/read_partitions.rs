@@ -33,17 +33,18 @@ use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
+use databend_storages_common_index::BloomIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
 use log::info;
-use opendal::Operator;
 use sha2::Digest;
 use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
+use crate::io::BloomIndexBuilder;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
@@ -114,7 +115,6 @@ impl FuseTable {
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
-                    self.operator.clone(),
                     push_downs.clone(),
                     table_schema,
                     segments_location,
@@ -131,7 +131,6 @@ impl FuseTable {
     pub async fn prune_snapshot_blocks(
         &self,
         ctx: Arc<dyn TableContext>,
-        dal: Operator,
         push_downs: Option<PushDownInfo>,
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
@@ -142,6 +141,8 @@ impl FuseTable {
             "segment numbers" = segments_location.len();
             "prune snapshot block start"
         );
+
+        let dal = self.operator.clone();
 
         type CacheItem = (PartStatistics, Partitions);
 
@@ -169,25 +170,48 @@ impl FuseTable {
             }
         }
 
+        let bloom_index_builder = if ctx
+            .get_settings()
+            .get_enable_auto_fix_missing_bloom_index()?
+        {
+            let storage_format = self.storage_format;
+
+            let bloom_columns_map = self
+                .bloom_index_cols()
+                .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
+
+            Some(BloomIndexBuilder {
+                table_ctx: ctx.clone(),
+                table_schema: table_schema.clone(),
+                table_dal: dal.clone(),
+                storage_format,
+                bloom_columns_map,
+            })
+        } else {
+            None
+        };
+
         let mut pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
             FusePruner::create(
                 &ctx,
-                dal.clone(),
+                dal,
                 table_schema.clone(),
                 &push_downs,
                 self.bloom_index_cols(),
+                bloom_index_builder,
             )?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
             FusePruner::create_with_pages(
                 &ctx,
-                dal.clone(),
+                dal,
                 table_schema,
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
                 self.bloom_index_cols(),
+                bloom_index_builder,
             )?
         };
         let block_metas = pruner.read_pruning(segments_location).await?;

@@ -27,13 +27,12 @@ use crate::TxnRequest;
 
 mod cmd_context;
 mod meta_spec;
-
 pub use cmd_context::CmdContext;
 pub use meta_spec::MetaSpec;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub enum Cmd {
     /// Add node if absent
     AddNode {
@@ -55,7 +54,7 @@ pub enum Cmd {
 }
 
 /// Update or insert a general purpose kv store
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub struct UpsertKV {
     pub key: String,
 
@@ -145,7 +144,7 @@ impl UpsertKV {
     pub fn delete(key: impl ToString) -> Self {
         Self {
             key: key.to_string(),
-            seq: MatchSeq::GE(0),
+            seq: MatchSeq::GE(1),
             value: Operation::Delete,
             value_meta: None,
         }

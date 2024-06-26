@@ -106,7 +106,7 @@ SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as
 NULL NULL NULL NULL 1
 Кирилл Müller 我是谁 ASCII 2
 
-query TTFI
+query TT?I
 SELECT 'Кирилл' as a, 'Müller' as b, 1.0 as c, 2 as id UNION SELECT NULL as a, NULL as b, 1 as c,  1 as id order by id
 ----
 NULL NULL 1.0 1
@@ -236,3 +236,85 @@ select t1.a from t1, t2 where t1.a = t2.a
 ) t
 ----
 90
+
+statement ok
+CREATE OR REPLACE TABLE `test3` (
+  `user_id` BIGINT NOT NULL,
+  `parent` BIGINT NOT NULL
+);
+
+
+query II
+SELECT * FROM (SELECT 3,
+          user_id AS r_uid,
+          user_id AS w_uid
+   FROM test3) t
+UNION ALL
+SELECT 3 AS id,
+       10086 AS r_uid,
+       1111 AS w_uid;
+----
+3 10086 1111
+
+statement ok
+drop table test3;
+
+statement ok
+CREATE OR REPLACE TABLE `test4` (
+  `user_id` BIGINT NOT NULL,
+  `parent` BIGINT NULL
+);
+
+query II
+SELECT * FROM (SELECT
+          user_id AS root_uid
+   FROM test4 where parent is not null limit 2) t
+UNION ALL
+SELECT
+       10086 AS root_uid
+       limit 200;
+----
+10086
+
+statement ok
+create or replace table t (n bigint);
+
+statement ok
+insert into t (n) values (1);
+
+query I
+with t1 as (SELECT  user_id AS root_uid  FROM test4 where parent is not null limit 2), t2 as (SELECT 10086 AS root_uid  from t limit 200) select * from t1 union all select * from t2;
+----
+10086
+
+statement ok
+drop table test4;
+
+statement ok
+drop table t;
+
+statement ok
+set max_set_operator_count = 10;
+
+# The number of set operations: 15 exceeds the limit: 10.
+query error
+SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(3), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(4), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(5), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(6), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(7), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(8), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(9), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(10), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(11), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(12), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(13), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(14), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(15), 'numbers(10)' FROM numbers(10)
+  UNION ALL SELECT COUNT(16), 'numbers(10)' FROM numbers(10);
+
+
+statement ok
+unset max_set_operator_count;

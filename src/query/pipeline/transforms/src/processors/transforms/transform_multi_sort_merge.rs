@@ -88,7 +88,6 @@ pub fn try_add_multi_sort_merge(
                 inputs_port,
                 vec![output_port],
             )]));
-
             Ok(())
         }
     }

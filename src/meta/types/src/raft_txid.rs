@@ -20,7 +20,7 @@ use serde::Serialize;
 
 /// RaftTxId is the essential info to identify an write operation to raft.
 /// Logs with the same RaftTxId are considered the same and only the first of them will be applied.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub struct RaftTxId {
     /// The ID of the client which has sent the request.
     pub client: String,

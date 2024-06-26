@@ -110,8 +110,6 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         );
         server_metrics::incr_applying_snapshot(-1);
 
-        assert!(snapshot.is_temp());
-
         let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
 
         let d = snapshot_store

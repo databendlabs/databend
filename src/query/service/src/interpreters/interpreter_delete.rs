@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
@@ -48,7 +49,6 @@ use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::EvalScalar;
 use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::SubqueryDesc;
@@ -113,23 +113,10 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
 
-        // Add table lock.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                catalog_name,
-                db_name,
-                tbl_name,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
-        let tbl = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
+
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         // check mutability
         tbl.check_mutable()?;
@@ -224,7 +211,9 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         }
 
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         // check if unconditional deletion
         let Some(filters) = filters else {
             let progress_values = ProgressValues {
@@ -325,7 +314,7 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
+        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {

@@ -168,7 +168,10 @@ pub struct Join {
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
+    // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
+    // Used for "is (not) distinct from".
+    pub is_null_equal: Vec<usize>,
 }
 
 impl Default for Join {
@@ -184,6 +187,7 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            is_null_equal: Default::default(),
         }
     }
 }
@@ -412,14 +416,12 @@ impl Operator for Join {
         used_columns.extend(left_prop.used_columns.clone());
         used_columns.extend(right_prop.used_columns.clone());
 
-        // Derive orderings
-        let orderings = vec![];
-
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-            orderings,
+            orderings: vec![],
+            partition_orderings: None,
         }))
     }
 

@@ -121,6 +121,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (89, "2024-04-19: Add: geometry_output_format settings"),
     (90, "2024-05-13: Refactor: After reader_check_msg success, RoleInfo::from_pb should not return err"),
     (91, "2024-05-28: Add: user/role.proto and User/RoleInfo add update/created_on field"),
+    (92, "2024-06-03: Add: user.proto/OrcFileFormatParams", ),
+    (93, "2024-06-06: Add: null_if in user.proto/ParquetFileFormatParams"),
+    (94, "2024-06-21: Remove: catalog in table meta"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

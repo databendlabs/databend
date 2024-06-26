@@ -6,25 +6,11 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../../../common/arrow" }
-databend-common-base = { path = "../../../common/base" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-exception = { path = "../../../common/exception" }
-databend-common-expression = { path = "../../expression" }
-databend-common-functions = { path = "../../functions" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-metrics = { path = "../../../common/metrics" }
-databend-common-pipeline-core = { path = "../../pipeline/core" }
-databend-common-storage = { path = "../../../common/storage" }
-databend-storages-common-pruner = { path = "../common/pruner" }
-databend-storages-common-table-meta = { path = "../common/table_meta" }
-
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-cast = { workspace = true }
@@ -33,6 +19,20 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-metrics = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-sql = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-storages-common-pruner = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
 ethnum = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
@@ -44,5 +44,8 @@ thrift = "0.17.0"
 typetag = { workspace = true }
 
 [dev-dependencies]
-databend-common-sql = { path = "../../sql" }
+databend-common-sql = { workspace = true }
 tempfile = "3.4.0"
+
+[lints]
+workspace = true

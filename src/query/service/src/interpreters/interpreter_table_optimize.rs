@@ -25,6 +25,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::CompactSource;
@@ -102,7 +103,7 @@ impl OptimizeTableInterpreter {
         parts: Partitions,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
+        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
@@ -230,15 +231,14 @@ impl OptimizeTableInterpreter {
                 .await?
             {
                 if !mutator.tasks.is_empty() {
+                    let is_distributed = mutator.is_distributed();
                     let reclustered_block_count = mutator.recluster_blocks_count;
                     let physical_plan = build_recluster_physical_plan(
                         mutator.tasks,
                         table.get_table_info().clone(),
                         catalog.info(),
                         mutator.snapshot,
-                        mutator.remained_blocks,
-                        mutator.removed_segment_indexes,
-                        mutator.removed_segment_summary,
+                        is_distributed,
                     )?;
 
                     build_res =
@@ -248,9 +248,8 @@ impl OptimizeTableInterpreter {
                     let ctx = self.ctx.clone();
                     let plan = self.plan.clone();
                     let start = SystemTime::now();
-                    build_res
-                        .main_pipeline
-                        .set_on_finished(move |(_profiles, may_error)| match may_error {
+                    build_res.main_pipeline.set_on_finished(
+                        move |info: &ExecutionInfo| match &info.res {
                             Ok(_) => InterpreterClusteringHistory::write_log(
                                 &ctx,
                                 start,
@@ -259,7 +258,8 @@ impl OptimizeTableInterpreter {
                                 reclustered_block_count,
                             ),
                             Err(error_code) => Err(error_code.clone()),
-                        });
+                        },
+                    );
                 }
             }
         } else {
@@ -274,7 +274,7 @@ impl OptimizeTableInterpreter {
             } else {
                 build_res
                     .main_pipeline
-                    .set_on_finished(move |(_profiles, may_error)| match may_error {
+                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                         Ok(_) => GlobalIORuntime::instance()
                             .block_on(async move { purge(ctx, catalog, plan, None).await }),
                         Err(error_code) => Err(error_code.clone()),
