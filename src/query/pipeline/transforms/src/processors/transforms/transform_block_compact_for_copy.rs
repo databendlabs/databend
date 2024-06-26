@@ -129,7 +129,16 @@ impl Compactor for BlockCompactorForCopy {
                 ));
             }
 
+            let start = Instant::now();
+            let n = blocks.len();
             let block = DataBlock::concat(&blocks)?;
+            log::info!(
+                "concat {} blocks ({} rows, {} bytes ) using {} secs",
+                n,
+                self.accumulated_rows,
+                self.accumulated_bytes,
+                start.elapsed().as_secs_f32()
+            );
             res.push(block);
         }
 

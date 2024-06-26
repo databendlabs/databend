@@ -343,16 +343,26 @@ impl BlockBuilder {
     pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
+        let start = Instant::now();
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
+        info!(
+            "build.cluster_states use {} secs",
+            start.elapsed().as_secs_f32()
+        );
         let (block_location, block_id) = self.meta_locations.gen_block_location();
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
+        let start = Instant::now();
         let bloom_index_state = BloomIndexState::from_data_block(
             self.ctx.clone(),
             &data_block,
             bloom_index_location,
             self.bloom_columns_map.clone(),
         )?;
+        info!(
+            "build.bloom_index_state use {} secs",
+            start.elapsed().as_secs_f32()
+        );
         let column_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone());
@@ -370,9 +380,15 @@ impl BlockBuilder {
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;
+        let start = Instant::now();
         let col_stats =
             gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
+        info!(
+            "build.gen_columns_statistics use {} secs",
+            start.elapsed().as_secs_f32()
+        );
 
+        let start = Instant::now();
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let col_metas = serialize_block(
             &self.write_settings,
@@ -380,6 +396,10 @@ impl BlockBuilder {
             data_block,
             &mut buffer,
         )?;
+        info!(
+            "build.serialize_block use {} secs",
+            start.elapsed().as_secs_f32()
+        );
         let file_size = buffer.len() as u64;
         let inverted_index_size = if !inverted_index_states.is_empty() {
             let size = inverted_index_states.iter().map(|v| v.size).sum();
