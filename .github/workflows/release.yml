@@ -23,7 +23,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: gcp
+  RUNNER_PROVIDER: aws
 
 jobs:
   create_release:
@@ -99,7 +99,7 @@ jobs:
           delete-branch: true
 
   build_default:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -134,7 +134,7 @@ jobs:
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
 
   build_udf:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -160,7 +160,7 @@ jobs:
           category: udf
 
   build_hdfs:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     needs: create_release
     strategy:
       fail-fast: false
@@ -186,7 +186,7 @@ jobs:
           category: hdfs
 
   publish:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c8g, aws]
     needs: [create_release, build_default, build_hdfs]
     strategy:
       fail-fast: false
@@ -263,7 +263,7 @@ jobs:
           category: ${{ matrix.category }}
 
   publish_testsuite:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     strategy:
       fail-fast: false
@@ -307,7 +307,7 @@ jobs:
           category: testsuite
 
   docker_all_in_one:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     steps:
       - name: Checkout
@@ -382,7 +382,7 @@ jobs:
           readme-filepath: ./docker/README.md
 
   docker_service:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_udf]
     strategy:
       fail-fast: false
@@ -453,7 +453,7 @@ jobs:
           file: ./docker/service/${{ matrix.service }}.Dockerfile
 
   distribution:
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     needs: [create_release, build_default]
     strategy:
       matrix:
@@ -604,7 +604,7 @@ jobs:
 
   sqlsmith:
     needs: [create_release, notify]
-    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -629,7 +629,7 @@ jobs:
 
   metachaos:
     needs: [create_release, notify]
-    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    runs-on: [self-hosted, X64, Linux, 8c16g, aws]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -664,5 +664,5 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: gcp
+      runner_provider: aws
       target: all
