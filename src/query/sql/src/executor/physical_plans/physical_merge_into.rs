@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::u64::MAX;
 
 use databend_common_exception::ErrorCode;
@@ -29,7 +28,6 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
 use itertools::Itertools;
@@ -64,7 +62,6 @@ pub struct MergeInto {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub catalog_info: Arc<CatalogInfo>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub output_schema: DataSchemaRef,
@@ -255,7 +252,6 @@ impl PhysicalPlanBuilder {
         let table = self.ctx.get_table(catalog, database, table_name).await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
-        let catalog_ = self.ctx.get_catalog(catalog).await?;
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`
@@ -368,7 +364,6 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
             unmatched: unmatched.clone(),
             matched: matched.clone(),
             field_index_of_input_schema: field_index_of_input_schema.clone(),
@@ -407,7 +402,6 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             input: Box::new(plan),
             table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
             unmatched: unmatched.clone(),
             segments: segments.clone(),
             distributed: *distributed,
@@ -421,7 +415,6 @@ impl PhysicalPlanBuilder {
             PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(plan.clone()),
                 table_info: table_info.clone(),
-                catalog_info: catalog_.info(),
                 unmatched,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
@@ -436,7 +429,6 @@ impl PhysicalPlanBuilder {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(plan.clone()),
                 table_info: table_info.clone(),
-                catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
                 distributed: true,
                 output_schema: if let Some(idx) = source_row_number_idx {
@@ -472,7 +464,6 @@ impl PhysicalPlanBuilder {
                     ignore_exchange: false,
                 })),
                 table_info: table_info.clone(),
-                catalog_info: catalog_.info(),
                 unmatched: unmatched.clone(),
                 input_schema: join_output_schema.clone(),
                 merge_type: merge_type.clone(),
@@ -487,7 +478,6 @@ impl PhysicalPlanBuilder {
             input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
             // let's use update first, we will do some optimizations and select exact strategy
             mutation_kind: MutationKind::Update,
             update_stream_meta: merge_into_build_info.update_stream_meta,
@@ -521,7 +511,6 @@ pub struct MergeIntoAppendNotMatched {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub catalog_info: Arc<CatalogInfo>,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub input_schema: DataSchemaRef,

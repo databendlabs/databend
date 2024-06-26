@@ -33,7 +33,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -112,9 +111,6 @@ impl Interpreter for DeleteInterpreter {
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
@@ -280,7 +276,6 @@ impl Interpreter for DeleteInterpreter {
             fuse_table.get_table_info().clone(),
             col_indices,
             snapshot,
-            catalog_info,
             is_distributed,
             query_row_id_col,
         )?;
@@ -314,7 +309,6 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
@@ -323,7 +317,6 @@ impl DeleteInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
@@ -344,7 +337,6 @@ impl DeleteInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Delete,
             update_stream_meta: vec![],
             merge_meta,
