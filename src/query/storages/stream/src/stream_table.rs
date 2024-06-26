@@ -57,11 +57,20 @@ pub enum StreamStatus {
 
 pub struct StreamTable {
     info: TableInfo,
+
+    source_table: Option<Arc<dyn Table>>,
 }
 
 impl StreamTable {
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
-        Ok(Box::new(StreamTable { info }))
+        Ok(Box::new(StreamTable {
+            info,
+            source_table: None,
+        }))
+    }
+
+    pub fn create(info: TableInfo, source_table: Option<Arc<dyn Table>>) -> Arc<dyn Table> {
+        Arc::new(StreamTable { info, source_table })
     }
 
     pub fn description() -> StorageDescription {
@@ -81,7 +90,24 @@ impl StreamTable {
         })
     }
 
+    pub fn check_source_valid(&self, source: &Arc<dyn Table>) -> Result<()> {
+        let desc = &source.get_table_info().desc;
+        if source.get_table_info().ident.table_id != self.source_table_id()? {
+            return Err(ErrorCode::IllegalStream(format!(
+                "Base table {} dropped, cannot read from stream {}",
+                desc, self.info.desc,
+            )));
+        }
+
+        let fuse_table = FuseTable::try_from_table(source.as_ref())?;
+        fuse_table.check_changes_valid(desc, self.offset()?)
+    }
+
     pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        if let Some(source) = &self.source_table {
+            return Ok(source.clone());
+        }
+
         let catalog = ctx.get_catalog(self.info.catalog()).await?;
         let source_table_name = self.source_table_name(catalog.as_ref()).await?;
         let source_database_name = self.source_database_name(catalog.as_ref()).await?;
@@ -93,20 +119,7 @@ impl StreamTable {
             )
             .await?;
 
-        if table.get_table_info().ident.table_id != self.source_table_id()? {
-            return Err(ErrorCode::IllegalStream(format!(
-                "Base table '{}'.'{}' dropped, cannot read from stream {}",
-                source_database_name, source_table_name, self.info.desc,
-            )));
-        }
-
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        fuse_table.check_changes_valid(
-            &source_database_name,
-            &source_table_name,
-            self.offset()?,
-        )?;
-
+        self.check_source_valid(&table)?;
         Ok(table)
     }
 
@@ -155,7 +168,7 @@ impl StreamTable {
             })
     }
 
-    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+    pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
         let source_db_id_opt = self
             .info
             .options()
@@ -184,7 +197,11 @@ impl StreamTable {
                     .parse::<u64>()?
             }
         };
+        Ok(source_db_id)
+    }
 
+    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
+        let source_db_id = self.source_database_id(catalog).await?;
         catalog.get_db_name_by_id(source_db_id).await
     }
 

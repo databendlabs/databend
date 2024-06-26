@@ -332,28 +332,34 @@ impl QueryContextShared {
                 .clone(),
         };
 
-        self.cache_stream_source_table(res.clone(), catalog).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
     async fn get_table_to_cache(
         &self,
-        catalog: &str,
+        catalog_name: &str,
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
-        let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
+        let table_meta_key = (
+            catalog_name.to_string(),
+            database.to_string(),
+            table.to_string(),
+        );
         let catalog = self
             .catalog_manager
             .get_catalog(
                 tenant.tenant_name(),
-                catalog,
+                catalog_name,
                 self.session.session_ctx.txn_mgr(),
             )
             .await?;
         let cache_table = catalog.get_table(&tenant, database, table).await?;
+        let cache_table = self
+            .cache_stream_source_table(cache_table, catalog_name)
+            .await?;
 
         let mut tables_refs = self.tables_refs.lock();
 
@@ -369,7 +375,7 @@ impl QueryContextShared {
         &self,
         table: Arc<dyn Table>,
         catalog_name: &str,
-    ) -> Result<()> {
+    ) -> Result<Arc<dyn Table>> {
         if table.engine() == "STREAM" {
             let tenant = self.get_tenant();
             let catalog = self
@@ -382,44 +388,60 @@ impl QueryContextShared {
                 .await?;
 
             let stream = StreamTable::try_from_table(table.as_ref())?;
-            let table_name = stream.source_table_name(catalog.as_ref()).await?;
-            let database = stream.source_database_name(catalog.as_ref()).await?;
+            let source_database_name = stream.source_database_name(catalog.as_ref()).await?;
+            let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
             let meta_key = (
                 catalog_name.to_string(),
-                database.to_string(),
-                table_name.to_string(),
+                source_database_name.to_string(),
+                source_table_name.to_string(),
             );
             let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
-            if !already_in_cache {
-                let stream_desc = &stream.get_table_info().desc;
-                let source_table = match catalog.get_stream_source_table(stream_desc)? {
-                    Some(source_table) => source_table,
-                    None => {
-                        let source_table = catalog
-                            .get_table(&tenant, &database, &table_name)
-                            .await
-                            .map_err(|err| {
-                                ErrorCode::IllegalStream(format!(
-                                    "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
-                                    database,
-                                    table_name,
-                                    stream_desc,
-                                    err.message()
-                                ))
-                            })?;
-                        catalog.cache_stream_source_table(
-                            stream.get_table_info().clone(),
-                            source_table.get_table_info().clone(),
-                        );
-                        source_table
-                    }
-                };
+            let source_table = match already_in_cache {
+                false => {
+                    let stream_desc = &stream.get_table_info().desc;
+                    let source_table = match catalog.get_stream_source_table(stream_desc)? {
+                        Some(source_table) => source_table,
+                        None => {
+                            let source_table = catalog
+                                .get_table(&tenant, &source_database_name, &source_table_name)
+                                .await
+                                .map_err(|err| {
+                                    ErrorCode::IllegalStream(format!(
+                                        "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
+                                        source_database_name,
+                                        source_table_name,
+                                        stream_desc,
+                                        err.message()
+                                    ))
+                                })?;
+                            catalog.cache_stream_source_table(
+                                stream.get_table_info().clone(),
+                                source_table.get_table_info().clone(),
+                            );
+                            source_table
+                        }
+                    };
 
-                let mut tables_refs = self.tables_refs.lock();
-                tables_refs.entry(meta_key).or_insert(source_table.clone());
-            }
+                    let mut tables_refs = self.tables_refs.lock();
+                    tables_refs.entry(meta_key).or_insert(source_table.clone());
+                    source_table
+                }
+                true => self
+                    .tables_refs
+                    .lock()
+                    .get(&meta_key)
+                    .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
+                    .clone(),
+            };
+            stream.check_source_valid(&source_table)?;
+
+            let mut stream_info = stream.get_table_info().to_owned();
+            stream_info.meta.schema = source_table.schema();
+
+            Ok(StreamTable::create(stream_info, Some(source_table)))
+        } else {
+            Ok(table)
         }
-        Ok(())
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
