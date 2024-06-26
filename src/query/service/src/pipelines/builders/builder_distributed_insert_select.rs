@@ -49,11 +49,9 @@ impl PipelineBuilder {
             })?;
         }
 
-        let table = self.ctx.build_table_by_table_info(
-            &insert_select.catalog_info,
-            &insert_select.table_info,
-            None,
-        )?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&insert_select.table_info, None)?;
 
         let source_schema = insert_schema;
         Self::fill_and_reorder_columns(

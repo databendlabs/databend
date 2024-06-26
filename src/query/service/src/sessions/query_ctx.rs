@@ -38,6 +38,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -76,7 +77,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -86,7 +86,6 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -170,18 +169,15 @@ impl QueryContext {
     }
 
     /// Build fuse/system normal table by table info.
-    ///
-    /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(catalog_info, self.txn_mgr())?;
+            .build_catalog(&table_info.catalog_info, self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -210,7 +206,6 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
-        _catalog: &CatalogInfo,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
@@ -329,35 +324,6 @@ impl QueryContext {
     pub fn clear_tables_cache(&self) {
         self.shared.clear_tables_cache()
     }
-
-    pub async fn acquire_table_lock(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
-        lock_opt: &LockTableOption,
-    ) -> Result<Option<LockGuard>> {
-        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
-        if !enabled_table_lock {
-            return Ok(None);
-        }
-
-        let catalog = self.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
-            .await?;
-        if tbl.engine() != "FUSE" {
-            return Ok(None);
-        }
-
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        match lock_opt {
-            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
-            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
-            LockTableOption::NoLock => Ok(None),
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -371,16 +337,12 @@ impl TableContext for QueryContext {
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
-                &plan.catalog_info,
-                table_info,
-                plan.tbl_args.clone(),
-            ),
-            DataSourceInfo::StageSource(stage_info) => self.build_external_by_table_info(
-                &plan.catalog_info,
-                stage_info,
-                plan.tbl_args.clone(),
-            ),
+            DataSourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+            }
+            DataSourceInfo::StageSource(stage_info) => {
+                self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
+            }
             DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
             DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
@@ -1307,6 +1269,35 @@ impl TableContext for QueryContext {
                     stage_info.file_format_params
                 )));
             }
+        }
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
+        if !enabled_table_lock {
+            return Ok(None);
+        }
+
+        let catalog = self.get_catalog(catalog_name).await?;
+        let tbl = catalog
+            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .await?;
+        if tbl.engine() != "FUSE" {
+            return Ok(None);
+        }
+
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
+        match lock_opt {
+            LockTableOption::LockNoRetry => table_lock.try_lock(self, false).await,
+            LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
+            LockTableOption::NoLock => Ok(None),
         }
     }
 }

@@ -46,9 +46,9 @@ impl PipelineBuilder {
     /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
     pub(crate) fn build_delete_source(&mut self, delete: &DeleteSource) -> Result<()> {
-        let table =
-            self.ctx
-                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if delete.parts.is_empty() {

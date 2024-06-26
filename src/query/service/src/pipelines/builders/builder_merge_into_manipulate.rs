@@ -63,11 +63,9 @@ impl PipelineBuilder {
             MergeIntoType::MatchedOnly => (1, true, false),
         };
 
-        let tbl = self.ctx.build_table_by_table_info(
-            &merge_into_manipulate.catalog_info,
-            &merge_into_manipulate.table_info,
-            None,
-        )?;
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(&merge_into_manipulate.table_info, None)?;
 
         let input_schema = merge_into_manipulate.input.output_schema()?;
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());

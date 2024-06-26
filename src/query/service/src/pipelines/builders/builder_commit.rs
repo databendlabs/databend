@@ -27,9 +27,7 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_commit_sink(&mut self, plan: &PhysicalCommitSink) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-        let table =
-            self.ctx
-                .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
+        let table = self.ctx.build_table_by_table_info(&plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_key_id = table.cluster_key_id();
 

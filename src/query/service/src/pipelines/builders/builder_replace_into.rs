@@ -106,7 +106,6 @@ impl PipelineBuilder {
             table_info,
             on_conflicts,
             bloom_filter_column_indexes,
-            catalog_info,
             segments,
             block_slots,
             need_insert,
@@ -114,9 +113,7 @@ impl PipelineBuilder {
         } = replace;
         let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
-        let table = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let table = self.ctx.build_table_by_table_info(table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let schema = DataSchema::from(table.schema()).into();
         let cluster_stats_gen =
@@ -268,7 +265,6 @@ impl PipelineBuilder {
             bloom_filter_column_indexes,
             table_is_empty,
             table_info,
-            catalog_info,
             select_ctx,
             table_level_range_index,
             target_schema,
@@ -277,9 +273,7 @@ impl PipelineBuilder {
             ..
         } = deduplicate;
 
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let tbl = self.ctx.build_table_by_table_info(table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;

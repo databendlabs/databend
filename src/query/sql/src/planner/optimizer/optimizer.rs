@@ -291,8 +291,11 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 }
 
 pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
-    let enable_distributed_query = opt_ctx.enable_distributed_optimization
-        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+    let mut enable_distributed_query = opt_ctx.enable_distributed_optimization;
+    if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
+        enable_distributed_query = false;
+        info!("Disable distributed optimization due to local table scan.");
+    }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
@@ -379,8 +382,11 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
 async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
-    let enable_distributed_query = opt_ctx.enable_distributed_optimization
-        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+    let mut enable_distributed_query = opt_ctx.enable_distributed_optimization;
+    if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
+        enable_distributed_query = false;
+        info!("Disable distributed optimization due to local table scan.");
+    }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
