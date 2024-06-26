@@ -93,7 +93,7 @@ impl PhysicalPlan {
                     None => Ok(FormatTreeNode::with_children(
                         format!(
                             "Scan: {}.{} (read rows: {})",
-                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.catalog_name(),
                             plan.source.source_info.desc(),
                             plan.source.statistics.read_rows
                         ),
@@ -458,7 +458,7 @@ fn table_scan_to_format_tree(
     let table_name = match plan.table_index {
         None => format!(
             "{}.{}",
-            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.catalog_name(),
             plan.source.source_info.desc()
         ),
         Some(table_index) => {

@@ -33,7 +33,6 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -251,7 +250,6 @@ impl UpdateInterpreter {
                 .await?;
 
             let is_distributed = !self.ctx.get_cluster().is_empty();
-            let catalog_info = self.ctx.get_catalog(catalog_name).await?.info();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,
@@ -260,7 +258,6 @@ impl UpdateInterpreter {
                 fuse_table.get_table_info().clone(),
                 col_indices,
                 snapshot,
-                catalog_info,
                 query_row_id_col,
                 is_distributed,
                 self.ctx.clone(),
@@ -278,7 +275,6 @@ impl UpdateInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: Arc<CatalogInfo>,
         query_row_id_col: bool,
         is_distributed: bool,
         ctx: Arc<QueryContext>,
@@ -288,7 +284,6 @@ impl UpdateInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             update_list,
@@ -310,7 +305,6 @@ impl UpdateInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Update,
             update_stream_meta: vec![],
             merge_meta,

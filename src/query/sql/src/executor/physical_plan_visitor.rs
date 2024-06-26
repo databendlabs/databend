@@ -428,7 +428,6 @@ pub trait PhysicalPlanReplacer {
             DistributedInsertSelect {
                 plan_id: plan.plan_id,
                 input: Box::new(input),
-                catalog_info: plan.catalog_info.clone(),
                 table_info: plan.table_info.clone(),
                 select_schema: plan.select_schema.clone(),
                 insert_schema: plan.insert_schema.clone(),

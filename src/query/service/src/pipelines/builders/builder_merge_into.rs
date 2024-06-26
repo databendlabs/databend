@@ -93,7 +93,6 @@ impl PipelineBuilder {
         let MergeIntoAppendNotMatched {
             input,
             table_info,
-            catalog_info,
             unmatched,
             input_schema,
             merge_type,
@@ -127,9 +126,7 @@ impl PipelineBuilder {
                 })?;
         }
 
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let tbl = self.ctx.build_table_by_table_info(table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
@@ -302,7 +299,6 @@ impl PipelineBuilder {
         let MergeInto {
             input,
             table_info,
-            catalog_info,
             unmatched,
             segments,
             distributed,
@@ -316,9 +312,7 @@ impl PipelineBuilder {
         let distributed = *distributed;
         self.build_pipeline(input)?;
 
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(catalog_info, table_info, None)?;
+        let tbl = self.ctx.build_table_by_table_info(table_info, None)?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();

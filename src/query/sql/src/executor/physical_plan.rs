@@ -768,7 +768,7 @@ impl PhysicalPlan {
         Ok(match self {
             PhysicalPlan::TableScan(v) => format!(
                 "{}.{}",
-                v.source.catalog_info.name_ident.catalog_name,
+                v.source.source_info.catalog_name(),
                 v.source.source_info.desc()
             ),
             PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
@@ -922,7 +922,7 @@ impl PhysicalPlan {
             PhysicalPlan::TableScan(v) => {
                 labels.insert(String::from("Full table name"), vec![format!(
                     "{}.{}",
-                    v.source.catalog_info.name_ident.catalog_name,
+                    v.source.source_info.catalog_name(),
                     v.source.source_info.desc()
                 )]);
 
