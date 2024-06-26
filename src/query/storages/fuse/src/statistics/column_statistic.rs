@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_storages_common_index::Index;
@@ -49,7 +50,7 @@ pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u6
 }
 
 pub fn get_traverse_columns_dfs(data_block: &DataBlock) -> traverse::TraverseResult {
-    traverse::traverse_columns_dfs(data_block.columns())
+    traverse::traverse_values_dfs(data_block.columns())
 }
 
 pub fn gen_columns_statistics(
@@ -58,7 +59,6 @@ pub fn gen_columns_statistics(
     schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
-    let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
@@ -74,71 +74,91 @@ pub fn gen_columns_statistics(
             continue;
         }
 
-        // later, during the evaluation of expressions, name of field does not matter
-        let mut min = Scalar::Null;
-        let mut max = Scalar::Null;
-
-        let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
-        let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
-
-        if mins.len() > 0 {
-            min = if let Some(v) = mins.index(0) {
-                if let Some(v) = v.to_owned().trim_min(STATS_STRING_PREFIX_LEN) {
-                    v
+        match col {
+            Value::Scalar(s) => {
+                let (distinct_of_values, unset_bits) = if *s == Scalar::Null {
+                    (0, rows)
                 } else {
-                    continue;
-                }
-            } else {
-                continue;
+                    (1, 0)
+                };
+                let col_stats = ColumnStatistics::new(
+                    s.clone(),
+                    s.clone(),
+                    unset_bits as u64,
+                    0,
+                    Some(distinct_of_values),
+                );
+
+                statistics.insert(column_id, col_stats);
             }
-        }
+            Value::Column(col) => {
+                // later, during the evaluation of expressions, name of field does not matter
+                let mut min = Scalar::Null;
+                let mut max = Scalar::Null;
 
-        if maxs.len() > 0 {
-            max = if let Some(v) = maxs.index(0) {
-                if let Some(v) = v.to_owned().trim_max(STATS_STRING_PREFIX_LEN) {
-                    v
-                } else {
-                    continue;
-                }
-            } else {
-                continue;
-            }
-        }
+                let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
+                let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
 
-        let (is_all_null, bitmap) = col.validity();
-        let unset_bits = match (is_all_null, bitmap) {
-            (true, _) => rows,
-            (false, Some(bitmap)) => bitmap.unset_bits(),
-            (false, None) => 0,
-        };
-
-        // use distinct count calculated by the xor hash function to avoid repetitive operation.
-        let distinct_of_values = match (col_idx, &column_distinct_count) {
-            (Some(col_idx), Some(ref column_distinct_count)) => {
-                if let Some(value) = column_distinct_count.get(col_idx) {
-                    // value calculated by xor hash function include NULL, need to subtract one.
-                    if unset_bits > 0 {
-                        *value as u64 - 1
+                if mins.len() > 0 {
+                    min = if let Some(v) = mins.index(0) {
+                        if let Some(v) = v.to_owned().trim_min(STATS_STRING_PREFIX_LEN) {
+                            v
+                        } else {
+                            continue;
+                        }
                     } else {
-                        *value as u64
+                        continue;
                     }
-                } else {
-                    calc_column_distinct_of_values(col, rows)?
                 }
+
+                if maxs.len() > 0 {
+                    max = if let Some(v) = maxs.index(0) {
+                        if let Some(v) = v.to_owned().trim_max(STATS_STRING_PREFIX_LEN) {
+                            v
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
+                let (is_all_null, bitmap) = col.validity();
+                let unset_bits = match (is_all_null, bitmap) {
+                    (true, _) => rows,
+                    (false, Some(bitmap)) => bitmap.unset_bits(),
+                    (false, None) => 0,
+                };
+
+                // use distinct count calculated by the xor hash function to avoid repetitive operation.
+                let distinct_of_values = match (col_idx, &column_distinct_count) {
+                    (Some(col_idx), Some(ref column_distinct_count)) => {
+                        if let Some(value) = column_distinct_count.get(col_idx) {
+                            // value calculated by xor hash function include NULL, need to subtract one.
+                            if unset_bits > 0 {
+                                *value as u64 - 1
+                            } else {
+                                *value as u64
+                            }
+                        } else {
+                            calc_column_distinct_of_values(col, rows)?
+                        }
+                    }
+                    (_, _) => calc_column_distinct_of_values(col, rows)?,
+                };
+
+                let in_memory_size = col.memory_size() as u64;
+                let col_stats = ColumnStatistics::new(
+                    min,
+                    max,
+                    unset_bits as u64,
+                    in_memory_size,
+                    Some(distinct_of_values),
+                );
+
+                statistics.insert(column_id, col_stats);
             }
-            (_, _) => calc_column_distinct_of_values(col, rows)?,
-        };
-
-        let in_memory_size = col.memory_size() as u64;
-        let col_stats = ColumnStatistics::new(
-            min,
-            max,
-            unset_bits as u64,
-            in_memory_size,
-            Some(distinct_of_values),
-        );
-
-        statistics.insert(column_id, col_stats);
+        }
     }
     Ok(statistics)
 }
@@ -162,31 +182,35 @@ pub mod traverse {
     use databend_common_expression::types::DataType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
+    use databend_common_expression::ColumnBuilder;
+    use databend_common_expression::Value;
 
     use super::*;
 
-    pub type TraverseResult = Result<Vec<(Option<usize>, Column, DataType)>>;
+    pub type TraverseResult = Result<Vec<(Option<usize>, Value<AnyType>, DataType)>>;
 
     // traverses columns and collects the leaves in depth first manner
-    pub fn traverse_columns_dfs(columns: &[BlockEntry]) -> TraverseResult {
+    pub fn traverse_values_dfs(columns: &[BlockEntry]) -> TraverseResult {
         let mut leaves = vec![];
         for (idx, entry) in columns.iter().enumerate() {
             let data_type = &entry.data_type;
-            let column = entry.value.as_column().unwrap();
-            traverse_recursive(Some(idx), column, data_type, &mut leaves)?;
+            match &entry.value {
+                Value::Scalar(s) => {
+                    traverse_scalar_recursive(Some(idx), s, data_type, &mut leaves)?;
+                }
+                Value::Column(c) => {
+                    traverse_column_recursive(Some(idx), c, data_type, &mut leaves)?;
+                }
+            }
         }
         Ok(leaves)
     }
 
-    /// Traverse the columns in DFS order, convert them to a flatten columns array sorted by leaf_index.
-    /// We must ensure that each leaf node is traversed, otherwise we may get an incorrect leaf_index.
-    ///
-    /// For the `Array, `Map` and `Tuple` types, we should expand its inner columns.
-    fn traverse_recursive(
+    fn traverse_column_recursive(
         idx: Option<usize>,
         column: &Column,
         data_type: &DataType,
-        leaves: &mut Vec<(Option<usize>, Column, DataType)>,
+        leaves: &mut Vec<(Option<usize>, Value<AnyType>, DataType)>,
     ) -> Result<()> {
         match data_type.remove_nullable() {
             DataType::Tuple(inner_types) => {
@@ -197,7 +221,12 @@ pub mod traverse {
                     column.as_tuple().unwrap()
                 };
                 for (inner_column, inner_type) in inner_columns.iter().zip(inner_types.iter()) {
-                    traverse_recursive(None, inner_column, inner_type, leaves)?;
+                    crate::statistics::traverse::traverse_column_recursive(
+                        None,
+                        inner_column,
+                        inner_type,
+                        leaves,
+                    )?;
                 }
             }
             DataType::Array(inner_type) => {
@@ -207,7 +236,12 @@ pub mod traverse {
                 } else {
                     column.as_array().unwrap()
                 };
-                traverse_recursive(None, &array_column.values, &inner_type, leaves)?;
+                crate::statistics::traverse::traverse_column_recursive(
+                    None,
+                    &array_column.values,
+                    &inner_type,
+                    leaves,
+                )?;
             }
             DataType::Map(inner_type) => match *inner_type {
                 DataType::Tuple(inner_types) => {
@@ -220,20 +254,82 @@ pub mod traverse {
                     let kv_column =
                         KvPair::<AnyType, AnyType>::try_downcast_column(&map_column.values)
                             .unwrap();
-                    traverse_recursive(None, &kv_column.keys, &inner_types[0], leaves)?;
-                    traverse_recursive(None, &kv_column.values, &inner_types[1], leaves)?;
+                    crate::statistics::traverse::traverse_column_recursive(
+                        None,
+                        &kv_column.keys,
+                        &inner_types[0],
+                        leaves,
+                    )?;
+                    crate::statistics::traverse::traverse_column_recursive(
+                        None,
+                        &kv_column.values,
+                        &inner_types[1],
+                        leaves,
+                    )?;
                 }
                 _ => unreachable!(),
             },
             _ => {
-                leaves.push((idx, column.clone(), data_type.clone()));
+                leaves.push((idx, Value::Column(column.clone()), data_type.clone()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Traverse the columns in DFS order, convert them to a flatten columns array sorted by leaf_index.
+    /// We must ensure that each leaf node is traversed, otherwise we may get an incorrect leaf_index.
+    ///
+    /// For the `Array, `Map` and `Tuple` types, we should expand its inner columns.
+    fn traverse_scalar_recursive(
+        idx: Option<usize>,
+        scalar: &Scalar,
+        data_type: &DataType,
+        leaves: &mut Vec<(Option<usize>, Value<AnyType>, DataType)>,
+    ) -> Result<()> {
+        match data_type.remove_nullable() {
+            DataType::Tuple(inner_types) => {
+                let inner_scalars = if data_type.is_nullable() && *scalar == Scalar::Null {
+                    inner_types.iter().map(Scalar::default_value).collect()
+                } else {
+                    scalar.as_tuple().unwrap().clone()
+                };
+                for (inner_scalar, inner_type) in inner_scalars.iter().zip(inner_types.iter()) {
+                    traverse_scalar_recursive(None, inner_scalar, inner_type, leaves)?;
+                }
+            }
+            DataType::Array(inner_type) => {
+                let array_column = if data_type.is_nullable() && *scalar == Scalar::Null {
+                    ColumnBuilder::with_capacity(&inner_type, 0).build()
+                } else {
+                    scalar.as_array().unwrap().clone()
+                };
+                traverse_column_recursive(None, &array_column, &inner_type, leaves)?;
+            }
+            DataType::Map(inner_type) => match *inner_type {
+                DataType::Tuple(ref inner_types) => {
+                    let map_column = if data_type.is_nullable() && *scalar == Scalar::Null {
+                        Column::Tuple(
+                            inner_types
+                                .iter()
+                                .map(|t| ColumnBuilder::with_capacity(t, 0).build())
+                                .collect(),
+                        )
+                    } else {
+                        scalar.as_map().unwrap().clone()
+                    };
+                    traverse_column_recursive(None, &map_column, &inner_type, leaves)?;
+                }
+                _ => unreachable!(),
+            },
+            _ => {
+                leaves.push((idx, Value::Scalar(scalar.clone()), data_type.clone()));
             }
         }
         Ok(())
     }
 }
 
-// Impls of this trait should preserves the property of min/max statistics:
+// Impls of this trait should preserve the property of min/max statistics:
 //
 // the trimmed max should be larger than the non-trimmed one (if possible).
 // and the trimmed min should be lesser than the non-trimmed one (if possible).
