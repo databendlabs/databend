@@ -87,12 +87,12 @@ fn prepare_config() -> InnerConfig {
         .build()
 }
 
-#[test]
-fn test_query() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_query() -> Result<()> {
+    let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
+
     let runtime = Runtime::with_default_worker_threads()?;
     runtime.block_on(async {
-        let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
-
         let file = NamedTempFile::new().unwrap();
         let path = file.into_temp_path().to_str().unwrap().to_string();
         let _ = fs::remove_file(path.clone());
@@ -108,10 +108,8 @@ fn test_query() -> Result<()> {
             .serve_with_incoming_shutdown(stream, async { shutdown_rx.await.unwrap() });
 
         let request_future = async {
-            let mut file = {
-                let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
-                mint.new_goldenfile("query.txt").unwrap()
-            };
+            let mut mint = Mint::new("tests/it/servers/flight_sql/testdata");
+            let mut file = mint.new_goldenfile("query.txt").unwrap();
 
             let mut client = client_with_uds(path).await;
             let token = client.handshake(TEST_USER, TEST_PASSWORD).await.unwrap();
