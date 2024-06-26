@@ -14,6 +14,7 @@
 
 use std::mem;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -104,6 +105,7 @@ impl AsyncSource for ORCSourceForCopy {
             if self.reader.is_none() && !self.next_part().await? {
                 return Ok(None);
             }
+            let start = Instant::now();
             if let Some((path, factory, schema, size)) = mem::take(&mut self.reader) {
                 let (factory, stripe) = factory
                     .read_next_stripe()
@@ -122,6 +124,7 @@ impl AsyncSource for ORCSourceForCopy {
                         continue;
                     }
                     Some(stripe) => {
+                        let used = start.elapsed().as_secs_f32();
                         let bytes = stripe.stream_map().inner.values().map(|b| b.len()).sum();
                         let progress_values = ProgressValues {
                             rows: stripe.number_of_rows(),
@@ -129,8 +132,9 @@ impl AsyncSource for ORCSourceForCopy {
                         };
                         Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, bytes);
                         log::info!(
-                            "read new stripe of {} rows and {bytes} bytes from {path}",
-                            stripe.number_of_rows()
+                            "read new stripe of {} rows and {bytes} bytes from {path}, use {} secs",
+                            stripe.number_of_rows(),
+                            used
                         );
                         self.scan_progress.incr(&progress_values);
 
