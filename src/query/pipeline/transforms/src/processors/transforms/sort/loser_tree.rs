@@ -68,7 +68,7 @@ impl<T: Ord> LoserTree<T> {
 
     pub fn update(&mut self, i: usize, v: T) {
         if self.ready && self.winner() == i {
-            if self.peek().cmp(&v) == Ordering::Equal {
+            if *self.peek() == v {
                 self.data[i] = v;
             } else {
                 self.data[i] = v;
