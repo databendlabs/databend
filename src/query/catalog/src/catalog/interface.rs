@@ -114,7 +114,7 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
