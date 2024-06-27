@@ -90,7 +90,21 @@ impl StreamTable {
         })
     }
 
-    pub fn check_source_valid(&self, source: &Arc<dyn Table>) -> Result<()> {
+    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
+        let source = if let Some(source) = &self.source_table {
+            source.clone()
+        } else {
+            let catalog = ctx.get_catalog(self.info.catalog()).await?;
+            let source_table_name = self.source_table_name(catalog.as_ref()).await?;
+            let source_database_name = self.source_database_name(catalog.as_ref()).await?;
+            ctx.get_table(
+                self.info.catalog(),
+                &source_database_name,
+                &source_table_name,
+            )
+            .await?
+        };
+
         let desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
@@ -100,27 +114,8 @@ impl StreamTable {
         }
 
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
-        fuse_table.check_changes_valid(desc, self.offset()?)
-    }
-
-    pub async fn source_table(&self, ctx: Arc<dyn TableContext>) -> Result<Arc<dyn Table>> {
-        if let Some(source) = &self.source_table {
-            return Ok(source.clone());
-        }
-
-        let catalog = ctx.get_catalog(self.info.catalog()).await?;
-        let source_table_name = self.source_table_name(catalog.as_ref()).await?;
-        let source_database_name = self.source_database_name(catalog.as_ref()).await?;
-        let table = ctx
-            .get_table(
-                self.info.catalog(),
-                &source_database_name,
-                &source_table_name,
-            )
-            .await?;
-
-        self.check_source_valid(&table)?;
-        Ok(table)
+        fuse_table.check_changes_valid(desc, self.offset()?)?;
+        Ok(source)
     }
 
     pub fn offset(&self) -> Result<u64> {

@@ -433,7 +433,6 @@ impl QueryContextShared {
                     .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
                     .clone(),
             };
-            stream.check_source_valid(&source_table)?;
 
             let mut stream_info = stream.get_table_info().to_owned();
             stream_info.meta.schema = source_table.schema();
