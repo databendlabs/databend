@@ -583,6 +583,51 @@ drop table t7 all
 statement ok
 drop table t8 all
 
+###############
+# issue 15899 #
+###############
+
+statement ok
+create table t_15899(a int)
+
+statement ok
+insert into t_15899 values(1)
+
+statement ok
+create stream s_15899 on table t_15899 append_only = false
+
+statement ok
+insert into t_15899 values(2)
+
+statement ok
+alter table t_15899 add b int default 0
+
+statement ok
+insert into t_15899 values(3, 3)
+
+query II
+select a, b from t_15899 order by a
+----
+1 0
+2 0
+3 3
+
+query IITB
+select a, b, change$action, change$is_update from s_15899 order by a
+----
+2 0 INSERT 0
+3 3 INSERT 0
+
+statement ok
+drop stream s_15899
+
+statement ok
+drop table t_15899 all
+
+######################
+# end of issue 15899 #
+######################
+
 statement error 2733
 create stream s_err on table t4 at (stream => s3)
 
@@ -732,48 +777,6 @@ select a, b, change$action, change$is_update from test_stream_1.s2 order by a, b
 2 2 INSERT 0
 3 3 INSERT 0
 4 4 INSERT 0
-
-###############
-# issue 15899 #
-###############
-
-statement ok
-create table t_15899(a int)
-
-statement ok
-insert into t_15899 values(1)
-
-statement ok
-create stream s_15899 on table t_15899 append_only = false
-
-statement ok
-insert into t_15899 values(2)
-
-statement ok
-alter table t_15899 add b int default 0
-
-statement ok
-insert into t_15899 values(3, 3)
-
-query II
-select a, b from t_15899 order by a
-----
-1 0
-2 0
-3 3
-
-query IITB
-select a, b, change$action, change$is_update from s_15899 order by a
-----
-2 0 INSERT 0
-3 3 INSERT 0
-
-statement ok
-drop stream s_15899
-
-######################
-# end of issue 15899 #
-######################
 
 statement ok
 DROP DATABASE IF EXISTS test_stream_1
