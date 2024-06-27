@@ -170,6 +170,7 @@ impl PatternExtractor {
         }
     }
 
+    #[recursive::recursive]
     fn extract_group(
         &mut self,
         memo: &Memo,
@@ -255,6 +256,7 @@ impl PatternExtractor {
     /// Expand a `Pattern` node to an arbitrary `SExpr` with `m_expr` as the root.
     /// Since we don't care about the actual content of the `Pattern` node, we will
     /// choose the first `MExpr` in each group to construct the `SExpr`.
+    #[recursive::recursive]
     fn expand_pattern(memo: &Memo, m_expr: &MExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(m_expr.arity());
         for child in m_expr.children.iter() {

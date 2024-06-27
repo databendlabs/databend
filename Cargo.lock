@@ -3929,6 +3929,7 @@ dependencies = [
  "minitrace",
  "opendal",
  "ordered-float 4.2.0",
+ "recursive",
  "serde",
  "typetag",
  "volo-thrift",
