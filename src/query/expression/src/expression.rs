@@ -336,6 +336,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
 
 impl<Index: ColumnIndex> RawExpr<Index> {
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
+        #[recursive::recursive]
         fn walk<Index: ColumnIndex>(expr: &RawExpr<Index>, buf: &mut HashMap<Index, DataType>) {
             match expr {
                 RawExpr::ColumnRef { id, data_type, .. } => {
@@ -444,6 +445,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn column_refs(&self) -> HashMap<Index, DataType> {
+        #[recursive::recursive]
         fn walk<Index: ColumnIndex>(expr: &Expr<Index>, buf: &mut HashMap<Index, DataType>) {
             match expr {
                 Expr::ColumnRef { id, data_type, .. } => {
