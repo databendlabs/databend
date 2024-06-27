@@ -262,17 +262,16 @@ impl BloomIndex {
                     }
                 }
                 _ => {
-                    let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
-                        let value = &block.get_by_offset(index).value;
-                        value.convert_to_full_column(field_type, block.num_rows())
-                    });
-                    let column = Column::concat_columns(source_columns_iter)?;
+                    let value = DataBlock::concat_columns(data_blocks_tobe_indexed, index)?;
 
-                    if Self::check_large_string(&column) {
+                    if let Value::Column(column) = &value {
+                        if !Self::check_large_string(&column) {
+                            continue;
+                        }
+                        (column.clone(), field_type.clone())
+                    } else {
                         continue;
                     }
-
-                    (column, field_type.clone())
                 }
             };
 
