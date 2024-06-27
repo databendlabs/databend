@@ -70,7 +70,6 @@ impl StreamHandler for RealStreamHandler {
         }
 
         let table_id = table_info.ident.table_id;
-        let schema = table_info.schema().clone();
         if !table.change_tracking_enabled() {
             let table_seq = table_info.ident.seq;
             // enable change tracking.
@@ -106,7 +105,7 @@ impl StreamHandler for RealStreamHandler {
                 abort_checker,
             )
             .await?;
-        table.check_changes_valid(&plan.table_database, &plan.table_name, change_desc.seq)?;
+        table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;
 
         let db_id = table
             .get_table_info()
@@ -139,7 +138,6 @@ impl StreamHandler for RealStreamHandler {
                 engine: STREAM_ENGINE.to_string(),
                 options,
                 comment: plan.comment.clone().unwrap_or("".to_string()),
-                schema,
                 ..Default::default()
             },
             as_dropped: false,
