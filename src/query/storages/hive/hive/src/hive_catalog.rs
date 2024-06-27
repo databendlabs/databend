@@ -115,7 +115,7 @@ use crate::hive_table::HiveTable;
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(
@@ -160,7 +160,7 @@ impl Debug for HiveCatalog {
 
 impl HiveCatalog {
     pub fn try_create(
-        info: CatalogInfo,
+        info: Arc<CatalogInfo>,
         sp: Option<StorageParams>,
         hms_address: impl Into<String>,
     ) -> Result<HiveCatalog> {
@@ -189,7 +189,7 @@ impl HiveCatalog {
             .build();
 
         Ok(HiveCatalog {
-            info: info.into(),
+            info,
             sp,
             client_address,
             client,

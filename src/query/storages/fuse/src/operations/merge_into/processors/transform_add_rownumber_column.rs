@@ -41,6 +41,12 @@ pub struct TransformAddRowNumberColumnProcessor {
 }
 
 impl TransformAddRowNumberColumnProcessor {
+    pub fn new(node_id: u16, row_number: Arc<AtomicU64>) -> Self {
+        TransformAddRowNumberColumnProcessor {
+            prefix: (node_id as u64) << PREFIX_OFFSET,
+            row_number,
+        }
+    }
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

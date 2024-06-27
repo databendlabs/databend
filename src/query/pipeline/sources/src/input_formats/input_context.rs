@@ -30,11 +30,16 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Scalar;
+use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::Value;
 use databend_common_formats::ClickhouseFormatType;
 use databend_common_formats::FileFormatOptionsExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageFileCompression;
@@ -114,7 +119,7 @@ pub struct InputContext {
     pub table_context: Arc<dyn TableContext>,
     pub plan: InputPlan,
     pub schema: TableSchemaRef,
-    pub default_values: Option<Vec<Scalar>>,
+    pub default_values: Option<Vec<RemoteExpr>>,
     pub source: InputSource,
 
     pub format: Arc<dyn InputFormat>,
@@ -175,7 +180,7 @@ impl InputContext {
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
         is_select: bool,
         projection: Option<Vec<usize>>,
-        default_values: Option<Vec<Scalar>>,
+        default_values: Option<Vec<RemoteExpr>>,
     ) -> Result<Self> {
         let mut file_format_options_ext =
             FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
@@ -436,6 +441,43 @@ impl InputContext {
                 }
             }
             _ => Err(e.to_error_code(&self.on_error_mode, file_path, line)),
+        }
+    }
+
+    pub(crate) fn push_default_value(
+        &self,
+        default_values: &[RemoteExpr],
+        column_builder: &mut ColumnBuilder,
+        column_index: usize,
+    ) -> std::result::Result<(), FileParseError> {
+        if let Some(remote_expr) = default_values.get(column_index) {
+            let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+            if let Expr::Constant { scalar, .. } = expr {
+                column_builder.push(scalar.as_ref());
+            } else {
+                let func_ctx = self.table_context.get_function_context().unwrap();
+                let input = DataBlock::new(vec![], 1);
+                let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+                let value = evaluator
+                    .run(&expr)
+                    .map_err(|e| FileParseError::Unexpected {
+                        message: format!("get error when eval default value: {}", e.message()),
+                    })?;
+                match value {
+                    Value::Scalar(s) => {
+                        column_builder.push(s.as_ref());
+                    }
+                    Value::Column(c) => {
+                        let v = unsafe { c.index_unchecked(0) };
+                        column_builder.push(v);
+                    }
+                };
+            }
+            Ok(())
+        } else {
+            Err(FileParseError::Unexpected {
+                message: format!("column {} don't have default value", column_index),
+            })
         }
     }
 }

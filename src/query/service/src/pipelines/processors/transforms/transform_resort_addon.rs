@@ -36,6 +36,19 @@ pub struct TransformResortAddOn {
 impl TransformResortAddOn
 where Self: Transform
 {
+    pub fn try_new(
+        ctx: Arc<QueryContext>,
+        input_schema: DataSchemaRef,
+        output_schema: DataSchemaRef,
+        table: Arc<dyn Table>,
+    ) -> Result<Self> {
+        let expression_transform =
+            build_expression_transform(input_schema.clone(), output_schema, table, ctx)?;
+        Ok(Self {
+            expression_transform,
+            input_len: input_schema.num_fields(),
+        })
+    }
     pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -44,16 +57,8 @@ where Self: Transform
         output_schema: DataSchemaRef,
         table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
-        let expression_transform =
-            build_expression_transform(input_schema.clone(), output_schema, table, ctx)?;
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            Self {
-                expression_transform,
-                input_len: input_schema.num_fields(),
-            },
-        )))
+        let me = Self::try_new(ctx, input_schema, output_schema, table)?;
+        Ok(ProcessorPtr::create(Transformer::create(input, output, me)))
     }
 }
 

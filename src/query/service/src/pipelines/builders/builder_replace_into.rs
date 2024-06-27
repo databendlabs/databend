@@ -36,6 +36,7 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -306,17 +307,13 @@ impl PipelineBuilder {
                 ));
             }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
-                self.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformCastSchema::try_create(
-                            transform_input_port,
-                            transform_output_port,
-                            select_schema.clone(),
-                            target_schema.clone(),
-                            self.func_ctx.clone(),
-                        )
-                    },
-                )?;
+                self.main_pipeline.try_add_transformer(|| {
+                    TransformCastSchema::try_new(
+                        select_schema.clone(),
+                        target_schema.clone(),
+                        self.func_ctx.clone(),
+                    )
+                })?;
             }
         }
 
@@ -391,7 +388,7 @@ impl PipelineBuilder {
 }
 
 pub struct ValueSource {
-    rows: Vec<Vec<Scalar>>,
+    rows: Arc<Vec<Vec<Scalar>>>,
     schema: DataSchemaRef,
     is_finished: bool,
 }
@@ -399,7 +396,7 @@ pub struct ValueSource {
 impl ValueSource {
     pub fn new(rows: Vec<Vec<Scalar>>, schema: DataSchemaRef) -> Self {
         Self {
-            rows,
+            rows: Arc::new(rows),
             schema,
             is_finished: false,
         }
@@ -425,7 +422,7 @@ impl AsyncSource for ValueSource {
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), self.rows.len()))
             .collect::<Vec<_>>();
 
-        for row in &self.rows {
+        for row in self.rows.as_ref() {
             for (field, column) in row.iter().zip(columns.iter_mut()) {
                 column.push(field.as_ref());
             }

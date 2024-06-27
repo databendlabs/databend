@@ -40,13 +40,11 @@ pub struct TransformCastSchema {
 impl TransformCastSchema
 where Self: Transform
 {
-    pub fn try_create(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
+    pub fn try_new(
         select_schema: DataSchemaRef,
         insert_schema: DataSchemaRef,
         func_ctx: FunctionContext,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Self> {
         let exprs = select_schema
             .fields()
             .iter()
@@ -61,15 +59,27 @@ where Self: Transform
                 check_cast(None, false, expr, to.data_type(), &BUILTIN_FUNCTIONS)
             })
             .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            func_ctx,
+            insert_schema,
+            select_schema,
+            exprs,
+        })
+    }
+
+    pub fn try_create(
+        input_port: Arc<InputPort>,
+        output_port: Arc<OutputPort>,
+        select_schema: DataSchemaRef,
+        insert_schema: DataSchemaRef,
+        func_ctx: FunctionContext,
+    ) -> Result<ProcessorPtr> {
+        let me = Self::try_new(select_schema, insert_schema, func_ctx)?;
         Ok(ProcessorPtr::create(Transformer::create(
             input_port,
             output_port,
-            Self {
-                func_ctx,
-                insert_schema,
-                select_schema,
-                exprs,
-            },
+            me,
         )))
     }
 }

@@ -22,12 +22,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_meta_app::principal::StageFileCompression;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::input_formats::InputContext;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::PrefetchAsyncSourcer;
-use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 
@@ -117,37 +116,22 @@ impl RowBasedReadPipelineBuilder<'_> {
             StageFileCompression::None => {}
             compression => {
                 let algo = InputContext::get_compression_alg_copy(compression, "")?;
-                pipeline.add_transform(|input, output| {
-                    let transformer = Decompressor::try_create(load_ctx.clone(), algo)?;
-                    Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                        input,
-                        output,
-                        transformer,
-                    )))
+                pipeline.try_add_accumulating_transformer(|| {
+                    Decompressor::try_create(load_ctx.clone(), algo)
                 })?;
             }
         }
 
-        pipeline.add_transform(|input, output| {
-            let transformer = Separator::try_create(load_ctx.clone(), format.clone())?;
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                input,
-                output,
-                transformer,
-            )))
+        pipeline.try_add_accumulating_transformer(|| {
+            Separator::try_create(load_ctx.clone(), format.clone())
         })?;
 
         // todo(youngsofun): no need to resize if it is unlikely to be unbalanced
         pipeline.try_resize(max_threads)?;
 
-        pipeline.add_transform(|input, output| {
-            let transformer = BlockBuilder::create(load_ctx.clone(), &format)?;
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                input,
-                output,
-                transformer,
-            )))
-        })?;
+        pipeline
+            .try_add_accumulating_transformer(|| BlockBuilder::create(load_ctx.clone(), &format))?;
+
         Ok(())
     }
 }

@@ -1,0 +1,61 @@
+statement ok
+create or replace table t1 as select * from numbers(1000);
+
+# selectivity == 0.0
+query T
+explain select count() from t1 where number % 10 = 11;
+----
+AggregateFinal
+├── output columns: [count() (#1)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── Filter
+        ├── output columns: []
+        ├── filters: [t1.number (#0) % 10 = 11]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [number (#0)]
+            ├── read rows: 1000
+            ├── read size: 1.40 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [t1.number (#0) % 10 = 11], limit: NONE]
+            └── estimated rows: 1000.00
+
+# selectivity == 0.1
+query T
+explain select count() from t1 where number % 10 = 2;
+----
+AggregateFinal
+├── output columns: [count() (#1)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── AggregatePartial
+    ├── group by: []
+    ├── aggregate functions: [count()]
+    ├── estimated rows: 1.00
+    └── Filter
+        ├── output columns: []
+        ├── filters: [t1.number (#0) % 10 = 2]
+        ├── estimated rows: 100.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [number (#0)]
+            ├── read rows: 1000
+            ├── read size: 1.40 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [t1.number (#0) % 10 = 2], limit: NONE]
+            └── estimated rows: 1000.00
+
+statement ok
+drop table t1;

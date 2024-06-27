@@ -82,7 +82,16 @@ impl EvalExpireTime for KVMeta {
     }
 }
 
-/// Some value bound with a seq number
+/// Some value bound with a seq number.
+///
+/// [`SeqV`] is the meta-service API level generic value.
+/// Meta-service application uses this type to interact with meta-service.
+///
+/// Inside the meta-service, the value is stored in the form of `Marked`, which could be a tombstone.
+/// A `Marked::TombStone` is converted to `None::<SeqV>` and a `Marked::Normal` is converted to `Some::<SeqV>`.
+///
+/// A `Marked::TombStone` also has an `internal_seq`, representing the freshness of the tombstone.
+/// `internal_seq` will be discarded when `Marked::TombStone` is converted to `None::<SeqV>`.
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 pub struct SeqV<T = Vec<u8>> {
     pub seq: u64,
