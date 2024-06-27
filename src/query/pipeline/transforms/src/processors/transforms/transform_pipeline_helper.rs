@@ -90,6 +90,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> R,
         R: AccumulatingTransform + 'static,
     {
+        // Safe to unwrap, since the closure always return Ok(_).
         self.try_add_accumulating_transformer(|| Ok(f())).unwrap()
     }
 
@@ -109,6 +110,7 @@ pub trait TransformPipelineHelper {
         F: Fn() -> R,
         R: AsyncAccumulatingTransform + 'static,
     {
+        // Safe to unwrap, since the closure always return Ok(_).
         self.try_add_async_accumulating_transformer(|| Ok(f()))
             .unwrap()
     }
