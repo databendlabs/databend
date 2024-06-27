@@ -227,8 +227,7 @@ impl Binder {
     }
 
     // The method will find all subquery in filter
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     async fn subquery_desc(
         &self,
         scalar: &ScalarExpr,

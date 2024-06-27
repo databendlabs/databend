@@ -12,7 +12,7 @@ test = true
 
 [dependencies]
 async-backtrace = { workspace = true }
-async-recursion = "1.0.0"
+async-recursion = "1.1.1"
 async-trait = { workspace = true }
 chrono = { workspace = true }
 databend-common-arrow = { workspace = true }

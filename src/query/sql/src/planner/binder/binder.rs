@@ -139,8 +139,7 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,
