@@ -59,7 +59,6 @@ pub fn gen_columns_statistics(
     schema: &TableSchemaRef,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
-    let data_block = data_block.convert_to_full();
     let rows = data_block.num_rows();
 
     let leaves = get_traverse_columns_dfs(&data_block)?;
