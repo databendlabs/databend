@@ -14,7 +14,6 @@
 
 use std::io;
 use std::io::SeekFrom;
-use std::path::Path;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -27,51 +26,6 @@ use tokio::io::AsyncWrite;
 use tokio::io::AsyncWriteExt;
 use tokio::io::BufReader;
 use tokio::io::ReadBuf;
-
-/// A typed temporary snapshot data.
-pub struct TempSnapshotData {
-    inner: SnapshotData,
-}
-
-impl TempSnapshotData {
-    pub fn new(snapshot_data: SnapshotData) -> Self {
-        assert!(snapshot_data.is_temp());
-        TempSnapshotData {
-            inner: snapshot_data,
-        }
-    }
-
-    /// Commit the temp snapshot to a final snapshot file.
-    ///
-    /// It requires the input snapshot is a temp snapshot.
-    pub fn commit<P: AsRef<Path>>(self, final_path: P) -> Result<SnapshotData, io::Error> {
-        let final_path = final_path.as_ref().to_string_lossy().to_string();
-
-        std::fs::rename(self.inner.path(), &final_path).map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!(
-                    "{}: while TempSnapshotData::commit(); temp path: {}; final path: {}",
-                    e,
-                    self.path(),
-                    final_path
-                ),
-            )
-        })?;
-
-        let d = SnapshotData::open(final_path)?;
-
-        Ok(d)
-    }
-
-    pub fn into_inner(self) -> SnapshotData {
-        self.inner
-    }
-
-    pub fn path(&self) -> &str {
-        self.inner.path()
-    }
-}
 
 pub struct SnapshotData {
     /// Whether it is a temp file that may contain partial data.
@@ -87,6 +41,13 @@ impl SnapshotData {
             path: path.to_string(),
             f: fs::File::from_std(f),
         }
+    }
+
+    /// Open an existing snapshot file as a temp snapshot.
+    pub fn open_temp(path: String) -> Result<Self, io::Error> {
+        let mut d = Self::open(path)?;
+        d.is_temp = true;
+        Ok(d)
     }
 
     pub fn open(path: String) -> Result<Self, io::Error> {
