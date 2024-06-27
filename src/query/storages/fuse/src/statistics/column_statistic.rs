@@ -20,7 +20,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
@@ -82,9 +81,20 @@ pub fn gen_columns_statistics(
                 } else {
                     (1, 0)
                 };
-                // when we read it back from parquet, it is a Column instead of Scalar, so we multiply it by rows
-                let in_memory_size =
-                    ColumnBuilder::repeat(&s.as_ref(), 1, data_type).memory_size() * rows;
+
+                // when we read it back from parquet, it is a Column instead of Scalar
+                // only need consider RangeIndex::supported_type
+                let in_memory_size = s.as_ref().memory_size();
+                let mut in_memory_size = if matches!(data_type.remove_nullable(), DataType::String)
+                {
+                    in_memory_size * rows + 8 * (rows + 1)
+                } else {
+                    in_memory_size * rows
+                };
+                if data_type.is_nullable() {
+                    in_memory_size += rows.saturating_add(7) / 8
+                }
+
                 let col_stats = ColumnStatistics::new(
                     s.clone(),
                     s.clone(),
