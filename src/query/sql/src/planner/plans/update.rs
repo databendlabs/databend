@@ -88,6 +88,7 @@ impl UpdatePlan {
             None,
             Some(&self.database),
             &self.table,
+            false,
         )
     }
 
@@ -137,6 +138,7 @@ pub fn generate_update_list(
     use_column_name_index: Option<usize>,
     database: Option<&str>,
     table: &str,
+    has_row_fetch: bool,
 ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
     let column = ColumnBindingBuilder::new(
         PREDICATE_COLUMN_NAME.to_string(),
@@ -175,9 +177,14 @@ pub fn generate_update_list(
                         field.name(),
                         column_binding,
                     ) {
+                        let mut column_binding = column_binding.clone();
+                        if has_row_fetch {
+                            // If has row fetch, fetched target columns are origin data_type
+                            column_binding.data_type = Box::new(target_type.clone());
+                        };
                         right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
-                            column: column_binding.clone(),
+                            column: column_binding,
                         }));
                         break;
                     }

@@ -36,7 +36,6 @@ impl PipelineBuilder {
             row_fetch.row_id_col_offset,
             &row_fetch.source,
             row_fetch.cols_to_fetch.clone(),
-            row_fetch.need_wrap_nullable,
         )?;
         if !matches!(&*row_fetch.input, PhysicalPlan::MergeIntoSplit(_)) {
             self.main_pipeline.add_transform(processor)?;

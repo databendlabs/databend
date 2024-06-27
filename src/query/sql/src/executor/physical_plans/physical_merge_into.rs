@@ -172,9 +172,11 @@ impl PhysicalPlanBuilder {
             }));
         }
 
+        let mut has_row_fetch = false;
         if let Some(lazy_columns) = lazy_columns
             && !lazy_columns.is_empty()
         {
+            has_row_fetch = true;
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
@@ -184,7 +186,6 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>();
 
             let mut has_inner_column = false;
-            let need_wrap_nullable = matches!(merge_type, MergeIntoType::FullOperation);
             let fetched_fields: Vec<DataField> = lazy_columns
                 .iter()
                 .map(|index| {
@@ -195,11 +196,8 @@ impl PhysicalPlanBuilder {
                             has_inner_column = true;
                         }
                     }
-                    let mut data_type = col.data_type();
-                    if need_wrap_nullable {
-                        data_type = data_type.wrap_nullable();
-                    }
-                    DataField::new(&index.to_string(), data_type)
+
+                    DataField::new(&index.to_string(), col.data_type())
                 })
                 .collect();
 
@@ -223,7 +221,6 @@ impl PhysicalPlanBuilder {
                 row_id_col_offset: row_id_offset,
                 cols_to_fetch,
                 fetched_fields,
-                need_wrap_nullable,
                 stat_info: None,
             });
         }
@@ -324,6 +321,7 @@ impl PhysicalPlanBuilder {
                     Some(PREDICATE_COLUMN_INDEX),
                     database,
                     &table_name,
+                    has_row_fetch,
                 )?;
                 let update_list = update_list
                     .iter()

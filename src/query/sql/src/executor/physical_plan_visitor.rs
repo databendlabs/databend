@@ -343,7 +343,6 @@ pub trait PhysicalPlanReplacer {
             cols_to_fetch: plan.cols_to_fetch.clone(),
             fetched_fields: plan.fetched_fields.clone(),
             stat_info: plan.stat_info.clone(),
-            need_wrap_nullable: plan.need_wrap_nullable,
         }))
     }
 
