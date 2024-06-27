@@ -85,7 +85,7 @@ pub fn gen_columns_statistics(
                     s.clone(),
                     s.clone(),
                     unset_bits as u64,
-                    0,
+                    col.as_ref().memory_size() as u64,
                     Some(distinct_of_values),
                 );
 
