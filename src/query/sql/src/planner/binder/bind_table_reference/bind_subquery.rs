@@ -22,8 +22,7 @@ use crate::BindContext;
 
 impl Binder {
     /// Bind a subquery.
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_subquery(
+    pub(crate) fn bind_subquery(
         &mut self,
         bind_context: &mut BindContext,
         lateral: bool,
@@ -34,7 +33,7 @@ impl Binder {
         // from the previous queries.
         let (result, mut result_bind_context) = if lateral {
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-            self.bind_query(&mut new_bind_context, subquery).await?
+            self.bind_query(&mut new_bind_context, subquery)?
         } else {
             let mut new_bind_context = BindContext::with_parent(
                 bind_context
@@ -42,7 +41,7 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| Box::new(BindContext::new())),
             );
-            self.bind_query(&mut new_bind_context, subquery).await?
+            self.bind_query(&mut new_bind_context, subquery)?
         };
 
         if let Some(alias) = alias {

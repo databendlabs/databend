@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -33,5 +30,4 @@ pub struct ReclusterSource {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
-    pub catalog_info: Arc<CatalogInfo>,
 }

@@ -340,9 +340,10 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto(merge_into) => Ok(Arc::new(MergeIntoInterpreter::try_create(
+            Plan::MergeInto { s_expr, schema } => Ok(Arc::new(MergeIntoInterpreter::try_create(
                 ctx,
-                *merge_into.clone(),
+                *s_expr.clone(),
+                schema.clone(),
             )?)),
 
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(

@@ -88,7 +88,7 @@ impl BytesReader {
                 .get_scan_progress()
                 .incr(&ProgressValues { rows: 0, bytes: n });
 
-            debug!("read {} bytes", n);
+            debug!("read {} bytes from {}", n, state.file.path);
             let offset = state.offset;
             state.offset += n;
             let is_eof = state.offset == state.file.size;

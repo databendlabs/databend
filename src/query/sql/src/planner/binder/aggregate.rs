@@ -362,11 +362,10 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
-    #[async_backtrace::framed]
-    pub async fn analyze_group_items<'a>(
+    pub fn analyze_group_items(
         &mut self,
         bind_context: &mut BindContext,
-        select_list: &SelectList<'a>,
+        select_list: &SelectList<'_>,
         group_by: &GroupBy,
     ) -> Result<()> {
         let mut available_aliases = vec![];

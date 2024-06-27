@@ -83,13 +83,22 @@ SELECT CAST(AVG(value) AS DECIMAL(30, 10)) AS avg FROM (SELECT CAST(number AS DE
 0.0000000002
 
 statement ok
-create table tc(a int, b Date)
+create or replace table tc(a int, b Date)
 
 statement ok
 insert into tc values(1, '2022-02-03'),(2,'2022-02-04'),(3,'2022-02-05');
 
 statement error 1065
 select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc ;
+
+
+statement ok
+insert into tc values(null, '2022-02-03');
+
+query III
+SELECT AVG(1 + a), sum(1 + a), count(1 + a) FROM tc;
+----
+3.0 9 3
 
 statement ok
 drop table tc

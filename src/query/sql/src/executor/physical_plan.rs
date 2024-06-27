@@ -22,6 +22,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
+use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
+use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -122,6 +126,10 @@ pub enum PhysicalPlan {
     MergeInto(Box<MergeInto>),
     MergeIntoAppendNotMatched(Box<MergeIntoAppendNotMatched>),
     MergeIntoAddRowNumber(Box<MergeIntoAddRowNumber>),
+    MergeIntoSplit(Box<MergeIntoSplit>),
+    MergeIntoManipulate(Box<MergeIntoManipulate>),
+    MergeIntoOrganize(Box<MergeIntoOrganize>),
+    MergeIntoSerialize(Box<MergeIntoSerialize>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -317,6 +325,26 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::MergeIntoSplit(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoManipulate(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoOrganize(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::MergeIntoSerialize(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
             PhysicalPlan::CommitSink(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -428,6 +456,10 @@ impl PhysicalPlan {
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
             PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
+            PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
+            PhysicalPlan::MergeIntoOrganize(v) => v.plan_id,
+            PhysicalPlan::MergeIntoSerialize(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
@@ -482,6 +514,10 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(plan) => plan.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoOrganize(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSerialize(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -542,13 +578,17 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
             PhysicalPlan::MergeIntoAppendNotMatched(_) => "MergeIntoAppendNotMatched".to_string(),
+            PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
+            PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
+            PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
+            PhysicalPlan::MergeIntoOrganize(_) => "MergeIntoOrganize".to_string(),
+            PhysicalPlan::MergeIntoSerialize(_) => "MergeIntoSerialize".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
-            PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
             PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
@@ -617,6 +657,14 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::MergeIntoSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoManipulate(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
+            PhysicalPlan::MergeIntoOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoSerialize(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -671,6 +719,10 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoAddRowNumber(_)
             | PhysicalPlan::MergeIntoAppendNotMatched(_)
+            | PhysicalPlan::MergeIntoSplit(_)
+            | PhysicalPlan::MergeIntoManipulate(_)
+            | PhysicalPlan::MergeIntoOrganize(_)
+            | PhysicalPlan::MergeIntoSerialize(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
@@ -692,6 +744,44 @@ impl PhysicalPlan {
         }
     }
 
+    pub fn try_find_data_source(&self, table_index: usize) -> Option<&DataSourcePlan> {
+        match self {
+            PhysicalPlan::TableScan(scan) => {
+                if let Some(index) = scan.table_index
+                    && index == table_index
+                {
+                    Some(&scan.source)
+                } else {
+                    None
+                }
+            }
+            PhysicalPlan::HashJoin(hash_join) => {
+                let left = hash_join.probe.try_find_data_source(table_index);
+                if left.is_some() {
+                    return left;
+                }
+                let right = hash_join.build.try_find_data_source(table_index);
+                right
+            }
+            PhysicalPlan::Filter(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::EvalScalar(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Window(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Sort(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Limit(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Exchange(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::DistributedInsertSelect(plan) => {
+                plan.input.try_find_data_source(table_index)
+            }
+            PhysicalPlan::ProjectSet(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::RowFetch(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::Udf(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_data_source(table_index),
+            PhysicalPlan::MergeIntoSplit(plan) => plan.input.try_find_data_source(table_index),
+            _ => None,
+        }
+    }
+
     pub fn is_distributed_plan(&self) -> bool {
         self.children().any(|child| child.is_distributed_plan())
             || matches!(
@@ -704,7 +794,7 @@ impl PhysicalPlan {
         Ok(match self {
             PhysicalPlan::TableScan(v) => format!(
                 "{}.{}",
-                v.source.catalog_info.name_ident.catalog_name,
+                v.source.source_info.catalog_name(),
                 v.source.source_info.desc()
             ),
             PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
@@ -858,7 +948,7 @@ impl PhysicalPlan {
             PhysicalPlan::TableScan(v) => {
                 labels.insert(String::from("Full table name"), vec![format!(
                     "{}.{}",
-                    v.source.catalog_info.name_ident.catalog_name,
+                    v.source.source_info.catalog_name(),
                     v.source.source_info.desc()
                 )]);
 

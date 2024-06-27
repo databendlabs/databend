@@ -88,6 +88,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -113,7 +114,7 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
@@ -292,6 +293,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
+
+    // update stream metas, currently used by "copy into location form stream"
+    async fn update_stream_metas(&self, _update_stream_meta: &[UpdateStreamMetaReq]) -> Result<()> {
+        Ok(())
+    }
 
     async fn update_multi_table_meta(
         &self,

@@ -51,7 +51,7 @@ jobs:
     secrets: inherit
     with:
       build_profile: debug
-      runner_provider: gcp
+      runner_provider: aws
 
   linux_hive:
     needs: changes
@@ -60,7 +60,7 @@ jobs:
     secrets: inherit
     with:
       build_profile: debug
-      runner_provider: gcp
+      runner_provider: aws
 
   ready:
     if: always()

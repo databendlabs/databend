@@ -530,6 +530,7 @@ impl<'a> Selector<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &expr.sql_display(),
                     selection,
                 )?;
                 let data_type = self

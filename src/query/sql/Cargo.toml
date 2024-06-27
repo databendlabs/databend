@@ -44,12 +44,7 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-common-storages-delta = { workspace = true }
-databend-common-storages-iceberg = { workspace = true }
-databend-common-storages-orc = { workspace = true }
-databend-common-storages-parquet = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
-databend-common-storages-stage = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
@@ -75,6 +70,7 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
+url = "2.3.1"
 
 [lints]
 workspace = true

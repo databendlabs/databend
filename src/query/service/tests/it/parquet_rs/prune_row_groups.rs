@@ -69,7 +69,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_timestamp() {
     test(
         Scenario::Timestamp,
@@ -79,12 +79,12 @@ async fn test_timestamp() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_date() {
     test(Scenario::Date, "date32 < to_date('2020-01-02')", vec![0]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_disabled() {
     test(
         Scenario::Timestamp,
@@ -101,7 +101,7 @@ async fn test_disabled() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_lt() {
     test(Scenario::Int32, "i < 1", vec![0, 1, 2]).await;
     // result of sql "SELECT * FROM t where i < 1" is same as
@@ -109,37 +109,37 @@ async fn test_int32_lt() {
     test(Scenario::Int32, " -i > -1", vec![0, 1, 2]).await
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq() {
     test(Scenario::Int32, "i = 1", vec![2]).await;
 }
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_scalar_fun_and_eq() {
     test(Scenario::Int32, "abs(i) = 1 and i = 1", vec![2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_scalar_fun() {
     test(Scenario::Int32, "abs(i) = 1", vec![0, 1, 2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_complex_expr() {
     test(Scenario::Int32, "i+1 = 1", vec![1, 2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_complex_expr_subtract() {
     test(Scenario::Int32, "1-i > 1", vec![0, 1]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_lt() {
     test(Scenario::Float64, "f < 1", vec![0, 1, 2]).await;
     test(Scenario::Float64, "-f > -1", vec![0, 1, 2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_scalar_fun_and_gt() {
     test(
         Scenario::Float64,
@@ -149,37 +149,37 @@ async fn test_f64_scalar_fun_and_gt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_scalar_fun() {
     test(Scenario::Float64, "abs(f-1) <= 0.000001", vec![2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_complex_expr() {
     test(Scenario::Float64, "f+1 > 1.1", vec![2, 3]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_f64_complex_expr_subtract() {
     test(Scenario::Float64, "1-f > 1", vec![0, 1]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq_in_list() {
     test(Scenario::Int32, "i in (1)", vec![2]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq_in_list_2() {
     test(Scenario::Int32, "i in (1000)", vec![]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_int32_eq_in_list_negated() {
     test(Scenario::Int32, "i not in (1)", vec![0, 1, 2, 3]).await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_lt() {
     // The data type of decimal_col is decimal(9,2)
     // There are three row groups:
@@ -207,7 +207,7 @@ async fn test_decimal_lt() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_eq() {
     // The data type of decimal_col is decimal(9,2)
     // There are three row groups:
@@ -226,7 +226,7 @@ async fn test_decimal_eq() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decimal_in_list() {
     // The data type of decimal_col is decimal(9,2)
     // There are three row groups:
@@ -259,7 +259,7 @@ async fn test_decimal_in_list() {
     .await;
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_periods_in_column_names() {
     // There are three row groups for "service.name", each with 5 rows = 15 rows total
     // name = "HTTP GET / DISPATCH", service.name = ['frontend', 'frontend'],

@@ -24,17 +24,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
-use super::physical_plans::CacheScan;
-use super::physical_plans::ExpressionScan;
-use super::physical_plans::MergeInto;
-use super::physical_plans::MergeIntoAddRowNumber;
-use super::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
@@ -45,11 +41,19 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
+use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoAddRowNumber;
+use crate::executor::physical_plans::MergeIntoAppendNotMatched;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSerialize;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -91,7 +95,7 @@ impl PhysicalPlan {
                     None => Ok(FormatTreeNode::with_children(
                         format!(
                             "Scan: {}.{} (read rows: {})",
-                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.catalog_name(),
                             plan.source.source_info.desc(),
                             plan.source.statistics.read_rows
                         ),
@@ -251,6 +255,14 @@ fn to_format_tree(
         PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
             format_merge_into_append_not_matched(plan, metadata, profs)
         }
+        PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
+        PhysicalPlan::MergeIntoManipulate(plan) => {
+            format_merge_into_manipulate(plan, metadata, profs)
+        }
+        PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
+        PhysicalPlan::MergeIntoSerialize(plan) => {
+            format_merge_into_serialize(plan, metadata, profs)
+        }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
             Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
@@ -405,6 +417,54 @@ fn format_merge_into_append_not_matched(
     ))
 }
 
+fn format_merge_into_split(
+    plan: &MergeIntoSplit,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoSplit".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_manipulate(
+    plan: &MergeIntoManipulate,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoManipulate".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_organize(
+    plan: &MergeIntoOrganize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoOrganize".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_serialize(
+    plan: &MergeIntoSerialize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoSerialize".to_string(),
+        vec![child],
+    ))
+}
+
 fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "CopyIntoTable: {}",
@@ -428,7 +488,7 @@ fn table_scan_to_format_tree(
     let table_name = match plan.table_index {
         None => format!(
             "{}.{}",
-            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.catalog_name(),
             plan.source.source_info.desc()
         ),
         Some(table_index) => {

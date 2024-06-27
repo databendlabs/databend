@@ -14,7 +14,7 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: gcp
+  RUNNER_PROVIDER: aws
 
 jobs:
   info:
@@ -36,7 +36,7 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
     strategy:
       matrix:
         include:
@@ -56,7 +56,7 @@ jobs:
 
   chaos:
     needs: [info, build]
-    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
+    runs-on: [self-hosted, X64, Linux, 8c16g, aws]
     steps:
       - uses: actions/checkout@v4
         with:
