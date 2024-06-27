@@ -30,7 +30,6 @@ use databend_common_meta_app::app_error::UnknownShareId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::VirtualColumnNotFound;
-use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
 use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
@@ -855,6 +854,7 @@ pub async fn get_tableinfos_by_ids(
                 name: tbl_names[i].clone(),
                 tenant: tenant_dbname.tenant_name().to_string(),
                 db_type: db_type.clone(),
+                catalog_info: Default::default(),
             };
             tbl_infos.push(Arc::new(tb_info));
         } else {
@@ -889,46 +889,6 @@ pub async fn list_tables_from_unshare_db(
         tenant_dbname,
         Some(dbid_tbnames),
         DatabaseType::NormalDB,
-    )
-    .await
-}
-
-pub async fn list_tables_from_share_db(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share: ShareNameIdent,
-    tenant_dbname: &DatabaseNameIdent,
-) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
-    let res = get_share_or_err(
-        kv_api,
-        &share,
-        format!("list_tables_from_share_db: {}", share.display()),
-    )
-    .await;
-
-    let (share_id_seq, _share_id, _share_meta_seq, share_meta) = match res {
-        Ok(x) => x,
-        Err(e) => {
-            return Err(e);
-        }
-    };
-    if share_id_seq == 0 {
-        return Err(KVAppError::AppError(AppError::WrongShare(WrongShare::new(
-            share.to_string_key(),
-        ))));
-    }
-
-    let mut ids = Vec::with_capacity(share_meta.entries.len());
-    for (_, entry) in share_meta.entries.iter() {
-        if let ShareGrantObject::Table(table_id) = entry.object {
-            ids.push(table_id);
-        }
-    }
-    get_tableinfos_by_ids(
-        kv_api,
-        &ids,
-        tenant_dbname,
-        None,
-        DatabaseType::ShareDB(share.into()),
     )
     .await
 }

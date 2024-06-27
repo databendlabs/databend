@@ -27,7 +27,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
@@ -70,7 +70,7 @@ impl FuseTable {
     pub async fn navigate_to_stream(&self, stream_info: &TableInfo) -> Result<Arc<FuseTable>> {
         let options = stream_info.options();
         let stream_table_id = options
-            .get(OPT_KEY_TABLE_ID)
+            .get(OPT_KEY_SOURCE_TABLE_ID)
             .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
             .parse::<u64>()?;
         if stream_table_id != self.table_info.ident.table_id {
@@ -334,7 +334,7 @@ impl FuseTable {
     ) -> Result<(String, Vec<String>)> {
         let options = stream_info.options();
         let stream_table_id = options
-            .get(OPT_KEY_TABLE_ID)
+            .get(OPT_KEY_SOURCE_TABLE_ID)
             .ok_or_else(|| ErrorCode::Internal("table id must be set"))?
             .parse::<u64>()?;
         if stream_table_id != self.table_info.ident.table_id {

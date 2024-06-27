@@ -121,7 +121,7 @@ impl ReclusterMutator {
         );
         let depth_threshold = (snapshot.summary.block_count as f64 * avg_depth_threshold)
             .max(1.0)
-            .min(64.0);
+            .min(16.0);
 
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
@@ -574,9 +574,13 @@ impl ReclusterMutator {
             });
         }
 
+        let mut selected_idx = IndexSet::new();
         if !unfinished_parts.is_empty() {
             warn!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
-            // todo: re-sort the unfinished parts firstly.
+            // re-sort the unfinished parts firstly.
+            unfinished_parts.keys().for_each(|idx| {
+                selected_idx.insert(*idx);
+            });
         }
 
         let sum_depth: usize = block_depths.iter().sum();
@@ -585,7 +589,6 @@ impl ReclusterMutator {
             (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
 
         // find the max point, gather the indices.
-        let mut selected_idx = IndexSet::new();
         if average_depth > depth_threshold {
             point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);

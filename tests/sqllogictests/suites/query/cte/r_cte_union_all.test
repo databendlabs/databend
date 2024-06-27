@@ -1,5 +1,11 @@
 control sortmode rowsort
 
+statement ok
+create or replace database db;
+
+statement ok
+use db;
+
 # simple recursive CTE
 query I
 with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t

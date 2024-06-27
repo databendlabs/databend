@@ -132,6 +132,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
     }
 
+    pub fn get_enable_streaming_load(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_streaming_load")? != 0)
+    }
+
     pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
@@ -282,6 +286,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
+    pub fn get_join_spilling_buffer_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
+    }
+
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
     }
@@ -300,6 +308,10 @@ impl Settings {
 
     pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    }
+
+    pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_merge_into_row_fetch")? != 0)
     }
 
     pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {

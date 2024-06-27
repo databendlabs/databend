@@ -94,6 +94,7 @@ mod interpreter_share_show_grant_tenants;
 mod interpreter_show_object_grant_privileges;
 mod interpreter_stream_create;
 mod interpreter_stream_drop;
+mod interpreter_system_action;
 mod interpreter_table_add_column;
 mod interpreter_table_analyze;
 mod interpreter_table_create;
@@ -211,6 +212,7 @@ pub use interpreter_share_show_grant_tenants::ShowGrantTenantsOfShareInterpreter
 pub use interpreter_show_object_grant_privileges::ShowObjectGrantPrivilegesInterpreter;
 pub use interpreter_stream_create::CreateStreamInterpreter;
 pub use interpreter_stream_drop::DropStreamInterpreter;
+pub use interpreter_system_action::SystemActionInterpreter;
 pub use interpreter_table_add_column::AddTableColumnInterpreter;
 pub use interpreter_table_analyze::AnalyzeTableInterpreter;
 pub use interpreter_table_create::CreateTableInterpreter;

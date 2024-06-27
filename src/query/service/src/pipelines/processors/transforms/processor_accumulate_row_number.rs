@@ -55,7 +55,7 @@ impl AccumulateRowNumber {
             data_block.num_columns(),
         );
         // if matched all source data, we will get an empty block, but which
-        // has source join schema,not only row_number,for combound_block project,
+        // has source join schema,not only row_number,for compound_block project,
         // it will do nothing for empty block.
         if !data_block.is_empty() {
             assert_eq!(data_block.num_columns(), 1);

@@ -23,7 +23,6 @@ use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
@@ -103,14 +102,12 @@ impl OptimizeTableInterpreter {
         parts: Partitions,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
         }));
@@ -129,7 +126,6 @@ impl OptimizeTableInterpreter {
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             table_info,
-            catalog_info,
             snapshot,
             mutation_kind: MutationKind::Compact,
             update_stream_meta: vec![],
@@ -180,7 +176,6 @@ impl OptimizeTableInterpreter {
             .compact_blocks(self.ctx.clone(), compaction_limits)
             .await?;
 
-        let catalog_info = catalog.info();
         let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
 
@@ -190,7 +185,6 @@ impl OptimizeTableInterpreter {
                 parts,
                 table.get_table_info().clone(),
                 snapshot,
-                catalog_info,
                 compact_is_distributed,
             )?;
 
@@ -236,7 +230,6 @@ impl OptimizeTableInterpreter {
                     let physical_plan = build_recluster_physical_plan(
                         mutator.tasks,
                         table.get_table_info().clone(),
-                        catalog.info(),
                         mutator.snapshot,
                         is_distributed,
                     )?;

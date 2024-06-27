@@ -323,7 +323,8 @@ impl SExpr {
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::RecursiveCteScan(_) => {}
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::MergeInto(_) => {}
         };
         for child in &self.children {
             let udf = child.get_udfs()?;
@@ -419,7 +420,8 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::ExpressionScan(_)
         | RelOperator::CacheScan(_)
         | RelOperator::AsyncFunction(_)
-        | RelOperator::RecursiveCteScan(_) => false,
+        | RelOperator::RecursiveCteScan(_)
+        | RelOperator::MergeInto(_) => false,
         RelOperator::Join(op) => {
             op.left_conditions.iter().any(find_subquery_in_expr)
                 || op.right_conditions.iter().any(find_subquery_in_expr)

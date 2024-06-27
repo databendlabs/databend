@@ -1,0 +1,35 @@
+statement ok
+DROP DATABASE IF EXISTS db_values_comment
+
+statement ok
+CREATE DATABASE db_values_comment
+
+statement ok
+USE db_values_comment
+
+statement ok
+CREATE TABLE IF NOT EXISTS t1(id Int, s string) Engine = Fuse
+
+statement ok
+INSERT INTO t1 (id, s) VALUES
+    -- line comment
+    (1, 'aaa'), -- line comment
+    (2, 'aaa'),
+    /* block comment */
+    (/* block comment */3, 'aaa'),/* block comment */
+    (4, 'aaa')/* block comment *//* block comment */--linecomment
+    --(5, '')
+
+statement ok
+INSERT INTO t1 (id, s) VALUES-- line comment
+
+query IT
+SELECT id, s FROM t1 order by id
+----
+1 aaa
+2 aaa
+3 aaa
+4 aaa
+
+statement ok
+DROP DATABASE db_values_comment

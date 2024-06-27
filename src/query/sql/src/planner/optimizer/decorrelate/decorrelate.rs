@@ -202,6 +202,7 @@ impl SubqueryRewriter {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
+            is_null_equal: Vec::new(),
         };
 
         // Rewrite plan to semi-join.
@@ -293,6 +294,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -344,6 +346,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -410,6 +413,7 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 }
                 .into();
                 Ok((

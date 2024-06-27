@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -30,7 +29,6 @@ pub struct CommitSink {
     pub input: Box<PhysicalPlan>,
     pub snapshot: Arc<TableSnapshot>,
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,

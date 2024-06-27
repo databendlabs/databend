@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -28,7 +27,6 @@ pub struct ReclusterSink {
     pub input: Box<PhysicalPlan>,
 
     pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
 
     pub snapshot: Arc<TableSnapshot>,
     pub remained_blocks: Vec<Arc<BlockMeta>>,

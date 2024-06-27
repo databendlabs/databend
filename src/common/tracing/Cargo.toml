@@ -12,6 +12,7 @@ test = true
 
 [dependencies]
 databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 defer = "0.2"
 fern = "0.6.2"
 humantime = "2.1.0"

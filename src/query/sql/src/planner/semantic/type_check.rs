@@ -93,7 +93,7 @@ use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -1151,6 +1151,11 @@ impl<'a> TypeChecker<'a> {
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr)?;
+
+            if matches!(order, ScalarExpr::ConstantExpr(_)) {
+                continue;
+            }
+
             order_by.push(WindowOrderBy {
                 expr: order,
                 asc: o.asc,
@@ -2683,9 +2688,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = databend_common_base::runtime::block_on(
-            binder.bind_query(&mut bind_context, subquery),
-        )?;
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -3395,7 +3398,7 @@ impl<'a> TypeChecker<'a> {
                 ))
             })?;
 
-        let op = StageTable::get_op(&stage_info).map_err(|err| {
+        let op = init_stage_operator(&stage_info).map_err(|err| {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
         })?;
 

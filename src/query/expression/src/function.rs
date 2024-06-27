@@ -100,6 +100,9 @@ pub struct FunctionContext {
     pub now: DateTime<Utc>,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
+    // used to gen scala default value when loading files
+    // funcs with 0 arg may need to handle it: rand(), uuid()
+    pub force_scalar: bool,
 
     pub openai_api_chat_base_url: String,
     pub openai_api_embedding_base_url: String,
@@ -571,6 +574,7 @@ impl<'a> EvalContext<'a> {
         params: &[Scalar],
         args: &[Value<AnyType>],
         func_name: &str,
+        expr_name: &str,
         selection: Option<&[u32]>,
     ) -> Result<()> {
         if self.suppress_error {
@@ -605,10 +609,12 @@ impl<'a> EvalContext<'a> {
                     .join(", ");
 
                 let err_msg = if params.is_empty() {
-                    format!("{error} while evaluating function `{func_name}({args})`")
+                    format!(
+                        "{error} while evaluating function `{func_name}({args})` in expr `{expr_name}`"
+                    )
                 } else {
                     format!(
-                        "{error} while evaluating function `{func_name}({params})({args})`",
+                        "{error} while evaluating function `{func_name}({params})({args})` in expr `{expr_name}`",
                         params = params.iter().join(", ")
                     )
                 };

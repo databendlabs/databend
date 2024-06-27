@@ -7,6 +7,8 @@ Error: APIError: ResponseError with 1025: Unknown table 'tbnotexists'
 >>>> GRANT SELECT ON dbnotexists.* TO 'test-user'
 Error: APIError: ResponseError with 1003: Unknown database 'dbnotexists'
 <<<<
+=== check list user's local stage ===
+=== no err ===
 information_schema
 system
 test -- insert
@@ -86,10 +88,10 @@ Error: APIError: ResponseError with 1063: Permission denied: No privilege on tab
 Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
 1	64	377
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
 a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===

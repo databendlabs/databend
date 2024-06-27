@@ -50,6 +50,7 @@ use crate::interpreters::interpreter_notification_drop::DropNotificationInterpre
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
 use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
@@ -339,9 +340,10 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto(merge_into) => Ok(Arc::new(MergeIntoInterpreter::try_create(
+            Plan::MergeInto { s_expr, schema } => Ok(Arc::new(MergeIntoInterpreter::try_create(
                 ctx,
-                *merge_into.clone(),
+                *s_expr.clone(),
+                schema.clone(),
             )?)),
 
             Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
@@ -595,6 +597,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::SetPriority(p) => Ok(Arc::new(SetPriorityInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::System(p) => Ok(Arc::new(SystemActionInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

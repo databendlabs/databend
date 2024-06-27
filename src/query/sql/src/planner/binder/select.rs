@@ -67,8 +67,7 @@ pub struct SelectItem<'a> {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn bind_where(
+    pub fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -115,8 +114,7 @@ impl Binder {
         Ok((new_expr, scalar))
     }
 
-    #[async_backtrace::framed]
-    pub(super) async fn bind_set_operator(
+    pub(super) fn bind_set_operator(
         &mut self,
         bind_context: &mut BindContext,
         left: &SetExpr,
@@ -125,8 +123,7 @@ impl Binder {
         all: &bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) =
-            self.bind_set_expr(bind_context, left, &[], None).await?;
+        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[], None)?;
         if let Some(cte_name) = cte_name.as_ref() {
             if !all {
                 return Err(ErrorCode::Internal(
@@ -135,6 +132,8 @@ impl Binder {
             }
             // Add recursive cte's columns to cte info
             let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
+            mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
                 let col = ColumnBindingBuilder::new(
                     column.column_name.clone(),
@@ -148,7 +147,7 @@ impl Binder {
             }
         }
         let (right_expr, right_bind_context) =
-            self.bind_set_expr(bind_context, right, &[], None).await?;
+            self.bind_set_expr(bind_context, right, &[], None)?;
 
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
@@ -167,7 +166,6 @@ impl Binder {
                     left_expr,
                     right_expr,
                 )
-                .await
             }
             (SetOperator::Except, false) => {
                 // Transfer Except to Anti join
@@ -179,7 +177,6 @@ impl Binder {
                     left_expr,
                     right_expr,
                 )
-                .await
             }
             (SetOperator::Union, true) => self.bind_union(
                 left.span(),
@@ -220,17 +217,12 @@ impl Binder {
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         let mut coercion_types = Vec::with_capacity(left_context.columns.len());
+        let mut cte_scan_names = Vec::new();
         if cte_name.is_some() {
-            let mut count = 0;
-            self.count_r_cte_scan(&right_expr, &mut count, &mut coercion_types)?;
-            if count == 0 {
+            self.count_r_cte_scan(&right_expr, &mut cte_scan_names, &mut coercion_types)?;
+            if cte_scan_names.is_empty() {
                 return Err(ErrorCode::SemanticError(
                     "Recursive cte should be used in recursive cte".to_string(),
-                ));
-            }
-            if count > 1 {
-                return Err(ErrorCode::SemanticError(
-                    "Currently, only support recursive cte be used in one place".to_string(),
                 ));
             }
         } else {
@@ -283,7 +275,7 @@ impl Binder {
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
-            cte_name,
+            cte_scan_names,
         };
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
@@ -304,7 +296,7 @@ impl Binder {
         Ok((new_expr, new_bind_context))
     }
 
-    pub async fn bind_intersect(
+    pub fn bind_intersect(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -322,10 +314,9 @@ impl Binder {
             right_expr,
             JoinType::LeftSemi,
         )
-        .await
     }
 
-    pub async fn bind_except(
+    pub fn bind_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -343,11 +334,10 @@ impl Binder {
             right_expr,
             JoinType::LeftAnti,
         )
-        .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn bind_intersect_or_except(
+    pub fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -393,9 +383,8 @@ impl Binder {
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr = self
-            .bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)
-            .await?;
+        let s_expr =
+            self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
         Ok((s_expr, left_context))
     }
 

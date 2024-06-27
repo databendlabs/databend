@@ -22,6 +22,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::OneBlockSource;
 
+use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
@@ -40,6 +41,7 @@ pub struct PipelineBuildResult {
     pub exchange_injector: Arc<dyn ExchangeInjector>,
     /// for local fragment data sharing
     pub builder_data: PipelineBuilderData,
+    pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
 }
 
 impl PipelineBuildResult {
@@ -52,6 +54,7 @@ impl PipelineBuildResult {
                 input_join_state: None,
                 input_probe_schema: None,
             },
+            r_cte_scan_interpreters: vec![],
         }
     }
 
@@ -74,6 +77,7 @@ impl PipelineBuildResult {
                 input_join_state: None,
                 input_probe_schema: None,
             },
+            r_cte_scan_interpreters: vec![],
         })
     }
 

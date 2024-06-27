@@ -1,24 +1,24 @@
 ==== check internal stage write priv ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s2 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s2 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'test_table' for user 'u1'@'%' with roles [public]
 20	160	160
 1
 ==== check external stage priv ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s1 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s1 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 20	160	160
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s1 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s1 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 csv/data_UUID_0000_00000000.csv	20	0	NULL	NULL
 ==== check internal stage read priv ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s2 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s2 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 data_UUID_0000_00000000.csv	20	0	NULL	NULL
 === check presign ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 000
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE presign_stage for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 000
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s3 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Write] is required on STAGE s3 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 1	64	377
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'u1'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'
 Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage s3 for user 'u1'@'%'

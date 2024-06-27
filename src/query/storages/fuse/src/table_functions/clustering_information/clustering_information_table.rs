@@ -31,10 +31,10 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
-use super::clustering_information::ClusteringInformation;
 use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_args;
+use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
+use crate::table_functions::ClusteringInformation;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::FuseTable;
@@ -46,6 +46,7 @@ pub struct ClusteringInformationTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
+    arg_cluster_key: Option<String>,
 }
 
 impl ClusteringInformationTable {
@@ -55,8 +56,8 @@ impl ClusteringInformationTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) =
-            parse_db_tb_args(&table_args, FUSE_FUNC_CLUSTERING)?;
+        let (arg_database_name, arg_table_name, arg_cluster_key) =
+            parse_db_tb_opt_args(&table_args, FUSE_FUNC_CLUSTERING)?;
 
         let engine = FUSE_FUNC_CLUSTERING.to_owned();
 
@@ -76,6 +77,7 @@ impl ClusteringInformationTable {
             table_info,
             arg_database_name,
             arg_table_name,
+            arg_cluster_key,
         }))
     }
 }
@@ -101,10 +103,13 @@ impl Table for ClusteringInformationTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        Some(TableArgs::new_positioned(vec![
-            string_literal(self.arg_database_name.as_str()),
-            string_literal(self.arg_table_name.as_str()),
-        ]))
+        let mut args = Vec::new();
+        args.push(string_literal(self.arg_database_name.as_str()));
+        args.push(string_literal(self.arg_table_name.as_str()));
+        if let Some(arg_cluster_key) = &self.arg_cluster_key {
+            args.push(string_literal(arg_cluster_key));
+        }
+        Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(
@@ -121,6 +126,7 @@ impl Table for ClusteringInformationTable {
                     output,
                     self.arg_database_name.to_owned(),
                     self.arg_table_name.to_owned(),
+                    self.arg_cluster_key.to_owned(),
                 )
             },
             1,
@@ -135,6 +141,7 @@ struct ClusteringInformationSource {
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
+    arg_cluster_key: Option<String>,
 }
 
 impl ClusteringInformationSource {
@@ -143,12 +150,14 @@ impl ClusteringInformationSource {
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
+        arg_cluster_key: Option<String>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, ClusteringInformationSource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
+            arg_cluster_key,
         })
     }
 }
@@ -180,7 +189,7 @@ impl AsyncSource for ClusteringInformationSource {
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
         Ok(Some(
-            ClusteringInformation::new(self.ctx.clone(), tbl)
+            ClusteringInformation::new(self.ctx.clone(), tbl, self.arg_cluster_key.clone())
                 .get_clustering_info()
                 .await?,
         ))

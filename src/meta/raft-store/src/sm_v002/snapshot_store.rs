@@ -342,8 +342,6 @@ impl SnapshotStoreV002 {
         mut temp: Box<SnapshotData>,
         meta: &SnapshotMeta,
     ) -> Result<SnapshotData, SnapshotStoreError> {
-        assert!(temp.is_temp());
-
         let src = temp.path().to_string();
 
         temp.sync_all()

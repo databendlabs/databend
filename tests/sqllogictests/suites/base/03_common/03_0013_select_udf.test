@@ -44,12 +44,12 @@ CREATE FUNCTION gcd (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd
 $$
 
 query I
-select number, gcd(number * 3, number * 6) from numbers(5) where number > 0 order by 1;
+select number, gcd(number * 3, number * 6), gcd(3, gcd(number * 3, number * 6)) from numbers(5) where number > 0 order by 1;
 ----
-1	3
-2	6
-3	9
-4	12
+1	3	3
+2	6	3
+3	9	3
+4	12	3
 
 statement ok
 DROP FUNCTION gcd

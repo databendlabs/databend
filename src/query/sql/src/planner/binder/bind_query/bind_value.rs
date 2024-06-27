@@ -251,6 +251,7 @@ impl Binder {
                     if !used {
                         join.left_conditions.remove(index);
                         join.right_conditions.remove(index);
+                        join.is_null_equal.retain(|&x| x != index);
                     }
                 }
 

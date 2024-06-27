@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
@@ -32,7 +33,6 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -41,7 +41,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
@@ -97,20 +96,8 @@ impl Interpreter for UpdateInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        // Add table lock.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                catalog_name,
-                db_name,
-                tbl_name,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
         // build physical plan.
-        let physical_plan = self.get_physical_plan().await?;
+        let physical_plan: Option<PhysicalPlan> = self.get_physical_plan().await?;
 
         // build pipeline.
         let mut build_res = PipelineBuildResult::create();
@@ -133,7 +120,9 @@ impl Interpreter for UpdateInterpreter {
             }
         }
 
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         Ok(build_res)
     }
 }
@@ -141,14 +130,9 @@ impl Interpreter for UpdateInterpreter {
 impl UpdateInterpreter {
     pub async fn get_physical_plan(&self) -> Result<Option<PhysicalPlan>> {
         let catalog_name = self.plan.catalog.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
-
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-        let tbl = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
         // check mutability
         tbl.check_mutable()?;
 
@@ -274,7 +258,6 @@ impl UpdateInterpreter {
                 fuse_table.get_table_info().clone(),
                 col_indices,
                 snapshot,
-                catalog_info,
                 query_row_id_col,
                 is_distributed,
                 self.ctx.clone(),
@@ -292,7 +275,6 @@ impl UpdateInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
         query_row_id_col: bool,
         is_distributed: bool,
         ctx: Arc<QueryContext>,
@@ -302,7 +284,6 @@ impl UpdateInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             update_list,
@@ -324,7 +305,6 @@ impl UpdateInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Update,
             update_stream_meta: vec![],
             merge_meta,

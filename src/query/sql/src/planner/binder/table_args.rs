@@ -27,8 +27,7 @@ use crate::plans::ConstantExpr;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 
-#[async_backtrace::framed]
-pub async fn bind_table_args(
+pub fn bind_table_args(
     scalar_binder: &mut ScalarBinder<'_>,
     params: &[Expr],
     named_params: &[(Identifier, Expr)],

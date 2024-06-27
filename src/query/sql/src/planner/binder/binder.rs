@@ -148,7 +148,7 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
@@ -205,7 +205,7 @@ impl<'a> Binder {
 
             Statement::CopyIntoTable(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -214,7 +214,7 @@ impl<'a> Binder {
 
             Statement::CopyIntoLocation(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -357,7 +357,7 @@ impl<'a> Binder {
             }
             Statement::Insert(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -368,7 +368,7 @@ impl<'a> Binder {
             }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -376,7 +376,7 @@ impl<'a> Binder {
             }
             Statement::MergeInto(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In Merge resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -384,7 +384,7 @@ impl<'a> Binder {
             }
             Statement::Delete(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -393,7 +393,7 @@ impl<'a> Binder {
             }
             Statement::Update(stmt) => {
                 if let Some(hints) = &stmt.hints {
-                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
                         warn!("In UPDATE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
@@ -618,6 +618,7 @@ impl<'a> Binder {
             Statement::SetPriority {priority, object_id} => {
                 self.bind_set_priority(priority, object_id).await?
             },
+            Statement::System(stmt) => self.bind_system(stmt).await?,
         };
 
         match plan.kind() {
@@ -642,7 +643,7 @@ impl<'a> Binder {
         normalize_identifier(ident, &self.name_resolution_ctx)
     }
 
-    pub(crate) async fn opt_hints_set_var(
+    pub(crate) fn opt_hints_set_var(
         &mut self,
         bind_context: &mut BindContext,
         hints: &Hint,
