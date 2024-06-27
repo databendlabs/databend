@@ -509,7 +509,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "Invalid option value. EMPTY_FILED_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
+                "Invalid option value. EMPTY_FIELD_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
@@ -518,7 +518,7 @@ impl FromStr for EmptyFieldAs {
 impl Display for EmptyFieldAs {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::FieldDefault => write!(f, "FILED_DEFAULT"),
+            Self::FieldDefault => write!(f, "FIELD_DEFAULT"),
             Self::Null => write!(f, "NULL"),
             Self::String => write!(f, "STRING"),
         }
@@ -697,7 +697,7 @@ impl Display for FileFormatParams {
                     "TYPE = CSV COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}'  EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
@@ -717,7 +717,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = TSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}'  QUOTE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
                      SKIP_HEADER = {} \
                      NAN_DISPLAY = '{}'",
                     params.compression,

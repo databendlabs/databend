@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_comma_separated_exprs;
-use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
@@ -238,20 +237,12 @@ pub fn parse_computed_expr(
     Ok(expr)
 }
 
-pub fn parse_default_expr_string(
-    ctx: &Arc<dyn TableContext>,
-    default_expr: &str,
-) -> Result<Box<(ScalarExpr, DataType)>> {
-    let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
-    let tokens = tokenize_sql(default_expr)?;
-    let ast = parse_expr(&tokens, dialect)?;
-    parse_default_expr(ctx, &ast)
-}
-
-fn parse_default_expr(
-    ctx: &Arc<dyn TableContext>,
+pub fn parse_default_expr_to_string(
+    ctx: Arc<dyn TableContext>,
+    field: &TableField,
     ast: &AExpr,
-) -> Result<Box<(ScalarExpr, DataType)>> {
+    is_add_column: bool,
+) -> Result<String> {
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
@@ -265,16 +256,8 @@ fn parse_default_expr(
         &[],
         false,
     )?;
-    type_checker.resolve(ast)
-}
 
-pub fn parse_default_expr_to_string(
-    ctx: Arc<dyn TableContext>,
-    field: &TableField,
-    ast: &AExpr,
-    is_add_column: bool,
-) -> Result<String> {
-    let (mut scalar, data_type) = *parse_default_expr(&ctx, ast)?;
+    let (mut scalar, data_type) = *type_checker.resolve(ast)?;
     let schema_data_type = DataType::from(field.data_type());
     if data_type != schema_data_type {
         scalar = wrap_cast(&scalar, &schema_data_type);
