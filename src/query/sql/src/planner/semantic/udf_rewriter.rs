@@ -61,6 +61,7 @@ impl UdfRewriter {
         }
     }
 
+    #[recursive::recursive]
     pub(crate) fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
         if !s_expr.children.is_empty() {

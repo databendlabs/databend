@@ -45,6 +45,7 @@ pub enum Matcher {
 
 impl Matcher {
     /// Check if the `SExpr` can be matched by the `Matcher`.
+    #[recursive::recursive]
     pub fn matches(&self, s_expr: &SExpr) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
