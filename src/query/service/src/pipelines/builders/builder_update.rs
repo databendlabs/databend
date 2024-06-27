@@ -27,9 +27,9 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_update_source(&mut self, update: &UpdateSource) -> Result<()> {
-        let table =
-            self.ctx
-                .build_table_by_table_info(&update.catalog_info, &update.table_info, None)?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&update.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if update.parts.is_empty() {

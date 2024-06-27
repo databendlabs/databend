@@ -70,19 +70,16 @@ impl Interpreter for CreateCatalogInterpreter {
         let catalog_manager = CatalogManager::instance();
 
         // Build and check if catalog is valid.
+        let ctl_info = CatalogInfo {
+            id: CatalogIdIdent::new(Tenant::new_literal("dummy"), 0).into(),
+            name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog).into(),
+            meta: CatalogMeta {
+                catalog_option: self.plan.meta.catalog_option.clone(),
+                created_on: chrono::Utc::now(),
+            },
+        };
         let ctl = catalog_manager
-            .build_catalog(
-                &CatalogInfo {
-                    id: CatalogIdIdent::new(Tenant::new_literal("dummy"), 0).into(),
-                    name_ident: CatalogNameIdent::new(self.plan.tenant.clone(), &self.plan.catalog)
-                        .into(),
-                    meta: CatalogMeta {
-                        catalog_option: self.plan.meta.catalog_option.clone(),
-                        created_on: chrono::Utc::now(),
-                    },
-                },
-                self.ctx.txn_mgr(),
-            )
+            .build_catalog(Arc::new(ctl_info), self.ctx.txn_mgr())
             .map_err(|err| err.add_message("Error creating catalog."))?;
 
         // list databases to check if the catalog is valid.

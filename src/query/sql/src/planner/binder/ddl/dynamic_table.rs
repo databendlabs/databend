@@ -142,7 +142,7 @@ impl Binder {
         }
 
         let mut init_bind_context = BindContext::new();
-        let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query).await?;
+        let (_, bind_context) = self.bind_query(&mut init_bind_context, as_query)?;
         let query_fields = bind_context
             .columns
             .iter()

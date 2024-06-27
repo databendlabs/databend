@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
@@ -28,8 +29,6 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
 use databend_common_ast::Span;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
-use databend_common_catalog::plan::ParquetReadOptions;
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
@@ -44,11 +43,7 @@ use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -56,9 +51,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_orc::OrcTable;
-use databend_common_storages_parquet::ParquetRSTable;
-use databend_common_storages_stage::StageTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
@@ -84,8 +76,7 @@ use crate::ColumnEntry;
 use crate::IndexType;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn bind_dummy_table(
+    pub fn bind_dummy_table(
         &mut self,
         bind_context: &BindContext,
         select_list: &Vec<SelectTarget>,
@@ -124,106 +115,10 @@ impl Binder {
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-
-        let table = match stage_info.file_format_params {
-            FileFormatParams::Parquet(..) => {
-                let mut read_options = ParquetReadOptions::default();
-
-                if !table_ctx.get_settings().get_enable_parquet_page_index()? {
-                    read_options = read_options.with_prune_pages(false);
-                }
-
-                if !table_ctx
-                    .get_settings()
-                    .get_enable_parquet_rowgroup_pruning()?
-                {
-                    read_options = read_options.with_prune_row_groups(false);
-                }
-
-                if !table_ctx.get_settings().get_enable_parquet_prewhere()? {
-                    read_options = read_options.with_do_prewhere(false);
-                }
-
-                ParquetRSTable::create(
-                    table_ctx.clone(),
-                    stage_info.clone(),
-                    files_info,
-                    read_options,
-                    files_to_copy,
-                )
-                .await?
-            }
-            FileFormatParams::Orc(..) => {
-                let schema = Arc::new(TableSchema::empty());
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_values: None,
-                };
-                OrcTable::try_create(info).await?
-            }
-            FileFormatParams::NdJson(..) => {
-                let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                    "_$1", // TODO: this name should be in visible
-                    TableDataType::Variant,
-                )]));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_values: None,
-                };
-                StageTable::try_create(info)?
-            }
-            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
-                let max_column_position = self.metadata.read().get_max_column_position();
-                if max_column_position == 0 {
-                    let file_type = match stage_info.file_format_params {
-                        FileFormatParams::Csv(..) => "CSV",
-                        FileFormatParams::Tsv(..) => "TSV",
-                        _ => unreachable!(), // This branch should never be reached
-                    };
-
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
-                        file_type
-                    )));
-                }
-
-                let mut fields = vec![];
-                for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(
-                        &format!("_${}", i),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ));
-                }
-
-                let schema = Arc::new(TableSchema::new(fields));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    duplicated_files_detected: vec![],
-                    is_select: true,
-                    default_values: None,
-                };
-                StageTable::try_create(info)?
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
-                    stage_info.file_format_params
-                )));
-            }
-        };
+        let max_column_position = self.metadata.read().get_max_column_position();
+        let table = table_ctx
+            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
             Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
@@ -242,9 +137,8 @@ impl Binder {
             false,
         );
 
-        let (s_expr, mut bind_context) = self
-            .bind_base_table(bind_context, "system", table_index, None)
-            .await?;
+        let (s_expr, mut bind_context) =
+            self.bind_base_table(bind_context, "system", table_index, None)?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -280,8 +174,7 @@ impl Binder {
         Ok(cte_scan)
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_cte(
+    pub(crate) fn bind_cte(
         &mut self,
         span: Span,
         bind_context: &mut BindContext,
@@ -307,9 +200,8 @@ impl Binder {
             window_definitions: DashMap::new(),
         };
 
-        let (s_expr, mut res_bind_context) = self
-            .bind_query(&mut new_bind_context, &cte_info.query)
-            .await?;
+        let (s_expr, mut res_bind_context) =
+            self.bind_query(&mut new_bind_context, &cte_info.query)?;
         let mut cols_alias = cte_info.columns_alias.clone();
         if let Some(alias) = alias {
             for (idx, col_alias) in alias.columns.iter().enumerate() {
@@ -345,8 +237,7 @@ impl Binder {
     }
 
     // Bind materialized cte
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_m_cte(
+    pub(crate) fn bind_m_cte(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -355,9 +246,8 @@ impl Binder {
         span: &Span,
     ) -> Result<(SExpr, BindContext)> {
         let new_bind_context = if cte_info.used_count == 0 {
-            let (cte_s_expr, cte_bind_ctx) = self
-                .bind_cte(*span, bind_context, table_name, alias, cte_info)
-                .await?;
+            let (cte_s_expr, cte_bind_ctx) =
+                self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
             self.ctes_map
                 .entry(table_name.clone())
                 .and_modify(|cte_info| {
@@ -394,8 +284,7 @@ impl Binder {
         Ok((s_expr, new_bind_context))
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_r_cte_scan(
+    pub(crate) fn bind_r_cte_scan(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -475,8 +364,7 @@ impl Binder {
         ))
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_r_cte(
+    pub(crate) fn bind_r_cte(
         &mut self,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
@@ -492,32 +380,27 @@ impl Binder {
                     ));
                 }
                 self.set_bind_recursive_cte(true);
-                let (union_s_expr, mut new_bind_ctx) = self
-                    .bind_set_operator(
-                        bind_context,
-                        &set_expr.left,
-                        &set_expr.right,
-                        &set_expr.op,
-                        &set_expr.all,
-                        Some(cte_name.to_string()),
-                    )
-                    .await?;
+                let (union_s_expr, mut new_bind_ctx) = self.bind_set_operator(
+                    bind_context,
+                    &set_expr.left,
+                    &set_expr.right,
+                    &set_expr.op,
+                    &set_expr.all,
+                    Some(cte_name.to_string()),
+                )?;
                 self.set_bind_recursive_cte(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
-            _ => {
-                return Err(ErrorCode::SyntaxException(
-                    "Recursive CTE must contain a UNION(ALL) query".to_string(),
-                ));
-            }
+            _ => Err(ErrorCode::SyntaxException(
+                "Recursive CTE must contain a UNION(ALL) query".to_string(),
+            )),
         }
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_base_table(
+    pub(crate) fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -584,8 +467,7 @@ impl Binder {
         ))
     }
 
-    #[async_backtrace::framed]
-    pub async fn resolve_data_source(
+    pub fn resolve_data_source(
         &self,
         _tenant: &str,
         catalog_name: &str,
@@ -594,40 +476,39 @@ impl Binder {
         navigation: Option<&TimeNavigation>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
-        // Resolve table with ctx
-        // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
-        // we will invoke here twice for t1, so in the past, we use catalog every time to get the
-        // newest snapshot, we can't get consistent snapshot
-        let mut table_meta = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
+        databend_common_base::runtime::block_on(async move {
+            // Resolve table with ctx
+            // for example: select * from t1 join (select * from t1 as t2 where a > 1 and a < 13);
+            // we will invoke here twice for t1, so in the past, we use catalog every time to get the
+            // newest snapshot, we can't get consistent snapshot
+            let mut table_meta = self
+                .ctx
+                .get_table(catalog_name, database_name, table_name)
+                .await?;
 
-        if let Some(desc) = navigation {
-            table_meta = table_meta.navigate_to(desc, abort_checker).await?;
-        }
-        Ok(table_meta)
+            if let Some(desc) = navigation {
+                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
+            }
+            Ok(table_meta)
+        })
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_temporal_clause(
+    pub(crate) fn resolve_temporal_clause(
         &self,
         bind_context: &mut BindContext,
         temporal: &Option<TemporalClause>,
     ) -> Result<Option<TimeNavigation>> {
         match temporal {
             Some(TemporalClause::TimeTravel(point)) => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Some(TimeNavigation::TimeTravel(point)))
             }
             Some(TemporalClause::Changes(interval)) => {
                 let end = match &interval.end_point {
-                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp).await?),
+                    Some(tp) => Some(self.resolve_data_travel_point(bind_context, tp)?),
                     None => None,
                 };
-                let at = self
-                    .resolve_data_travel_point(bind_context, &interval.at_point)
-                    .await?;
+                let at = self.resolve_data_travel_point(bind_context, &interval.at_point)?;
                 Ok(Some(TimeNavigation::Changes {
                     append_only: interval.append_only,
                     at,
@@ -639,8 +520,7 @@ impl Binder {
         }
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn resolve_data_travel_point(
+    pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
@@ -726,19 +606,28 @@ impl Binder {
                 catalog,
                 database,
                 name,
-            } => {
-                let (catalog, database, name) =
-                    self.normalize_object_identifier_triple(catalog, database, name);
-                let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-                if stream.engine() != "STREAM" {
-                    return Err(ErrorCode::TableEngineNotSupported(format!(
-                        "{database}.{name} is not STREAM",
-                    )));
-                }
-                let info = stream.get_table_info().clone();
-                Ok(NavigationPoint::StreamInfo(info))
-            }
+            } => self.resolve_stream_data_travel_point(catalog, database, name),
         }
+    }
+
+    fn resolve_stream_data_travel_point(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        name: &Identifier,
+    ) -> Result<NavigationPoint> {
+        let (catalog, database, name) =
+            self.normalize_object_identifier_triple(catalog, database, name);
+        databend_common_base::runtime::block_on(async move {
+            let stream = self.ctx.get_table(&catalog, &database, &name).await?;
+            if stream.engine() != "STREAM" {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "{database}.{name} is not STREAM",
+                )));
+            }
+            let info = stream.get_table_info().clone();
+            Ok(NavigationPoint::StreamInfo(info))
+        })
     }
 
     #[async_backtrace::framed]

@@ -96,7 +96,7 @@ impl LockManager {
         ctx: Arc<dyn TableContext>,
         lock: &T,
         should_retry: bool,
-    ) -> Result<Option<LockGuard>> {
+    ) -> Result<Option<Arc<LockGuard>>> {
         let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
         let query_id = ctx.get_current_session_id();
@@ -200,7 +200,7 @@ impl LockManager {
             }?;
         }
 
-        Ok(Some(guard))
+        Ok(Some(Arc::new(guard)))
     }
 
     fn insert_lock(&self, revision: u64, lock_holder: Arc<LockHolder>) {

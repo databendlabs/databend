@@ -119,7 +119,7 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
 
         Ok(catalog)
@@ -143,21 +143,8 @@ pub struct IcebergCatalog {
 
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
-    ///
-    /// # NOTE
-    ///
-    /// endpoint_url should be set as in `Stage`s.
-    /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
-    ///
-    /// `s3://bucket_name/path/to/iceberg_catalog`
-    ///
-    /// Some iceberg storages barely store tables in the root directory,
-    /// making there no path for database.
-    ///
-    /// Such catalog will be seen as an `flatten` catalogs,
-    /// a `default` database will be generated directly
     #[minitrace::trace]
-    pub fn try_create(info: &CatalogInfo) -> Result<Self> {
+    pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Iceberg(opt) => opt,
             _ => unreachable!(

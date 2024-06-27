@@ -16,7 +16,7 @@ use databend_common_catalog::table::NavigationPoint;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct CreateStreamPlan {
     pub create_option: CreateOption,
     pub tenant: Tenant,
@@ -30,7 +30,7 @@ pub struct CreateStreamPlan {
     pub comment: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct DropStreamPlan {
     pub if_exists: bool,
     pub tenant: Tenant,

@@ -266,6 +266,10 @@ SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS re
 ----
 802970992.95934959
 
+query I
+SELECT 404.754480000000000000000001 / 563.653044520000000000000001, 404.754480000000000000000000 / 563.653044520000000000000000;
+----
+0.718091535094401799683905 0.718091535094401799683905
 
 ## negative
 
@@ -1113,6 +1117,17 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 2 2 2
 -1 -1 -1
 -2 -2 -2
+
+statement ok
+create table decimal_test2(a decimal(28,8), b decimal(24,16));
+
+statement ok
+insert into decimal_test2 values(300.07878791,5325.0000000000000000),(2.00000000,10491.0000000000000000);
+
+query I
+select sum(a * b) / sum(a * b), sum(a + b) / sum(a + b), sum(a - b) / sum(a - b) from decimal_test2;
+----
+1.000000000000000000000000	1.0000000000000000	1.0000000000000000
 
 statement ok
 drop database decimal_t;

@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -29,9 +30,9 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::Insert;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
@@ -211,11 +212,13 @@ impl Interpreter for InsertInterpreter {
                     _ => unreachable!(),
                 };
 
+                let explain_plan = select_plan
+                    .format(metadata.clone(), Default::default())?
+                    .format_pretty()?;
+                info!("Insert select plan: \n{}", explain_plan);
+
                 let update_stream_meta =
                     dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
-
-                let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-                let catalog_info = catalog.info();
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match select_plan {
@@ -228,7 +231,6 @@ impl Interpreter for InsertInterpreter {
                                 // which is not correct. We should generate a new id for insert.
                                 plan_id: exchange.plan_id,
                                 input,
-                                catalog_info,
                                 table_info: table1.get_table_info().clone(),
                                 select_schema: plan.schema(),
                                 select_column_bindings,
@@ -245,7 +247,6 @@ impl Interpreter for InsertInterpreter {
                             // which is not correct. We should generate a new id for insert.
                             plan_id: other_plan.get_id(),
                             input: Box::new(other_plan),
-                            catalog_info,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,

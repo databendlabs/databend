@@ -76,7 +76,8 @@ impl Binder {
             RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::Aggregate(_)
-            | RelOperator::Window(_) => {
+            | RelOperator::Window(_)
+            | RelOperator::MergeInto(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()

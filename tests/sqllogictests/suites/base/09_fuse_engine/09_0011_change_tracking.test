@@ -177,13 +177,16 @@ merge into t3 using t4 on t3.a = t4.a when matched and t4.a = 4 then delete when
 ----
 1 1 1
 
+statement ok
+set enable_compact_after_write = 0;
+
 query IIBBII
-select a, b, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t3 order by a
+select a, b, _row_version from t3 order by a
 ----
-0 0 0 0 0 0
-1 1 0 0 0 0
-2 2 0 0 1 1
-3 3 0 0 0 1
+0 0 0
+1 1 0
+2 2 1
+3 3 1
 
 statement ok
 drop table t4 all

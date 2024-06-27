@@ -80,7 +80,7 @@ where T: AsRef<[u8]>
         let mut v =
             std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
                 format!(
-                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8.",
+                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
                     buf
                 )
             })?;
@@ -93,7 +93,7 @@ where T: AsRef<[u8]>
             .parse::<NaiveDate>()
             .map_err_to_code(ErrorCode::BadBytes, || {
                 format!(
-                    "Date Parsing Error: The value '{}' could not be parsed into a valid Date.",
+                    "Date Parsing Error: The value '{}' could not be parsed into a valid Date",
                     v
                 )
             })?;
@@ -148,7 +148,7 @@ where T: AsRef<[u8]>
                 let size = self.keep_read(&mut buf, |f| f.is_ascii_digit());
                 if size == 0 {
                     return Err(ErrorCode::BadBytes(
-                        "Microsecond Parsing Error: Expecting a format like [.123456] for microseconds part.",
+                        "Microsecond Parsing Error: Expecting a format like [.123456] for microseconds part",
                     ));
                 }
                 let mut scales: i64 =
@@ -238,14 +238,14 @@ where T: AsRef<[u8]>
                             Ok(DateTimeResType::Date(d))
                         } else {
                             Err(ErrorCode::BadBytes(format!(
-                                "Local Time Error: No valid local time found for timezone '{:?}' with date '{}'.",
+                                "Local Time Error: No valid local time found for timezone '{:?}' with date '{}'",
                                 tz, d
                             )))
                         }
                     }
                     LocalResult::Single(t) => Ok(DateTimeResType::Datetime(t)),
                     LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
-                        "Ambiguous Local Time: The local time is ambiguous, with possible times ranging from {:?} to {:?}.",
+                        "Ambiguous Local Time: The local time is ambiguous, with possible times ranging from {:?} to {:?}",
                         t1, t2
                     ))),
                 }
@@ -293,7 +293,7 @@ where T: AsRef<[u8]>
                 }
             } else {
                 Err(ErrorCode::BadBytes(format!(
-                    "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00].",
+                    "Invalid Timezone Offset: The minute offset '{}' is outside the valid range. Expected range is [00-59] within a timezone gap of [-14:00, +14:00]",
                     minute_offset
                 )))
             }
@@ -309,7 +309,7 @@ where T: AsRef<[u8]>
                         if self.keep_read(buf, |f| f.is_ascii_digit()) != 2 {
                             // +08[other byte]00 will err in there, e.g. +08-00
                             return Err(ErrorCode::BadBytes(
-                                "Timezone Parsing Error: Incorrect format in hour part. The time zone format must conform to the ISO 8601 standard.",
+                                "Timezone Parsing Error: Incorrect format in hour part. The time zone format must conform to the ISO 8601 standard",
                             ));
                         }
                         let minute_offset: i32 =
@@ -328,7 +328,7 @@ where T: AsRef<[u8]>
                     }
                 } else {
                     Err(ErrorCode::BadBytes(format!(
-                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00].",
+                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
                         hour_offset
                     )))
                 }
@@ -353,13 +353,13 @@ where T: AsRef<[u8]>
                     )
                 } else {
                     Err(ErrorCode::BadBytes(format!(
-                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00].",
+                        "Invalid Timezone Offset: The hour offset '{}' is outside the valid range. Expected range is [00-14] within a timezone gap of [-14:00, +14:00]",
                         hour_offset
                     )))
                 }
             }
             _ => Err(ErrorCode::BadBytes(
-                "Timezone Parsing Error: Incorrect format. The time zone format must conform to the ISO 8601 standard.",
+                "Timezone Parsing Error: Incorrect format. The time zone format must conform to the ISO 8601 standard",
             )),
         }
     }

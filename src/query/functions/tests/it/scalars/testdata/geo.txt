@@ -2,7 +2,7 @@ error:
   --> SQL:1:1
   |
 1 | geo_to_h3(37.79506683, 55.71290588, 16)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `geo_to_h3(37.79506683, 55.71290588, 16)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid resolution (got Some(16)): out of range while evaluating function `geo_to_h3(37.79506683, 55.71290588, 16)` in expr `geo_to_h3(to_float64(37.79506683), to_float64(55.71290588), 16)`
 
 
 

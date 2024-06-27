@@ -99,7 +99,8 @@ impl CatalogManager {
             let creator = catalog_creators.get(&CatalogType::Hive).ok_or_else(|| {
                 ErrorCode::BadArguments(format!("unknown catalog type: {:?}", CatalogType::Hive))
             })?;
-            let ctl = creator.try_create(&CatalogInfo {
+
+            let ctl_info = CatalogInfo {
                 id: CatalogIdIdent::new(&tenant, 0).into(),
                 name_ident: CatalogNameIdent::new(tenant.clone(), name).into(),
                 meta: CatalogMeta {
@@ -109,7 +110,8 @@ impl CatalogManager {
                     }),
                     created_on: Utc::now(),
                 },
-            })?;
+            };
+            let ctl = creator.try_create(Arc::new(ctl_info))?;
             external_catalogs.insert(name.clone(), ctl);
         }
 
@@ -137,7 +139,7 @@ impl CatalogManager {
     /// build_catalog builds a catalog from catalog info.
     pub fn build_catalog(
         &self,
-        info: &CatalogInfo,
+        info: Arc<CatalogInfo>,
         txn_mgr: TxnManagerRef,
     ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
@@ -182,7 +184,7 @@ impl CatalogManager {
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
 
-        self.build_catalog(&info, txn_mgr)
+        self.build_catalog(info, txn_mgr)
     }
 
     /// Create a new catalog.
@@ -255,7 +257,7 @@ impl CatalogManager {
             .await?;
 
         for info in infos {
-            catalogs.push(self.build_catalog(&info, txn_mgr.clone())?);
+            catalogs.push(self.build_catalog(info, txn_mgr.clone())?);
         }
 
         Ok(catalogs)

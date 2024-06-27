@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::Partitions;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -26,7 +25,6 @@ pub struct DeleteSource {
     pub parts: Partitions,
     pub filters: Filters,
     pub table_info: TableInfo,
-    pub catalog_info: Arc<CatalogInfo>,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
     pub snapshot: Arc<TableSnapshot>,
