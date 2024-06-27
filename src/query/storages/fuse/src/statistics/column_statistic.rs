@@ -20,6 +20,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
@@ -81,11 +82,14 @@ pub fn gen_columns_statistics(
                 } else {
                     (1, 0)
                 };
+                // when we read it back from parquet, it is a Column instead of Scalar, so we multiply it by rows
+                let in_memory_size =
+                    ColumnBuilder::repeat(&s.as_ref(), 1, data_type).memory_size() * rows;
                 let col_stats = ColumnStatistics::new(
                     s.clone(),
                     s.clone(),
                     unset_bits as u64,
-                    col.as_ref().memory_size() as u64,
+                    in_memory_size as u64,
                     Some(distinct_of_values),
                 );
 
