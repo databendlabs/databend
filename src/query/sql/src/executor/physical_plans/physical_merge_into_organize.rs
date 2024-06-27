@@ -12,16 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 
-use databend_common_catalog::plan::Partitions;
-use databend_common_expression::ColumnId;
-use databend_common_meta_app::schema::TableInfo;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::MergeIntoOp;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CompactSource {
+pub struct MergeIntoOrganize {
     pub plan_id: u32,
-    pub parts: Partitions,
-    pub table_info: TableInfo,
-    pub column_ids: HashSet<ColumnId>,
+    pub input: Box<PhysicalPlan>,
+    // merge_into_operation
+    pub merge_into_op: MergeIntoOp,
+}
+
+impl MergeIntoOrganize {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }

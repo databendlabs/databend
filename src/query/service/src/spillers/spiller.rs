@@ -99,11 +99,11 @@ impl Spiller {
     ) -> Result<Self> {
         let join_spilling_partition_bits = ctx.get_settings().get_join_spilling_partition_bits()?;
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             operator,
             config,
             _spiller_type: spiller_type,
-            spiller_buffer: SpillerBuffer::create(),
+            spiller_buffer: SpillerBuffer::create(ctx)?,
             join_spilling_partition_bits,
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -273,11 +273,11 @@ impl Spiller {
                 &block_row_indexes,
                 row_indexes.len(),
             );
-            if let Some((p_id, block)) = self
+            if let Some(block) = self
                 .spiller_buffer
                 .add_partition_unspilled_data(*p_id, block)?
             {
-                self.spill_with_partition(p_id, block).await?;
+                self.spill_with_partition(*p_id, block).await?;
             }
         }
         if !left_related_join {
@@ -317,7 +317,7 @@ impl Spiller {
     }
 
     pub(crate) fn format_spill_info(&self) -> String {
-        // Using a single line to print how many bytes have been spilled and how many files have been spiled for each partition.
+        // Using a single line to print how many bytes have been spilled and how many files have been spilled for each partition.
         let mut info = String::new();
         for (p_id, bytes) in self.partition_spilled_bytes.iter() {
             // Covert bytes to GB

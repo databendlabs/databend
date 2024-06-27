@@ -435,11 +435,7 @@ impl<'a> Binder {
                     },
                 }],
             };
-            if let Some(e) = self
-                .opt_hints_set_var(&mut output_context, &hints)
-                .await
-                .err()
-            {
+            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
                 warn!(
                     "In COPY resolve optimize hints {:?} failed, err: {:?}",
                     hints, e

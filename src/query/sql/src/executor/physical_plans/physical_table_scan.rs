@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
@@ -214,9 +213,8 @@ impl PhysicalPlanBuilder {
             self.push_downs(&scan, &table_schema, has_inner_column, has_virtual_column)?;
 
         let mut source = table
-            .read_plan_with_catalog(
+            .read_plan(
                 self.ctx.clone(),
-                table_entry.catalog().to_string(),
                 Some(push_downs),
                 if project_internal_columns.is_empty() {
                     None
@@ -262,14 +260,7 @@ impl PhysicalPlanBuilder {
         }
 
         let source = table
-            .read_plan_with_catalog(
-                self.ctx.clone(),
-                CATALOG_DEFAULT.to_string(),
-                None,
-                None,
-                false,
-                self.dry_run,
-            )
+            .read_plan(self.ctx.clone(), None, None, false, self.dry_run)
             .await?;
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,

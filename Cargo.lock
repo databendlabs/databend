@@ -1933,15 +1933,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "codespan-reporting"
-version = "0.11.1"
-source = "git+https://github.com/brendanzab/codespan?rev=c84116f5#c84116f5a667bfce2aa1e045205c5832cfee1548"
-dependencies = [
- "termcolor",
- "unicode-width",
-]
-
-[[package]]
 name = "color-eyre"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2695,15 +2686,13 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
- "codespan-reporting",
  "criterion",
  "derive-visitor",
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
- "geos",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -2716,6 +2705,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "regex",
+ "rspack-codespan-reporting",
  "serde",
  "serde_json",
  "strsim 0.10.0",
@@ -3755,6 +3745,7 @@ dependencies = [
  "serde",
  "simsearch",
  "time",
+ "url",
 ]
 
 [[package]]
@@ -9761,9 +9752,9 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minitrace"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "768c9114d3a27035d5763ac97cd06fab60991b1d5b812f8b10ee811b51cd90ec"
+checksum = "197d538cd69839d49a593c8c72df44291b0ea3296ecc0c85529002c53c8fbc6f"
 dependencies = [
  "minitrace-macro",
  "minstant",
@@ -9776,9 +9767,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9c77e679c93b96c3d651bb076015dd5c2e66bf802131ad7dc39cb0b71dbd833"
+checksum = "14efd4b574325fcb981bce1ac700b9ccf071ec2eb94f7a6a6b583a84f228ba47"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -9788,9 +9779,9 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4686438a165a3da65bbdc51bd24729e6200938456e3f6551770f095bed46da8"
+checksum = "fabb581e91af60aab44f6d49ee70646c87162ad25224cd6184ae67cfca08db05"
 dependencies = [
  "futures",
  "log",
@@ -10510,9 +10501,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "opentelemetry"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "900d57987be3f2aeb70d385fff9b27fb74c5723cc9a52d904d4f9c807a0667bf"
+checksum = "1b69a91d4893e713e06f724597ad630f1fa76057a5e1026c0ca67054a9032a76"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -10520,14 +10511,13 @@ dependencies = [
  "once_cell",
  "pin-project-lite",
  "thiserror",
- "urlencoding",
 ]
 
 [[package]]
 name = "opentelemetry-http"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7690dc77bf776713848c4faa6501157469017eaf332baccd4eb1cea928743d94"
+checksum = "b0ba633e55c5ea6f431875ba55e71664f2fa5d3a90bd34ec9302eecc41c865dd"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10538,9 +10528,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a016b8d9495c639af2145ac22387dcb88e44118e45320d9238fbf4e7889abcb"
+checksum = "a94c69209c05319cdf7460c6d4c055ed102be242a0a6245835d7bc42c6ec7f54"
 dependencies = [
  "async-trait",
  "futures-core",
@@ -10548,7 +10538,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-http",
  "opentelemetry-proto",
- "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
  "prost 0.12.3",
  "reqwest 0.11.24",
@@ -10559,9 +10548,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-proto"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a8fddc9b68f5b80dae9d6f510b88e02396f006ad48cac349411fbecc80caae4"
+checksum = "984806e6cf27f2b49282e2a05e288f30594f3dbc74eb7a6e99422bc48ed78162"
 dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
@@ -10570,23 +10559,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry-semantic-conventions"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9ab5bd6c42fb9349dcf28af2ba9a0667f697f9bdcca045d39f2cec5543e2910"
-
-[[package]]
 name = "opentelemetry_sdk"
-version = "0.22.1"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e90c7113be649e31e9a0f8b5ee24ed7a16923b322c3c5ab6367469c049d6b7e"
+checksum = "ae312d58eaa90a82d2e627fd86e075cf5230b3f11794e2ed74199ebbe572d4fd"
 dependencies = [
  "async-trait",
- "crossbeam-channel",
  "futures-channel",
  "futures-executor",
  "futures-util",
  "glob",
+ "lazy_static",
  "once_cell",
  "opentelemetry",
  "ordered-float 4.2.0",
@@ -12586,6 +12569,16 @@ dependencies = [
  "spki 0.7.3",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rspack-codespan-reporting"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc53b3a0e58f509a8b55bde278d44c05879f27a66819346e0fef193c6348e9f8"
+dependencies = [
+ "termcolor",
+ "unicode-width",
 ]
 
 [[package]]

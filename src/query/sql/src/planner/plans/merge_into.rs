@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::binder::MergeIntoType;
 use crate::optimizer::ColumnSet;
@@ -88,6 +89,7 @@ pub struct MergeInto {
     pub can_try_update_column_only: bool,
     pub enable_right_broadcast: bool,
     pub lazy_columns: Option<HashSet<usize>>,
+    pub lock_guard: Option<Arc<LockGuard>>,
 }
 
 impl std::fmt::Debug for MergeInto {

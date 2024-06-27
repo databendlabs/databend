@@ -19,7 +19,6 @@ use std::task::Poll;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use futures::future::BoxFuture;
 use futures::FutureExt;
 
 pub fn drop_guard<F: FnOnce() -> R, R>(f: F) -> R {
@@ -55,21 +54,21 @@ pub fn catch_unwind<F: FnOnce() -> R, R>(f: F) -> Result<R> {
     }
 }
 
-pub struct CatchUnwindFuture<F: Future + Send + 'static> {
-    inner: BoxFuture<'static, F::Output>,
+pub struct CatchUnwindFuture<F: Future> {
+    inner: Pin<Box<F>>,
 }
 
-impl<F: Future + Send + 'static> CatchUnwindFuture<F> {
+impl<F: Future> CatchUnwindFuture<F> {
     pub fn create(f: F) -> CatchUnwindFuture<F> {
-        CatchUnwindFuture::<F> { inner: f.boxed() }
+        CatchUnwindFuture::<F> { inner: Box::pin(f) }
     }
 }
 
-impl<F: Future + Send + 'static> Future for CatchUnwindFuture<F> {
+impl<F: Future> Future for CatchUnwindFuture<F> {
     type Output = Result<F::Output>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let inner = &mut self.inner;
+        let inner = &mut self.inner.as_mut();
 
         match catch_unwind(move || inner.poll_unpin(cx)) {
             Ok(Poll::Pending) => Poll::Pending,

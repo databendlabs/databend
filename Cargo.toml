@@ -229,7 +229,6 @@ bytes = "1.5.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
-codespan-reporting = "0.11"
 criterion = "0.5"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
@@ -250,11 +249,7 @@ hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
 jsonb = "0.4.0"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.9"
 match-template = "0.0.1"
-minitrace = { version = "0.6.5", features = ["enable"] }
-minitrace-opentelemetry = "0.6.5"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
@@ -276,15 +271,6 @@ opendal = { version = "0.47.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = [
-    "trace",
-    "logs",
-    "grpc-tonic",
-    "http-proto",
-    "reqwest-client",
-] }
-opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 orc-rust = "0.3"
 ordered-float = { version = "4.1.0", default-features = false }
 ordq = "0.2.0"
@@ -320,9 +306,6 @@ tokio-stream = "0.1.11"
 tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tonic-build = { version = "0.11" }
 tonic-reflection = { version = "0.11.0" }
-tracing = "0.1.40"
-tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
@@ -336,6 +319,24 @@ openraft = { version = "0.9.12", features = [
     "storage-v2",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
+
+# Observability
+log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+logcall = "0.1.9"
+minitrace = { version = "0.6.6", features = ["enable"] }
+minitrace-opentelemetry = "0.6.6"
+opentelemetry = { version = "0.23", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.16", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
+] }
+opentelemetry_sdk = { version = "0.23", features = ["trace", "logs", "rt-tokio"] }
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
@@ -398,6 +399,3 @@ openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev =
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
-# TODO: Use the version from crates.io once
-# https://github.com/brendanzab/codespan/pull/331 is released.
-codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }

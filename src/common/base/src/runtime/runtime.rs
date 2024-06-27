@@ -207,7 +207,7 @@ impl Runtime {
 
     #[track_caller]
     pub fn block_on<T, F>(&self, future: F) -> F::Output
-    where F: Future<Output = Result<T>> + Send + 'static {
+    where F: Future<Output = Result<T>> {
         let future = CatchUnwindFuture::create(future);
         #[allow(clippy::disallowed_methods)]
         tokio::task::block_in_place(|| {

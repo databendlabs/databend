@@ -12,26 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::BlockThresholds;
-use databend_common_expression::FieldIndex;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 
-use crate::executor::physical_plans::common::OnConflictField;
-use crate::executor::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::MergeIntoOp;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct ReplaceInto {
-    /// A unique id of operator in a `PhysicalPlan` tree.
+pub struct MergeIntoSerialize {
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
-    pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
-    pub on_conflicts: Vec<OnConflictField>,
-    pub bloom_filter_column_indexes: Vec<FieldIndex>,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
+    // used to record the index of target table's field in merge_source_schema
     pub segments: Vec<(usize, Location)>,
-    pub block_slots: Option<BlockSlotDescription>,
-    pub need_insert: bool,
+    pub distributed: bool,
+    pub change_join_order: bool,
+    pub need_match: bool,
+    pub merge_into_op: MergeIntoOp,
+    pub enable_right_broadcast: bool,
+}
+
+impl MergeIntoSerialize {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }

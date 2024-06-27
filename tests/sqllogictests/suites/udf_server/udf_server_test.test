@@ -87,6 +87,9 @@ statement ok
 CREATE OR REPLACE FUNCTION bool_select (BOOLEAN, BIGINT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'bool_select' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
+CREATE OR REPLACE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815/ab/cc/d';
+
+statement ok
 CREATE OR REPLACE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok

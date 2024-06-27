@@ -11,7 +11,7 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')`
+  |  ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`
 
 
 
@@ -113,7 +113,7 @@ error:
   --> SQL:1:1
   |
 1 | range(10, 500000011)
-  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)`
+  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)` in expr `range(to_uint64(10), to_uint64(500000011))`
 
 
 
@@ -121,7 +121,7 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`
 
 
 
@@ -769,7 +769,7 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')`
+  |                       ^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64()`
 
 
 
@@ -1021,7 +1021,7 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')`
+  |                      ^^^ invalid digit found in string while evaluating function `to_int64('s')` in expr `to_int64('s')`
 
 
 

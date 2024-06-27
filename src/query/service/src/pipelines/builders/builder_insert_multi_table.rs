@@ -127,11 +127,9 @@ impl PipelineBuilder {
         let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(plan.fill_and_reorders.len());
         for fill_and_reorder in plan.fill_and_reorders.iter() {
             if let Some(fill_and_reorder) = fill_and_reorder {
-                let table = self.ctx.build_table_by_table_info(
-                    &fill_and_reorder.catalog_info,
-                    &fill_and_reorder.target_table_info,
-                    None,
-                )?;
+                let table = self
+                    .ctx
+                    .build_table_by_table_info(&fill_and_reorder.target_table_info, None)?;
                 f.push(Box::new(self.fill_and_reorder_transform_builder(
                     table,
                     fill_and_reorder.source_schema.clone(),
@@ -180,11 +178,9 @@ impl PipelineBuilder {
         let mut sort_num = 0;
 
         for append_data in plan.target_tables.iter() {
-            let table = self.ctx.build_table_by_table_info(
-                &append_data.target_catalog_info,
-                &append_data.target_table_info,
-                None,
-            )?;
+            let table = self
+                .ctx
+                .build_table_by_table_info(&append_data.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
             compact_builders.push(Box::new(
                 self.block_compact_transform_builder(block_thresholds)?,
@@ -275,11 +271,9 @@ impl PipelineBuilder {
             Vec::with_capacity(targets.len());
         let mut tables = HashMap::new();
         for target in targets {
-            let table = self.ctx.build_table_by_table_info(
-                &target.target_catalog_info,
-                &target.target_table_info,
-                None,
-            )?;
+            let table = self
+                .ctx
+                .build_table_by_table_info(&target.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
             serialize_segment_builders.push(Box::new(
                 self.serialize_segment_transform_builder(table.clone(), block_thresholds)?,
@@ -295,7 +289,7 @@ impl PipelineBuilder {
             .add_transforms_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
         let catalog = CatalogManager::instance()
-            .build_catalog(&targets[0].target_catalog_info, self.ctx.txn_mgr())?;
+            .build_catalog(targets[0].target_catalog_info.clone(), self.ctx.txn_mgr())?;
         self.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,

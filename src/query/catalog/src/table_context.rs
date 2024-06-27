@@ -47,6 +47,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -65,6 +66,7 @@ use xorf::BinaryFuse16;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
+use crate::lock::LockTableOption;
 use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
@@ -339,4 +341,12 @@ pub trait TableContext: Send + Sync {
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()
     }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        catalog_name: &str,
+        db_name: &str,
+        tbl_name: &str,
+        lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>>;
 }

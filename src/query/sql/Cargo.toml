@@ -70,6 +70,7 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
+url = "2.3.1"
 
 [lints]
 workspace = true
