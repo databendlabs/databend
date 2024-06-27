@@ -69,6 +69,8 @@ impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     }
 
     fn update_top(&mut self, item: Reverse<Cursor<Self::Rows>>) {
+        // `peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
+        // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
         *BinaryHeap::peek_mut(self).unwrap() = item
     }
 

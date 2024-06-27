@@ -763,6 +763,12 @@ impl DefaultSettings {
                     desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_loser_tree_merge_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 })
             ]);
 

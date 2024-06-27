@@ -46,13 +46,12 @@ pub trait SortedStream {
 pub struct Merger<A, S>
 where
     A: SortAlgorithm,
-    A::Rows: Rows,
     S: SortedStream,
 {
     schema: DataSchemaRef,
     sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
-    algorithm: A,
+    sorted_cursors: A,
     buffer: Vec<DataBlock>,
     pending_streams: VecDeque<usize>,
     batch_size: usize,
@@ -66,7 +65,6 @@ where
 impl<A, S> Merger<A, S>
 where
     A: SortAlgorithm,
-    A::Rows: Rows,
     S: SortedStream + Send,
 {
     pub fn create(
@@ -79,14 +77,14 @@ where
         // We only create a merger when there are at least two streams.
         debug_assert!(streams.len() > 1, "streams.len() = {}", streams.len());
 
-        let algorithm = A::with_capacity(streams.len());
+        let sorted_cursors = A::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
         let pending_stream = (0..streams.len()).collect();
 
         Self {
             schema,
             unsorted_streams: streams,
-            algorithm,
+            sorted_cursors,
             buffer,
             batch_size,
             limit,
@@ -100,7 +98,7 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.algorithm.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+        (self.sorted_cursors.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
             || self.limit == Some(0)
     }
 
@@ -109,7 +107,7 @@ where
         !self.pending_streams.is_empty()
     }
 
-    // This method can only be called when there is no data of the stream in the heap.
+    // This method can only be called when there is no data of the stream in the sorted_cursors.
     pub async fn async_poll_pending_stream(&mut self) -> Result<()> {
         let mut continue_pendings = Vec::new();
         while let Some(i) = self.pending_streams.pop_front() {
@@ -122,11 +120,11 @@ where
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
-                self.algorithm.push(i, Reverse(cursor));
+                self.sorted_cursors.push(i, Reverse(cursor));
                 self.buffer[i] = block;
             }
         }
-        self.algorithm.rebuild();
+        self.sorted_cursors.rebuild();
         self.pending_streams.extend(continue_pendings);
         Ok(())
     }
@@ -144,23 +142,23 @@ where
             if let Some((block, col)) = input {
                 let rows = A::Rows::from_column(&col, &self.sort_desc)?;
                 let cursor = Cursor::new(i, rows);
-                self.algorithm.push(i, Reverse(cursor));
+                self.sorted_cursors.push(i, Reverse(cursor));
                 self.buffer[i] = block;
             }
         }
-        self.algorithm.rebuild();
+        self.sorted_cursors.rebuild();
         self.pending_streams.extend(continue_pendings);
         Ok(())
     }
 
-    /// To evaluate the current cursor, and update the top of the heap if necessary.
-    /// This method can only be called when iterating the heap.
+    /// To evaluate the current cursor, and update the top of the sorted_cursors if necessary.
+    /// This method can only be called when iterating the sorted_cursors.
     ///
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
     fn evaluate_cursor(&mut self, mut cursor: Cursor<A::Rows>) -> bool {
         let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
-        if self.algorithm.len() == 1 {
+        if self.sorted_cursors.len() == 1 {
             let start = cursor.row_index;
             let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
             self.temp_sorted_num_rows += count;
@@ -168,7 +166,7 @@ where
             self.temp_output_indices
                 .push((cursor.input_index, start, count));
         } else {
-            let next_cursor = &self.algorithm.peek_top2().0;
+            let next_cursor = &self.sorted_cursors.peek_top2().0;
             if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
@@ -181,14 +179,14 @@ where
                     .push((cursor.input_index, start, count));
             } else {
                 // We copy current cursor for advancing,
-                // and we will use this copied cursor to update the top of the heap at last
-                // (let heap adjust itself without popping and pushing any element).
+                // and we will use this copied cursor to update the top of the sorted_cursors at last
+                // (let sorted_cursors adjust itself without popping and pushing any element).
                 let start = cursor.row_index;
                 while !cursor.is_finished()
                     && cursor.le(next_cursor)
                     && self.temp_sorted_num_rows < max_rows
                 {
-                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
                     self.temp_sorted_num_rows += 1;
                     cursor.advance();
                 }
@@ -201,13 +199,11 @@ where
         }
 
         if !cursor.is_finished() {
-            // Update the top of the heap.
-            // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
-            // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-            self.algorithm.update_top(Reverse(cursor));
+            // Update the top of the sorted_cursors.
+            self.sorted_cursors.update_top(Reverse(cursor));
         } else {
             // Pop the current `cursor`.
-            self.algorithm.pop();
+            self.sorted_cursors.pop();
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
@@ -262,7 +258,7 @@ where
         }
 
         // No pending streams now.
-        if self.algorithm.is_empty() {
+        if self.sorted_cursors.is_empty() {
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -270,7 +266,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.algorithm.peek() {
+        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }
@@ -299,7 +295,7 @@ where
         }
 
         // No pending streams now.
-        if self.algorithm.is_empty() {
+        if self.sorted_cursors.is_empty() {
             return if self.temp_sorted_num_rows > 0 {
                 Ok(Some(self.build_output()?))
             } else {
@@ -307,7 +303,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.algorithm.peek() {
+        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
             if self.evaluate_cursor(cursor.clone()) {
                 break;
             }

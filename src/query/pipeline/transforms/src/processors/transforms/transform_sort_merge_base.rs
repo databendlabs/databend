@@ -266,6 +266,7 @@ pub struct TransformSortMergeBuilder {
     output_order_col: bool,
     max_memory_usage: usize,
     spilling_bytes_threshold_per_core: usize,
+    enable_loser_tree: bool,
     limit: Option<usize>,
 }
 
@@ -287,6 +288,7 @@ impl TransformSortMergeBuilder {
             output_order_col: false,
             max_memory_usage: 0,
             spilling_bytes_threshold_per_core: 0,
+            enable_loser_tree: false,
             limit: None,
         }
     }
@@ -319,6 +321,11 @@ impl TransformSortMergeBuilder {
         self
     }
 
+    pub fn with_enable_loser_tree(mut self, enable_loser_tree: bool) -> Self {
+        self.enable_loser_tree = enable_loser_tree;
+        self
+    }
+
     pub fn build(self) -> Result<Box<dyn Processor>> {
         debug_assert!(if self.output_order_col {
             self.schema.has_field(ORDER_COL_NAME)
@@ -344,6 +351,7 @@ impl TransformSortMergeBuilder {
             output_order_col,
             max_memory_usage,
             spilling_bytes_threshold_per_core,
+            enable_loser_tree,
             ..
         } = self;
 
@@ -365,7 +373,12 @@ impl TransformSortMergeBuilder {
                             output_order_col,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
-                            TransformSortMerge::create(schema, sort_desc, block_size),
+                            TransformSortMerge::create(
+                                schema,
+                                sort_desc,
+                                block_size,
+                                enable_loser_tree
+                            ),
                         )?,
                     ),
                 }),
@@ -379,7 +392,12 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
-                        MergeSortDateImpl::create(schema, sort_desc, block_size),
+                        MergeSortDateImpl::create(
+                            schema,
+                            sort_desc,
+                            block_size,
+                            enable_loser_tree,
+                        ),
                     )?,
                 ),
                 DataType::Timestamp => AccumulatingTransformer::create(
@@ -392,7 +410,12 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
-                        MergeSortTimestampImpl::create(schema, sort_desc, block_size),
+                        MergeSortTimestampImpl::create(
+                            schema,
+                            sort_desc,
+                            block_size,
+                            enable_loser_tree,
+                        ),
                     )?,
                 ),
                 DataType::String => AccumulatingTransformer::create(
@@ -405,7 +428,12 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
-                        MergeSortStringImpl::create(schema, sort_desc, block_size),
+                        MergeSortStringImpl::create(
+                            schema,
+                            sort_desc,
+                            block_size,
+                            enable_loser_tree,
+                        ),
                     )?,
                 ),
                 _ => AccumulatingTransformer::create(
@@ -418,7 +446,12 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
-                        MergeSortCommonImpl::create(schema, sort_desc, block_size),
+                        MergeSortCommonImpl::create(
+                            schema,
+                            sort_desc,
+                            block_size,
+                            enable_loser_tree,
+                        ),
                     )?,
                 ),
             }
@@ -433,7 +466,12 @@ impl TransformSortMergeBuilder {
                     output_order_col,
                     max_memory_usage,
                     spilling_bytes_threshold_per_core,
-                    MergeSortCommonImpl::create(schema, sort_desc, block_size),
+                    MergeSortCommonImpl::create(
+                        schema,
+                        sort_desc,
+                        block_size,
+                        enable_loser_tree,
+                    ),
                 )?,
             )
         };
