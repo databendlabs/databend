@@ -163,6 +163,7 @@ impl PhysicalPlan {
     /// Adjust the plan_id of the physical plan.
     /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
+    #[recursive::recursive]
     pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
         match self {
             PhysicalPlan::AsyncFunction(plan) => {
