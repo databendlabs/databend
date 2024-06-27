@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::CommitSink as PhysicalCommitSink;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::CommitSink;
@@ -35,31 +33,22 @@ impl PipelineBuilder {
 
         self.main_pipeline.try_resize(1)?;
         if plan.merge_meta {
-            self.main_pipeline.add_transform(|input, output| {
-                let merger = TransformMergeCommitMeta::create(cluster_key_id);
-                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                    input, output, merger,
-                )))
-            })?;
+            self.main_pipeline
+                .add_accumulating_transformer(|| TransformMergeCommitMeta::create(cluster_key_id));
         } else {
-            self.main_pipeline.add_transform(|input, output| {
+            self.main_pipeline.add_async_accumulating_transformer(|| {
                 let base_segments = if matches!(plan.mutation_kind, MutationKind::Compact) {
                     vec![]
                 } else {
                     plan.snapshot.segments.clone()
                 };
-                let mutation_aggregator = TableMutationAggregator::new(
+                TableMutationAggregator::new(
                     table,
                     self.ctx.clone(),
                     base_segments,
                     plan.mutation_kind,
-                );
-                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                    input,
-                    output,
-                    mutation_aggregator,
-                )))
-            })?;
+                )
+            });
         }
 
         let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), plan.mutation_kind);

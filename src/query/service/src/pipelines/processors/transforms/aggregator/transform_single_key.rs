@@ -49,11 +49,7 @@ pub struct PartialSingleStateAggregator {
 }
 
 impl PartialSingleStateAggregator {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        params: &Arc<AggregatorParams>,
-    ) -> Result<Box<dyn Processor>> {
+    pub fn try_new(params: &Arc<AggregatorParams>) -> Result<Self> {
         assert!(!params.offsets_aggregate_states.is_empty());
 
         let arena = Bump::new();
@@ -74,16 +70,12 @@ impl PartialSingleStateAggregator {
             func.init_state(state_place);
         }
 
-        Ok(AccumulatingTransformer::create(
-            input,
-            output,
-            PartialSingleStateAggregator {
-                arena,
-                places,
-                funcs: params.aggregate_functions.clone(),
-                arg_indices: params.aggregate_functions_arguments.clone(),
-            },
-        ))
+        Ok(PartialSingleStateAggregator {
+            arena,
+            places,
+            funcs: params.aggregate_functions.clone(),
+            arg_indices: params.aggregate_functions_arguments.clone(),
+        })
     }
 }
 

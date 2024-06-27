@@ -36,21 +36,21 @@ pub struct StripeDecoder {
 }
 
 impl StripeDecoder {
-    pub fn try_create(
+    pub fn new(
         table_ctx: Arc<dyn TableContext>,
         data_schema: Arc<DataSchema>,
         arrow_schema: arrow_schema::SchemaRef,
-    ) -> Result<Self> {
+    ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
             Some(table_ctx.get_copy_status())
         } else {
             None
         };
-        Ok(StripeDecoder {
+        StripeDecoder {
             copy_status,
             arrow_schema,
             data_schema,
-        })
+        }
     }
 }
 

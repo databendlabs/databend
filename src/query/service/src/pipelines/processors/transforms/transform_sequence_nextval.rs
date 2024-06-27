@@ -23,13 +23,9 @@ use databend_common_expression::FromData;
 use databend_common_expression::Value;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
 
 pub struct TransformSequenceNextval {
@@ -39,18 +35,12 @@ pub struct TransformSequenceNextval {
 }
 
 impl TransformSequenceNextval {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        ctx: Arc<QueryContext>,
-        sequence: &str,
-        return_type: &DataType,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
+    pub fn new(ctx: Arc<QueryContext>, sequence: &str, return_type: &DataType) -> Self {
+        Self {
             ctx,
             sequence: sequence.to_owned(),
             return_type: return_type.clone(),
-        }))
+        }
     }
 }
 
