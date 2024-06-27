@@ -167,7 +167,7 @@ impl<R: Rows> TransformSortMerge<R> {
 
         if self.enable_loser_tree {
             self.merge_sort_algo::<LoserTreeSort<R>>(batch_size, size_hint)
-        }else{
+        } else {
             self.merge_sort_algo::<HeapSort<R>>(batch_size, size_hint)
         }
     }

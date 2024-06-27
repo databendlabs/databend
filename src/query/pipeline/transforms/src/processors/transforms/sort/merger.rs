@@ -98,7 +98,9 @@ where
 
     #[inline(always)]
     pub fn is_finished(&self) -> bool {
-        (self.sorted_cursors.is_empty() && !self.has_pending_stream() && self.temp_sorted_num_rows == 0)
+        (self.sorted_cursors.is_empty()
+            && !self.has_pending_stream()
+            && self.temp_sorted_num_rows == 0)
             || self.limit == Some(0)
     }
 
