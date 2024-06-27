@@ -49,7 +49,7 @@ byteorder = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
-ctor = "0.1.26"
+ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }

@@ -230,6 +230,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
 criterion = "0.5"
+ctor = "0.2"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
 deltalake = "0.17"

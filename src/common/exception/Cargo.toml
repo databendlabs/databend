@@ -11,13 +11,15 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../arrow" }
-databend-common-ast = { path = "../../query/ast" }
+databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true }
 bincode = { workspace = true }
+color-backtrace = { version = "0.6" }
+ctor = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 http = { workspace = true }
