@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 
@@ -34,6 +35,8 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergHmsCatalogOption;
+use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 
 use crate::binder::parse_storage_params_from_uri;
@@ -152,7 +155,7 @@ impl Binder {
                     ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
                 })?;
 
-                let sp = parse_catalog_url(ctx, options).await?;
+                let sp = parse_hive_catalog_url(ctx, options).await?;
 
                 CatalogOption::Hive(HiveCatalogOption {
                     address,
@@ -160,15 +163,7 @@ impl Binder {
                 })
             }
             CatalogType::Iceberg => {
-                let sp = parse_catalog_url(ctx,options.clone()).await?.ok_or_else(|| {
-                    ErrorCode::InvalidArgument(
-                        "expect storage connection but failed to find, seems the url is missing",
-                    )
-                })?;
-
-                let opt = IcebergCatalogOption {
-                    storage_params: Box::new(sp),
-                };
+                let opt = parse_iceberg_rest_catalog(options.clone())?;
                 CatalogOption::Iceberg(opt)
             }
         };
@@ -180,7 +175,7 @@ impl Binder {
     }
 }
 
-async fn parse_catalog_url(
+async fn parse_hive_catalog_url(
     ctx: &Arc<dyn TableContext>,
     options: BTreeMap<String, String>,
 ) -> Result<Option<StorageParams>> {
@@ -206,4 +201,45 @@ async fn parse_catalog_url(
     .await?;
 
     Ok(Some(sp))
+}
+
+fn parse_iceberg_rest_catalog(
+    mut options: BTreeMap<String, String>,
+) -> Result<IcebergCatalogOption> {
+    let typ = options
+        .remove("type")
+        .ok_or_else(|| ErrorCode::InvalidArgument("type for iceberg catalog is not specified"))?
+        .to_lowercase();
+
+    let address = options
+        .remove("address")
+        .ok_or_else(|| ErrorCode::InvalidArgument("address for iceberg catalog is not specified"))?
+        .to_string();
+
+    let warehouse = options
+        .remove("warehouse")
+        .ok_or_else(|| {
+            ErrorCode::InvalidArgument("warehouse for iceberg catalog is not specified")
+        })?
+        .to_string();
+
+    let option = match typ.as_str() {
+        "rest" => IcebergCatalogOption::Rest(IcebergRestCatalogOption {
+            uri: address,
+            warehouse,
+            props: HashMap::from_iter(options.into_iter()),
+        }),
+        "hive" => IcebergCatalogOption::Hms(IcebergHmsCatalogOption {
+            address,
+            warehouse,
+            props: HashMap::from_iter(options.into_iter()),
+        }),
+        v => {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "iceberg catalog with type {v} is not supported"
+            )));
+        }
+    };
+
+    Ok(option)
 }

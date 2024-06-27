@@ -16,6 +16,7 @@ use std::assert_ne;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -80,6 +81,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexIdToName;
 use databend_common_meta_app::schema::IndexMeta;
@@ -1394,12 +1396,13 @@ impl SchemaApiTestSuite {
             if_not_exists: false,
             name_ident: ident.clone(),
             meta: CatalogMeta {
-                catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-                    storage_params: Box::new(StorageParams::S3(StorageS3Config {
-                        bucket: "bucket".to_string(),
-                        ..Default::default()
-                    })),
-                }),
+                catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Rest(
+                    IcebergRestCatalogOption {
+                        uri: "http://127.0.0.1:8080".to_string(),
+                        warehouse: "test".to_string(),
+                        props: HashMap::default(),
+                    },
+                )),
                 created_on: Utc::now(),
             },
         };

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -47,7 +48,6 @@ use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::RangePrunerCreator;
-use icelake::catalog::Catalog;
 use opendal::Operator;
 use tokio::sync::OnceCell;
 
@@ -72,7 +72,7 @@ impl IcebergTable {
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
-        let ctl = IcebergCatalog::try_create(&info.catalog_info)?;
+        let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
         let (db_name, table_name) = info.desc.split_once(",").ok_or(|| {
             ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", info.desc))
         })?;
@@ -141,7 +141,7 @@ impl IcebergTable {
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
-            desc: format!("{database}.{table_name}"),
+            desc: format!("{database_name}.{table_name}"),
             name: table_name.to_string(),
             meta: TableMeta {
                 schema: Arc::new(table_schema),
@@ -149,7 +149,7 @@ impl IcebergTable {
                 created_on: Utc::now(),
                 ..Default::default()
             },
-            catalog_info,
+            catalog_info: ctl.info(),
             ..Default::default()
         };
 
@@ -250,6 +250,8 @@ impl IcebergTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
+        table.metadata_ref().current_snapshot();
+
         let data_files = table.current_data_files().await.map_err(|e| {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
@@ -279,19 +281,19 @@ impl IcebergTable {
                     true
                 }
             })
-            .map(|v: icelake::types::DataFile| {
-                read_rows += v.record_count as usize;
-                read_bytes += v.file_size_in_bytes as usize;
-                match v.file_format {
-                    icelake::types::DataFileFormat::Parquet => {
+            .map(|v: iceberg::spec::DataFile| {
+                read_rows += v.record_count() as usize;
+                read_bytes += v.file_size_in_bytes() as usize;
+                match v.file_format() {
+                    iceberg::spec::DataFileFormat::Parquet => {
                         let location = table
-                            .rel_path(&v.file_path)
+                            .rel_path(&v.file_path())
                             .expect("file path must be rel to table");
                         Ok(Arc::new(
                             Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
                                 ParquetFilesPart {
-                                    files: vec![(location, v.file_size_in_bytes as u64)],
-                                    estimated_uncompressed_size: v.file_size_in_bytes as u64, // This field is not used here.
+                                    files: vec![(location, v.file_size_in_bytes() as u64)],
+                                    estimated_uncompressed_size: v.file_size_in_bytes() as u64, // This field is not used here.
                                 },
                             ))) as Box<dyn PartInfo>,
                         ))
@@ -361,22 +363,5 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         true
-    }
-}
-
-struct OperatorCreatorWrapper(DataOperator);
-
-impl icelake::catalog::OperatorCreator for OperatorCreatorWrapper {
-    fn create(&self) -> icelake::Result<Operator> {
-        Ok(self.0.operator())
-    }
-
-    fn create_with_subdir(&self, path: &str) -> icelake::Result<Operator> {
-        let params = self.0.params().map_root(|v| format!("{}/{}", v, path));
-
-        // The operator used to be built successfully, change root should never returns error.
-        Ok(DataOperator::try_new(&params)
-            .expect("invalid params")
-            .operator())
     }
 }

@@ -70,18 +70,21 @@ impl FromToProto for mt::CatalogOption {
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        Ok(
-            match p.catalog_option.ok_or_else(|| Incompatible {
-                reason: "CatalogOption.catalog_option is None".to_string(),
-            })? {
-                pb::catalog_option::CatalogOption::Hive(v) => {
-                    mt::CatalogOption::Hive(mt::HiveCatalogOption::from_pb(v)?)
-                }
-                pb::catalog_option::CatalogOption::Iceberg(v) => {
-                    mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
-                }
-            },
-        )
+        // It's possible that we have written data without catalog_option before.
+        //
+        // Let's load it as default catalog.
+        let Some(catalog_option) = p.catalog_option else {
+            return Ok(mt::CatalogOption::Default);
+        };
+
+        Ok(match catalog_option {
+            pb::catalog_option::CatalogOption::Hive(v) => {
+                mt::CatalogOption::Hive(mt::HiveCatalogOption::from_pb(v)?)
+            }
+            pb::catalog_option::CatalogOption::Iceberg(v) => {
+                mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
+            }
+        })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
