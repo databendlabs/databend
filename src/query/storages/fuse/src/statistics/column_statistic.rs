@@ -61,7 +61,7 @@ pub fn gen_columns_statistics(
     let mut statistics = StatisticsOfColumns::new();
     let rows = data_block.num_rows();
 
-    let leaves = get_traverse_columns_dfs(&data_block)?;
+    let leaves = get_traverse_columns_dfs(data_block)?;
     let leaf_column_ids = schema.to_leaf_column_ids();
     for ((col_idx, col, data_type), column_id) in leaves.iter().zip(leaf_column_ids) {
         // Ignore the range index does not supported type.
