@@ -176,7 +176,7 @@ impl JwkKeyStore {
         }
         *self.cached_keys.write() = new_keys;
         self.last_refreshed_at.write().replace(Instant::now());
-        Ok(self.cached_keys.read().clone())
+        Ok(old_keys)
     }
 
     #[async_backtrace::framed]
@@ -198,7 +198,7 @@ impl JwkKeyStore {
         };
 
         // happy path: the key_id is found in the store
-        if let Some(key) = self.cached_keys.read().get(&key_id) {
+        if let Some(key) = keys.get(&key_id) {
             return Ok(key.clone());
         }
 
