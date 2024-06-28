@@ -21,10 +21,14 @@
 1
 2
 <<<<
+#### delete should fail
 >>>> delete from table_to where a=1;
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'table_to' is READ ONLY, preventing any changes or updates.
+<<<<
 #### select after deletion
 >>>> select * from table_to order by a;
 0
+1
 2
 <<<<
 #### select after deletion with self-defined connection

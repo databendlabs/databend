@@ -40,6 +40,8 @@ query "select * from table_to order by a;"
 comment "select attach table with self-defined connection"
 query "select * from table_to2 order by a;"
 
+
+comment "delete should fail"
 stmt "delete from table_to where a=1;"
 
 comment "select after deletion"

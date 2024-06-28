@@ -218,9 +218,9 @@ impl Display for AttachTableStmt {
 
         write!(f, " {}", self.uri_location)?;
 
-        if self.read_only {
-            write!(f, " READ_ONLY")?;
-        }
+        //        if self.read_only {
+        //            write!(f, " READ_ONLY")?;
+        //        }
 
         Ok(())
     }

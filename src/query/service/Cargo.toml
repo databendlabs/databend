@@ -105,6 +105,7 @@ databend-common-storages-view = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
+databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }

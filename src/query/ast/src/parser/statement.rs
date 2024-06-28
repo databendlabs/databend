@@ -653,15 +653,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
+        |(_, _, (catalog, database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
-                read_only: opt_read_only.is_some(),
+                read_only: true,
             })
         },
     );
