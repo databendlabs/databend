@@ -381,7 +381,7 @@ impl QueryEntry {
             | Plan::Replace(_)
             | Plan::Delete(_)
             | Plan::Update(_)
-            | Plan::MergeInto(_)
+            | Plan::MergeInto { .. }
             | Plan::CopyIntoTable(_)
             | Plan::CopyIntoLocation(_) => {
                 return true;

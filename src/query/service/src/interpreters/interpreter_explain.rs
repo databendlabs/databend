@@ -24,12 +24,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::MergeInto;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
@@ -40,6 +42,7 @@ use databend_common_users::UserApiProvider;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
+use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -98,6 +101,7 @@ impl Interpreter for ExplainInterpreter {
                         .await?
                 }
                 Plan::Insert(insert_plan) => insert_plan.explain(self.config.verbose).await?,
+                Plan::Replace(replace_plan) => replace_plan.explain(self.config.verbose).await?,
                 Plan::CreateTable(plan) => match &plan.as_select {
                     Some(box Plan::Query {
                         s_expr,
@@ -128,10 +132,11 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::MergeInto(plan) => {
+                Plan::MergeInto { s_expr, .. } => {
+                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self
-                        .explain_query(&plan.input, &plan.meta_data, &plan.bind_context, &None)
+                        .explain_query(s_expr.child(0)?, &plan.meta_data, &plan.bind_context, &None)
                         .await?;
                     res.extend(input);
                     vec![DataBlock::concat(&res)?]
@@ -173,9 +178,10 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto(plan) => {
+                Plan::MergeInto { s_expr, .. } => {
+                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
-                        &plan.input,
+                        s_expr.child(0)?,
                         &plan.meta_data,
                         *plan.columns_set.clone(),
                         true,
@@ -191,7 +197,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } => {
+                    Plan::Query { .. } | Plan::MergeInto { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -215,6 +221,10 @@ impl Interpreter for ExplainInterpreter {
                         bind_context.column_set(),
                     )
                     .await?
+                }
+                Plan::MergeInto { s_expr, schema } => {
+                    self.explain_merge_fragments(*s_expr.clone(), schema.clone())
+                        .await?
                 }
                 Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
@@ -562,5 +572,27 @@ impl ExplainInterpreter {
             result.push(DataBlock::new_from_columns(vec![formatted_plan]));
         }
         Ok(vec![DataBlock::concat(&result)?])
+    }
+
+    async fn explain_merge_fragments(
+        &self,
+        s_expr: SExpr,
+        schema: DataSchemaRef,
+    ) -> Result<Vec<DataBlock>> {
+        let merge_into: databend_common_sql::plans::MergeInto = s_expr.plan().clone().try_into()?;
+        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let plan = interpreter.build_physical_plan(&merge_into).await?;
+        let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+
+        let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
+        root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+        let display_string = fragments_actions
+            .display_indent(&merge_into.meta_data)
+            .to_string();
+
+        let line_split_result = display_string.lines().collect::<Vec<_>>();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 }

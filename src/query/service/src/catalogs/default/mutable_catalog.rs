@@ -25,6 +25,8 @@ use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -99,6 +101,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -210,8 +213,8 @@ impl Catalog for MutableCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        CatalogInfo::default().into()
     }
 
     #[async_backtrace::framed]
@@ -365,10 +368,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(
-        &self,
-        table_id: MetaId,
-    ) -> databend_common_exception::Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
         let res = self.ctx.meta.get_table_by_id(table_id).await?;
         Ok(res)
     }
@@ -377,13 +377,13 @@ impl Catalog for MutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>> {
+    ) -> Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         let res = self.ctx.meta.get_db_name_by_id(db_id).await?;
         Ok(res)
     }
@@ -394,6 +394,12 @@ impl Catalog for MutableCatalog {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         let res = self.ctx.meta.mget_database_names_by_ids(db_ids).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.ctx.meta.get_table_name_by_id(table_id).await?;
         Ok(res)
     }
 
@@ -481,6 +487,13 @@ impl Catalog for MutableCatalog {
         Ok(res)
     }
 
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.commit_table_meta(req).await
+    }
+
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         let db = self
@@ -528,6 +541,11 @@ impl Catalog for MutableCatalog {
                 db.update_table_meta(req).await
             }
         }
+    }
+
+    async fn update_stream_metas(&self, reqs: &[UpdateStreamMetaReq]) -> Result<()> {
+        self.ctx.meta.update_stream_metas(reqs).await?;
+        Ok(())
     }
 
     #[async_backtrace::framed]

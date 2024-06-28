@@ -22,6 +22,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
@@ -36,7 +37,7 @@ use crate::table::IcebergTable;
 #[derive(Clone, Debug)]
 pub struct IcebergDatabase {
     /// catalog this database belongs to
-    ctl_name: String,
+    ctl_info: Arc<CatalogInfo>,
     /// operator pointing to the directory holding iceberg tables
     db_root: DataOperator,
     /// database information
@@ -45,7 +46,7 @@ pub struct IcebergDatabase {
 
 impl IcebergDatabase {
     /// create a new database, but from reading
-    pub fn create(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
+    pub fn create(ctl_info: Arc<CatalogInfo>, db_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), db_name),
@@ -57,7 +58,7 @@ impl IcebergDatabase {
             },
         };
         Self {
-            ctl_name: ctl_name.to_string(),
+            ctl_info,
             db_root,
             info,
         }
@@ -90,7 +91,7 @@ impl Database for IcebergDatabase {
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
         let tbl = IcebergTable::try_create_from_iceberg_catalog(
-            &self.ctl_name,
+            self.ctl_info.clone(),
             self.info.name_ident.database_name(),
             table_name,
             tbl_root,

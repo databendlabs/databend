@@ -2,6 +2,9 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+set enable_merge_into_row_fetch = 0;
+
+statement ok
 DROP TABLE IF EXISTS employees2;
 
 statement ok
@@ -174,7 +177,7 @@ on t1.a = t2.a when matched then update set t1.b = t2.b when not matched then in
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: true
+├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t2.b (#1)]
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]
@@ -211,7 +214,7 @@ on t1.a = t2.a when matched then update * when not matched then insert *;
 MergeInto:
 target_table: default.default.column_only_optimization_target
 ├── distributed: false
-├── target_build_optimization: true
+├── target_build_optimization: false
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set a = a (#0),b = b (#1)]
 └── unmatched insert: [condition: None,insert into (a,b) values(CAST(a (#0) AS Int32 NULL),CAST(b (#1) AS String NULL))]

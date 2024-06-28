@@ -58,6 +58,7 @@ pub enum FileFormatParams {
     Json(JsonFileFormatParams),
     Xml(XmlFileFormatParams),
     Parquet(ParquetFileFormatParams),
+    Orc(OrcFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -69,6 +70,7 @@ impl FileFormatParams {
             FileFormatParams::Json(_) => StageFileFormatType::Json,
             FileFormatParams::Xml(_) => StageFileFormatType::Xml,
             FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
+            FileFormatParams::Orc(_) => StageFileFormatType::Orc,
         }
     }
 
@@ -85,6 +87,7 @@ impl FileFormatParams {
             StageFileFormatType::Json => {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
+            StageFileFormatType::Orc => Ok(FileFormatParams::Orc(OrcFileFormatParams::default())),
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -100,6 +103,19 @@ impl FileFormatParams {
             FileFormatParams::Json(v) => v.compression,
             FileFormatParams::Xml(v) => v.compression,
             FileFormatParams::Parquet(_) => StageFileCompression::None,
+            FileFormatParams::Orc(_) => StageFileCompression::None,
+        }
+    }
+
+    pub fn need_field_default(&self) -> bool {
+        match self {
+            FileFormatParams::Parquet(v) => v.missing_field_as == NullAs::FieldDefault,
+            FileFormatParams::Csv(v) => v.empty_field_as == EmptyFieldAs::FieldDefault,
+            FileFormatParams::NdJson(v) => {
+                v.null_field_as == NullAs::FieldDefault
+                    || v.missing_field_as == NullAs::FieldDefault
+            }
+            _ => true,
         }
     }
 
@@ -123,19 +139,7 @@ impl FileFormatParams {
                 let compression = reader.take_compression()?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
                 let null_field_as = reader.options.remove(NULL_FIELD_AS);
-                let null_if = reader.options.remove(NULL_IF);
-                let null_if = match null_if {
-                    None => {
-                        vec![]
-                    }
-                    Some(s) => {
-                        let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
-                            ErrorCode::InvalidArgument(format!(
-                            "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
-                            )))?;
-                        values
-                    }
-                };
+                let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::NdJson(NdJsonFileFormatParams::try_create(
                     compression,
                     missing_field_as.as_deref(),
@@ -145,10 +149,13 @@ impl FileFormatParams {
             }
             StageFileFormatType::Parquet => {
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
                     missing_field_as.as_deref(),
+                    null_if,
                 )?)
             }
+            StageFileFormatType::Orc => FileFormatParams::Orc(OrcFileFormatParams::try_create()?),
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression()?;
@@ -280,6 +287,7 @@ impl Default for FileFormatParams {
     fn default() -> Self {
         FileFormatParams::Parquet(ParquetFileFormatParams {
             missing_field_as: NullAs::Error,
+            null_if: vec![],
         })
     }
 }
@@ -501,7 +509,7 @@ impl FromStr for EmptyFieldAs {
             "null" => Ok(Self::Null),
             "field_default" => Ok(Self::FieldDefault),
             _ => Err(ErrorCode::InvalidArgument(format!(
-                "Invalid option value. EMPTY_FILED_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
+                "Invalid option value. EMPTY_FIELD_AS is currently set to {s}. The valid values are NULL | STRING | FIELD_DEFAULT."
             ))),
         }
     }
@@ -510,7 +518,7 @@ impl FromStr for EmptyFieldAs {
 impl Display for EmptyFieldAs {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::FieldDefault => write!(f, "FILED_DEFAULT"),
+            Self::FieldDefault => write!(f, "FIELD_DEFAULT"),
             Self::Null => write!(f, "NULL"),
             Self::String => write!(f, "STRING"),
         }
@@ -658,12 +666,25 @@ impl NdJsonFileFormatParams {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParquetFileFormatParams {
     pub missing_field_as: NullAs,
+    pub null_if: Vec<String>,
 }
 
 impl ParquetFileFormatParams {
-    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+    pub fn try_create(missing_field_as: Option<&str>, null_if: Vec<String>) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
-        Ok(Self { missing_field_as })
+        Ok(Self {
+            missing_field_as,
+            null_if,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OrcFileFormatParams {}
+
+impl OrcFileFormatParams {
+    pub fn try_create() -> Result<Self> {
+        Ok(Self {})
     }
 }
 
@@ -676,7 +697,7 @@ impl Display for FileFormatParams {
                     "TYPE = CSV COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}'  EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
@@ -696,7 +717,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = TSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}'  QUOTE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
                      SKIP_HEADER = {} \
                      NAN_DISPLAY = '{}'",
                     params.compression,
@@ -721,7 +742,7 @@ impl Display for FileFormatParams {
             FileFormatParams::NdJson(params) => {
                 write!(
                     f,
-                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AA = {}",
+                    "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AS = {}",
                     params.compression, params.missing_field_as, params.null_field_as
                 )
             }
@@ -731,6 +752,9 @@ impl Display for FileFormatParams {
                     "TYPE = PARQUET MISSING_FIELD_AS = {}",
                     params.missing_field_as
                 )
+            }
+            FileFormatParams::Orc(_) => {
+                write!(f, "TYPE = ORC",)
             }
         }
     }
@@ -785,4 +809,17 @@ pub fn check_choices(v: &str, choices: &[&str]) -> std::result::Result<(), Strin
         return Err(format!("The valid values are {choices}."));
     }
     Ok(())
+}
+
+fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
+    match null_if {
+        None => Ok(vec![]),
+        Some(s) => {
+            let values: Vec<String> = serde_json::from_str(&s).map_err(|_|
+                ErrorCode::InvalidArgument(format!(
+                    "Invalid option value: NULL_IF is currently set to {s} (in JSON). The valid values are a list of strings."
+                )))?;
+            Ok(values)
+        }
+    }
 }

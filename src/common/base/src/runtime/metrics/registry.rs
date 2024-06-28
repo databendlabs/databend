@@ -39,6 +39,7 @@ use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
 use crate::runtime::metrics::histogram::BUCKET_SECONDS;
+use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 
@@ -67,7 +68,7 @@ struct GlobalMetric {
     pub name: String,
     pub help: String,
     pub metric: Box<dyn Metric>,
-    pub creator: Box<dyn Fn(usize) -> Box<dyn Metric>>,
+    pub creator: Box<dyn Fn(usize) -> Box<dyn Metric> + Send>,
 }
 
 struct GlobalRegistryInner {
@@ -79,16 +80,14 @@ pub struct GlobalRegistry {
     inner: Mutex<GlobalRegistryInner>,
 }
 
-unsafe impl Send for GlobalRegistry {}
-
-unsafe impl Sync for GlobalRegistry {}
-
 impl GlobalRegistry {
     pub fn create() -> GlobalRegistry {
+        let mut registry = Registry::with_prefix("databend");
+        registry.register_collector(ProcessCollector::new());
         GlobalRegistry {
             inner: Mutex::new(GlobalRegistryInner {
                 metrics: vec![],
-                registry: Registry::with_prefix("databend"),
+                registry,
             }),
         }
     }

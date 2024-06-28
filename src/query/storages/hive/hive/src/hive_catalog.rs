@@ -29,6 +29,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -109,13 +111,11 @@ use volo_thrift::transport::pool;
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
 
-pub const HIVE_CATALOG: &str = "hive";
-
 #[derive(Debug)]
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(
@@ -135,7 +135,7 @@ impl CatalogCreator for HiveCreator {
 
 #[derive(Clone)]
 pub struct HiveCatalog {
-    info: CatalogInfo,
+    info: Arc<CatalogInfo>,
 
     /// storage params for this hive catalog
     ///
@@ -160,7 +160,7 @@ impl Debug for HiveCatalog {
 
 impl HiveCatalog {
     pub fn try_create(
-        info: CatalogInfo,
+        info: Arc<CatalogInfo>,
         sp: Option<StorageParams>,
         hms_address: impl Into<String>,
     ) -> Result<HiveCatalog> {
@@ -270,7 +270,7 @@ impl Catalog for HiveCatalog {
         self.info.name_ident.catalog_name.clone()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
@@ -366,6 +366,13 @@ impl Catalog for HiveCatalog {
         ))
     }
 
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in HIVE catalog",
+        ))
+    }
+
     async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
             "Cannot get db name by id in HIVE catalog",
@@ -416,8 +423,12 @@ impl Catalog for HiveCatalog {
             .get_schema(FastStr::new(db_name), FastStr::new(table_name))
             .await
             .map_err(from_thrift_error)?;
-        let table_info: TableInfo =
-            super::converters::try_into_table_info(self.sp.clone(), table_meta, fields)?;
+        let table_info: TableInfo = super::converters::try_into_table_info(
+            self.info.clone(),
+            self.sp.clone(),
+            table_meta,
+            fields,
+        )?;
         let res: Arc<dyn Table> = Arc::new(HiveTable::try_create(table_info)?);
 
         Ok(res)
@@ -471,6 +482,13 @@ impl Catalog for HiveCatalog {
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot undrop table in HIVE catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot commit_table_meta in HIVE catalog",
         ))
     }
 

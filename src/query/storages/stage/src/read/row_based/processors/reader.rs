@@ -88,7 +88,7 @@ impl BytesReader {
                 .get_scan_progress()
                 .incr(&ProgressValues { rows: 0, bytes: n });
 
-            debug!("read {} bytes", n);
+            debug!("read {} bytes from {}", n, state.file.path);
             let offset = state.offset;
             state.offset += n;
             let is_eof = state.offset == state.file.size;
@@ -137,7 +137,8 @@ impl PrefetchAsyncSource for BytesReader {
                 // TODO: Use 4 concurrent for test, let's extract as a new setting.
                 .concurrent(4)
                 .await?
-                .into_futures_async_read(0..file.size as u64);
+                .into_futures_async_read(0..file.size as u64)
+                .await?;
             self.file_state = Some(FileState {
                 file,
                 reader,

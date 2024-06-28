@@ -491,11 +491,11 @@ impl<R> OperatorMetricsWrapper<R> {
 }
 
 impl<R: oio::Read> oio::Read for OperatorMetricsWrapper<R> {
-    async fn read_at(&self, offset: u64, limit: usize) -> opendal::Result<Buffer> {
+    async fn read(&mut self) -> opendal::Result<Buffer> {
         let start = Instant::now();
 
         self.inner
-            .read_at(offset, limit)
+            .read()
             .await
             .map(|res| {
                 self.metrics
@@ -513,11 +513,11 @@ impl<R: oio::Read> oio::Read for OperatorMetricsWrapper<R> {
 }
 
 impl<R: oio::BlockingRead> oio::BlockingRead for OperatorMetricsWrapper<R> {
-    fn read_at(&self, offset: u64, limit: usize) -> opendal::Result<Buffer> {
+    fn read(&mut self) -> opendal::Result<Buffer> {
         let start = Instant::now();
 
         self.inner
-            .read_at(offset, limit)
+            .read()
             .map(|res| {
                 self.metrics
                     .observe_bytes_total(self.scheme, self.op, res.len());

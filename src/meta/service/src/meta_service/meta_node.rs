@@ -34,7 +34,6 @@ use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
@@ -86,7 +85,7 @@ use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
-use crate::network::Network;
+use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
@@ -115,7 +114,7 @@ pub struct MetaNodeStatus {
     pub db_size: u64,
 
     /// key number of current snapshot
-    pub key_num: usize,
+    pub key_num: u64,
 
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,
@@ -205,7 +204,7 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
-        let net = Network::new(sto.clone());
+        let net = NetworkFactory::new(sto.clone());
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
@@ -507,11 +506,9 @@ impl MetaNode {
                 let mm = metrics_rx.borrow().clone();
 
                 // Report metrics about server state and role.
-
                 server_metrics::set_node_is_health(
                     mm.state == ServerState::Follower || mm.state == ServerState::Leader,
                 );
-
                 if mm.current_leader.is_some() && mm.current_leader != last_leader {
                     server_metrics::incr_leader_change();
                 }
@@ -519,11 +516,14 @@ impl MetaNode {
                 server_metrics::set_is_leader(mm.current_leader == Some(meta_node.sto.id));
 
                 // metrics about raft log and state machine.
-
                 server_metrics::set_current_term(mm.current_term);
                 server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
+
+                // metrics about server storage
+                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
+                server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
 
                 last_leader = mm.current_leader;
             }
@@ -606,6 +606,11 @@ impl MetaNode {
                         return Ok(true);
                     } else {
                         error!("leaving cluster via {} fail: {:?}", addr, reply.error);
+                        errors.push(
+                            AnyError::error(reply.error).add_context(|| {
+                                format!("leave {} via: {}", leave_id, addr.clone())
+                            }),
+                        );
                     }
                 }
                 Err(s) => {
@@ -895,6 +900,20 @@ impl MetaNode {
         nodes
     }
 
+    fn get_db_size(&self) -> Result<u64, MetaError> {
+        self.sto.db.size_on_disk().map_err(|e| {
+            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
+            MetaError::StorageError(se)
+        })
+    }
+
+    async fn get_key_num(&self) -> u64 {
+        self.sto
+            .try_get_snapshot_key_num()
+            .await
+            .unwrap_or_default()
+    }
+
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .sto
@@ -908,12 +927,8 @@ impl MetaNode {
 
         let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
 
-        let db_size = self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })?;
-
-        let key_num = self.sto.key_num().await.map_or(0, |num| num);
+        let db_size = self.get_db_size()?;
+        let key_num = self.get_key_num().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 

@@ -122,6 +122,12 @@ impl DefaultSettings {
             let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
+                ("enable_streaming_load", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables streaming load.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_clickhouse_handler", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables clickhouse handler.",
@@ -290,11 +296,29 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the spilling buffer threshold (MB) for each join processor.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("disable_merge_into_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable merge into join reorder optimization.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_merge_into_row_fetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable merge into row fetch optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_cte_recursive_depth", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Max recursive depth for recursive cte",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
@@ -469,13 +493,13 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(15),
+                    value: UserSettingValue::UInt64(20),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -576,6 +600,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("compact_max_block_selection", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Limits the maximum number of blocks that can be selected during a compact operation.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(2..=u64::MAX)),
+                }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table recluster.",
@@ -632,7 +662,7 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(disable by default).",
+                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -727,9 +757,22 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("max_vacuum_temp_files_after_query", DefaultSettingValue {
+
+                ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. The default value is 0(all temp files)",
+                    desc: "Enables auto fix missing bloom index",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_vacuum_temp_files_after_query", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("max_set_operator_count", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 })

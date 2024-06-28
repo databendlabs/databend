@@ -35,7 +35,9 @@ use crate::converts::arrow2::ARROW_EXT_TYPE_VARIANT;
 use crate::types::DataType;
 use crate::utils::arrow::column_to_arrow_array;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::DataBlock;
+use crate::Scalar;
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
 
@@ -271,4 +273,37 @@ fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
         ArrowType::Decimal256(_, _) => compare_decimal256(left, right),
         _ => arrow_ord::build_compare(left, right),
     }
+}
+
+pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Result<Vec<u32>> {
+    let length = rows.len();
+    let mut columns = data_types
+        .iter()
+        .map(|ty| ColumnBuilder::with_capacity(ty, length))
+        .collect::<Vec<_>>();
+
+    for row in rows.into_iter() {
+        for (field, column) in row.into_iter().zip(columns.iter_mut()) {
+            column.push(field.as_ref());
+        }
+    }
+
+    let order_columns = columns
+        .into_iter()
+        .map(|builder| builder.build().as_arrow())
+        .collect::<Vec<_>>();
+    let order_arrays = order_columns
+        .iter()
+        .map(|array| arrow_sort::SortColumn {
+            values: array.as_ref(),
+            options: Some(arrow_sort::SortOptions {
+                descending: false,
+                nulls_first: false,
+            }),
+        })
+        .collect::<Vec<_>>();
+    let indices: PrimitiveArray<u32> =
+        arrow_sort::lexsort_to_indices_impl(&order_arrays, None, &build_compare)?;
+
+    Ok(indices.values().to_vec())
 }

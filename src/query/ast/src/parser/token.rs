@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Range;
-use databend_common_exception::Result;
 use logos::Lexer;
 use logos::Logos;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
 pub use self::TokenKind::*;
+use crate::ParseError;
+use crate::Range;
+use crate::Result;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Token<'a> {
@@ -72,10 +72,13 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(TokenKind::Error) => Some(Err(ErrorCode::SyntaxException(
-                "unable to recognize the rest tokens".to_string(),
-            )
-            .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
+            Some(TokenKind::Error) => {
+                let span = Some((self.lexer.span().start..self.source.len()).into());
+                Some(Err(ParseError(
+                    span,
+                    "unable to recognize the rest tokens".to_string(),
+                )))
+            }
             Some(kind) => {
                 // Skip hint-like comment that is in the invalid position.
                 if !matches!(
@@ -451,8 +454,6 @@ pub enum TokenKind {
     COUNT,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
-    #[token("CREDENTIALS", ignore(ascii_case))]
-    CREDENTIALS,
     #[token("CROSS", ignore(ascii_case))]
     CROSS,
     #[token("CSV", ignore(ascii_case))]
@@ -499,6 +500,8 @@ pub enum TokenKind {
     DETAILED_OUTPUT,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE", ignore(ascii_case))]
+    DISABLE,
     #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
@@ -537,6 +540,8 @@ pub enum TokenKind {
     ELSE,
     #[token("EMPTY_FIELD_AS", ignore(ascii_case))]
     EMPTY_FIELD_AS,
+    #[token("ENABLE", ignore(ascii_case))]
+    ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
     #[token("END", ignore(ascii_case))]
@@ -553,6 +558,8 @@ pub enum TokenKind {
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
     ESCAPE,
+    #[token("EXCEPTION_BACKTRACE", ignore(ascii_case))]
+    EXCEPTION_BACKTRACE,
     #[token("EXISTS", ignore(ascii_case))]
     EXISTS,
     #[token("EXPLAIN", ignore(ascii_case))]
@@ -810,6 +817,8 @@ pub enum TokenKind {
     OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
+    #[token("ORC", ignore(ascii_case))]
+    ORC,
     #[token("ORDER", ignore(ascii_case))]
     ORDER,
     #[token("OUTPUT_HEADER", ignore(ascii_case))]
@@ -964,6 +973,8 @@ pub enum TokenKind {
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]
     SECOND,
+    #[token("MILLISECOND", ignore(ascii_case))]
+    MILLISECOND,
     #[token("SELECT", ignore(ascii_case))]
     SELECT,
     #[token("PIVOT", ignore(ascii_case))]
@@ -1048,6 +1059,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
+    #[token("SYSTEM", ignore(ascii_case))]
+    SYSTEM,
     #[token("STORAGE_TYPE", ignore(ascii_case))]
     STORAGE_TYPE,
     #[token("TABLE", ignore(ascii_case))]

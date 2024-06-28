@@ -15,9 +15,9 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
@@ -58,7 +58,7 @@ pub fn decorrelate_subquery(
     metadata: MetadataRef,
     s_expr: SExpr,
 ) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(ctx, metadata);
+    let mut rewriter = SubqueryRewriter::new(ctx, metadata, None);
     rewriter.rewrite(&s_expr)
 }
 
@@ -201,6 +201,8 @@ impl SubqueryRewriter {
             need_hold_hash_table: false,
             is_lateral: false,
             single_to_inner: None,
+            build_side_cache_info: None,
+            is_null_equal: Vec::new(),
         };
 
         // Rewrite plan to semi-join.
@@ -291,6 +293,8 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -328,6 +332,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let join_plan = Join {
@@ -340,6 +345,8 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -392,6 +399,7 @@ impl SubqueryRewriter {
                     self.metadata.write().add_derived_column(
                         "marker".to_string(),
                         DataType::Nullable(Box::new(DataType::Boolean)),
+                        None,
                     )
                 };
                 let mark_join = Join {
@@ -404,6 +412,8 @@ impl SubqueryRewriter {
                     need_hold_hash_table: false,
                     is_lateral: false,
                     single_to_inner: None,
+                    build_side_cache_info: None,
+                    is_null_equal: Vec::new(),
                 }
                 .into();
                 Ok((
@@ -426,6 +436,8 @@ impl SubqueryRewriter {
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
+        let mut correlated_columns = correlated_columns.clone().into_iter().collect::<Vec<_>>();
+        correlated_columns.sort();
         for correlated_column in correlated_columns.iter() {
             let metadata = self.metadata.read();
             let column_entry = metadata.column(*correlated_column);

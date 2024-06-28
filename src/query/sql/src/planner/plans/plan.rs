@@ -24,6 +24,8 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::Exchange;
+use super::RelOperator;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -107,7 +109,6 @@ use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
-use crate::plans::MergeInto;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTablePlan;
@@ -136,13 +137,13 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantTenantsOfSharePlan;
-use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
 use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
+use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -230,7 +231,10 @@ pub enum Plan {
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
-    MergeInto(Box<MergeInto>),
+    MergeInto {
+        s_expr: Box<SExpr>,
+        schema: DataSchemaRef,
+    },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),
     CopyIntoLocation(CopyIntoLocationPlan),
@@ -275,7 +279,6 @@ pub enum Plan {
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
     GrantPriv(Box<GrantPrivilegePlan>),
-    ShowGrants(Box<ShowGrantsPlan>),
     RevokePriv(Box<RevokePrivilegePlan>),
     RevokeRole(Box<RevokeRolePlan>),
     SetRole(Box<SetRolePlan>),
@@ -305,6 +308,7 @@ pub enum Plan {
     UnSetVariable(Box<UnSettingPlan>),
     Kill(Box<KillPlan>),
     SetPriority(Box<SetPriorityPlan>),
+    System(Box<SystemPlan>),
 
     // Share
     CreateShareEndpoint(Box<CreateShareEndpointPlan>),
@@ -396,6 +400,7 @@ pub enum RewriteKind {
     ListStage,
     ShowRoles,
     ShowPasswordPolicies,
+    ShowGrants,
 
     Call,
 }
@@ -415,7 +420,7 @@ impl Plan {
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::Delete(_)
-            | Plan::MergeInto(_)
+            | Plan::MergeInto { .. }
             | Plan::OptimizeTable(_)
             | Plan::Update(_) => QueryKind::Update,
             _ => QueryKind::Other,
@@ -444,6 +449,7 @@ impl Plan {
             | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
+            Plan::MergeInto { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
@@ -454,7 +460,6 @@ impl Plan {
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
-            Plan::ShowGrants(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
@@ -470,7 +475,6 @@ impl Plan {
             Plan::DescPasswordPolicy(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::CopyIntoLocation(plan) => plan.schema(),
-            Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
@@ -487,5 +491,30 @@ impl Plan {
 
     pub fn has_result_set(&self) -> bool {
         !self.schema().fields().is_empty()
+    }
+
+    pub fn remove_exchange_for_select(&self) -> Self {
+        if let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            rewrite_kind,
+            formatted_ast,
+            ignore_result,
+        } = self
+        {
+            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
+                let s_expr = Box::new(s_expr.child(0).unwrap().clone());
+                return Plan::Query {
+                    s_expr,
+                    metadata: metadata.clone(),
+                    bind_context: bind_context.clone(),
+                    rewrite_kind: rewrite_kind.clone(),
+                    formatted_ast: formatted_ast.clone(),
+                    ignore_result: *ignore_result,
+                };
+            }
+        }
+        self.clone()
     }
 }

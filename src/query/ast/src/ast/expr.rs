@@ -15,82 +15,69 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::merge_span;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_exception::Span;
-use databend_common_io::display_decimal_256;
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
-use pratt::Precedence;
+use pratt::Associativity;
 
 use super::ColumnRef;
 use super::OrderByExpr;
+use crate::ast::display_decimal_256;
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::expr::ExprElement;
+use crate::span::merge_span;
+use crate::ParseError;
+use crate::Result;
+use crate::Span;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
-        #[drive(skip)]
         span: Span,
         column: ColumnRef,
     },
     /// `IS [ NOT ] NULL` expression
     IsNull {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `IS [NOT] DISTINCT` expression
     IsDistinctFrom {
-        #[drive(skip)]
         span: Span,
         left: Box<Expr>,
         right: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (expr, ...)`
     InList {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         list: Vec<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// `[ NOT ] IN (SELECT ...)`
     InSubquery {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         subquery: Box<Query>,
-        #[drive(skip)]
         not: bool,
     },
     /// `BETWEEN ... AND ...`
     Between {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         low: Box<Expr>,
         high: Box<Expr>,
-        #[drive(skip)]
         not: bool,
     },
     /// Binary operation
     BinaryOp {
-        #[drive(skip)]
         span: Span,
         op: BinaryOperator,
         left: Box<Expr>,
@@ -98,7 +85,6 @@ pub enum Expr {
     },
     /// JSON operation
     JsonOp {
-        #[drive(skip)]
         span: Span,
         op: JsonOperator,
         left: Box<Expr>,
@@ -106,51 +92,43 @@ pub enum Expr {
     },
     /// Unary operation
     UnaryOp {
-        #[drive(skip)]
         span: Span,
         op: UnaryOperator,
         expr: Box<Expr>,
     },
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
-        #[drive(skip)]
         pg_style: bool,
     },
     /// `TRY_CAST` expression`
     TryCast {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         target_type: TypeName,
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
-        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// DATE_PART(IntervalKind, <expr>)
     DatePart {
-        #[drive(skip)]
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
     },
     /// POSITION(<expr> IN <expr>)
     Position {
-        #[drive(skip)]
         span: Span,
         substr_expr: Box<Expr>,
         str_expr: Box<Expr>,
     },
     /// SUBSTRING(<expr> [FROM <expr>] [FOR <expr>])
     Substring {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         substring_from: Box<Expr>,
@@ -160,7 +138,6 @@ pub enum Expr {
     /// Or
     /// TRIM(<expr>)
     Trim {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         // ([BOTH | LEADING | TRAILING], <expr>)
@@ -168,31 +145,26 @@ pub enum Expr {
     },
     /// A literal value, such as string, number, date or NULL
     Literal {
-        #[drive(skip)]
         span: Span,
         value: Literal,
     },
     /// `COUNT(*)` expression
     CountAll {
-        #[drive(skip)]
         span: Span,
         window: Option<Window>,
     },
     /// `(foo, bar)`
     Tuple {
-        #[drive(skip)]
         span: Span,
         exprs: Vec<Expr>,
     },
     /// Scalar/Agg/Window function call
     FunctionCall {
-        #[drive(skip)]
         span: Span,
         func: FunctionCall,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
-        #[drive(skip)]
         span: Span,
         operand: Option<Box<Expr>>,
         conditions: Vec<Expr>,
@@ -201,70 +173,58 @@ pub enum Expr {
     },
     /// `EXISTS` expression
     Exists {
-        #[drive(skip)]
         span: Span,
         /// Indicate if this is a `NOT EXISTS`
-        #[drive(skip)]
         not: bool,
         subquery: Box<Query>,
     },
     /// Scalar/ANY/ALL/SOME subquery
     Subquery {
-        #[drive(skip)]
         span: Span,
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
     /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         accessor: MapAccessor,
     },
     /// The `Array` expr
     Array {
-        #[drive(skip)]
         span: Span,
         exprs: Vec<Expr>,
     },
     /// The `Map` expr
     Map {
-        #[drive(skip)]
         span: Span,
         kvs: Vec<(Literal, Expr)>,
     },
     /// The `Interval 1 DAY` expr
     Interval {
-        #[drive(skip)]
         span: Span,
         expr: Box<Expr>,
         unit: IntervalKind,
     },
     DateAdd {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateSub {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         interval: Box<Expr>,
         date: Box<Expr>,
     },
     DateTrunc {
-        #[drive(skip)]
         span: Span,
         unit: IntervalKind,
         date: Box<Expr>,
     },
     Hole {
-        #[drive(skip)]
         span: Span,
-        #[drive(skip)]
         name: String,
     },
 }
@@ -453,27 +413,51 @@ impl Expr {
             "DATE_TRUNC",
         ]
     }
-
-    pub fn precedence(&self) -> Option<Precedence> {
-        match ExprElement::from(self.clone()).affix() {
-            Affix::Nilfix => None,
-            Affix::Infix(p, _) => Some(p),
-            Affix::Prefix(p) => Some(p),
-            Affix::Postfix(p) => Some(p),
-        }
-    }
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        fn needs_parentheses(parent: Option<Affix>, child: Affix, is_left: bool) -> bool {
+            match (parent, child) {
+                (Some(Affix::Infix(parent_prec, parent_assoc)), Affix::Infix(child_prec, _)) => {
+                    if parent_prec < child_prec {
+                        return false;
+                    }
+                    if parent_prec > child_prec {
+                        return true;
+                    }
+                    if matches!(parent_assoc, Associativity::Left) && !is_left {
+                        return true;
+                    }
+                    if matches!(parent_assoc, Associativity::Right) && is_left {
+                        return true;
+                    }
+                }
+                (
+                    Some(
+                        Affix::Infix(parent_prec, _)
+                        | Affix::Prefix(parent_prec)
+                        | Affix::Postfix(parent_prec),
+                    ),
+                    Affix::Infix(child_prec, _)
+                    | Affix::Prefix(child_prec)
+                    | Affix::Postfix(child_prec),
+                ) => {
+                    return parent_prec > child_prec;
+                }
+                _ => (),
+            }
+            false
+        }
+
         fn write_expr(
             expr: &Expr,
-            min_precedence: Precedence,
+            parent: Option<Affix>,
+            is_left: bool,
             f: &mut Formatter,
         ) -> std::fmt::Result {
-            let prec = expr.precedence();
-            let need_paren = prec.map(|p| p < min_precedence).unwrap_or(false);
-            let min_prec = prec.unwrap_or(Precedence(0));
+            let affix = expr.affix();
+            let need_paren = needs_parentheses(parent, affix, is_left);
 
             if need_paren {
                 write!(f, "(")?;
@@ -488,7 +472,7 @@ impl Display for Expr {
                     }
                 }
                 Expr::IsNull { expr, not, .. } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
@@ -498,19 +482,19 @@ impl Display for Expr {
                 Expr::IsDistinctFrom {
                     left, right, not, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " IS")?;
                     if *not {
                         write!(f, " NOT")?;
                     }
                     write!(f, " DISTINCT FROM ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), true, f)?;
                 }
 
                 Expr::InList {
                     expr, list, not, ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -524,7 +508,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -537,7 +521,7 @@ impl Display for Expr {
                     not,
                     ..
                 } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     if *not {
                         write!(f, " NOT")?;
                     }
@@ -547,28 +531,28 @@ impl Display for Expr {
                     match op {
                         // TODO (xieqijun) Maybe special attribute are provided to check whether the symbol is before or after.
                         UnaryOperator::Factorial => {
-                            write_expr(expr, min_prec, f)?;
+                            write_expr(expr, Some(affix), true, f)?;
                             write!(f, " {op}")?;
                         }
                         _ => {
                             write!(f, "{op} ")?;
-                            write_expr(expr, min_prec, f)?;
+                            write_expr(expr, Some(affix), true, f)?;
                         }
                     }
                 }
                 Expr::BinaryOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), false, f)?;
                 }
                 Expr::JsonOp {
                     op, left, right, ..
                 } => {
-                    write_expr(left, min_prec, f)?;
+                    write_expr(left, Some(affix), true, f)?;
                     write!(f, " {op} ")?;
-                    write_expr(right, min_prec, f)?;
+                    write_expr(right, Some(affix), true, f)?;
                 }
                 Expr::Cast {
                     expr,
@@ -577,7 +561,7 @@ impl Display for Expr {
                     ..
                 } => {
                     if *pg_style {
-                        write_expr(expr, min_prec, f)?;
+                        write_expr(expr, Some(affix), true, f)?;
                         write!(f, "::{target_type}")?;
                     } else {
                         write!(f, "CAST({expr} AS {target_type})")?;
@@ -680,7 +664,7 @@ impl Display for Expr {
                     write!(f, "({subquery})")?;
                 }
                 Expr::MapAccess { expr, accessor, .. } => {
-                    write_expr(expr, min_prec, f)?;
+                    write_expr(expr, Some(affix), true, f)?;
                     match accessor {
                         MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
                         MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
@@ -736,7 +720,7 @@ impl Display for Expr {
             Ok(())
         }
 
-        write_expr(self, Precedence(0), f)
+        write_expr(self, None, true, f)
     }
 }
 
@@ -790,19 +774,17 @@ impl Display for SubqueryModifier {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Literal {
-    UInt64(#[drive(skip)] u64),
-    Float64(#[drive(skip)] f64),
+    UInt64(u64),
+    Float64(f64),
     Decimal256 {
         #[drive(skip)]
         value: i256,
-        #[drive(skip)]
         precision: u8,
-        #[drive(skip)]
         scale: u8,
     },
     // Quoted string literal value
-    String(#[drive(skip)] String),
-    Boolean(#[drive(skip)] bool),
+    String(String),
+    Boolean(bool),
     Null,
 }
 
@@ -816,10 +798,20 @@ impl Display for Literal {
                 write!(f, "{}", display_decimal_256(*value, *scale))
             }
             Literal::Float64(val) => {
-                write!(f, "{val}")
+                if val.is_infinite() {
+                    if val.is_sign_positive() {
+                        write!(f, "'+INFINITY'::FLOAT64")
+                    } else {
+                        write!(f, "'-INFINITY'::FLOAT64")
+                    }
+                } else if val.is_nan() {
+                    write!(f, "'NaN'::FLOAT64")
+                } else {
+                    write!(f, "{val}")
+                }
             }
             Literal::String(val) => {
-                write!(f, "\'{}\'", escape_string_with_quote(val, Some('\'')))
+                write!(f, "{}", QuotedString(val, '\''))
             }
             Literal::Boolean(val) => {
                 if *val {
@@ -838,7 +830,6 @@ impl Display for Literal {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct FunctionCall {
     /// Set to true if the function is aggregate function with `DISTINCT`, like `COUNT(DISTINCT a)`
-    #[drive(skip)]
     pub distinct: bool,
     pub name: Identifier,
     pub args: Vec<Expr>,
@@ -886,10 +877,7 @@ pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
     /// `.1`
-    DotNumber {
-        #[drive(skip)]
-        key: u64,
-    },
+    DotNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier },
 }
@@ -908,9 +896,7 @@ pub enum TypeName {
     Float32,
     Float64,
     Decimal {
-        #[drive(skip)]
         precision: u8,
-        #[drive(skip)]
         scale: u8,
     },
     Date,
@@ -924,7 +910,6 @@ pub enum TypeName {
     },
     Bitmap,
     Tuple {
-        #[drive(skip)]
         fields_name: Option<Vec<String>>,
         fields_type: Vec<TypeName>,
     },
@@ -1265,9 +1250,10 @@ impl BinaryOperator {
             BinaryOperator::Lte => Ok(BinaryOperator::Gt),
             BinaryOperator::Eq => Ok(BinaryOperator::NotEq),
             BinaryOperator::NotEq => Ok(BinaryOperator::Eq),
-            _ => Err(ErrorCode::Unimplemented(format!(
-                "Converting {self} to its contrary is not currently supported"
-            ))),
+            _ => Err(ParseError(
+                None,
+                format!("Converting {self} to its contrary is not currently supported"),
+            )),
         }
     }
 

@@ -18,6 +18,8 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -36,6 +38,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
+    // MergeInto info, used to build MergeInto physical plan
+    pub(crate) merge_into_build_info: Option<MergeIntoBuildInfo>,
 }
 
 impl PhysicalPlanBuilder {
@@ -47,6 +51,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
+            merge_into_build_info: None,
         }
     }
 
@@ -112,12 +117,30 @@ impl PhysicalPlanBuilder {
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
+            RelOperator::ExpressionScan(scan) => {
+                self.build_expression_scan(s_expr, scan, required).await
+            }
+            RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
             RelOperator::AddRowNumber(_) => self.build_add_row_number(s_expr, required).await,
             RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
+            RelOperator::RecursiveCteScan(scan) => {
+                self.build_recursive_cte_scan(scan, stat_info).await
+            }
             RelOperator::AsyncFunction(async_func) => {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
+            RelOperator::MergeInto(merge_into) => self.build_merge_into(s_expr, merge_into).await,
         }
     }
+
+    pub fn set_merge_into_build_info(&mut self, merge_into_build_info: MergeIntoBuildInfo) {
+        self.merge_into_build_info = Some(merge_into_build_info);
+    }
+}
+
+#[derive(Clone)]
+pub struct MergeIntoBuildInfo {
+    pub table_snapshot: Arc<TableSnapshot>,
+    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
 }

@@ -514,6 +514,167 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+replace into test on(c) select sum(c) as c from source group by v;
+---------- Output ---------
+REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+---------- AST ------------
+Replace(
+    ReplaceStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..17,
+            ),
+            name: "test",
+            quote: None,
+            is_hole: false,
+        },
+        on_conflict_columns: [
+            Identifier {
+                span: Some(
+                    21..22,
+                ),
+                name: "c",
+                quote: None,
+                is_hole: false,
+            },
+        ],
+        columns: [],
+        source: Select {
+            query: Query {
+                span: Some(
+                    24..65,
+                ),
+                with: None,
+                body: Select(
+                    SelectStmt {
+                        span: Some(
+                            24..65,
+                        ),
+                        hints: None,
+                        distinct: false,
+                        top_n: None,
+                        select_list: [
+                            AliasedExpr {
+                                expr: FunctionCall {
+                                    span: Some(
+                                        31..37,
+                                    ),
+                                    func: FunctionCall {
+                                        distinct: false,
+                                        name: Identifier {
+                                            span: Some(
+                                                31..34,
+                                            ),
+                                            name: "sum",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                        args: [
+                                            ColumnRef {
+                                                span: Some(
+                                                    35..36,
+                                                ),
+                                                column: ColumnRef {
+                                                    database: None,
+                                                    table: None,
+                                                    column: Name(
+                                                        Identifier {
+                                                            span: Some(
+                                                                35..36,
+                                                            ),
+                                                            name: "c",
+                                                            quote: None,
+                                                            is_hole: false,
+                                                        },
+                                                    ),
+                                                },
+                                            },
+                                        ],
+                                        params: [],
+                                        window: None,
+                                        lambda: None,
+                                    },
+                                },
+                                alias: Some(
+                                    Identifier {
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                        name: "c",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                ),
+                            },
+                        ],
+                        from: [
+                            Table {
+                                span: Some(
+                                    48..54,
+                                ),
+                                catalog: None,
+                                database: None,
+                                table: Identifier {
+                                    span: Some(
+                                        48..54,
+                                    ),
+                                    name: "source",
+                                    quote: None,
+                                    is_hole: false,
+                                },
+                                alias: None,
+                                temporal: None,
+                                consume: false,
+                                pivot: None,
+                                unpivot: None,
+                            },
+                        ],
+                        selection: None,
+                        group_by: Some(
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            64..65,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        64..65,
+                                                    ),
+                                                    name: "v",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        ),
+                        having: None,
+                        window_list: None,
+                        qualify: None,
+                    },
+                ),
+                order_by: [],
+                limit: [],
+                offset: None,
+                ignore_result: false,
+            },
+        },
+        delete_when: None,
+    },
+)
+
+
+---------- Input ----------
 explain pipeline select a from b;
 ---------- Output ---------
 EXPLAIN PIPELINE SELECT a FROM b
@@ -598,9 +759,174 @@ Explain {
 
 
 ---------- Input ----------
+explain replace into test on(c) select sum(c) as c from source group by v;
+---------- Output ---------
+EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+---------- AST ------------
+Explain {
+    kind: Plan,
+    options: [],
+    query: Replace(
+        ReplaceStmt {
+            hints: None,
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    21..25,
+                ),
+                name: "test",
+                quote: None,
+                is_hole: false,
+            },
+            on_conflict_columns: [
+                Identifier {
+                    span: Some(
+                        29..30,
+                    ),
+                    name: "c",
+                    quote: None,
+                    is_hole: false,
+                },
+            ],
+            columns: [],
+            source: Select {
+                query: Query {
+                    span: Some(
+                        32..73,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                32..73,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: FunctionCall {
+                                        span: Some(
+                                            39..45,
+                                        ),
+                                        func: FunctionCall {
+                                            distinct: false,
+                                            name: Identifier {
+                                                span: Some(
+                                                    39..42,
+                                                ),
+                                                name: "sum",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                            args: [
+                                                ColumnRef {
+                                                    span: Some(
+                                                        43..44,
+                                                    ),
+                                                    column: ColumnRef {
+                                                        database: None,
+                                                        table: None,
+                                                        column: Name(
+                                                            Identifier {
+                                                                span: Some(
+                                                                    43..44,
+                                                                ),
+                                                                name: "c",
+                                                                quote: None,
+                                                                is_hole: false,
+                                                            },
+                                                        ),
+                                                    },
+                                                },
+                                            ],
+                                            params: [],
+                                            window: None,
+                                            lambda: None,
+                                        },
+                                    },
+                                    alias: Some(
+                                        Identifier {
+                                            span: Some(
+                                                49..50,
+                                            ),
+                                            name: "c",
+                                            quote: None,
+                                            is_hole: false,
+                                        },
+                                    ),
+                                },
+                            ],
+                            from: [
+                                Table {
+                                    span: Some(
+                                        56..62,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            56..62,
+                                        ),
+                                        name: "source",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    consume: false,
+                                    pivot: None,
+                                    unpivot: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: Some(
+                                Normal(
+                                    [
+                                        ColumnRef {
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            72..73,
+                                                        ),
+                                                        name: "v",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                ),
+                            ),
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            },
+            delete_when: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 explain pipeline select a from t1 ignore_result;
 ---------- Output ---------
-EXPLAIN PIPELINE SELECT a FROM t1
+EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
@@ -9814,6 +10140,82 @@ Query(
 
 
 ---------- Input ----------
+SELECT 1 - (2 + 3);
+---------- Output ---------
+SELECT 1 - (2 + 3)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..18,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..18,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: BinaryOp {
+                            span: Some(
+                                9..10,
+                            ),
+                            op: Minus,
+                            left: Literal {
+                                span: Some(
+                                    7..8,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            right: BinaryOp {
+                                span: Some(
+                                    14..15,
+                                ),
+                                op: Plus,
+                                left: Literal {
+                                    span: Some(
+                                        12..13,
+                                    ),
+                                    value: UInt64(
+                                        2,
+                                    ),
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        16..17,
+                                    ),
+                                    value: UInt64(
+                                        3,
+                                    ),
+                                },
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE ~
 ---------- Output ---------
 CREATE STAGE ~
@@ -9835,7 +10237,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -9880,7 +10282,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
@@ -10168,7 +10570,7 @@ CreateRole {
 ---------- Input ----------
 create user `a'a` identified by '123'
 ---------- Output ---------
-CREATE USER 'a%27a'@'%' IDENTIFIED BY '123'
+CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
@@ -11681,7 +12083,7 @@ CreateTable(
 ---------- Input ----------
 GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
+GRANT CREATE, CREATE USER ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11707,7 +12109,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11733,7 +12135,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11757,7 +12159,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
+GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11783,7 +12185,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO ROLE 'role1'
+GRANT SELECT, CREATE ON  * TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11806,7 +12208,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
+GRANT ALL PRIVILEGES ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11826,7 +12228,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO ROLE 'role2'
+GRANT ALL PRIVILEGES ON  *.* TO ROLE 'role2'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11843,7 +12245,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
+GRANT ALL PRIVILEGES ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11865,7 +12267,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO ROLE 'role3'
+GRANT ALL PRIVILEGES ON  * TO ROLE 'role3'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11941,7 +12343,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11968,7 +12370,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -11995,7 +12397,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
-GRANT SELECT ON db01.* TO ROLE 'role1'
+GRANT SELECT ON  db01.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12019,7 +12421,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12047,7 +12449,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
+GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12075,7 +12477,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO ROLE 'role1'
+GRANT SELECT ON  db01.tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12100,7 +12502,7 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
-GRANT SELECT ON tb1 TO ROLE 'role1'
+GRANT SELECT ON  tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12123,7 +12525,7 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON tb1 TO 'u1';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON tb1 TO USER 'u1'@'%'
+GRANT ALL PRIVILEGES ON  tb1 TO USER 'u1'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -12146,17 +12548,23 @@ Grant(
 ---------- Input ----------
 SHOW GRANTS;
 ---------- Output ---------
-SHOW GRANTS
+SHOW GRANTS 
 ---------- AST ------------
 ShowGrants {
     principal: None,
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12166,6 +12574,12 @@ ShowGrants {
                 hostname: "%",
             },
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 
@@ -12173,7 +12587,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%'
+SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12184,19 +12598,31 @@ ShowGrants {
             },
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
 
 
 ---------- Input ----------
 SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         Role(
             "role1",
         ),
+    ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
     ),
 }
 
@@ -12204,7 +12630,7 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1'
+SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -12212,13 +12638,40 @@ ShowGrants {
             "role1",
         ),
     ),
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
 }
+
+
+---------- Input ----------
+SHOW GRANTS ON TABLE t;
+---------- Output ---------
+SHOW GRANTS ON TABLE t 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: Table(
+            None,
+            "t",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
+            },
+        ),
+    },
+)
 
 
 ---------- Input ----------
 REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
+REVOKE SELECT, CREATE ON  * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12244,7 +12697,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE role1;
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE 'role1'
+REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12267,7 +12720,7 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE 'role1';
 ---------- Output ---------
-REVOKE SELECT ON tb1 FROM ROLE 'role1'
+REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12368,7 +12821,7 @@ SetRole {
 ---------- Input ----------
 REVOKE ALL ON tb1 FROM 'u1';
 ---------- Output ---------
-REVOKE ALL PRIVILEGES ON tb1 FROM USER 'u1'@'%'
+REVOKE ALL PRIVILEGES ON  tb1 FROM USER 'u1'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -12393,7 +12846,7 @@ COPY INTO mytable
     FROM '@~/mybucket/my data.csv'
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12446,7 +12899,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12513,7 +12966,7 @@ COPY INTO mytable
     size_limit=10
     max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12589,7 +13042,7 @@ COPY INTO mytable
     size_limit=10
     max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12667,7 +13120,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12747,7 +13200,7 @@ COPY INTO mytable
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12817,7 +13270,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12872,7 +13325,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -12935,7 +13388,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13154,7 +13607,7 @@ CopyIntoLocation(
 ---------- Input ----------
 COPY INTO mytable
     FROM 's3://mybucket/data.csv'
-    CREDENTIALS = (
+    CONNECTION = (
         AWS_KEY_ID = 'access_key'
         AWS_SECRET_KEY = 'secret_key'
     )
@@ -13166,7 +13619,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13244,7 +13697,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13310,7 +13763,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13376,7 +13829,7 @@ COPY INTO mytable
     )
     force=true;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13443,7 +13896,7 @@ COPY INTO mytable
     size_limit=10
     disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13517,7 +13970,7 @@ COPY INTO books FROM 's3://databend/books.csv'
     )
     FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14487,7 +14940,7 @@ GrantShareObject(
 ---------- Input ----------
 GRANT all ON stage s1 TO a;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON STAGE s1 TO USER 'a'@'%'
+GRANT ALL PRIVILEGES ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14509,7 +14962,7 @@ Grant(
 ---------- Input ----------
 GRANT read ON stage s1 TO a;
 ---------- Output ---------
-GRANT Read ON STAGE s1 TO USER 'a'@'%'
+GRANT Read ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14534,7 +14987,7 @@ Grant(
 ---------- Input ----------
 GRANT write ON stage s1 TO a;
 ---------- Output ---------
-GRANT Write ON STAGE s1 TO USER 'a'@'%'
+GRANT Write ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14559,7 +15012,7 @@ Grant(
 ---------- Input ----------
 REVOKE write ON stage s1 FROM a;
 ---------- Output ---------
-REVOKE Write ON STAGE s1 FROM USER 'a'@'%'
+REVOKE Write ON  STAGE s1 FROM USER 'a'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14584,7 +15037,7 @@ Revoke(
 ---------- Input ----------
 GRANT all ON UDF a TO 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14609,7 +15062,7 @@ Grant(
 ---------- Input ----------
 GRANT usage ON UDF a TO 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON UDF a TO USER 'test-grant'@'%'
+GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14634,7 +15087,7 @@ Grant(
 ---------- Input ----------
 REVOKE usage ON UDF a FROM 'test-grant';
 ---------- Output ---------
-REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14659,7 +15112,7 @@ Revoke(
 ---------- Input ----------
 REVOKE all ON UDF a FROM 'test-grant';
 ---------- Output ---------
-REVOKE USAGE ON UDF a FROM USER 'test-grant'@'%'
+REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14917,26 +15370,20 @@ ShowShares(
 ---------- Input ----------
 SHOW GRANTS ON TABLE db1.tb1;
 ---------- Output ---------
-SHOW GRANTS ON TABLE db1.tb1
+SHOW GRANTS ON TABLE db1.tb1 
 ---------- AST ------------
-ShowObjectGrantPrivileges(
-    ShowObjectGrantPrivilegesStmt {
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
         object: Table(
-            Identifier {
-                span: Some(
-                    21..24,
-                ),
-                name: "db1",
-                quote: None,
-                is_hole: false,
-            },
-            Identifier {
-                span: Some(
-                    25..28,
-                ),
-                name: "tb1",
-                quote: None,
-                is_hole: false,
+            Some(
+                "db1",
+            ),
+            "tb1",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -14946,18 +15393,17 @@ ShowObjectGrantPrivileges(
 ---------- Input ----------
 SHOW GRANTS ON DATABASE db;
 ---------- Output ---------
-SHOW GRANTS ON DATABASE db
+SHOW GRANTS ON DATABASE db 
 ---------- AST ------------
-ShowObjectGrantPrivileges(
-    ShowObjectGrantPrivilegesStmt {
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
         object: Database(
-            Identifier {
-                span: Some(
-                    24..26,
-                ),
-                name: "db",
-                quote: None,
-                is_hole: false,
+            "db",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
             },
         ),
     },
@@ -18367,6 +18813,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 900,
+                0,
             ),
         ),
         session_parameters: {
@@ -18408,6 +18855,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 15,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18444,6 +18892,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1215,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18501,7 +18950,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -18523,7 +18972,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort",
+            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
         ),
     },
 )
@@ -18741,6 +19190,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18785,6 +19235,7 @@ CreateTask(
         schedule_opts: Some(
             IntervalSecs(
                 1,
+                0,
             ),
         ),
         session_parameters: {},
@@ -18915,6 +19366,7 @@ AlterTask(
             schedule: Some(
                 IntervalSecs(
                     780,
+                    0,
                 ),
             ),
             suspend_task_after_num_failures: Some(
@@ -18946,6 +19398,7 @@ AlterTask(
             schedule: Some(
                 IntervalSecs(
                     5,
+                    0,
                 ),
             ),
             suspend_task_after_num_failures: Some(
@@ -19310,7 +19763,7 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -19365,7 +19818,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -20133,7 +20586,7 @@ Query(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20157,7 +20610,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  d20_0014.t TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20182,7 +20635,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  STAGE s1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -20204,7 +20657,7 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner'
+GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {

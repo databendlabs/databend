@@ -22,6 +22,7 @@ use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
@@ -56,17 +57,15 @@ impl PipelineBuilder {
 
                 if projection.len() < input_schema.fields().len() {
                     // Only if the projection is not a full projection, we need to add a projection transform.
-                    self.main_pipeline.add_transform(|input, output| {
-                        Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                            input,
-                            output,
-                            input_schema.num_fields(),
-                            self.func_ctx.clone(),
+                    self.main_pipeline.add_transformer(|| {
+                        CompoundBlockOperator::new(
                             vec![BlockOperator::Project {
                                 projection: projection.clone(),
                             }],
-                        )))
-                    })?;
+                            self.func_ctx.clone(),
+                            input_schema.num_fields(),
+                        )
+                    });
                 }
             }
         }
@@ -87,7 +86,11 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        if sort.window_partition.is_empty() {
+            self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        } else {
+            self.build_window_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        }
     }
 
     pub(crate) fn build_sort_pipeline(
@@ -146,6 +149,59 @@ impl PipelineBuilder {
             }
         }
     }
+
+    pub(crate) fn build_window_sort_pipeline(
+        &mut self,
+        plan_schema: DataSchemaRef,
+        sort_desc: Vec<SortColumnDescription>,
+        limit: Option<usize>,
+        after_exchange: Option<bool>,
+    ) -> Result<()> {
+        let block_size = self.settings.get_max_block_size()? as usize;
+        let max_threads = self.settings.get_max_threads()? as usize;
+        let sort_desc = Arc::new(sort_desc);
+
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+            self.main_pipeline.try_resize(max_threads)?;
+        }
+
+        let mut builder =
+            SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
+                .with_partial_block_size(block_size)
+                .with_final_block_size(block_size)
+                .with_limit(limit);
+
+        // Build for single node mode cause it's window shuffle
+        // We build the full sort pipeline for it
+        match after_exchange {
+            Some(true) => {
+                // Build for the coordinator node.
+                // We only build a `MultiSortMergeTransform`,
+                // as the data is already sorted in each cluster node.
+                // The input number of the transform is equal to the number of cluster nodes.
+                if self.main_pipeline.output_len() > 1 {
+                    try_add_multi_sort_merge(
+                        &mut self.main_pipeline,
+                        plan_schema,
+                        block_size,
+                        limit,
+                        sort_desc,
+                        true,
+                    )
+                } else {
+                    builder = builder.remove_order_col_at_last();
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
+                }
+            }
+            _ => {
+                // Build for each single node mode.
+                // We build the full sort pipeline for it.
+                builder = builder.remove_order_col_at_last();
+                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+            }
+        }
+    }
 }
 
 pub struct SortPipelineBuilder {
@@ -197,14 +253,7 @@ impl SortPipelineBuilder {
 
     pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         // Partial sort
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
-                input,
-                output,
-                self.limit,
-                self.sort_desc.clone(),
-            )?))
-        })?;
+        pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
 
         self.build_merge_sort_pipeline(pipeline, false)
     }

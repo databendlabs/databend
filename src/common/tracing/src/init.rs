@@ -22,9 +22,11 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use log::LevelFilter;
 use log::Log;
+use log::Metadata;
 use minitrace::prelude::*;
 use opentelemetry_otlp::WithExportConfig;
 
+use crate::config::OTLPProtocol;
 use crate::loggers::formatter;
 use crate::loggers::new_file_log_writer;
 use crate::loggers::MinitraceLogger;
@@ -71,17 +73,19 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
 
 #[allow(dyn_drop)]
 pub fn init_logging(
-    name: &str,
+    log_name: &str,
     cfg: &Config,
     mut labels: BTreeMap<String, String>,
 ) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
     let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
-    let log_name = name;
+    if !labels.contains_key("service") {
+        labels.insert("service".to_string(), log_name.to_string());
+    }
     let trace_name = match labels.get("node_id") {
-        None => name.to_string(),
+        None => log_name.to_string(),
         Some(node_id) => format!(
             "{}@{}",
-            name,
+            log_name,
             if node_id.len() >= 7 {
                 &node_id[0..7]
             } else {
@@ -89,15 +93,44 @@ pub fn init_logging(
             }
         ),
     };
-    // use name as service name if not specified
-    if !labels.contains_key("service") {
-        labels.insert("service".to_string(), trace_name.to_string());
-    }
 
     // Initialize tracing reporter
     if cfg.tracing.on {
-        let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
-
+        let endpoint = cfg.tracing.otlp.endpoint.clone();
+        let mut kvs = cfg
+            .tracing
+            .otlp
+            .labels
+            .iter()
+            .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
+            .collect::<Vec<_>>();
+        kvs.push(opentelemetry::KeyValue::new(
+            "service.name",
+            trace_name.clone(),
+        ));
+        for (k, v) in &labels {
+            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
+        }
+        let exporter = match cfg.tracing.otlp.protocol {
+            OTLPProtocol::Grpc => opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(endpoint)
+                .with_protocol(opentelemetry_otlp::Protocol::Grpc)
+                .with_timeout(Duration::from_secs(
+                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                ))
+                .build_span_exporter()
+                .expect("initialize oltp grpc exporter"),
+            OTLPProtocol::Http => opentelemetry_otlp::new_exporter()
+                .http()
+                .with_endpoint(endpoint)
+                .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
+                .with_timeout(Duration::from_secs(
+                    opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                ))
+                .build_span_exporter()
+                .expect("initialize oltp http exporter"),
+        };
         let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
             // Init runtime with 2 threads.
             let rt = tokio::runtime::Builder::new_multi_thread()
@@ -107,25 +140,10 @@ pub fn init_logging(
                 .unwrap();
             let reporter = rt.block_on(async {
                 minitrace_opentelemetry::OpenTelemetryReporter::new(
-                    opentelemetry_otlp::new_exporter()
-                        .tonic()
-                        .with_endpoint(otlp_endpoint)
-                        .with_protocol(opentelemetry_otlp::Protocol::Grpc)
-                        .with_timeout(Duration::from_secs(
-                            opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                        ))
-                        .build_span_exporter()
-                        .expect("initialize oltp exporter"),
+                    exporter,
                     opentelemetry::trace::SpanKind::Server,
-                    Cow::Owned(opentelemetry_sdk::Resource::new([
-                        opentelemetry::KeyValue::new("service.name", trace_name.clone()),
-                    ])),
-                    opentelemetry::InstrumentationLibrary::new(
-                        trace_name,
-                        None::<&'static str>,
-                        None::<&'static str>,
-                        None,
-                    ),
+                    Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
+                    opentelemetry::InstrumentationLibrary::builder(trace_name).build(),
                 )
             });
             (rt, reporter)
@@ -181,10 +199,7 @@ pub fn init_logging(
 
     // OpenTelemetry logger
     if cfg.otlp.on {
-        let mut labels = labels.clone();
-        labels.insert("category".to_string(), "system".to_string());
-        labels.extend(cfg.otlp.labels.clone());
-        let logger = OpenTelemetryLogger::new(log_name, &cfg.otlp.endpoint, labels);
+        let logger = OpenTelemetryLogger::new(log_name, "system", &cfg.otlp.endpoint, &labels);
         let dispatch = fern::Dispatch::new()
             .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
             .format(formatter("json"))
@@ -215,11 +230,8 @@ pub fn init_logging(
             guards.push(Box::new(flush_guard));
             query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
         }
-        if !cfg.query.otlp_endpoint.is_empty() {
-            let mut labels = labels.clone();
-            labels.insert("category".to_string(), "query".to_string());
-            labels.extend(cfg.query.labels.clone());
-            let logger = OpenTelemetryLogger::new(log_name, &cfg.query.otlp_endpoint, labels);
+        if let Some(endpoint) = &cfg.query.otlp {
+            let logger = OpenTelemetryLogger::new(log_name, "query", endpoint, &labels);
             query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -233,11 +245,8 @@ pub fn init_logging(
             profile_logger =
                 profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
         }
-        if !cfg.profile.otlp_endpoint.is_empty() {
-            let mut labels = labels.clone();
-            labels.insert("category".to_string(), "profile".to_string());
-            labels.extend(cfg.profile.labels.clone());
-            let logger = OpenTelemetryLogger::new(log_name, &cfg.profile.otlp_endpoint, labels);
+        if let Some(endpoint) = &cfg.profile.otlp {
+            let logger = OpenTelemetryLogger::new(log_name, "profile", endpoint, &labels);
             profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
         }
     }
@@ -257,16 +266,7 @@ pub fn init_logging(
                 .level_for("databend::log::query", LevelFilter::Off)
                 .level_for("databend::log::profile", LevelFilter::Off)
                 .level_for("databend::log::structlog", LevelFilter::Off)
-                .filter({
-                    let prefix_filter = cfg.file.prefix_filter.clone();
-                    move |meta| {
-                        if prefix_filter.is_empty() || meta.target().starts_with(&prefix_filter) {
-                            true
-                        } else {
-                            meta.level() <= LevelFilter::Error
-                        }
-                    }
-                })
+                .filter(make_log_filter(&cfg.file.prefix_filter))
                 .chain(normal_logger),
         )
         .chain(
@@ -295,4 +295,36 @@ pub fn init_logging(
     }
 
     guards
+}
+
+/// Creates a log filter that matches log entries based on specified target prefixes or severity.
+fn make_log_filter(prefix_filter: &str) -> impl Fn(&Metadata) -> bool {
+    let filters = prefix_filter
+        .split(',')
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>();
+
+    move |meta| match_prefix_many(meta, &filters)
+}
+
+fn match_prefix_many(meta: &Metadata, prefixes: &[String]) -> bool {
+    if is_severe(meta) {
+        return true;
+    }
+
+    for p in prefixes {
+        if meta.target().starts_with(p) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Return true if the log level is considered severe.
+///
+/// Severe logs ignores the prefix filter.
+fn is_severe(meta: &Metadata) -> bool {
+    // For other component, output logs with level <= WARN
+    meta.level() <= LevelFilter::Warn
 }

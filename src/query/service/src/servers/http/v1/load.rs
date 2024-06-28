@@ -128,6 +128,16 @@ pub async fn streaming_load(
         }
     }
 
+    if !settings
+        .get_enable_streaming_load()
+        .map_err(InternalServerError)?
+    {
+        return Err(poem::Error::from_string(
+            "Streaming load will be removed soon. In this version, if you still need it, set enable_streaming_load=1 in HTTP header.".to_string(),
+            StatusCode::METHOD_NOT_ALLOWED,
+        ));
+    }
+
     let mut planner = Planner::new(context.clone());
     let (mut plan, extras) = planner
         .plan_sql(insert_sql)

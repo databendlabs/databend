@@ -82,6 +82,23 @@ pub struct RaftConfig {
     /// The size of chunk for transmitting snapshot. The default is 64MB
     pub snapshot_chunk_size: u64,
 
+    /// Whether to check keys fed to snapshot are sorted.
+    pub snapshot_db_debug_check: bool,
+
+    /// The maximum number of keys allowed in a block within a snapshot db.
+    ///
+    /// A block serves as the caching unit in a snapshot database.
+    /// Smaller blocks enable more granular cache control but may increase the index size.
+    pub snapshot_db_block_keys: u64,
+
+    /// The total block to cache.
+    pub snapshot_db_block_cache_item: u64,
+
+    /// The total cache size for snapshot blocks.
+    ///
+    /// By default it is 1GB.
+    pub snapshot_db_block_cache_size: u64,
+
     /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
     /// Otherwise it opens the previous one.
     /// This is mainly for testing purpose.
@@ -109,6 +126,9 @@ pub struct RaftConfig {
 
     /// For test only: specifies the tree name prefix
     pub sled_tree_prefix: String,
+
+    /// The maximum memory in MB that sled can use for caching.
+    pub sled_max_cache_size_mb: u64,
 
     ///  The node name. If the user specifies a name,
     /// the user-supplied name is used, if not, the default name is used.
@@ -142,12 +162,19 @@ impl Default for RaftConfig {
             install_snapshot_timeout: 4000,
             max_applied_log_to_keep: 1000,
             snapshot_chunk_size: 4194304, // 4MB
+
+            snapshot_db_debug_check: true,
+            snapshot_db_block_keys: 8000,
+            snapshot_db_block_cache_item: 1024,
+            snapshot_db_block_cache_size: 1073741824,
+
             single: false,
             join: vec![],
             leave_via: vec![],
             leave_id: None,
             id: 0,
             sled_tree_prefix: "".to_string(),
+            sled_max_cache_size_mb: 10 * 1024,
             cluster_name: "foo_cluster".to_string(),
             wait_leader_timeout: 70000,
         }
@@ -155,6 +182,20 @@ impl Default for RaftConfig {
 }
 
 impl RaftConfig {
+    pub fn to_rotbl_config(&self) -> rotbl::v001::Config {
+        rotbl::v001::Config::default()
+            .with_debug_check(self.snapshot_db_debug_check)
+            .with_block_config(
+                rotbl::v001::BlockConfig::default()
+                    .with_max_items(self.snapshot_db_block_keys as usize),
+            )
+            .with_block_cache_config(
+                rotbl::v001::BlockCacheConfig::default()
+                    .with_max_items(self.snapshot_db_block_cache_item as usize)
+                    .with_capacity(self.snapshot_db_block_cache_size as usize),
+            )
+    }
+
     pub fn raft_api_listen_host_string(&self) -> String {
         format!("{}:{}", self.raft_listen_host, self.raft_api_port)
     }
@@ -194,7 +235,7 @@ impl RaftConfig {
     ///
     /// Raft will choose a random timeout in this range for next election.
     pub fn election_timeout(&self) -> (u64, u64) {
-        (self.heartbeat_interval * 5, self.heartbeat_interval * 7)
+        (self.heartbeat_interval * 2, self.heartbeat_interval * 3)
     }
 
     pub fn check(&self) -> std::result::Result<(), MetaStartupError> {
@@ -226,5 +267,10 @@ impl RaftConfig {
     /// sled does not allow to open multiple `sled::Db` in one process.
     pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
         format!("{}{}", self.sled_tree_prefix, name)
+    }
+
+    /// Return the size of sled cache in bytes.
+    pub fn sled_cache_size(&self) -> u64 {
+        self.sled_max_cache_size_mb * 1024 * 1024
     }
 }

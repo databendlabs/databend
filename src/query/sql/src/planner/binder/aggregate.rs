@@ -206,10 +206,11 @@ impl<'a> AggregateRewriter<'a> {
                     column: column_binding,
                 }));
             } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
+                let index = self.metadata.write().add_derived_column(
+                    name.clone(),
+                    arg.data_type()?,
+                    Some(arg.clone()),
+                );
 
                 // Generate a ColumnBinding for each argument of aggregates
                 let column_binding = ColumnBindingBuilder::new(
@@ -237,6 +238,7 @@ impl<'a> AggregateRewriter<'a> {
         let index = self.metadata.write().add_derived_column(
             aggregate.display_name.clone(),
             *aggregate.return_type.clone(),
+            Some(ScalarExpr::AggregateFunction(aggregate.clone())),
         );
 
         let replaced_agg = AggregateFunction {
@@ -360,11 +362,10 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
-    #[async_backtrace::framed]
-    pub async fn analyze_group_items<'a>(
+    pub fn analyze_group_items(
         &mut self,
         bind_context: &mut BindContext,
-        select_list: &SelectList<'a>,
+        select_list: &SelectList<'_>,
         group_by: &GroupBy,
     ) -> Result<()> {
         let mut available_aliases = vec![];
@@ -377,7 +378,11 @@ impl Binder {
                     column.column_name = item.alias.clone();
                     column
                 } else {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+                    self.create_derived_column_binding(
+                        item.alias.clone(),
+                        item.scalar.data_type()?,
+                        Some(item.scalar.clone()),
+                    )
                 };
                 available_aliases.push((column, item.scalar.clone()));
             }
@@ -385,17 +390,14 @@ impl Binder {
 
         bind_context.set_expr_context(ExprContext::GroupClaue);
         match group_by {
-            GroupBy::Normal(exprs) => {
-                self.resolve_group_items(
-                    bind_context,
-                    select_list,
-                    exprs,
-                    &available_aliases,
-                    false,
-                    &mut vec![],
-                )
-                .await
-            }
+            GroupBy::Normal(exprs) => self.resolve_group_items(
+                bind_context,
+                select_list,
+                exprs,
+                &available_aliases,
+                false,
+                &mut vec![],
+            ),
             GroupBy::All => {
                 let groups = self.resolve_group_all(select_list)?;
                 self.resolve_group_items(
@@ -406,11 +408,9 @@ impl Binder {
                     false,
                     &mut vec![],
                 )
-                .await
             }
             GroupBy::GroupingSets(sets) => {
                 self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)
-                    .await
             }
             // TODO: avoid too many clones.
             GroupBy::Rollup(exprs) => {
@@ -420,7 +420,6 @@ impl Binder {
                     sets.push(exprs[0..i].to_vec());
                 }
                 self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
-                    .await
             }
             GroupBy::Cube(exprs) => {
                 // CUBE (a,b) => GROUPING SETS ((a,b),(a),(b),()) // All subsets
@@ -428,13 +427,11 @@ impl Binder {
                     .flat_map(|count| exprs.clone().into_iter().combinations(count))
                     .collect::<Vec<_>>();
                 self.resolve_grouping_sets(bind_context, select_list, &sets, &available_aliases)
-                    .await
             }
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind_aggregate(
+    pub fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,
@@ -484,8 +481,7 @@ impl Binder {
         Ok(new_expr)
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_grouping_sets(
+    fn resolve_grouping_sets(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
@@ -501,8 +497,7 @@ impl Binder {
                 available_aliases,
                 true,
                 &mut grouping_sets,
-            )
-            .await?;
+            )?;
         }
         let agg_info = &mut bind_context.aggregate_info;
         // `grouping_sets` stores formatted `ScalarExpr` for each grouping set.
@@ -528,6 +523,7 @@ impl Binder {
             let dummy = self.create_derived_column_binding(
                 format!("_dup_group_item_{i}"),
                 item.scalar.data_type()?,
+                Some(item.scalar.clone()),
             );
             dup_group_items.push((dummy.index, *dummy.data_type));
         }
@@ -535,6 +531,7 @@ impl Binder {
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
+            None,
         );
 
         let bound_grouping_id_col = BoundColumnRef {
@@ -581,8 +578,7 @@ impl Binder {
         Ok(groups)
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_group_items(
+    fn resolve_group_items(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
@@ -614,7 +610,11 @@ impl Binder {
                     {
                         column_ref.column.clone()
                     } else {
-                        self.create_derived_column_binding(alias, scalar.data_type()?)
+                        self.create_derived_column_binding(
+                            alias,
+                            scalar.data_type()?,
+                            Some(scalar.clone()),
+                        )
                     };
                     bind_context.aggregate_info.group_items.push(ScalarItem {
                         scalar: scalar.clone(),
@@ -640,7 +640,6 @@ impl Binder {
             );
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)
-                .await
                 .or_else(|e| Self::resolve_alias_item(bind_context, expr, available_aliases, e))?;
 
             if collect_grouping_sets && !grouping_sets.last().unwrap().contains(&scalar_expr) {
@@ -665,9 +664,11 @@ impl Binder {
             {
                 *index
             } else {
-                self.metadata
-                    .write()
-                    .add_derived_column(group_item_name.clone(), scalar_expr.data_type()?)
+                self.metadata.write().add_derived_column(
+                    group_item_name.clone(),
+                    scalar_expr.data_type()?,
+                    Some(scalar_expr.clone()),
+                )
             };
 
             bind_context.aggregate_info.group_items.push(ScalarItem {

@@ -19,10 +19,15 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::physical_plans::AsyncFunction;
+use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
+use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -35,6 +40,7 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
@@ -56,6 +62,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::plans::CacheSource;
 use crate::plans::JoinType;
 
 impl PhysicalPlan {
@@ -107,9 +114,24 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
                 write!(f, "{}", merge_into_row_id_apply)?
             }
             PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
+            PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
+            PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
+                write!(f, "{}", merge_into_manipulate)?
+            }
+            PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
+                write!(f, "{}", merge_into_organize)?
+            }
+            PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
+                write!(f, "{}", merge_into_serialize)?
+            }
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
+            PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
+                write!(f, "{}", recursive_cte_scan)?
+            }
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
+            PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
@@ -166,6 +188,39 @@ impl Display for ConstantTableScan {
             .collect::<Vec<String>>();
 
         write!(f, "ConstantTableScan: {}", columns.join(", "))
+    }
+}
+
+impl Display for ExpressionScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let columns = self
+            .values
+            .iter()
+            .enumerate()
+            .map(|(i, value)| {
+                let column = value
+                    .iter()
+                    .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .join(", ");
+                format!("column {}: [{}]", i, column)
+            })
+            .collect::<Vec<String>>();
+
+        write!(f, "ExpressionScan: {}", columns.join(", "))
+    }
+}
+
+impl Display for CacheScan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.cache_source {
+            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+                write!(
+                    f,
+                    "CacheScan: [cache_index: {}, column_indexes: {:?}]",
+                    cache_index, column_indexes
+                )
+            }
+        }
     }
 }
 
@@ -482,6 +537,30 @@ impl Display for MergeIntoAddRowNumber {
 impl Display for MergeIntoAppendNotMatched {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoAppendNotMatched")
+    }
+}
+
+impl Display for MergeIntoSplit {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoSplit")
+    }
+}
+
+impl Display for MergeIntoManipulate {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoManipulate")
+    }
+}
+
+impl Display for MergeIntoOrganize {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoOrganize")
+    }
+}
+
+impl Display for MergeIntoSerialize {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MergeIntoSerialize")
     }
 }
 

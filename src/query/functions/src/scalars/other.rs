@@ -79,6 +79,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default().non_deterministic(),
     );
 
+    registry.properties.insert(
+        "gen_random_uuid".to_string(),
+        FunctionProperty::default().non_deterministic(),
+    );
+
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_size",
         |_, _| FunctionDomain::Full,
@@ -228,7 +233,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 offsets.push(offsets.last().unwrap() + 36u64);
                 write!(&mut values, "{:x}", value).unwrap();
             }
-
             let col = StringColumn::new(values.into(), offsets.into());
             Value::Column(col)
         },

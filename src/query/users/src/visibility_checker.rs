@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
@@ -42,7 +43,11 @@ pub struct GrantObjectVisibilityChecker {
 }
 
 impl GrantObjectVisibilityChecker {
-    pub fn new(user: &UserInfo, available_roles: &Vec<RoleInfo>) -> Self {
+    pub fn new(
+        user: &UserInfo,
+        available_roles: &Vec<RoleInfo>,
+        ownership_objects: &[OwnershipObject],
+    ) -> Self {
         let mut granted_global_udf = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
@@ -147,6 +152,33 @@ impl GrantObjectVisibilityChecker {
                             granted_read_stages.insert(stage.to_string());
                         }
                     }
+                }
+            }
+        }
+
+        for ownership_object in ownership_objects {
+            match ownership_object {
+                OwnershipObject::Database {
+                    catalog_name,
+                    db_id,
+                } => {
+                    granted_databases_id.insert((catalog_name.to_string(), *db_id));
+                }
+                OwnershipObject::Table {
+                    catalog_name,
+                    db_id,
+                    table_id,
+                } => {
+                    granted_tables_id.insert((catalog_name.to_string(), *db_id, *table_id));
+                    // if table is visible, the table's database is also treated as visible
+                    extra_databases_id.insert((catalog_name.to_string(), *db_id));
+                }
+                OwnershipObject::Stage { name } => {
+                    granted_write_stages.insert(name.to_string());
+                    granted_read_stages.insert(name.to_string());
+                }
+                OwnershipObject::UDF { name } => {
+                    granted_udfs.insert(name.to_string());
                 }
             }
         }

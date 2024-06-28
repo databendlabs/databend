@@ -86,7 +86,6 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         table: fixture.default_table_name(),
         index_name: index_name.clone(),
         segment_locs: None,
-        need_lock: true,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
     let _ = interpreter.execute(ctx.clone()).await?;

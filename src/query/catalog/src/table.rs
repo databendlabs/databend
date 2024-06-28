@@ -41,7 +41,6 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 
-use crate::lock::Lock;
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
@@ -310,7 +309,6 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[async_backtrace::framed]
     async fn generage_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -339,10 +337,9 @@ pub trait Table: Sync + Send {
     async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, lock, limit);
+        let (_, _) = (ctx, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The operation 'compact_segments' is not supported for the table '{}', which is using the '{}' engine.",

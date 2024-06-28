@@ -20,9 +20,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Mutex as TokioMutex;
 use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::StageAttachment;
@@ -60,7 +62,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryError;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
-use crate::sessions::short_sql;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 use crate::sessions::SessionType;
@@ -474,15 +475,16 @@ impl HttpQuery {
         http_query_runtime_instance.runtime().try_spawn(
             async move {
                 let state = state_clone.clone();
-                if let Err(e) = ExecuteState::try_start_query(
+                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
                     state,
                     sql,
                     session,
                     ctx_clone.clone(),
                     block_sender,
                     format_settings_clone,
-                )
+                ))
                 .await
+                .flatten()
                 {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
@@ -588,7 +590,8 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        if !self.is_txn_mgr_saved.load(Ordering::Relaxed)
+        if txn_state != TxnState::AutoCommit
+            && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
             && matches!(executor.state, ExecuteState::Stopped(_))
             && self
                 .is_txn_mgr_saved

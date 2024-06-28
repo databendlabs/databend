@@ -16,8 +16,6 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -30,6 +28,8 @@ use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableAlias;
 use crate::ast::TableReference;
+use crate::ParseError;
+use crate::Result;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeUpdateExpr {
@@ -52,7 +52,6 @@ impl Display for MergeUpdateExpr {
 pub enum MatchOperation {
     Update {
         update_list: Vec<MergeUpdateExpr>,
-        #[drive(skip)]
         is_star: bool,
     },
     Delete,
@@ -68,7 +67,6 @@ pub struct MatchedClause {
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
-    #[drive(skip)]
     pub is_star: bool,
 }
 
@@ -190,7 +188,7 @@ impl MergeIntoStmt {
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
                 if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ErrorCode::SemanticError(
+                    return Err(ParseError(None,
                         "when there are multi matched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
@@ -204,7 +202,7 @@ impl MergeIntoStmt {
         if clauses.len() > 1 {
             for (idx, clause) in clauses.iter().enumerate() {
                 if clause.selection.is_none() && idx < clauses.len() - 1 {
-                    return Err(ErrorCode::SemanticError(
+                    return Err(ParseError(None,
                         "when there are multi unmatched clauses, we must have a condition for every one except the last one".to_string(),
                     ));
                 }
@@ -218,9 +216,7 @@ impl MergeIntoStmt {
 pub enum MergeSource {
     StreamingV2 {
         settings: FileFormatOptions,
-        #[drive(skip)]
         on_error_mode: Option<String>,
-        #[drive(skip)]
         start: usize,
     },
 
@@ -238,11 +234,8 @@ pub enum MergeSource {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct StreamingSource {
-    #[drive(skip)]
     settings: BTreeMap<String, String>,
-    #[drive(skip)]
     on_error_mode: Option<String>,
-    #[drive(skip)]
     start: usize,
 }
 

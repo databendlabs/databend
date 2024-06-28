@@ -1324,6 +1324,7 @@ fn add_eager_count(final_agg: &mut Aggregate, metadata: MetadataRef) -> (usize, 
     let eager_count_index = metadata.write().add_derived_column(
         "count(*)".to_string(),
         DataType::Number(NumberDataType::UInt64),
+        None,
     );
     if let ScalarExpr::AggregateFunction(agg) = &mut eager_count_aggregation_function.scalar {
         agg.func_name = "count".to_string();
@@ -1390,6 +1391,7 @@ fn decompose_avg(
     let count_index = metadata.write().add_derived_column(
         format!("avg_count_{}({}.{})", &func_name, table_name, column_name),
         count_aggregation_function.scalar.data_type()?,
+        None,
     );
 
     // AVG => COUNT
@@ -1417,6 +1419,7 @@ fn update_aggregate_and_eval(
     let new_index = metadata.write().add_derived_column(
         format!("_eager_final_{}", &func_name),
         final_aggregate_function.scalar.data_type()?,
+        None,
     );
 
     // Modify final aggregate functions.
@@ -1464,6 +1467,7 @@ fn create_eager_count_multiply_scalar_item(
     let new_index = metadata.write().add_derived_column(
         format!("{} * _eager_count", aggregate_function.display_name),
         aggregate_function.args[0].data_type()?,
+        None,
     );
 
     let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {

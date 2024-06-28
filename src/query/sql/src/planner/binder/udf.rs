@@ -22,6 +22,7 @@ use databend_common_ast::ast::UDFDefinition;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_meta_app::principal::LambdaUDF;
@@ -41,7 +42,8 @@ use crate::Binder;
 
 impl Binder {
     fn is_allowed_language(language: &str) -> bool {
-        let allowed_languages: HashSet<&str> = ["javascript", "wasm"].iter().cloned().collect();
+        let allowed_languages: HashSet<&str> =
+            ["javascript", "wasm", "python"].iter().cloned().collect();
         allowed_languages.contains(&language.to_lowercase().as_str())
     }
 
@@ -85,12 +87,21 @@ impl Binder {
                         "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
                     ));
                 }
-
                 let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-                if udf_server_allow_list
-                    .iter()
-                    .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
-                {
+                let url_addr =
+                    url::Url::parse(address).map_err_to_code(ErrorCode::InvalidArgument, || {
+                        format!(
+                            "udf server address '{address}' is invalid, please check the address",
+                        )
+                    })?;
+
+                if udf_server_allow_list.iter().all(|allow_url| {
+                    if let Ok(allow_url) = url::Url::parse(allow_url) {
+                        allow_url.host_str() != url_addr.host_str()
+                    } else {
+                        true
+                    }
+                }) {
                     return Err(ErrorCode::InvalidArgument(format!(
                         "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
                     )));
@@ -148,7 +159,7 @@ impl Binder {
 
                 if !Self::is_allowed_language(language) {
                     return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF language '{language}', must be javascript or wasm"
+                        "Unallowed UDF language '{language}', must be python, javascript or wasm"
                     )));
                 }
 

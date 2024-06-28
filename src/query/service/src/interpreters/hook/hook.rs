@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -35,7 +36,7 @@ pub struct HookOperator {
     database: String,
     table: String,
     mutation_kind: MutationKind,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 }
 
 impl HookOperator {
@@ -45,7 +46,7 @@ impl HookOperator {
         database: String,
         table: String,
         mutation_kind: MutationKind,
-        need_lock: bool,
+        lock_opt: LockTableOption,
     ) -> Self {
         Self {
             ctx,
@@ -53,7 +54,7 @@ impl HookOperator {
             database,
             table,
             mutation_kind,
-            need_lock,
+            lock_opt,
         }
     }
 
@@ -105,7 +106,7 @@ impl HookOperator {
             pipeline,
             compact_target,
             trace_ctx,
-            self.need_lock,
+            self.lock_opt.clone(),
         )
         .await;
     }
@@ -122,6 +123,6 @@ impl HookOperator {
             table: self.table.to_owned(),
         };
 
-        hook_refresh(self.ctx.clone(), pipeline, refresh_desc, self.need_lock).await;
+        hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
     }
 }

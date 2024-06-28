@@ -166,7 +166,7 @@ impl BlockPruner {
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
                                 let keep = bloom_pruner
-                                    .should_keep(&index_location, index_size, column_ids)
+                                    .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &block_meta)
                                     .await
                                     && limit_pruner.within_limit(row_count);
                                 if keep {

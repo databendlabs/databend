@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::lock::Lock;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -25,9 +24,8 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -58,7 +56,6 @@ impl FuseTable {
     pub(crate) async fn do_compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        lock: Arc<dyn Lock>,
         num_segment_limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self
@@ -72,7 +69,6 @@ impl FuseTable {
 
         let mut segment_mutator = SegmentCompactMutator::try_create(
             ctx.clone(),
-            lock,
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
@@ -224,15 +220,9 @@ impl FuseTable {
 
         if is_lazy {
             pipeline.try_resize(1)?;
-            pipeline.add_transform(|input, output| {
-                let mutation_aggregator =
-                    TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact);
-                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                    input,
-                    output,
-                    mutation_aggregator,
-                )))
-            })?;
+            pipeline.add_async_accumulating_transformer(|| {
+                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact)
+            });
         }
         Ok(())
     }

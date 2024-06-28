@@ -84,16 +84,14 @@ impl Dataframe {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
             let tenant = query_ctx.get_tenant();
-            let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(
-                    tenant.tenant_name(),
-                    catalog,
-                    database,
-                    "one",
-                    None,
-                    query_ctx.clone().get_abort_checker(),
-                )
-                .await?;
+            let table_meta: Arc<dyn Table> = binder.resolve_data_source(
+                tenant.tenant_name(),
+                catalog,
+                database,
+                "one",
+                None,
+                query_ctx.clone().get_abort_checker(),
+            )?;
 
             let table_index = metadata.write().add_table(
                 CATALOG_DEFAULT.to_owned(),
@@ -106,11 +104,9 @@ impl Dataframe {
                 false,
             );
 
-            binder
-                .bind_base_table(&bind_context, database, table_index, None)
-                .await
+            binder.bind_base_table(&bind_context, database, table_index, None)
         } else {
-            binder.bind_table_reference(&mut bind_context, &table).await
+            binder.bind_table_reference(&mut bind_context, &table)
         }?;
 
         Ok(Dataframe {
@@ -125,14 +121,14 @@ impl Dataframe {
         Self::scan(query_ctx, Some("system"), "one").await
     }
 
-    pub async fn select_columns(self, columns: &[&str]) -> Result<Self> {
+    pub fn select_columns(self, columns: &[&str]) -> Result<Self> {
         let schema = self.bind_context.output_schema();
         let select_list = parse_cols(schema, columns)?;
 
-        self.select_targets(&select_list).await
+        self.select_targets(&select_list)
     }
 
-    pub async fn select(self, expr_list: Vec<Expr>) -> Result<Self> {
+    pub fn select(self, expr_list: Vec<Expr>) -> Result<Self> {
         let select_list: Vec<SelectTarget> = expr_list
             .into_iter()
             .map(|expr| SelectTarget::AliasedExpr {
@@ -141,15 +137,14 @@ impl Dataframe {
             })
             .collect();
 
-        self.select_targets(&select_list).await
+        self.select_targets(&select_list)
     }
 
-    async fn select_targets(mut self, select_list: &[SelectTarget]) -> Result<Self> {
+    fn select_targets(mut self, select_list: &[SelectTarget]) -> Result<Self> {
         let bind_context = &mut self.bind_context;
         let select_list = self
             .binder
-            .normalize_select_list(bind_context, select_list)
-            .await?;
+            .normalize_select_list(bind_context, select_list)?;
 
         let (scalar_items, projections) = self.binder.analyze_projection(
             &bind_context.aggregate_info,
@@ -171,15 +166,14 @@ impl Dataframe {
     }
 
     pub async fn filter(mut self, expr: Expr) -> Result<Self> {
-        let (s_expr, _) = self
-            .binder
-            .bind_where(&mut self.bind_context, &[], &expr, self.s_expr)
-            .await?;
+        let (s_expr, _) =
+            self.binder
+                .bind_where(&mut self.bind_context, &[], &expr, self.s_expr)?;
         self.s_expr = s_expr;
         Ok(self)
     }
 
-    pub async fn count(mut self) -> Result<Self> {
+    pub fn count(mut self) -> Result<Self> {
         let select_list = [SelectTarget::AliasedExpr {
             expr: Box::new(Expr::FunctionCall {
                 span: None,
@@ -197,8 +191,7 @@ impl Dataframe {
 
         let mut select_list = self
             .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)
-            .await?;
+            .normalize_select_list(&mut self.bind_context, &select_list)?;
 
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
@@ -211,8 +204,7 @@ impl Dataframe {
 
         self.s_expr = self
             .binder
-            .bind_aggregate(&mut self.bind_context, self.s_expr)
-            .await?;
+            .bind_aggregate(&mut self.bind_context, self.s_expr)?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -242,8 +234,7 @@ impl Dataframe {
 
         let select_list = self
             .binder
-            .normalize_select_list(&mut self.bind_context, &select_list)
-            .await?;
+            .normalize_select_list(&mut self.bind_context, &select_list)?;
 
         let aliases = select_list
             .items
@@ -252,8 +243,7 @@ impl Dataframe {
             .collect::<Vec<_>>();
 
         self.binder
-            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)
-            .await?;
+            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
 
         if !self
             .bind_context
@@ -264,19 +254,16 @@ impl Dataframe {
         {
             self.s_expr = self
                 .binder
-                .bind_aggregate(&mut self.bind_context, self.s_expr)
-                .await?;
+                .bind_aggregate(&mut self.bind_context, self.s_expr)?;
         }
 
         if let Some(having) = &having {
-            let having = self
-                .binder
-                .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
-                .await?;
+            let having =
+                self.binder
+                    .analyze_aggregate_having(&mut self.bind_context, &aliases, having)?;
             self.s_expr = self
                 .binder
-                .bind_having(&mut self.bind_context, having, self.s_expr)
-                .await?;
+                .bind_having(&mut self.bind_context, having, self.s_expr)?;
         }
 
         let (scalar_items, projections) = self.binder.analyze_projection(
@@ -297,12 +284,12 @@ impl Dataframe {
         Ok(self)
     }
 
-    pub async fn distinct_col(self, columns: &[&str]) -> Result<Self> {
+    pub fn distinct_col(self, columns: &[&str]) -> Result<Self> {
         let select_list = parse_cols(self.bind_context.output_schema(), columns)?;
-        self.distinct_target(select_list).await
+        self.distinct_target(select_list)
     }
 
-    pub async fn distinct(self, select_list: Vec<Expr>) -> Result<Self> {
+    pub fn distinct(self, select_list: Vec<Expr>) -> Result<Self> {
         let select_list: Vec<SelectTarget> = select_list
             .into_iter()
             .map(|expr| SelectTarget::AliasedExpr {
@@ -310,14 +297,13 @@ impl Dataframe {
                 alias: None,
             })
             .collect();
-        self.distinct_target(select_list).await
+        self.distinct_target(select_list)
     }
 
-    pub async fn distinct_target(mut self, select_list: Vec<SelectTarget>) -> Result<Self> {
+    pub fn distinct_target(mut self, select_list: Vec<SelectTarget>) -> Result<Self> {
         let mut select_list = self
             .binder
-            .normalize_select_list(&mut self.bind_context, select_list.as_slice())
-            .await?;
+            .normalize_select_list(&mut self.bind_context, select_list.as_slice())?;
         self.binder
             .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
         let (mut scalar_items, projections) = self.binder.analyze_projection(
@@ -397,8 +383,7 @@ impl Dataframe {
         }
         let select_list = self
             .binder
-            .normalize_select_list(&mut self.bind_context, select_list.as_slice())
-            .await?;
+            .normalize_select_list(&mut self.bind_context, select_list.as_slice())?;
         let aliases = select_list
             .items
             .iter()
@@ -409,27 +394,21 @@ impl Dataframe {
             &self.bind_context.windows,
             &select_list,
         )?;
-        let order_items = self
-            .binder
-            .analyze_order_items(
-                &mut self.bind_context,
-                &mut scalar_items,
-                &aliases,
-                &projections,
-                &order,
-                distinct,
-            )
-            .await?;
-        self.s_expr = self
-            .binder
-            .bind_order_by(
-                &self.bind_context,
-                order_items,
-                &select_list,
-                &mut scalar_items,
-                self.s_expr,
-            )
-            .await?;
+        let order_items = self.binder.analyze_order_items(
+            &mut self.bind_context,
+            &mut scalar_items,
+            &aliases,
+            &projections,
+            &order,
+            distinct,
+        )?;
+        self.s_expr = self.binder.bind_order_by(
+            &self.bind_context,
+            order_items,
+            &select_list,
+            &mut scalar_items,
+            self.s_expr,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -508,8 +487,7 @@ impl Dataframe {
             .unwrap();
         let (join_expr, ctx) = self
             .binder
-            .bind_table_reference(&mut self.bind_context, &cross_joins)
-            .await?;
+            .bind_table_reference(&mut self.bind_context, &cross_joins)?;
 
         self.s_expr = join_expr;
         self.bind_context = ctx;
@@ -525,6 +503,7 @@ impl Dataframe {
             self.s_expr,
             dataframe.s_expr,
             false,
+            None,
         )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
@@ -540,6 +519,7 @@ impl Dataframe {
             self.s_expr,
             dataframe.s_expr,
             true,
+            None,
         )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;

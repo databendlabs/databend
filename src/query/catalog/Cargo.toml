@@ -6,34 +6,32 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-base = { path = "../../common/base" }
-databend-common-config = { path = "../config" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-expression = { path = "../expression" }
-databend-common-io = { path = "../../common/io" }
-databend-common-meta-api = { path = "../../meta/api" }
-databend-common-meta-app = { path = "../../meta/app" }
-databend-common-meta-store = { path = "../../meta/store" }
-databend-common-meta-types = { path = "../../meta/types" }
-databend-common-pipeline-core = { path = "../pipeline/core" }
-databend-common-settings = { path = "../settings" }
-databend-common-storage = { path = "../../common/storage" }
-databend-common-users = { path = "../users" }
-databend-storages-common-table-meta = { path = "../storages/common/table_meta" }
-databend-storages-common-txn = { path = "../storages/common/txn" }
-
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+databend-common-meta-api = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-meta-store = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-pipeline-core = { workspace = true }
+databend-common-settings = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-common-users = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+databend-storages-common-txn = { workspace = true }
 dyn-clone = "1.0.9"
 log = { workspace = true }
 parking_lot = { workspace = true }
@@ -48,3 +46,6 @@ xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"
 
 [dev-dependencies]
 goldenfile = "1.4"
+
+[lints]
+workspace = true

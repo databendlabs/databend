@@ -10,11 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = true
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-base = { path = "../base" }
-
-# Crates.io dependencies
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 defer = "0.2"
 fern = "0.6.2"
 humantime = "2.1.0"
@@ -29,3 +27,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
 tracing-appender = { workspace = true }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

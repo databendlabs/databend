@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
 
@@ -26,6 +27,9 @@ pub trait UserApi: Sync + Send {
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>>;
 
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>>;
+
+    /// Just get user count in meta
+    async fn get_raw_users(&self) -> Result<ListKVReply>;
 
     /// General user's grants update.
     ///

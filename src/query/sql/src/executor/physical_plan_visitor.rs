@@ -14,6 +14,13 @@
 
 use databend_common_exception::Result;
 
+use super::physical_plans::CacheScan;
+use super::physical_plans::ExpressionScan;
+use super::physical_plans::MergeIntoManipulate;
+use super::physical_plans::MergeIntoOrganize;
+use super::physical_plans::MergeIntoSerialize;
+use super::physical_plans::MergeIntoSplit;
+use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -67,6 +74,7 @@ pub trait PhysicalPlanReplacer {
         match plan {
             PhysicalPlan::TableScan(plan) => self.replace_table_scan(plan),
             PhysicalPlan::CteScan(plan) => self.replace_cte_scan(plan),
+            PhysicalPlan::RecursiveCteScan(plan) => self.replace_recursive_cte_scan(plan),
             PhysicalPlan::Filter(plan) => self.replace_filter(plan),
             PhysicalPlan::EvalScalar(plan) => self.replace_eval_scalar(plan),
             PhysicalPlan::AggregateExpand(plan) => self.replace_aggregate_expand(plan),
@@ -97,8 +105,14 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)
             }
+            PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
+            PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
+            PhysicalPlan::MergeIntoOrganize(plan) => self.replace_merge_into_organize(plan),
+            PhysicalPlan::MergeIntoSerialize(plan) => self.replace_merge_into_serialize(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
+            PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
+            PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
@@ -136,8 +150,20 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CteScan(plan.clone()))
     }
 
+    fn replace_recursive_cte_scan(&mut self, plan: &RecursiveCteScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::RecursiveCteScan(plan.clone()))
+    }
+
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
+    fn replace_expression_scan(&mut self, plan: &ExpressionScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ExpressionScan(plan.clone()))
+    }
+
+    fn replace_cache_scan(&mut self, plan: &CacheScan) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CacheScan(plan.clone()))
     }
 
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
@@ -233,6 +259,7 @@ pub trait PhysicalPlanReplacer {
             probe: Box::new(probe),
             build_keys: plan.build_keys.clone(),
             probe_keys: plan.probe_keys.clone(),
+            is_null_equal: plan.is_null_equal.clone(),
             non_equi_conditions: plan.non_equi_conditions.clone(),
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
@@ -245,6 +272,7 @@ pub trait PhysicalPlanReplacer {
             enable_bloom_runtime_filter: plan.enable_bloom_runtime_filter,
             broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
+            build_side_cache_info: plan.build_side_cache_info.clone(),
         }))
     }
 
@@ -288,6 +316,7 @@ pub trait PhysicalPlanReplacer {
             after_exchange: plan.after_exchange,
             pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
+            window_partition: plan.window_partition.clone(),
         }))
     }
 
@@ -314,6 +343,7 @@ pub trait PhysicalPlanReplacer {
             cols_to_fetch: plan.cols_to_fetch.clone(),
             fetched_fields: plan.fetched_fields.clone(),
             stat_info: plan.stat_info.clone(),
+            need_wrap_nullable: plan.need_wrap_nullable,
         }))
     }
 
@@ -360,9 +390,11 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
+            left_outputs: plan.left_outputs.clone(),
+            right_outputs: plan.right_outputs.clone(),
             schema: plan.schema.clone(),
-            pairs: plan.pairs.clone(),
             stat_info: plan.stat_info.clone(),
+            cte_scan_names: plan.cte_scan_names.clone(),
         }))
     }
 
@@ -400,7 +432,6 @@ pub trait PhysicalPlanReplacer {
             DistributedInsertSelect {
                 plan_id: plan.plan_id,
                 input: Box::new(input),
-                catalog_info: plan.catalog_info.clone(),
                 table_info: plan.table_info.clone(),
                 select_schema: plan.select_schema.clone(),
                 insert_schema: plan.insert_schema.clone(),
@@ -477,6 +508,47 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::MergeIntoAppendNotMatched(Box::new(
             MergeIntoAppendNotMatched {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
+    fn replace_merge_into_split(&mut self, plan: &MergeIntoSplit) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_merge_into_manipulate(
+        &mut self,
+        plan: &MergeIntoManipulate,
+    ) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoManipulate(Box::new(
+            MergeIntoManipulate {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
+    fn replace_merge_into_organize(&mut self, plan: &MergeIntoOrganize) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoOrganize(Box::new(
+            MergeIntoOrganize {
+                input: Box::new(input),
+                ..plan.clone()
+            },
+        )))
+    }
+
+    fn replace_merge_into_serialize(&mut self, plan: &MergeIntoSerialize) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MergeIntoSerialize(Box::new(
+            MergeIntoSerialize {
                 input: Box::new(input),
                 ..plan.clone()
             },
@@ -600,7 +672,10 @@ impl PhysicalPlan {
                 PhysicalPlan::TableScan(_)
                 | PhysicalPlan::ReplaceAsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
+                | PhysicalPlan::RecursiveCteScan(_)
                 | PhysicalPlan::ConstantTableScan(_)
+                | PhysicalPlan::ExpressionScan(_)
+                | PhysicalPlan::CacheScan(_)
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
@@ -688,6 +763,18 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoSplit(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoManipulate(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoOrganize(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MergeIntoSerialize(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

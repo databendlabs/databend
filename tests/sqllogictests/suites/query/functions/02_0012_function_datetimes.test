@@ -43,6 +43,10 @@ SELECT to_unix_timestamp(now()) >= 1680753801;
 ----
 1
 
+query B
+SELECT now() = now()
+----
+1
 
 query TB
 select to_datetime(1630833797), to_int64(to_datetime(1630833797)) = 1630833797000000
@@ -1080,8 +1084,22 @@ select to_timestamp('2022年02月04日，8时58分59秒', '');
 ----
 NULL
 
-query T
+statement error 1006
 select to_timestamp('10000-09-09 01:46:39', '%Y-%m-%d %H:%M:%S');
+
+statement error 1006
+select to_timestamp('10000-09-09 01:46:39', '%s-%m-%d %H:%M:%S');
+
+query T
+select try_to_timestamp('10000-09-09 01:46:39', '%s-%m-%d %H:%M:%S');
+----
+NULL
+
+statement error 1006
+select to_date('2022-02-02', '%m');
+
+query T
+select try_to_date('2022-02-02', '%m');
 ----
 NULL
 

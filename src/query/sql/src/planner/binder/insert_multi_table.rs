@@ -26,8 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::TableSchema;
 
 use crate::binder::ScalarBinder;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
 use crate::plans::Into;
@@ -61,9 +59,7 @@ impl Binder {
                 alias: None,
             };
 
-            let (s_expr, bind_context) = self.bind_single_table(bind_context, &table_ref).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty());
+            let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;
 
             let select_plan = Plan::Query {
                 s_expr: Box::new(s_expr),
@@ -74,8 +70,7 @@ impl Binder {
                 ignore_result: false,
             };
 
-            let optimized_plan = optimize(opt_ctx, select_plan).await?;
-            (optimized_plan, bind_context)
+            (select_plan, bind_context)
         };
 
         let source_schema = input_source.schema();
@@ -100,7 +95,7 @@ impl Binder {
                 self.m_cte_bound_ctx.clone(),
                 self.ctes_map.clone(),
             );
-            let (condition, _) = scalar_binder.bind(&when_clause.condition).await?;
+            let (condition, _) = scalar_binder.bind(&when_clause.condition)?;
             if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
                 return Err(ErrorCode::IllegalDataType(
                     "The condition in WHEN clause must be a boolean expression".to_string(),
@@ -254,7 +249,7 @@ impl Binder {
                 for source_column in source_columns {
                     match source_column {
                         SourceExpr::Expr(expr) => {
-                            let (scalar_expr, _) = scalar_binder.bind(expr).await?;
+                            let (scalar_expr, _) = scalar_binder.bind(expr)?;
                             source_scalar_exprs.push(scalar_expr);
                         }
                         SourceExpr::Default => {

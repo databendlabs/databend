@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::Udf;
 
 use crate::pipelines::processors::transforms::TransformUdfScript;
@@ -26,23 +26,19 @@ impl PipelineBuilder {
 
         if udf.script_udf {
             let runtimes = TransformUdfScript::init_runtime(&udf.udf_funcs)?;
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(TransformUdfScript::try_create(
+            self.main_pipeline.try_add_transformer(|| {
+                Ok(TransformUdfScript::new(
                     self.func_ctx.clone(),
                     udf.udf_funcs.clone(),
                     runtimes.clone(),
-                    input,
-                    output,
-                )?))
+                ))
             })
         } else {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(TransformUdfServer::try_create(
+            self.main_pipeline.try_add_async_transformer(|| {
+                Ok(TransformUdfServer::new_retry_wrapper(
                     self.func_ctx.clone(),
                     udf.udf_funcs.clone(),
-                    input,
-                    output,
-                )?))
+                ))
             })
         }
     }

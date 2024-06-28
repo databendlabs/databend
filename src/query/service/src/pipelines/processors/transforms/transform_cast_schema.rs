@@ -33,19 +33,18 @@ use crate::pipelines::processors::ProcessorPtr;
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
     insert_schema: DataSchemaRef,
+    select_schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
 
 impl TransformCastSchema
 where Self: Transform
 {
-    pub fn try_create(
-        input_port: Arc<InputPort>,
-        output_port: Arc<OutputPort>,
+    pub fn try_new(
         select_schema: DataSchemaRef,
         insert_schema: DataSchemaRef,
         func_ctx: FunctionContext,
-    ) -> Result<ProcessorPtr> {
+    ) -> Result<Self> {
         let exprs = select_schema
             .fields()
             .iter()
@@ -60,14 +59,27 @@ where Self: Transform
                 check_cast(None, false, expr, to.data_type(), &BUILTIN_FUNCTIONS)
             })
             .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            func_ctx,
+            insert_schema,
+            select_schema,
+            exprs,
+        })
+    }
+
+    pub fn try_create(
+        input_port: Arc<InputPort>,
+        output_port: Arc<OutputPort>,
+        select_schema: DataSchemaRef,
+        insert_schema: DataSchemaRef,
+        func_ctx: FunctionContext,
+    ) -> Result<ProcessorPtr> {
+        let me = Self::try_new(select_schema, insert_schema, func_ctx)?;
         Ok(ProcessorPtr::create(Transformer::create(
             input_port,
             output_port,
-            Self {
-                func_ctx,
-                insert_schema,
-                exprs,
-            },
+            me,
         )))
     }
 }
@@ -78,8 +90,23 @@ impl Transform for TransformCastSchema {
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
         let mut columns = Vec::with_capacity(self.exprs.len());
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (field, expr) in self.insert_schema.fields().iter().zip(self.exprs.iter()) {
-            let value = evaluator.run(expr)?;
+        for (i, (field, expr)) in self
+            .insert_schema
+            .fields()
+            .iter()
+            .zip(self.exprs.iter())
+            .enumerate()
+        {
+            let value = evaluator.run(expr).map_err(|err| {
+                let msg = format!(
+                    "fail to auto cast column {} ({}) to column {} ({})",
+                    self.select_schema.fields[i].name(),
+                    self.select_schema.fields[i].data_type(),
+                    field.name(),
+                    field.data_type(),
+                );
+                err.add_message(msg)
+            })?;
             let column = BlockEntry::new(field.data_type().clone(), value);
             columns.push(column);
         }

@@ -110,8 +110,7 @@ impl SrfCollector {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn bind_project_set(
+    pub fn bind_project_set(
         &mut self,
         bind_context: &mut BindContext,
         srfs: &[Expr],
@@ -144,7 +143,7 @@ impl Binder {
                             self.m_cte_bound_ctx.clone(),
                             self.ctes_map.clone(),
                         );
-                        let (scalar, _) = scalar_binder.bind(arg).await?;
+                        let (scalar, _) = scalar_binder.bind(arg)?;
                         arguments.push(scalar);
                     }
 
@@ -169,10 +168,11 @@ impl Binder {
             let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             // Add result column to metadata
-            let column_index = self
-                .metadata
-                .write()
-                .add_derived_column(name.clone(), srf_expr.data_type().clone());
+            let column_index = self.metadata.write().add_derived_column(
+                name.clone(),
+                srf_expr.data_type().clone(),
+                Some(srf_scalar.clone()),
+            );
             let column = ColumnBindingBuilder::new(
                 name.clone(),
                 column_index,

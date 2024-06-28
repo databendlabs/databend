@@ -37,6 +37,7 @@ pub struct EvalScalar {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarItem {
     pub scalar: ScalarExpr,
+    // The index of the derived column in metadata
     pub index: IndexType,
 }
 
@@ -101,12 +102,14 @@ impl Operator for EvalScalar {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Scalar;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_formats::FieldDecoder;
 use databend_common_formats::FieldJsonAstDecoder;
@@ -41,12 +41,14 @@ impl InputFormatNDJson {
     pub fn create() -> Self {
         Self {}
     }
+
     fn read_row(
+        input_ctx: &Arc<InputContext>,
         field_decoder: &FieldJsonAstDecoder,
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
-        default_values: &Option<Vec<Scalar>>,
+        default_values: &Option<Vec<RemoteExpr>>,
         null_field_as: &NullAs,
         missing_field_as: &NullAs,
         null_if: &[&str],
@@ -102,7 +104,7 @@ impl InputFormatNDJson {
                         }
                         NullAs::FieldDefault => {
                             if let Some(values) = default_values {
-                                column.push(values[column_index].as_ref());
+                                input_ctx.push_default_value(values, column, column_index)?;
                             } else {
                                 column.push_default();
                             }
@@ -125,7 +127,7 @@ impl InputFormatNDJson {
                         }
                         NullAs::FieldDefault => {
                             if let Some(values) = default_values {
-                                column.push(values[column_index].as_ref());
+                                input_ctx.push_default_value(values, column, column_index)?;
                             } else {
                                 column.push_default();
                             }
@@ -206,6 +208,7 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(
+                    &builder.ctx,
                     field_decoder,
                     buf,
                     columns,

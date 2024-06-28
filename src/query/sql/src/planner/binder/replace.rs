@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -25,8 +26,6 @@ use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
@@ -53,6 +52,18 @@ impl Binder {
 
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table);
+
+        // Add table lock before execution.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
 
         let table = self
             .ctx
@@ -161,10 +172,7 @@ impl Binder {
             InsertSource::Select { query } => {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
-                    .with_enable_distributed_optimization(false);
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))
+                Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
         };
 
@@ -177,6 +185,7 @@ impl Binder {
             schema,
             source: input_source?,
             delete_when: delete_when.clone(),
+            lock_guard,
         };
 
         Ok(Plan::Replace(Box::new(plan)))

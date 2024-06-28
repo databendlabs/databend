@@ -266,7 +266,7 @@ Literal {
 ---------- Input ----------
 1e100000000000000
 ---------- Output ---------
-inf
+'+INFINITY'::FLOAT64
 ---------- AST ------------
 Literal {
     span: Some(

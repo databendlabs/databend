@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_common_storage::parquet_rs::read_metadata_async;
@@ -114,11 +115,12 @@ impl ParquetRSTable {
 
     #[async_backtrace::framed]
     pub async fn create(
-        ctx: Arc<dyn TableContext>,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
         read_options: ParquetReadOptions,
         files_to_read: Option<Vec<StageFileInfo>>,
+        settings: Arc<Settings>,
+        query_kind: QueryKind,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
@@ -135,10 +137,9 @@ impl ParquetRSTable {
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
         let need_stats_provider = !matches!(
-            ctx.get_query_kind(),
+            query_kind,
             QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
         );
-        let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
 

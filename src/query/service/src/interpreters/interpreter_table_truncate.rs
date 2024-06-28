@@ -14,14 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
-use databend_common_storages_fuse::FuseTable;
 
 use crate::interpreters::Interpreter;
-use crate::locks::LockManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::packets::Packet;
 use crate::servers::flight::v1::packets::TruncateTablePacket;
@@ -72,22 +71,24 @@ impl Interpreter for TruncateTableInterpreter {
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        // try add lock table.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &self.catalog_name,
+                &self.database_name,
+                &self.table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
         let table = self
             .ctx
             .get_table(&self.catalog_name, &self.database_name, &self.table_name)
             .await?;
-
         // check mutability
         table.check_mutable()?;
-
-        // Add table lock.
-        let maybe_fuse_table = FuseTable::try_from_table(table.as_ref()).is_ok();
-        let lock_guard = if maybe_fuse_table {
-            let table_lock = LockManager::create_table_lock(table.get_table_info().clone())?;
-            table_lock.try_lock(self.ctx.clone()).await?
-        } else {
-            None
-        };
 
         if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
             let settings = self.ctx.get_settings();

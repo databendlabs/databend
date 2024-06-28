@@ -14,6 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -25,6 +26,9 @@ use poem::web::Path;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
+
+use crate::interpreters::ShowCreateQuerySettings;
+use crate::interpreters::ShowCreateTableInterpreter;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTablesResponse {
@@ -46,6 +50,7 @@ pub struct TenantTableInfo {
     pub number_of_blocks: Option<u64>,
     pub number_of_segments: Option<u64>,
     pub table_id: u64,
+    pub create_query: String,
 }
 
 async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
@@ -55,6 +60,13 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
 
     let mut table_infos: Vec<TenantTableInfo> = vec![];
     let mut warnings: Vec<String> = vec![];
+
+    let settings = ShowCreateQuerySettings {
+        sql_dialect: Dialect::PostgreSQL,
+        quoted_ident_case_sensitive: true,
+        hide_options_in_show_create_table: false,
+    };
+
     for database in databases {
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
@@ -69,6 +81,14 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
             }
         };
         for table in tables {
+            let create_query = ShowCreateTableInterpreter::show_create_query(
+                catalog.as_ref(),
+                database.name(),
+                table.as_ref(),
+                &settings,
+            )
+            .await?;
+
             let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;
             table_infos.push(TenantTableInfo {
@@ -84,6 +104,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 number_of_blocks: stats.number_of_blocks,
                 number_of_segments: stats.number_of_segments,
                 table_id,
+                create_query,
             });
         }
     }

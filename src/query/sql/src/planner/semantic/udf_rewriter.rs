@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::mem;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -37,9 +37,9 @@ use crate::Visibility;
 pub(crate) struct UdfRewriter {
     metadata: MetadataRef,
     /// Arguments of udf functions
-    udf_arguments: Vec<ScalarItem>,
+    udf_arguments: VecDeque<Vec<ScalarItem>>,
     /// Udf functions
-    udf_functions: Vec<ScalarItem>,
+    udf_functions: VecDeque<Vec<ScalarItem>>,
     /// Mapping: (udf function display name) -> (derived column ref)
     /// This is used to replace udf with a derived column.
     udf_functions_map: HashMap<String, BoundColumnRef>,
@@ -101,28 +101,29 @@ impl UdfRewriter {
     }
 
     fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
-        if !self.udf_functions.is_empty() {
+        while !self.udf_functions.is_empty() {
             if !self.udf_arguments.is_empty() {
                 // Add an EvalScalar for the arguments of Udf.
-                let mut scalar_items = mem::take(&mut self.udf_arguments);
+                let mut scalar_items = self.udf_arguments.pop_front().unwrap();
                 scalar_items.sort_by_key(|item| item.index);
                 let eval_scalar = EvalScalar {
                     items: scalar_items,
                 };
+
                 child_expr = Arc::new(SExpr::create_unary(
                     Arc::new(eval_scalar.into()),
                     child_expr,
                 ));
             }
 
+            let udf_functions = self.udf_functions.pop_front().unwrap();
             let udf_plan = Udf {
-                items: mem::take(&mut self.udf_functions),
+                items: udf_functions,
                 script_udf: self.script_udf,
             };
-            Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr))
-        } else {
-            child_expr
+            child_expr = Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr));
         }
+        child_expr
     }
 }
 
@@ -145,22 +146,20 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
             return Ok(());
         }
 
+        let mut udf_arguments = Vec::with_capacity(udf.arguments.len());
+
         for (i, arg) in udf.arguments.iter_mut().enumerate() {
-            if let ScalarExpr::UDFCall(_) = arg {
-                return Err(ErrorCode::InvalidArgument(
-                    "the argument of UDF server call can't be a UDF server call",
-                ));
-            }
             self.visit(arg)?;
 
             let new_column_ref = if let ScalarExpr::BoundColumnRef(ref column_ref) = &arg {
                 column_ref.clone()
             } else {
                 let name = format!("{}_arg_{}", &udf.display_name, i);
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), arg.data_type()?);
+                let index = self.metadata.write().add_derived_column(
+                    name.clone(),
+                    arg.data_type()?,
+                    Some(arg.clone()),
+                );
 
                 // Generate a ColumnBinding for each argument of udf function
                 let column = ColumnBindingBuilder::new(
@@ -177,19 +176,22 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
                 }
             };
 
-            self.udf_arguments.push(ScalarItem {
+            udf_arguments.push(ScalarItem {
                 index: new_column_ref.column.index,
                 scalar: arg.clone(),
             });
             *arg = new_column_ref.into();
         }
 
+        self.udf_arguments.push_back(udf_arguments);
+
         let index = match self.udf_functions_index_map.get(&udf.display_name) {
             Some(index) => *index,
-            None => self
-                .metadata
-                .write()
-                .add_derived_column(udf.display_name.clone(), (*udf.return_type).clone()),
+            None => self.metadata.write().add_derived_column(
+                udf.display_name.clone(),
+                (*udf.return_type).clone(),
+                Some(ScalarExpr::UDFCall(udf.clone())),
+            ),
         };
 
         // Generate a ColumnBinding for the udf function
@@ -208,10 +210,10 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 
         self.udf_functions_map
             .insert(udf.display_name.clone(), replaced_column);
-        self.udf_functions.push(ScalarItem {
+        self.udf_functions.push_back(vec![ScalarItem {
             index,
             scalar: udf.clone().into(),
-        });
+        }]);
 
         Ok(())
     }

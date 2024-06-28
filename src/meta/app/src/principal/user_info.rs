@@ -62,6 +62,9 @@ pub struct UserInfo {
 
     // Login lockout time, records the end time of login lockout due to multiple password fails.
     pub lockout_time: Option<DateTime<Utc>>,
+
+    pub created_on: DateTime<Utc>,
+    pub update_on: DateTime<Utc>,
 }
 
 impl UserInfo {
@@ -70,6 +73,7 @@ impl UserInfo {
         let grants = UserGrantSet::default();
         let quota = UserQuota::no_limit();
         let option = UserOption::default();
+        let now = Utc::now();
 
         UserInfo {
             name: name.to_string(),
@@ -82,6 +86,8 @@ impl UserInfo {
             password_fails: Vec::new(),
             password_update_on: None,
             lockout_time: None,
+            created_on: now,
+            update_on: now,
         }
     }
 
@@ -121,6 +127,10 @@ impl UserInfo {
                 self.password_update_on = Some(Utc::now());
             }
         }
+    }
+
+    pub fn update_user_time(&mut self) {
+        self.update_on = Utc::now();
     }
 
     pub fn update_login_fail_history(&mut self) {

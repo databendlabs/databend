@@ -5,9 +5,10 @@
 # shellcheck disable=SC2034
 data_dir="tests/sqllogictests/data"
 
-db="tpch_test"
+db=${1:-"tpch_test"}
 
-echo "CREATE DATABASE IF NOT EXISTS tpch_test" | $BENDSQL_CLIENT_CONNECT
+echo "DROP DATABASE if EXISTS ${db}" | $BENDSQL_CLIENT_CONNECT
+echo "CREATE DATABASE ${db}" | $BENDSQL_CLIENT_CONNECT
 
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
@@ -115,11 +116,14 @@ fi
 
 tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
+stmt "drop stage if exists s1"
+stmt "create stage s1 url='fs://${PWD}/${data_dir}/'"
+
 # insert data to tables
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "$t"
-    insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
+    sub_path="tests/suites/0_stateless/13_tpch/data/$t.tbl"
+   	stmt "copy into ${db}.$t from @s1/${sub_path} file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
 done
 
 

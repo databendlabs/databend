@@ -203,7 +203,7 @@ alter table t set options(change_tracking = false)
 query TT
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
-s2 Change tracking is not enabled on table 'test_stream.t'
+s2 Change tracking is not enabled on table 'test_stream'.'t'
 
 statement ok
 drop table t all
@@ -583,6 +583,51 @@ drop table t7 all
 statement ok
 drop table t8 all
 
+###############
+# issue 15899 #
+###############
+
+statement ok
+create table t_15899(a int)
+
+statement ok
+insert into t_15899 values(1)
+
+statement ok
+create stream s_15899 on table t_15899 append_only = false
+
+statement ok
+insert into t_15899 values(2)
+
+statement ok
+alter table t_15899 add b int default 0
+
+statement ok
+insert into t_15899 values(3, 3)
+
+query II
+select a, b from t_15899 order by a
+----
+1 0
+2 0
+3 3
+
+query IITB
+select a, b, change$action, change$is_update from s_15899 order by a
+----
+2 0 INSERT 0
+3 3 INSERT 0
+
+statement ok
+drop stream s_15899
+
+statement ok
+drop table t_15899 all
+
+######################
+# end of issue 15899 #
+######################
+
 statement error 2733
 create stream s_err on table t4 at (stream => s3)
 
@@ -699,15 +744,39 @@ merge into t1 using t2 on t1.a=t2.a when matched then update set t1.b=t2.b when 
 statement ok
 set enable_experimental_merge_into = 0;
 
-# todo(zhyass): if base table is renamed, the stream will be invalid. Maybe we should allow the scene.
 statement ok
 alter table t1 rename to t1_1
 
-query TTT
+query T
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
-s1 Unknown table 't1'
-s2 Unknown table 't1'
+s1 (empty)
+s2 (empty)
+
+query IITB
+select a, b, change$action, change$is_update from s1 order by a, b
+----
+1 1 INSERT 0
+2 2 INSERT 0
+3 3 INSERT 0
+4 4 INSERT 0
 
 statement ok
-DROP DATABASE IF EXISTS test_stream
+alter database test_stream rename to test_stream_1
+
+query TTTT
+select database, name, mode, table_name from system.streams where database='test_stream_1' order by name
+----
+test_stream_1 s1 standard test_stream_1.t1_1
+test_stream_1 s2 append_only test_stream_1.t1_1
+
+query IITB
+select a, b, change$action, change$is_update from test_stream_1.s2 order by a, b
+----
+1 1 INSERT 0
+2 2 INSERT 0
+3 3 INSERT 0
+4 4 INSERT 0
+
+statement ok
+DROP DATABASE IF EXISTS test_stream_1

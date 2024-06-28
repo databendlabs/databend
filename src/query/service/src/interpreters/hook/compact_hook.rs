@@ -16,9 +16,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::OptimizeTableAction;
@@ -52,10 +54,10 @@ pub async fn hook_compact(
     pipeline: &mut Pipeline,
     compact_target: CompactTargetTableDescription,
     trace_ctx: CompactHookTraceCtx,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 ) {
     let op_name = trace_ctx.operation_name.clone();
-    if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, need_lock).await {
+    if let Err(e) = do_hook_compact(ctx, pipeline, compact_target, trace_ctx, lock_opt).await {
         info!("compact hook ({}) with error (ignored): {}", op_name, e);
     }
 }
@@ -66,13 +68,13 @@ async fn do_hook_compact(
     pipeline: &mut Pipeline,
     compact_target: CompactTargetTableDescription,
     trace_ctx: CompactHookTraceCtx,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 ) -> Result<()> {
     if pipeline.is_empty() {
         return Ok(());
     }
 
-    pipeline.set_on_finished(move |(_profiles, err)| {
+    pipeline.set_on_finished(move |info: &ExecutionInfo| {
         let compaction_limits = match compact_target.mutation_kind {
             MutationKind::Insert => {
                 let compaction_num_block_hint = ctx.get_compaction_num_block_hint();
@@ -100,10 +102,10 @@ async fn do_hook_compact(
         metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
 
         let compact_start_at = Instant::now();
-        if err.is_ok() {
+        if info.res.is_ok() {
             info!("execute {op_name} finished successfully. running table optimization job.");
             match GlobalIORuntime::instance().block_on({
-                compact_table(ctx, compact_target, compaction_limits, need_lock)
+                compact_table(ctx, compact_target, compaction_limits, lock_opt)
             }) {
                 Ok(_) => {
                     info!("execute {op_name} finished successfully. table optimization job finished.");
@@ -126,7 +128,7 @@ async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
     compaction_limits: CompactionLimits,
-    need_lock: bool,
+    lock_opt: LockTableOption,
 ) -> Result<()> {
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -143,7 +145,7 @@ async fn compact_table(
             table: compact_target.table,
             action: OptimizeTableAction::CompactBlocks(compaction_limits.block_limit),
             limit: compaction_limits.segment_limit,
-            need_lock,
+            lock_opt,
         })?;
 
     let mut build_res = optimize_interpreter.execute2().await?;
@@ -169,6 +171,7 @@ async fn compact_table(
         ctx.clear_segment_locations()?;
         ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
+        drop(complete_executor);
 
         // reset the progress value
         ctx.get_write_progress().set(&progress_value);

@@ -16,10 +16,10 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
@@ -126,19 +126,23 @@ impl Operator for Window {
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
         let mut required = required.clone();
-        required.distribution = Distribution::Serial;
-        Ok(required)
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(required.clone())
     }
 
     fn compute_required_prop_children(
         &self,
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        Ok(vec![vec![RequiredProperty {
-            distribution: Distribution::Serial,
-        }]])
+        let mut required = required.clone();
+        if self.partition_by.is_empty() {
+            required.distribution = Distribution::Serial;
+        }
+        Ok(vec![vec![required.clone()]])
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -161,12 +165,14 @@ impl Operator for Window {
 
         // Derive orderings
         let orderings = input_prop.orderings.clone();
+        let partition_orderings = input_prop.partition_orderings.clone();
 
         Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
             orderings,
+            partition_orderings,
         }))
     }
 

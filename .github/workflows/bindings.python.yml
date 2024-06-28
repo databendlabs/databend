@@ -1,18 +1,20 @@
 name: Bindings Python
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - ".github/workflows/bindings.python.yml"
-  workflow_call:
-    inputs:
-      tag:
-        description: Tag to release
-        required: true
-        type: string
+  ## uncomment it when bendpy is enabled
+  workflow_dispatch:
+  # pull_request:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - "src/**"
+  #     - ".github/workflows/bindings.python.yml"
+  # workflow_call:
+  #   inputs:
+  #     tag:
+  #       description: Tag to release
+  #       required: true
+  #       type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -20,7 +22,7 @@ concurrency:
 
 jobs:
   linux:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c16g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c16g, aws]
     strategy:
       matrix:
         include:

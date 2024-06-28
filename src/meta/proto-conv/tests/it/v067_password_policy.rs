@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use chrono::DateTime;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -107,6 +108,8 @@ fn test_decode_v67_password_policy() -> anyhow::Result<()> {
         password_fails: vec![],
         password_update_on: None,
         lockout_time: None,
+        created_on: DateTime::<Utc>::default(),
+        update_on: DateTime::<Utc>::default(),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

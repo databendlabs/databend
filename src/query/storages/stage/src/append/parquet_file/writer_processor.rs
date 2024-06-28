@@ -17,18 +17,25 @@ use std::collections::VecDeque;
 use std::mem;
 use std::sync::Arc;
 
+use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_config::QUERY_SEMVER;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_formats::output_format::OutputFormat;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
+use parquet_rs::arrow::ArrowWriter;
+use parquet_rs::basic::Encoding;
+use parquet_rs::file::properties::EnabledStatistics;
+use parquet_rs::file::properties::WriterProperties;
 
 use super::block_batch::BlockBatch;
 use crate::append::output::DataSummary;
@@ -40,18 +47,51 @@ pub struct ParquetFileWriter {
     output: Arc<OutputPort>,
 
     table_info: StageTableInfo,
-    output_format: Box<dyn OutputFormat>,
+    arrow_schema: Arc<ArrowSchema>,
 
+    input_data: Vec<DataBlock>,
+
+    input_bytes: usize,
+    row_counts: usize,
+    writer: ArrowWriter<Vec<u8>>,
+
+    file_to_write: Option<(Vec<u8>, DataSummary)>,
+    data_accessor: Operator,
+
+    // the result of statement
     unload_output: UnloadOutput,
     unload_output_blocks: Option<VecDeque<DataBlock>>,
-    input_data: Option<DataBlock>,
-    file_to_write: Option<(Vec<u8>, DataSummary)>,
-
-    data_accessor: Operator,
 
     uuid: String,
     group_id: usize,
     batch_id: usize,
+
+    targe_file_size: Option<usize>,
+}
+
+const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
+// this is number of rows, not size
+const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
+
+fn create_writer(
+    arrow_schema: Arc<ArrowSchema>,
+    targe_file_size: Option<usize>,
+) -> Result<ArrowWriter<Vec<u8>>> {
+    let props = WriterProperties::builder()
+        .set_compression(TableCompression::Zstd.into())
+        .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
+        .set_encoding(Encoding::PLAIN)
+        .set_dictionary_enabled(false)
+        .set_statistics_enabled(EnabledStatistics::None)
+        .set_bloom_filter_enabled(false)
+        .set_created_by(format!("Databend {}", *QUERY_SEMVER))
+        .build();
+    let buf_size = match targe_file_size {
+        Some(n) if n < MAX_BUFFER_SIZE => n,
+        _ => MAX_BUFFER_SIZE,
+    };
+    let writer = ArrowWriter::try_new(Vec::with_capacity(buf_size), arrow_schema, Some(props))?;
+    Ok(writer)
 }
 
 impl ParquetFileWriter {
@@ -59,34 +99,61 @@ impl ParquetFileWriter {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table_info: StageTableInfo,
-        output_format: Box<dyn OutputFormat>,
         data_accessor: Operator,
         uuid: String,
         group_id: usize,
+        targe_file_size: Option<usize>,
     ) -> Result<ProcessorPtr> {
         let unload_output =
             UnloadOutput::create(table_info.stage_info.copy_options.detailed_output);
+
+        let arrow_schema = Arc::new(table_schema_to_arrow_schema(&table_info.schema));
+        let writer = create_writer(arrow_schema.clone(), targe_file_size)?;
+
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {
             input,
             output,
             table_info,
-            output_format,
+            arrow_schema,
             unload_output,
             unload_output_blocks: None,
-            input_data: None,
+            writer,
+            input_data: Vec::new(),
+            input_bytes: 0,
             file_to_write: None,
             data_accessor,
             uuid,
             group_id,
             batch_id: 0,
+            targe_file_size,
+            row_counts: 0,
         })))
+    }
+    pub fn reinit_writer(&mut self) -> Result<()> {
+        self.writer = create_writer(self.arrow_schema.clone(), self.targe_file_size)?;
+        self.row_counts = 0;
+        self.input_bytes = 0;
+        Ok(())
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        _ = self.writer.finish();
+        let buf = mem::take(self.writer.inner_mut());
+        let output_bytes = buf.len();
+        self.file_to_write = Some((buf, DataSummary {
+            row_counts: self.row_counts,
+            input_bytes: self.input_bytes,
+            output_bytes,
+        }));
+        self.reinit_writer()?;
+        Ok(())
     }
 }
 
 #[async_trait]
 impl Processor for ParquetFileWriter {
     fn name(&self) -> String {
-        "ParquetFileSink".to_string()
+        "ParquetFileWriter".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -100,10 +167,13 @@ impl Processor for ParquetFileWriter {
         } else if self.file_to_write.is_some() {
             self.input.set_not_need_data();
             Ok(Event::Async)
-        } else if self.input_data.is_some() {
+        } else if !self.input_data.is_empty() {
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else if self.input.is_finished() {
+            if self.row_counts > 0 {
+                return Ok(Event::Sync);
+            }
             if self.unload_output.is_empty() {
                 self.output.finish();
                 return Ok(Event::Finished);
@@ -123,7 +193,15 @@ impl Processor for ParquetFileWriter {
                 Ok(Event::NeedConsume)
             }
         } else if self.input.has_data() {
-            self.input_data = Some(self.input.pull_data().unwrap()?);
+            let block = self.input.pull_data().unwrap()?;
+            if self.targe_file_size.is_none() {
+                self.input_data.push(block);
+            } else {
+                let block_meta = block.get_owned_meta().unwrap();
+                let blocks = BlockBatch::downcast_from(block_meta).unwrap();
+                self.input_data.extend_from_slice(&blocks.blocks);
+            }
+
             self.input.set_not_need_data();
             Ok(Event::Sync)
         } else {
@@ -133,23 +211,29 @@ impl Processor for ParquetFileWriter {
     }
 
     fn process(&mut self) -> Result<()> {
-        let block = self.input_data.take().unwrap();
-        let block_meta = block.get_owned_meta().unwrap();
-        let blocks = BlockBatch::downcast_from(block_meta).unwrap();
-        let mut input_bytes = 0;
-        let mut row_counts = 0;
-        for b in blocks.blocks {
-            input_bytes += b.memory_size();
-            row_counts += b.num_rows();
-            self.output_format.serialize_block(&b)?;
+        while let Some(b) = self.input_data.pop() {
+            self.input_bytes += b.memory_size();
+            self.row_counts += b.num_rows();
+            let batch = b.to_record_batch(&self.table_info.schema)?;
+            self.writer.write(&batch)?;
+
+            if let Some(target) = self.targe_file_size {
+                if self.row_counts > 0 {
+                    // written row groups: compressed, controlled by MAX_ROW_GROUP_SIZE
+                    let file_size = self.writer.bytes_written();
+                    // in_progress row group: each column leaf has an at most 1MB uncompressed buffer and multi compressed pages
+                    // may result in small file for schema with many columns
+                    let in_progress = self.writer.in_progress_size();
+                    if file_size + in_progress >= target {
+                        self.flush()?;
+                        return Ok(());
+                    }
+                }
+            }
         }
-        let data = self.output_format.finalize()?;
-        let output_bytes = data.len();
-        self.file_to_write = Some((data, DataSummary {
-            row_counts,
-            input_bytes,
-            output_bytes,
-        }));
+        if self.input.is_finished() && self.row_counts > 0 {
+            self.flush()?;
+        }
         Ok(())
     }
 

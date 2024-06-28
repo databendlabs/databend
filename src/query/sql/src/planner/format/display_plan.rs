@@ -46,7 +46,7 @@ impl Plan {
                 s_expr, metadata, ..
             } => {
                 let metadata = &*metadata.read();
-                s_expr.to_format_tree(metadata, verbose)?.format_pretty()
+                Ok(s_expr.to_format_tree(metadata, verbose)?.format_pretty()?)
             }
             Plan::Explain { kind, plan, .. } => {
                 let result = plan.format_indent(false)?;
@@ -126,7 +126,7 @@ impl Plan {
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::MergeInto(merge_into) => format_merge_into(merge_into),
+            Plan::MergeInto { s_expr, .. } => format_merge_into(s_expr),
             Plan::Delete(delete) => format_delete(delete),
             Plan::Update(_) => Ok("Update".to_string()),
 
@@ -143,7 +143,6 @@ impl Plan {
             // Account
             Plan::GrantRole(_) => Ok("GrantRole".to_string()),
             Plan::GrantPriv(_) => Ok("GrantPrivilege".to_string()),
-            Plan::ShowGrants(_) => Ok("ShowGrants".to_string()),
             Plan::RevokePriv(_) => Ok("RevokePrivilege".to_string()),
             Plan::RevokeRole(_) => Ok("RevokeRole".to_string()),
             Plan::CreateUser(_) => Ok("CreateUser".to_string()),
@@ -227,6 +226,7 @@ impl Plan {
             Plan::DropSequence(_) => Ok("DropSequence".to_string()),
 
             Plan::SetPriority(_) => Ok("SetPriority".to_string()),
+            Plan::System(_) => Ok("System".to_string()),
         }
     }
 }
@@ -298,8 +298,10 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
             } => {
                 let metadata = &*metadata.read();
                 let res = s_expr.to_format_tree(metadata, false)?;
-                FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
-                    .format_pretty()
+                Ok(
+                    FormatTreeNode::with_children("CreateTableAsSelect".to_string(), vec![res])
+                        .format_pretty()?,
+                )
             }
             _ => Err(ErrorCode::Internal("Invalid create table plan")),
         },
@@ -307,7 +309,8 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
     }
 }
 
-fn format_merge_into(merge_into: &MergeInto) -> Result<String> {
+fn format_merge_into(s_expr: &SExpr) -> Result<String> {
+    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
         .meta_data

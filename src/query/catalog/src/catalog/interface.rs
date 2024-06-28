@@ -19,6 +19,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -86,6 +88,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -111,7 +114,7 @@ pub struct StorageDescription {
 }
 
 pub trait CatalogCreator: Send + Sync + Debug {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>>;
 }
 
 #[async_trait::async_trait]
@@ -121,7 +124,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
-    fn info(&self) -> CatalogInfo;
+    fn info(&self) -> Arc<CatalogInfo>;
 
     /// Database.
 
@@ -204,17 +207,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
 
-    // Mget the db name by meta id.
-    async fn get_db_name_by_id(&self, db_ids: MetaId) -> databend_common_exception::Result<String>;
+    // Get the db name by meta id.
+    async fn get_db_name_by_id(&self, db_ids: MetaId) -> Result<String>;
 
     // Mget the dbs name by meta ids.
     async fn mget_database_names_by_ids(
         &self,
         tenant: &Tenant,
         db_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>>;
+    ) -> Result<Vec<Option<String>>>;
+
+    // Get the table name by meta id.
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(
@@ -254,6 +260,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         unimplemented!("TODO")
     }
 
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        unimplemented!("TODO")
+    }
+
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply>;
 
     // Check a db.table is exists or not.
@@ -283,6 +293,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
+
+    // update stream metas, currently used by "copy into location form stream"
+    async fn update_stream_metas(&self, _update_stream_meta: &[UpdateStreamMetaReq]) -> Result<()> {
+        Ok(())
+    }
 
     async fn update_multi_table_meta(
         &self,

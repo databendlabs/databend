@@ -15,13 +15,13 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_io::escape_string_with_quote;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::task::CreateTaskStmt;
@@ -77,12 +77,10 @@ pub enum Statement {
 
     KillStmt {
         kill_target: KillTarget,
-        #[drive(skip)]
         object_id: String,
     },
 
     SetVariable {
-        #[drive(skip)]
         is_global: bool,
         variable: Identifier,
         value: Box<Expr>,
@@ -91,9 +89,7 @@ pub enum Statement {
     UnSetVariable(UnSetStmt),
 
     SetRole {
-        #[drive(skip)]
         is_default: bool,
-        #[drive(skip)]
         role_name: String,
     },
 
@@ -182,33 +178,29 @@ pub enum Statement {
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
-        #[drive(skip)]
         if_exists: bool,
         user: UserIdentity,
     },
     ShowRoles,
     CreateRole {
-        #[drive(skip)]
         if_not_exists: bool,
-        #[drive(skip)]
         role_name: String,
     },
     DropRole {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         role_name: String,
     },
     Grant(GrantStmt),
     ShowGrants {
         principal: Option<PrincipalIdentity>,
+        show_options: Option<ShowOptions>,
     },
+    ShowObjectPrivileges(ShowObjectPrivilegesStmt),
     Revoke(RevokeStmt),
 
     // UDF
     CreateUDF(CreateUDFStmt),
     DropUDF {
-        #[drive(skip)]
         if_exists: bool,
         udf_name: Identifier,
     },
@@ -218,25 +210,18 @@ pub enum Statement {
     CreateStage(CreateStageStmt),
     ShowStages,
     DropStage {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         stage_name: String,
     },
     DescribeStage {
-        #[drive(skip)]
         stage_name: String,
     },
     RemoveStage {
-        #[drive(skip)]
         location: String,
-        #[drive(skip)]
         pattern: String,
     },
     ListStage {
-        #[drive(skip)]
         location: String,
-        #[drive(skip)]
         pattern: Option<String>,
     },
     // Connection
@@ -248,14 +233,11 @@ pub enum Statement {
     // UserDefinedFileFormat
     CreateFileFormat {
         create_option: CreateOption,
-        #[drive(skip)]
         name: String,
         file_format_options: FileFormatOptions,
     },
     DropFileFormat {
-        #[drive(skip)]
         if_exists: bool,
-        #[drive(skip)]
         name: String,
     },
     ShowFileFormats,
@@ -326,22 +308,18 @@ pub enum Statement {
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
 
-    // sequence
+    // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
 
     // Set priority for query
     SetPriority {
         priority: Priority,
-        #[drive(skip)]
         object_id: String,
     },
-}
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct StatementWithFormat {
-    pub(crate) stmt: Statement,
-    pub(crate) format: Option<String>,
+    // System actions
+    System(SystemStmt),
 }
 
 impl Statement {
@@ -592,7 +570,7 @@ impl Display for Statement {
                 if *if_not_exists {
                     write!(f, " IF NOT EXISTS")?;
                 }
-                write!(f, " '{}'", escape_string_with_quote(role, Some('\'')))?;
+                write!(f, " {}", QuotedString(role, '\''))?;
             }
             Statement::DropRole {
                 if_exists,
@@ -605,13 +583,20 @@ impl Display for Statement {
                 write!(f, " '{role}'")?;
             }
             Statement::Grant(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrants { principal } => {
+            Statement::ShowGrants {
+                principal,
+                show_options,
+            } => {
                 write!(f, "SHOW GRANTS")?;
                 if let Some(principal) = principal {
                     write!(f, " FOR")?;
                     write!(f, "{principal}")?;
                 }
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
             }
+            Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {
@@ -739,6 +724,23 @@ impl Display for Statement {
                 write!(f, " {priority}")?;
                 write!(f, " '{object_id}'")?;
             }
+            Statement::System(stmt) => write!(f, "{stmt}")?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct StatementWithFormat {
+    pub(crate) stmt: Statement,
+    pub(crate) format: Option<String>,
+}
+
+impl Display for StatementWithFormat {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.stmt)?;
+        if let Some(format) = &self.format {
+            write!(f, " FORMAT {}", format)?;
         }
         Ok(())
     }

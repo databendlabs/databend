@@ -54,6 +54,7 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -72,8 +73,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
-use databend_common_storages_delta::DeltaTable;
-use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
@@ -92,8 +91,6 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::optimize;
-use crate::optimizer::OptimizerContext;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -498,7 +495,7 @@ impl Binder {
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -518,7 +515,7 @@ impl Binder {
                 let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -540,9 +537,8 @@ impl Binder {
                     Engine::Iceberg => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let dop = DataOperator::try_new(&sp)?;
-                        let table = IcebergTable::load_iceberg_table(dop).await?;
-                        let table_schema = IcebergTable::get_schema(&table).await?;
+                        let (table_schema, _) =
+                            self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -552,8 +548,8 @@ impl Binder {
                     Engine::Delta => {
                         let sp =
                             get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
-                        let table = DeltaTable::load(&sp).await?;
-                        let (table_schema, meta) = DeltaTable::get_meta(&table).await?;
+                        let (table_schema, meta) =
+                            self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
                         // since we get it from table options location and connection when load table each time.
                         // we do this in case we change this idea.
@@ -661,10 +657,7 @@ impl Binder {
                 let mut bind_context = BindContext::new();
                 let stmt = Statement::Query(Box::new(*query.clone()));
                 let select_plan = self.bind_statement(&mut bind_context, &stmt).await?;
-                // Don't enable distributed optimization for `CREATE TABLE ... AS SELECT ...` for now
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
-                let optimized_plan = optimize(opt_ctx, select_plan).await?;
-                Some(Box::new(optimized_plan))
+                Some(Box::new(select_plan))
             } else {
                 None
             },
@@ -893,6 +886,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
                         ModifyColumnActionInPlan::SetMaskingPolicy(
@@ -908,6 +902,17 @@ impl Binder {
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
                         let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        // try add lock table.
+                        lock_guard = self
+                            .ctx
+                            .clone()
+                            .acquire_table_lock(
+                                &catalog,
+                                &database,
+                                &table,
+                                &LockTableOption::LockWithRetry,
+                            )
+                            .await?;
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)
@@ -926,6 +931,7 @@ impl Binder {
                     database,
                     table,
                     action: action_in_plan,
+                    lock_guard,
                 })))
             }
             AlterTableAction::DropColumn { column } => {
@@ -967,22 +973,21 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let (_, mut context) = self
-                    .bind_table_reference(bind_context, table_reference)
-                    .await?;
-
-                let mut scalar_binder = ScalarBinder::new(
-                    &mut context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
-                );
-
                 let push_downs = if let Some(expr) = selection {
-                    let (scalar, _) = scalar_binder.bind(expr).await?;
+                    let (_, mut context) =
+                        self.bind_table_reference(bind_context, table_reference)?;
+
+                    let mut scalar_binder = ScalarBinder::new(
+                        &mut context,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        self.metadata.clone(),
+                        &[],
+                        self.m_cte_bound_ctx.clone(),
+                        self.ctes_map.clone(),
+                    );
+
+                    let (scalar, _) = scalar_binder.bind(expr)?;
                     Some(scalar)
                 } else {
                     None
@@ -1000,7 +1005,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::FlashbackTo { point } => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant,
                     catalog,
@@ -1101,7 +1106,7 @@ impl Binder {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge { before } => {
                 let p = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                    let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None
@@ -1120,7 +1125,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
-            need_lock: true,
+            lock_opt: LockTableOption::LockWithRetry,
         })))
     }
 
@@ -1549,7 +1554,7 @@ impl Binder {
 
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
-            let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
+            let (cluster_key, _) = scalar_binder.bind(cluster_by)?;
             if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",

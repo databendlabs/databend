@@ -27,9 +27,9 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
@@ -107,10 +107,13 @@ impl Binder {
                 ScalarExpr::AsyncFunctionCall(async_func) => self.create_derived_column_binding(
                     async_func.display_name.clone(),
                     async_func.return_type.as_ref().clone(),
+                    Some(item.scalar.clone()),
                 ),
-                _ => {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
-                }
+                _ => self.create_derived_column_binding(
+                    item.alias.clone(),
+                    item.scalar.data_type()?,
+                    Some(item.scalar.clone()),
+                ),
             };
 
             if is_grouping_sets_item {
@@ -216,8 +219,7 @@ impl Binder {
     /// For scalar expressions and aggregate expressions, we will register new columns for
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
-    #[async_backtrace::framed]
-    pub async fn normalize_select_list<'a>(
+    pub fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
@@ -249,8 +251,7 @@ impl Binder {
                         names.as_slice(),
                         column_filter,
                         &mut output,
-                    )
-                    .await?;
+                    )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
                     let mut scalar_binder = ScalarBinder::new(
@@ -262,7 +263,7 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-                    let (bound_expr, _) = scalar_binder.bind(expr).await?;
+                    let (bound_expr, _) = scalar_binder.bind(expr)?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match (expr.as_ref(), alias) {
@@ -301,8 +302,7 @@ impl Binder {
         Ok(output)
     }
 
-    #[async_backtrace::framed]
-    async fn build_select_item<'a>(
+    fn build_select_item<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -324,7 +324,7 @@ impl Binder {
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, self.dialect)?;
 
-                let (scalar, _) = scalar_binder.bind(&expr).await?;
+                let (scalar, _) = scalar_binder.bind(&expr)?;
                 scalar
             }
             None => ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -340,8 +340,7 @@ impl Binder {
         })
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_star_columns<'a>(
+    fn resolve_star_columns<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -436,9 +435,12 @@ impl Binder {
                 column_ids.push(column_binding.index);
                 column_names.push(column_binding.column_name.clone())
             } else {
-                let item = self
-                    .build_select_item(span, input_context, select_target, column_binding.clone())
-                    .await?;
+                let item = self.build_select_item(
+                    span,
+                    input_context,
+                    select_target,
+                    column_binding.clone(),
+                )?;
                 output.items.push(item);
                 adds += 1;
             }
@@ -506,7 +508,7 @@ impl Binder {
                 &[],
                 true,
             )?;
-            let (scalar, _) = *type_checker.resolve(&expr).await?;
+            let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
             let (new_expr, _) =
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
@@ -530,14 +532,12 @@ impl Binder {
                         .iter()
                         .filter(|x| new_column_idx.contains(&x.index))
                     {
-                        let item = self
-                            .build_select_item(
-                                span,
-                                input_context,
-                                select_target,
-                                column_binding.clone(),
-                            )
-                            .await?;
+                        let item = self.build_select_item(
+                            span,
+                            input_context,
+                            select_target,
+                            column_binding.clone(),
+                        )?;
                         output.items.push(item);
                     }
                 }

@@ -32,6 +32,9 @@ use tracing_appender::non_blocking::WorkerGuard;
 use tracing_appender::rolling::RollingFileAppender;
 use tracing_appender::rolling::Rotation;
 
+use crate::config::OTLPEndpointConfig;
+use crate::config::OTLPProtocol;
+
 /// Create a `BufWriter<NonBlocking>` for a rolling file logger.
 ///
 /// `BufWriter` collects log segments into a whole before sending to underlying writer.
@@ -85,6 +88,8 @@ impl log::Log for MinitraceLogger {
 
 #[derive(Debug)]
 pub(crate) struct OpenTelemetryLogger {
+    name: String,
+    category: String,
     library: Arc<InstrumentationLibrary>,
     provider: opentelemetry_sdk::logs::LoggerProvider,
 }
@@ -92,40 +97,78 @@ pub(crate) struct OpenTelemetryLogger {
 impl OpenTelemetryLogger {
     pub(crate) fn new(
         name: impl ToString,
-        endpoint: &str,
-        labels: BTreeMap<String, String>,
+        category: impl ToString,
+        config: &OTLPEndpointConfig,
+        labels: &BTreeMap<String, String>,
     ) -> Self {
-        let kvs = labels
-            .into_iter()
-            .map(|(k, v)| opentelemetry::KeyValue::new(k, v))
-            .collect::<Vec<_>>();
-        let export_config = opentelemetry_otlp::ExportConfig {
-            endpoint: endpoint.to_string(),
-            protocol: opentelemetry_otlp::Protocol::Grpc,
-            timeout: Duration::from_secs(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT),
+        let endpoint = if !config.endpoint.trim_end_matches('/').ends_with("/v1/logs") {
+            format!("{}/v1/logs", config.endpoint)
+        } else {
+            config.endpoint.clone()
         };
-        let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_export_config(export_config)
-                .into();
-        let exporter = exporter_builder
-            .build_log_exporter()
-            .expect("build log exporter");
+
+        let exporter = match config.protocol {
+            OTLPProtocol::Grpc => {
+                let export_config = opentelemetry_otlp::ExportConfig {
+                    endpoint,
+                    protocol: opentelemetry_otlp::Protocol::Grpc,
+                    timeout: Duration::from_secs(
+                        opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                    ),
+                };
+                let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
+                    opentelemetry_otlp::new_exporter()
+                        .tonic()
+                        .with_export_config(export_config)
+                        .into();
+                exporter_builder
+                    .build_log_exporter()
+                    .expect("build grpc log exporter")
+            }
+            OTLPProtocol::Http => {
+                let export_config = opentelemetry_otlp::ExportConfig {
+                    endpoint,
+                    protocol: opentelemetry_otlp::Protocol::HttpBinary,
+                    timeout: Duration::from_secs(
+                        opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                    ),
+                };
+                let exporter_builder: opentelemetry_otlp::LogExporterBuilder =
+                    opentelemetry_otlp::new_exporter()
+                        .http()
+                        .with_export_config(export_config)
+                        .into();
+                exporter_builder
+                    .build_log_exporter()
+                    .expect("build http log exporter")
+            }
+        };
+        let mut kvs = config
+            .labels
+            .iter()
+            .map(|(k, v)| opentelemetry::KeyValue::new(k.to_string(), v.to_string()))
+            .collect::<Vec<_>>();
+        kvs.push(opentelemetry::KeyValue::new(
+            "category",
+            category.to_string(),
+        ));
+        for (k, v) in labels {
+            kvs.push(opentelemetry::KeyValue::new(k.to_string(), v.to_string()));
+        }
         let provider = opentelemetry_sdk::logs::LoggerProvider::builder()
-            .with_simple_exporter(exporter)
+            .with_batch_exporter(exporter, opentelemetry_sdk::runtime::Tokio)
             .with_config(
                 opentelemetry_sdk::logs::Config::default()
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let library = Arc::new(InstrumentationLibrary::new(
-            name.to_string(),
-            None::<&str>,
-            None::<&str>,
-            None,
-        ));
-        Self { library, provider }
+        let library = Arc::new(InstrumentationLibrary::builder(name.to_string()).build());
+        Self {
+            name: name.to_string(),
+            category: category.to_string(),
+            library,
+            provider,
+        }
     }
 
     pub fn instrumentation_library(&self) -> &InstrumentationLibrary {
@@ -141,18 +184,16 @@ impl log::Log for OpenTelemetryLogger {
 
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
-        let config = provider.config();
-        let builder = opentelemetry::logs::LogRecord::builder()
-            .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
-            .with_severity_text(log_record.level().as_str())
-            .with_body(AnyValue::from(log_record.args().to_string()));
-        let record = builder.build();
+        let mut record = opentelemetry_sdk::logs::LogRecord::default();
+        record.observed_timestamp = Some(SystemTime::now());
+        record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
+        record.severity_text = Some(log_record.level().as_str().into());
+        record.body = Some(AnyValue::from(log_record.args().to_string()));
+
         for processor in provider.log_processors() {
             let record = record.clone();
             let data = opentelemetry_sdk::export::logs::LogData {
                 record,
-                resource: config.resource.clone(),
                 instrumentation: self.instrumentation_library().clone(),
             };
             processor.emit(data);
@@ -163,7 +204,7 @@ impl log::Log for OpenTelemetryLogger {
         let result = self.provider.force_flush();
         for r in result {
             if let Err(e) = r {
-                eprintln!("flush log failed: {}", e);
+                eprintln!("flush logger {}:{} failed: {}", self.name, self.category, e);
             }
         }
     }

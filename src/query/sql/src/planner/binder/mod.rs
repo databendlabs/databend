@@ -14,6 +14,8 @@
 
 mod aggregate;
 mod bind_context;
+mod bind_query;
+mod bind_table_reference;
 #[allow(clippy::module_inception)]
 mod binder;
 /// SQL builders;
@@ -30,9 +32,7 @@ mod having;
 mod insert;
 mod insert_multi_table;
 mod internal_column_factory;
-mod join;
 mod kill;
-mod limit;
 mod location;
 mod merge_into;
 mod presign;
@@ -49,16 +49,18 @@ mod show;
 mod sort;
 mod stage;
 mod stream_column_factory;
+mod system;
 mod table;
 mod table_args;
 mod udf;
 mod update;
 mod util;
-mod values;
 mod window;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
+pub use bind_query::bind_values;
+pub use bind_table_reference::parse_result_scan_args;
 pub use binder::Binder;
 pub use builders::*;
 pub use column_binding::ColumnBinding;
@@ -74,6 +76,4 @@ pub use merge_into::MergeIntoType;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
-pub use table::parse_result_scan_args;
-pub use values::bind_values;
 pub use window::WindowOrderByInfo;

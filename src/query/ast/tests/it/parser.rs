@@ -112,7 +112,9 @@ fn test_statement() {
         r#"show processlist where database='default' limit 2;"#,
         r#"show create table a.b;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
+        r#"replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from b;"#,
+        r#"explain replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from t1 ignore_result;"#,
         r#"explain(verbose, logical, optimized) select * from t where a = 1"#,
         r#"describe a;"#,
@@ -231,9 +233,10 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"SELECT avg((number > 314)::UInt32);"#,
+        r#"SELECT 1 - (2 + 3);"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
@@ -310,6 +313,7 @@ fn test_statement() {
         r#"SHOW GRANTS FOR USER 'test-grant';"#,
         r#"SHOW GRANTS FOR ROLE role1;"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
+        r#"SHOW GRANTS ON TABLE t;"#,
         r#"REVOKE SELECT, CREATE ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE role1;"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
@@ -435,7 +439,7 @@ fn test_statement() {
         r#"
             COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
-                CREDENTIALS = (
+                CONNECTION = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
                 )
@@ -862,8 +866,8 @@ fn test_statement_error() {
         r#"GRANT select ON UDF a TO 'test-grant';"#,
         r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';"#,
         r#"REVOKE SELECT, CREATE ON * TO 'test-grant';"#,
-        r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
-        r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
+        r#"COPY INTO mytable FROM 's3://bucket' CONECTION= ();"#,
+        r#"COPY INTO mytable FROM @mystage CONNECTION = ();"#,
         r#"CALL system$test"#,
         r#"CALL system$test(a"#,
         r#"show settings ilike 'enable%'"#,
@@ -911,6 +915,7 @@ fn test_statement_error() {
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
+        r#"SHOW GRANTS ON task t1;"#,
     ];
 
     for case in cases {
@@ -919,7 +924,7 @@ fn test_statement_error() {
         writeln!(file, "---------- Input ----------").unwrap();
         writeln!(file, "{}", case).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
-        writeln!(file, "{}", err.message()).unwrap();
+        writeln!(file, "{}", err.1).unwrap();
     }
 }
 

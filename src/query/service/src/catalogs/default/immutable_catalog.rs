@@ -22,6 +22,8 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -146,8 +148,8 @@ impl Catalog for ImmutableCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        CatalogInfo::default().into()
     }
 
     #[async_backtrace::framed]
@@ -207,7 +209,7 @@ impl Catalog for ImmutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
-    ) -> databend_common_exception::Result<Vec<Option<String>>> {
+    ) -> Result<Vec<Option<String>>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {
             if let Some(table) = self.sys_db_meta.get_by_id(id) {
@@ -217,7 +219,7 @@ impl Catalog for ImmutableCatalog {
         Ok(table_name)
     }
 
-    async fn get_db_name_by_id(&self, db_id: MetaId) -> databend_common_exception::Result<String> {
+    async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         if self.sys_db.get_db_info().ident.db_id == db_id {
             Ok("system".to_string())
         } else if self.info_schema_db.get_db_info().ident.db_id == db_id {
@@ -244,6 +246,14 @@ impl Catalog for ImmutableCatalog {
             }
         }
         Ok(res)
+    }
+
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let table_name = self
+            .sys_db_meta
+            .get_by_id(&table_id)
+            .map(|v| v.name().to_string());
+        Ok(table_name)
     }
 
     #[async_backtrace::framed]
@@ -310,6 +320,12 @@ impl Catalog for ImmutableCatalog {
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
         Err(ErrorCode::Unimplemented(
             "Cannot rename table in system database",
+        ))
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        Err(ErrorCode::Unimplemented(
+            "cannot commit_table_meta in system database",
         ))
     }
 

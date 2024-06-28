@@ -35,10 +35,6 @@ use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 use crate::FuseTable;
 use crate::SegmentLocation;
-use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
@@ -88,39 +84,12 @@ impl FuseTable {
 
         let start = Instant::now();
 
-        let settings = ctx.get_settings();
-        let mut max_tasks = 1;
-        let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
-            max_tasks = cluster.nodes.len();
-        }
-
-        let schema = self.schema_with_stream();
-        let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let block_thresholds = self.get_block_thresholds();
-        let block_per_seg =
-            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-        let avg_depth_threshold = self.get_option(
-            FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
-            DEFAULT_AVG_DEPTH_THRESHOLD,
-        );
-        let threshold = (snapshot.summary.block_count as f64 * avg_depth_threshold)
-            .max(1.0)
-            .min(64.0);
-        let mut mutator = ReclusterMutator::try_create(
-            ctx.clone(),
-            snapshot.clone(),
-            schema,
-            threshold,
-            block_thresholds,
-            default_cluster_key_id,
-            max_tasks,
-        )?;
+        let mut mutator = ReclusterMutator::try_create(self, ctx.clone(), snapshot.clone())?;
 
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
-        let max_threads = settings.get_max_threads()? as usize;
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
         // The default limit might be too small, which makes
         // the scanning of recluster candidates slow.
@@ -159,28 +128,19 @@ impl FuseTable {
             }
 
             // select the segments with the highest depth.
-            let selected_segs = ReclusterMutator::select_segments(
-                &compact_segments,
-                block_per_seg,
-                max_seg_num,
-                default_cluster_key_id,
-            )?;
+            let selected_segs = mutator.select_segments(&compact_segments, max_seg_num)?;
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 let mut selected_segs = vec![];
                 let mut block_count = 0;
                 for compact_segment in compact_segments.into_iter() {
-                    if !ReclusterMutator::segment_can_recluster(
-                        &compact_segment.1.summary,
-                        block_per_seg,
-                        default_cluster_key_id,
-                    ) {
+                    if !mutator.segment_can_recluster(&compact_segment.1.summary) {
                         continue;
                     }
 
                     block_count += compact_segment.1.summary.block_count as usize;
                     selected_segs.push(compact_segment);
-                    if block_count >= block_per_seg {
+                    if block_count >= mutator.block_per_seg {
                         let seg_num = selected_segs.len();
                         if mutator
                             .target_select(std::mem::take(&mut selected_segs))
@@ -238,6 +198,8 @@ impl FuseTable {
             v
         };
 
+        // during re-cluster, we do not rebuild missing bloom index
+        let bloom_index_builder = None;
         // Only use push_down here.
         let pruning_ctx = PruningContext::try_create(
             ctx,
@@ -248,6 +210,7 @@ impl FuseTable {
             vec![],
             BloomIndexColumns::None,
             max_concurrency,
+            bloom_index_builder,
         )?;
 
         let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;

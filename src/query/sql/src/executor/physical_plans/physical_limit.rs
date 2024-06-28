@@ -86,6 +86,17 @@ impl PhysicalPlanBuilder {
             .iter()
             .position(|col| col.name() == ROW_ID_COL_NAME)
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
+
+        if !input_schema.has_field(&row_id_col_index.to_string()) {
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: 0,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+
         let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
 
         // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
@@ -151,6 +162,7 @@ impl PhysicalPlanBuilder {
             row_id_col_offset,
             cols_to_fetch,
             fetched_fields,
+            need_wrap_nullable: false,
             stat_info: Some(stat_info),
         }))
     }

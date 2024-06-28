@@ -167,6 +167,22 @@ impl UndropDbHasNoHistory {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CommitTableMetaError: {table_name} while {context}")]
+pub struct CommitTableMetaError {
+    table_name: String,
+    context: String,
+}
+
+impl CommitTableMetaError {
+    pub fn new(table_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("TableAlreadyExists: {table_name} while {context}")]
 pub struct TableAlreadyExists {
     table_name: String,
@@ -205,6 +221,20 @@ pub struct CreateTableWithDropTime {
 }
 
 impl CreateTableWithDropTime {
+    pub fn new(table_name: impl Into<String>) -> Self {
+        Self {
+            table_name: table_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateAsDropTableWithoutDropTime: create as_drop {table_name} without drop time")]
+pub struct CreateAsDropTableWithoutDropTime {
+    table_name: String,
+}
+
+impl CreateAsDropTableWithoutDropTime {
     pub fn new(table_name: impl Into<String>) -> Self {
         Self {
             table_name: table_name.into(),
@@ -350,6 +380,20 @@ impl MultiStmtTxnCommitFailed {
     pub fn new(context: impl Into<String>) -> MultiStmtTxnCommitFailed {
         Self {
             context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UpdateStreamMetasFailed: {message}")]
+pub struct UpdateStreamMetasFailed {
+    message: String,
+}
+
+impl crate::app_error::UpdateStreamMetasFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
         }
     }
 }
@@ -650,14 +694,16 @@ impl ShareHasNoGrantedPrivilege {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("UnknownShareTable: {tenant}.{share_name} has no share table {table_name}")]
-pub struct UnknownShareTable {
+#[error(
+    "CannotAccessShareTable: cannot access share table {table_name} from {tenant}.{share_name}"
+)]
+pub struct CannotAccessShareTable {
     pub tenant: String,
     pub share_name: String,
     pub table_name: String,
 }
 
-impl UnknownShareTable {
+impl CannotAccessShareTable {
     pub fn new(
         tenant: impl Into<String>,
         share_name: impl Into<String>,
@@ -1030,6 +1076,9 @@ pub enum AppError {
     DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
 
     #[error(transparent)]
+    CommitTableMetaError(#[from] CommitTableMetaError),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -1037,6 +1086,9 @@ pub enum AppError {
 
     #[error(transparent)]
     CreateTableWithDropTime(#[from] CreateTableWithDropTime),
+
+    #[error(transparent)]
+    CreateAsDropTableWithoutDropTime(#[from] CreateAsDropTableWithoutDropTime),
 
     #[error(transparent)]
     UndropTableAlreadyExists(#[from] UndropTableAlreadyExists),
@@ -1112,7 +1164,7 @@ pub enum AppError {
     ShareHasNoGrantedPrivilege(#[from] ShareHasNoGrantedPrivilege),
 
     #[error(transparent)]
-    UnknownShareTable(#[from] UnknownShareTable),
+    CannotAccessShareTable(#[from] CannotAccessShareTable),
 
     #[error(transparent)]
     WrongShare(#[from] WrongShare),
@@ -1192,6 +1244,9 @@ pub enum AppError {
     // sequence
     #[error(transparent)]
     SequenceError(#[from] SequenceError),
+
+    #[error(transparent)]
+    UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1290,7 +1345,15 @@ impl AppErrorMessage for UnknownStreamId {}
 
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
 
+impl AppErrorMessage for UpdateStreamMetasFailed {}
+
 impl AppErrorMessage for DuplicatedUpsertFiles {}
+
+impl AppErrorMessage for CommitTableMetaError {
+    fn message(&self) -> String {
+        format!("Commit table '{}' fail", self.table_name)
+    }
+}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
@@ -1307,6 +1370,15 @@ impl AppErrorMessage for ViewAlreadyExists {
 impl AppErrorMessage for CreateTableWithDropTime {
     fn message(&self) -> String {
         format!("Create Table '{}' with drop time", self.table_name)
+    }
+}
+
+impl AppErrorMessage for CreateAsDropTableWithoutDropTime {
+    fn message(&self) -> String {
+        format!(
+            "Create as drop Table '{}' without drop time",
+            self.table_name
+        )
     }
 }
 
@@ -1385,10 +1457,10 @@ impl AppErrorMessage for ShareHasNoGrantedPrivilege {
     }
 }
 
-impl AppErrorMessage for UnknownShareTable {
+impl AppErrorMessage for CannotAccessShareTable {
     fn message(&self) -> String {
         format!(
-            "unknown share table {} of share {}.{}",
+            "cannot access to share table {} from share {}.{}",
             self.table_name, self.tenant, self.share_name
         )
     }
@@ -1635,10 +1707,14 @@ impl From<AppError> for ErrorCode {
             AppError::UndropDbWithNoDropTime(err) => {
                 ErrorCode::UndropDbWithNoDropTime(err.message())
             }
+            AppError::CommitTableMetaError(err) => ErrorCode::CommitTableMetaError(err.message()),
             AppError::TableAlreadyExists(err) => ErrorCode::TableAlreadyExists(err.message()),
             AppError::ViewAlreadyExists(err) => ErrorCode::ViewAlreadyExists(err.message()),
             AppError::CreateTableWithDropTime(err) => {
                 ErrorCode::CreateTableWithDropTime(err.message())
+            }
+            AppError::CreateAsDropTableWithoutDropTime(err) => {
+                ErrorCode::CreateAsDropTableWithoutDropTime(err.message())
             }
             AppError::UndropTableAlreadyExists(err) => {
                 ErrorCode::UndropTableAlreadyExists(err.message())
@@ -1668,7 +1744,9 @@ impl From<AppError> for ErrorCode {
             AppError::ShareHasNoGrantedPrivilege(err) => {
                 ErrorCode::ShareHasNoGrantedPrivilege(err.message())
             }
-            AppError::UnknownShareTable(err) => ErrorCode::UnknownShareTable(err.message()),
+            AppError::CannotAccessShareTable(err) => {
+                ErrorCode::CannotAccessShareTable(err.message())
+            }
             AppError::WrongShare(err) => ErrorCode::WrongShare(err.message()),
             AppError::ShareEndpointAlreadyExists(err) => {
                 ErrorCode::ShareEndpointAlreadyExists(err.message())
@@ -1714,6 +1792,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UnresolvableConflict(err.message())
             }
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
+            AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
         }
     }
 }

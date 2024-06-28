@@ -153,36 +153,40 @@ impl FromToProto for mt::principal::GrantObject {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        match p.object {
-            Some(pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {})) => {
+        let Some(object) = p.object else {
+            return Err(Incompatible {
+                reason: "GrantObject cannot be None".to_string(),
+            });
+        };
+
+        match object {
+            pb::grant_object::Object::Global(pb::grant_object::GrantGlobalObject {}) => {
                 Ok(mt::principal::GrantObject::Global)
             }
-            Some(pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
+            pb::grant_object::Object::Database(pb::grant_object::GrantDatabaseObject {
                 catalog,
                 db,
-            })) => Ok(mt::principal::GrantObject::Database(catalog, db)),
-            Some(pb::grant_object::Object::Databasebyid(
-                pb::grant_object::GrantDatabaseIdObject { catalog, db },
-            )) => Ok(mt::principal::GrantObject::DatabaseById(catalog, db)),
-            Some(pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
+            }) => Ok(mt::principal::GrantObject::Database(catalog, db)),
+            pb::grant_object::Object::Databasebyid(pb::grant_object::GrantDatabaseIdObject {
                 catalog,
                 db,
-                table,
-            })) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
-            Some(pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+            }) => Ok(mt::principal::GrantObject::DatabaseById(catalog, db)),
+            pb::grant_object::Object::Table(pb::grant_object::GrantTableObject {
                 catalog,
                 db,
                 table,
-            })) => Ok(mt::principal::GrantObject::TableById(catalog, db, table)),
-            Some(pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf })) => {
+            }) => Ok(mt::principal::GrantObject::Table(catalog, db, table)),
+            pb::grant_object::Object::Tablebyid(pb::grant_object::GrantTableIdObject {
+                catalog,
+                db,
+                table,
+            }) => Ok(mt::principal::GrantObject::TableById(catalog, db, table)),
+            pb::grant_object::Object::Udf(pb::grant_object::GrantUdfObject { udf }) => {
                 Ok(mt::principal::GrantObject::UDF(udf))
             }
-            Some(pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage })) => {
+            pb::grant_object::Object::Stage(pb::grant_object::GrantStageObject { stage }) => {
                 Ok(mt::principal::GrantObject::Stage(stage))
             }
-            _ => Err(Incompatible {
-                reason: "GrantObject cannot be None".to_string(),
-            }),
         }
     }
 
@@ -322,19 +326,19 @@ impl FromToProto for mt::principal::UserInfo {
             hostname: p.hostname.clone(),
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
                 Incompatible {
-                    reason: "UserInfo.auth_info cannot be None".to_string(),
+                    reason: format!("USER {}: UserInfo.auth_info cannot be None", &p.name),
                 }
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
                 Incompatible {
-                    reason: "UserInfo.grants cannot be None".to_string(),
+                    reason: format!("user {}: UserInfo.grants cannot be None", &p.name),
                 }
             })?)?,
             quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
-                reason: "UserInfo.quota cannot be None".to_string(),
+                reason: format!("user {}: UserInfo.quota cannot be None", &p.name),
             })?)?,
             option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
-                reason: "UserInfo.option cannot be None".to_string(),
+                reason: format!("user {}: UserInfo.option cannot be None", &p.name),
             })?)?,
             history_auth_infos: p
                 .history_auth_infos
@@ -353,6 +357,14 @@ impl FromToProto for mt::principal::UserInfo {
             lockout_time: match p.lockout_time {
                 Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
                 None => None,
+            },
+            created_on: match p.created_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
+            },
+            update_on: match p.update_on {
+                Some(c) => DateTime::<Utc>::from_pb(c)?,
+                None => DateTime::<Utc>::default(),
             },
         })
     }
@@ -385,6 +397,8 @@ impl FromToProto for mt::principal::UserInfo {
                 Some(t) => Some(t.to_pb()?),
                 None => None,
             },
+            created_on: Some(self.created_on.to_pb()?),
+            update_on: Some(self.update_on.to_pb()?),
         })
     }
 }

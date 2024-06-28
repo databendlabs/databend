@@ -68,7 +68,9 @@ impl PullUpFilterOptimizer {
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
-            RelOperator::Join(join) if !join.is_lateral => self.pull_up_join(s_expr, join),
+            RelOperator::Join(join) if !join.is_lateral && join.is_null_equal.is_empty() => {
+                self.pull_up_join(s_expr, join)
+            }
             RelOperator::EvalScalar(eval_scalar) => self.pull_up_eval_scalar(s_expr, eval_scalar),
             RelOperator::MaterializedCte(_) => Ok(s_expr.clone()),
             _ => self.pull_up_others(s_expr),
@@ -180,6 +182,7 @@ impl PullUpFilterOptimizer {
                 let new_index = metadata.write().add_derived_column(
                     column.column.column_name.clone(),
                     *column.column.data_type.clone(),
+                    None,
                 );
                 let new_column = column.clone();
                 items.push(ScalarItem {

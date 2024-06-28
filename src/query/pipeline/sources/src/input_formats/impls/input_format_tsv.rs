@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Scalar;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_formats::FieldDecoder;
 use databend_common_formats::FileFormatOptionsExt;
@@ -45,12 +45,13 @@ impl InputFormatTSV {
     }
 
     fn read_column(
+        input_ctx: &Arc<InputContext>,
         builder: &mut ColumnBuilder,
         field_decoder: &SeparatedTextDecoder,
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
-        default_values: &Option<Vec<Scalar>>,
+        default_values: &Option<Vec<RemoteExpr>>,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             match default_values {
@@ -58,7 +59,7 @@ impl InputFormatTSV {
                     builder.push_default();
                 }
                 Some(values) => {
-                    builder.push(values[column_index].as_ref());
+                    input_ctx.push_default_value(values, builder, column_index)?;
                 }
             }
             Ok(())
@@ -82,13 +83,14 @@ impl InputFormatTSV {
     }
 
     fn read_row(
+        input_ctx: &Arc<InputContext>,
         field_delimiter: u8,
         field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
-        default_values: &Option<Vec<Scalar>>,
+        default_values: &Option<Vec<RemoteExpr>>,
     ) -> std::result::Result<(), FileParseError> {
         let num_columns = columns.len();
         let mut column_index = 0;
@@ -103,6 +105,7 @@ impl InputFormatTSV {
                 {
                     if columns_to_read.contains(&column_index) {
                         if let Err(e) = Self::read_column(
+                            input_ctx,
                             &mut columns[column_index],
                             field_decoder,
                             &buf[field_start..field_end],
@@ -133,6 +136,7 @@ impl InputFormatTSV {
                 if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
                 {
                     if let Err(err) = Self::read_column(
+                        input_ctx,
                         &mut columns[column_index],
                         field_decoder,
                         &buf[field_start..field_end],
@@ -226,6 +230,7 @@ impl InputFormatTextBase for InputFormatTSV {
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
+                &builder.ctx,
                 field_delimiter,
                 field_decoder,
                 buf,

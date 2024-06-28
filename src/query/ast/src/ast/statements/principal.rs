@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::quote::EscapedString;
+use crate::ast::quote::QuotedString;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -35,23 +35,17 @@ impl Display for ShareNameIdent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct UserIdentity {
-    #[drive(skip)]
     pub username: String,
-    #[drive(skip)]
     pub hostname: String,
-}
-
-impl UserIdentity {
-    const ESCAPE_CHARS: [u8; 2] = [b'\'', b'@'];
 }
 
 impl Display for UserIdentity {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "'{}'@'{}'",
-            EscapedString(&self.username, &Self::ESCAPE_CHARS),
-            EscapedString(&self.hostname, &Self::ESCAPE_CHARS),
+            "{}@{}",
+            QuotedString(&self.username, '\''),
+            QuotedString(&self.hostname, '\''),
         )
     }
 }
@@ -59,7 +53,7 @@ impl Display for UserIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum PrincipalIdentity {
     User(UserIdentity),
-    Role(#[drive(skip)] String),
+    Role(String),
 }
 
 impl Display for PrincipalIdentity {
@@ -232,23 +226,14 @@ impl Display for ShareGrantObjectPrivilege {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CopyOptions {
     pub on_error: OnErrorMode,
-    #[drive(skip)]
     pub size_limit: usize,
-    #[drive(skip)]
     pub max_files: usize,
-    #[drive(skip)]
     pub split_size: usize,
-    #[drive(skip)]
     pub purge: bool,
-    #[drive(skip)]
     pub disable_variant_check: bool,
-    #[drive(skip)]
     pub return_failed_only: bool,
-    #[drive(skip)]
     pub max_file_size: usize,
-    #[drive(skip)]
     pub single: bool,
-    #[drive(skip)]
     pub detailed_output: bool,
 }
 
@@ -270,8 +255,8 @@ impl Display for CopyOptions {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum OnErrorMode {
     Continue,
-    SkipFileNum(#[drive(skip)] u64),
-    AbortNum(#[drive(skip)] u64),
+    SkipFileNum(u64),
+    AbortNum(u64),
 }
 
 impl Display for OnErrorMode {

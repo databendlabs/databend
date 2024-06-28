@@ -26,6 +26,8 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -93,6 +95,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -168,8 +171,8 @@ impl Catalog for DatabaseCatalog {
         "default".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
-        CatalogInfo::new_default()
+    fn info(&self) -> Arc<CatalogInfo> {
+        Arc::default()
     }
 
     #[async_backtrace::framed]
@@ -316,6 +319,16 @@ impl Catalog for DatabaseCatalog {
         tables.extend(other);
 
         Ok(tables)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        let res = self.immutable_catalog.get_table_name_by_id(table_id).await;
+
+        match res {
+            Ok(Some(x)) => Ok(Some(x)),
+            Ok(None) | Err(_) => self.mutable_catalog.get_table_name_by_id(table_id).await,
+        }
     }
 
     #[async_backtrace::framed]
@@ -490,6 +503,12 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog.undrop_database(req).await
     }
 
+    async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        info!("commit_table_meta from req:{:?}", req);
+
+        self.mutable_catalog.commit_table_meta(req).await
+    }
+
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
         info!("Rename table from req:{:?}", req);
@@ -562,6 +581,15 @@ impl Catalog for DatabaseCatalog {
     ) -> Result<UpdateTableMetaReply> {
         self.mutable_catalog
             .update_table_meta(table_info, req)
+            .await
+    }
+
+    async fn update_stream_metas(
+        &self,
+        update_stream_meta_reqs: &[UpdateStreamMetaReq],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .update_stream_metas(update_stream_meta_reqs)
             .await
     }
 

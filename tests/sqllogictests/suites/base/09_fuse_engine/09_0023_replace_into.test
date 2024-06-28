@@ -1,7 +1,4 @@
 statement ok
-set enable_distributed_replace_into = 1;
-
-statement ok
 DROP DATABASE IF EXISTS db_09_0023
 
 statement ok
@@ -288,7 +285,7 @@ statement ok
 insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
 
 statement ok
-CREATE STAGE IF NOT EXISTS test_stage;
+CREATE OR REPLACE STAGE test_stage;
 
 statement ok
 CREATE TABLE test(id INTEGER not null, name VARCHAR not null, age INT not null);
@@ -321,6 +318,9 @@ select * from test order by id;
 
 statement ok
 DROP TABLE test;
+
+statement ok
+remove @test_stage
 
 statement ok
 drop stage test_stage
@@ -389,10 +389,10 @@ select a, b FROM test order by a
 4 4
 
 # since auto re-clustering is disabled, the table is not expected to be re-clustered
-query TIIIFFT
-select * FROM clustering_information('db_09_0023','test')
+query TIIFFT
+select * exclude(timestamp) FROM clustering_information('db_09_0023','test')
 ----
-(a + 1, b) 3 2 0 0.0 1.0 {"00001":3}
+(a + 1, b) 3 2 0.0 1.0 {"00001":3}
 
 statement ok
 DROP TABLE test
@@ -507,6 +507,29 @@ select * from t order by c;
 ----
 2
 3
+
+statement ok
+create or replace table test (c int);
+
+statement ok
+create or replace table source (c int, v string);
+
+statement ok
+insert into source select number as c, number::string from numbers(100000);
+
+statement ok
+replace into test on(c) select sum(c) as c from source group by v; 
+
+statement ok
+replace into test on(c) select sum(c) as c from source group by v; 
+
+query I
+select sum(c) from test;
+----
+4999950000
+
+statement ok
+explain replace into test on(c) select sum(c) as c from source group by v;
 
 statement ok
 DROP DATABASE db_09_0023

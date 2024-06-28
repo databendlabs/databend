@@ -9,18 +9,7 @@ edition = { workspace = true }
 [lib]
 test = true
 
-[dependencies] # In alphabetical order
-# Workspace dependencies
-databend-common-arrow = { path = "../../common/arrow" }
-databend-common-base = { path = "../../common/base" }
-databend-common-datavalues = { path = "../datavalues" }
-databend-common-exception = { path = "../../common/exception" }
-databend-common-hashtable = { path = "../../common/hashtable" }
-databend-common-io = { path = "../../common/io" }
-
-# GitHub dependencies
-
-# Crates.io dependencies
+[dependencies]
 arrow-array = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
@@ -33,6 +22,13 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 comfy-table = "6"
 dashmap = { workspace = true }
+databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-datavalues = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-hashtable = { workspace = true }
+databend-common-io = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
 ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
@@ -64,11 +60,13 @@ unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
 arrow-ord = { workspace = true }
-databend-common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"
 rand = { workspace = true }
 rmp-serde = "1.1.1"
+
+[lints]
+workspace = true
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]

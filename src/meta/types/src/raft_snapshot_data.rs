@@ -35,6 +35,21 @@ pub struct SnapshotData {
 }
 
 impl SnapshotData {
+    pub fn new(path: impl ToString, f: std::fs::File, is_temp: bool) -> Self {
+        SnapshotData {
+            is_temp,
+            path: path.to_string(),
+            f: fs::File::from_std(f),
+        }
+    }
+
+    /// Open an existing snapshot file as a temp snapshot.
+    pub fn open_temp(path: String) -> Result<Self, io::Error> {
+        let mut d = Self::open(path)?;
+        d.is_temp = true;
+        Ok(d)
+    }
+
     pub fn open(path: String) -> Result<Self, io::Error> {
         let f = std::fs::OpenOptions::new()
             .create(false)

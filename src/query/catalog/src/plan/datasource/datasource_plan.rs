@@ -18,7 +18,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::schema::CatalogInfo;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
 use crate::plan::PartStatistics;
@@ -29,7 +28,6 @@ use crate::table_args::TableArgs;
 // TODO: Delete the scan plan field, but it depends on plan_parser:L394
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DataSourcePlan {
-    pub catalog_info: CatalogInfo,
     pub source_info: DataSourceInfo,
 
     pub output_schema: TableSchemaRef,

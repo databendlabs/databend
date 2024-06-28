@@ -18,9 +18,9 @@ use std::ops::Not;
 use databend_common_arrow::arrow::bitmap;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use itertools::Itertools;
 use log::error;
 
@@ -217,6 +217,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &expr.sql_display(),
                     options.selection,
                 )?;
 
@@ -1017,7 +1018,14 @@ impl<'a> Evaluator<'a> {
                     suppress_error: false,
                 };
                 let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
-                ctx.render_error(*span, id.params(), &args, &function.signature.name, None)?;
+                ctx.render_error(
+                    *span,
+                    id.params(),
+                    &args,
+                    &function.signature.name,
+                    &expr.sql_display(),
+                    None,
+                )?;
                 assert_eq!(result.len(), self.data_block.num_rows());
                 return Ok(result);
             }
@@ -1276,7 +1284,6 @@ impl<'a> Evaluator<'a> {
                     self.remove_generics_data_type(generics, &function.signature.return_type);
                 Ok((self.eval_and_filters(args, None, options)?, return_type))
             }
-
             Expr::FunctionCall {
                 span,
                 id,
@@ -1327,6 +1334,7 @@ impl<'a> Evaluator<'a> {
                     id.params(),
                     &args,
                     &function.signature.name,
+                    &expr.sql_display(),
                     options.selection,
                 )?;
 
@@ -1438,7 +1446,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         folder.fold_to_stable(expr)
     }
 
-    fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
+    pub fn full_input_domains(expr: &Expr<Index>) -> HashMap<Index, Domain> {
         expr.column_refs()
             .into_iter()
             .map(|(id, ty)| {

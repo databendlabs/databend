@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
@@ -52,9 +53,7 @@ impl Binder {
             ..
         } = stmt;
 
-        if let Some(with) = &with {
-            self.add_cte(with, bind_context)?;
-        }
+        self.init_cte(bind_context, with)?;
 
         let (catalog_name, database_name, table_name) = if let TableReference::Table {
             catalog,
@@ -79,7 +78,19 @@ impl Binder {
             ));
         };
 
-        let (table_expr, mut context) = self.bind_single_table(bind_context, table).await?;
+        // Add table lock.
+        let lock_guard = self
+            .ctx
+            .clone()
+            .acquire_table_lock(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                &LockTableOption::LockWithRetry,
+            )
+            .await?;
+
+        let (table_expr, mut context) = self.bind_table_reference(bind_context, table)?;
 
         let table = self
             .ctx
@@ -116,7 +127,7 @@ impl Binder {
             }
 
             // TODO(zhyass): update_list support subquery.
-            let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
+            let (scalar, _) = scalar_binder.bind(&update_expr.expr)?;
             if !self.check_allowed_scalar_expr(&scalar)? {
                 return Err(ErrorCode::SemanticError(
                     "update_list in update statement can't contain subquery|window|aggregate|udf functions|async functions".to_string(),
@@ -160,6 +171,7 @@ impl Binder {
             bind_context: Box::new(context),
             metadata: self.metadata.clone(),
             subquery_desc,
+            lock_guard,
         };
         Ok(Plan::Update(Box::new(plan)))
     }

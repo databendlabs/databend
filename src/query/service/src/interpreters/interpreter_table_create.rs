@@ -31,6 +31,7 @@ use databend_common_license::license::Feature::InvertedIndex;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
@@ -38,8 +39,8 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_types::MatchSeq;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::BloomIndexColumns;
@@ -84,6 +85,7 @@ use crate::sql::plans::insert::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
+#[derive(Clone, Debug)]
 pub struct CreateTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateTablePlan,
@@ -196,6 +198,8 @@ impl CreateTableInterpreter {
         }
 
         let table_id = reply.table_id;
+        let prev_table_id = reply.prev_table_id;
+        let orphan_table_name = reply.orphan_table_name.clone();
         let table_id_seq = reply
             .table_id_seq
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
@@ -249,7 +253,7 @@ impl CreateTableInterpreter {
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
                 tenant.tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
+                self.ctx.get_application_level_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
             )
@@ -272,11 +276,16 @@ impl CreateTableInterpreter {
 
         pipeline
             .main_pipeline
-            .push_front_on_finished_callback(move |(_profiles, err)| {
-                if err.is_ok() {
-                    let qualified_table_name = format!("{}.{}", db_name, table_name);
-                    let undrop_fut = async move {
-                        let undrop_by_id = UndropTableByIdReq {
+            .lift_on_finished(move |info: &ExecutionInfo| {
+                let qualified_table_name = format!("{}.{}", db_name, table_name);
+
+                if info.res.is_ok() {
+                    info!(
+                        "create_table_as_select {} success, commit table meta data by table id {}",
+                        qualified_table_name, table_id
+                    );
+                    let fut = async move {
+                        let req = CommitTableMetaReq {
                             name_ident: TableNameIdent {
                                 tenant,
                                 db_name,
@@ -284,17 +293,16 @@ impl CreateTableInterpreter {
                             },
                             db_id,
                             table_id,
-                            table_id_seq,
-                            force_replace: true,
+                            prev_table_id,
+                            orphan_table_name,
                         };
-                        catalog.undrop_table_by_id(undrop_by_id).await
+                        catalog.commit_table_meta(req).await
                     };
-                    GlobalIORuntime::instance()
-                        .block_on(undrop_fut)
-                        .map_err(|e| {
-                            info!("create {} as select failed. {:?}", qualified_table_name, e);
-                            e
-                        })?;
+
+                    GlobalIORuntime::instance().block_on(fut).map_err(|e| {
+                        info!("create {} as select failed. {:?}", qualified_table_name, e);
+                        e
+                    })?;
                 }
 
                 Ok(())
@@ -309,7 +317,9 @@ impl CreateTableInterpreter {
         let mut stat = None;
         if !GlobalConfig::instance().query.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
-                let operator = self.ctx.get_data_operator()?.operator();
+                // using application level data operator is a temp workaround
+                // please see discussions https://github.com/datafuselabs/databend/pull/10424
+                let operator = self.ctx.get_application_level_data_operator()?.operator();
                 let reader = MetaReaders::table_snapshot_reader(operator);
 
                 let params = LoadParams {
@@ -362,7 +372,7 @@ impl CreateTableInterpreter {
         if let Some((spec_vec, share_table_info)) = reply.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_data_operator()?.operator(),
+                self.ctx.get_application_level_data_operator()?.operator(),
                 Some(spec_vec),
                 Some(share_table_info),
             )

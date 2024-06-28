@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Span;
-
 use crate::ast::*;
+use crate::Span;
 
 #[deprecated = "Use derive_visitor::Visitor instead"]
 pub trait Visitor<'ast>: Sized {
@@ -612,7 +611,14 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_grant(&mut self, _grant: &'ast GrantStmt) {}
 
-    fn visit_show_grant(&mut self, _principal: &'ast Option<PrincipalIdentity>) {}
+    fn visit_show_grant(
+        &mut self,
+        _principal: &'ast Option<PrincipalIdentity>,
+        _show_options: &'ast Option<ShowOptions>,
+    ) {
+    }
+
+    fn visit_show_object_priv(&mut self, _show: &'ast ShowObjectPrivilegesStmt) {}
 
     fn visit_revoke(&mut self, _revoke: &'ast RevokeStmt) {}
 
@@ -838,4 +844,6 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_sequence(&mut self, _stmt: &'ast DropSequenceStmt) {}
     fn visit_set_priority(&mut self, _priority: &'ast Priority, _object_id: &'ast str) {}
     fn visit_multi_table_insert(&mut self, insert: &'ast InsertMultiTableStmt);
+
+    fn visit_system(&mut self, _stmt: &'ast SystemStmt) {}
 }

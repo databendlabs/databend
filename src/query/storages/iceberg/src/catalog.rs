@@ -27,6 +27,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -111,7 +113,7 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
-    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>> {
+    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Iceberg(opt) => opt,
             _ => unreachable!(
@@ -120,8 +122,7 @@ impl CatalogCreator for IcebergCreator {
         };
 
         let data_operator = DataOperator::try_new(&opt.storage_params)?;
-        let catalog: Arc<dyn Catalog> =
-            Arc::new(IcebergCatalog::try_create(info.clone(), data_operator)?);
+        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info, data_operator)?);
 
         Ok(catalog)
     }
@@ -136,7 +137,7 @@ impl CatalogCreator for IcebergCreator {
 #[derive(Clone, Debug)]
 pub struct IcebergCatalog {
     /// info of this iceberg table.
-    info: CatalogInfo,
+    info: Arc<CatalogInfo>,
 
     /// underlying storage access operator
     operator: DataOperator,
@@ -144,21 +145,8 @@ pub struct IcebergCatalog {
 
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
-    ///
-    /// # NOTE
-    ///
-    /// endpoint_url should be set as in `Stage`s.
-    /// For example, to create a iceberg catalog on S3, the endpoint_url should be:
-    ///
-    /// `s3://bucket_name/path/to/iceberg_catalog`
-    ///
-    /// Some iceberg storages barely store tables in the root directory,
-    /// making there no path for database.
-    ///
-    /// Such catalog will be seen as an `flatten` catalogs,
-    /// a `default` database will be generated directly
     #[minitrace::trace]
-    pub fn try_create(info: CatalogInfo, operator: DataOperator) -> Result<Self> {
+    pub fn try_create(info: Arc<CatalogInfo>, operator: DataOperator) -> Result<Self> {
         Ok(Self { info, operator })
     }
 
@@ -193,7 +181,7 @@ impl Catalog for IcebergCatalog {
     fn name(&self) -> String {
         self.info.name_ident.catalog_name.clone()
     }
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
@@ -217,7 +205,7 @@ impl Catalog for IcebergCatalog {
         let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create(
-            &self.name(),
+            self.info.clone(),
             db_name,
             db_root,
         )))
@@ -272,6 +260,13 @@ impl Catalog for IcebergCatalog {
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table name by id in ICEBERG catalog",
         ))
     }
 
@@ -331,6 +326,11 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         unimplemented!()
     }
 

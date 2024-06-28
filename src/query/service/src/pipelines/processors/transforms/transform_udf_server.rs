@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::udf_client::UDFFlightClient;
@@ -24,13 +22,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_transforms::processors::AsyncRetry;
+use databend_common_pipeline_transforms::processors::AsyncRetryWrapper;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::processors::RetryStrategy;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
-
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 
 pub struct TransformUdfServer {
     func_ctx: FunctionContext,
@@ -38,16 +34,25 @@ pub struct TransformUdfServer {
 }
 
 impl TransformUdfServer {
-    pub fn try_create(
+    pub fn new_retry_wrapper(
         func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
-            func_ctx,
-            funcs,
-        }))
+    ) -> AsyncRetryWrapper<Self> {
+        let s = Self { func_ctx, funcs };
+        AsyncRetryWrapper::create(s)
+    }
+}
+
+impl AsyncRetry for TransformUdfServer {
+    fn retry_on(&self, _err: &databend_common_exception::ErrorCode) -> bool {
+        true
+    }
+
+    fn retry_strategy(&self) -> RetryStrategy {
+        RetryStrategy {
+            retry_times: 64,
+            retry_sleep_duration: Some(tokio::time::Duration::from_millis(500)),
+        }
     }
 }
 

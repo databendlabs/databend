@@ -1,0 +1,44 @@
+query T
+explain create or replace table t2  as select number % 400 d, max(number) from numbers(10000000) group by number  limit 3;
+----
+CreateTableAsSelect:
+(empty)
+EvalScalar
+├── output columns: [max(number) (#6), d (#7)]
+├── expressions: [numbers.number (#4) % 400]
+├── estimated rows: 3.00
+└── Limit
+    ├── output columns: [max(number) (#6), numbers.number (#4)]
+    ├── limit: 3
+    ├── offset: 0
+    ├── estimated rows: 3.00
+    └── Exchange
+        ├── output columns: [max(number) (#6), numbers.number (#4)]
+        ├── exchange type: Merge
+        └── Limit
+            ├── output columns: [max(number) (#6), numbers.number (#4)]
+            ├── limit: 3
+            ├── offset: 0
+            ├── estimated rows: 3.00
+            └── AggregateFinal
+                ├── output columns: [max(number) (#6), numbers.number (#4)]
+                ├── group by: [number]
+                ├── aggregate functions: [max(number)]
+                ├── limit: 3
+                ├── estimated rows: 10000000.00
+                └── Exchange
+                    ├── output columns: [max(number) (#6), numbers.number (#4)]
+                    ├── exchange type: Hash(0)
+                    └── AggregatePartial
+                        ├── group by: [number]
+                        ├── aggregate functions: [max(number)]
+                        ├── estimated rows: 10000000.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── output columns: [number (#4)]
+                            ├── read rows: 10000000
+                            ├── read size: 76.29 MiB
+                            ├── partitions total: 153
+                            ├── partitions scanned: 153
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 10000000.00

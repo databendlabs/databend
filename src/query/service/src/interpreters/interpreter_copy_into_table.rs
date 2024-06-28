@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
@@ -106,7 +107,13 @@ impl CopyIntoTableInterpreter {
             .await?;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
-            let (query_interpreter, update_stream_meta) = self.build_query(query).await?;
+            let query = if plan.enable_distributed {
+                query.remove_exchange_for_select()
+            } else {
+                *query.clone()
+            };
+
+            let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
             let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
 
@@ -119,14 +126,7 @@ impl CopyIntoTableInterpreter {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
 
             let data_source_plan = stage_table
-                .read_plan_with_catalog(
-                    self.ctx.clone(),
-                    plan.catalog_info.catalog_name().to_string(),
-                    None,
-                    None,
-                    false,
-                    false,
-                )
+                .read_plan(self.ctx.clone(), None, None, false, false)
                 .await?;
 
             let mut name_mapping = BTreeMap::new();
@@ -149,7 +149,6 @@ impl CopyIntoTableInterpreter {
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
             plan_id: 0,
-            catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
@@ -160,6 +159,7 @@ impl CopyIntoTableInterpreter {
             validation_mode: plan.validation_mode.clone(),
             project_columns,
             source,
+            is_transform: plan.is_transform,
         }));
 
         if plan.enable_distributed {
@@ -289,7 +289,6 @@ impl CopyIntoTableInterpreter {
         Ok(())
     }
 
-    // things should be done when there is no files to be copied
     async fn on_no_files_to_copy(&self) -> Result<PipelineBuildResult> {
         // currently, there is only one thing that we care about:
         //
@@ -386,7 +385,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
                 MutationKind::Insert,
-                true,
+                LockTableOption::LockNoRetry,
             );
             hook_operator.execute(&mut build_res.main_pipeline).await;
         }

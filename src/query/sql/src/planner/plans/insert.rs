@@ -52,7 +52,9 @@ pub enum InsertInputSource {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InsertValue {
+    // Scalars of literal values
     Values { rows: Vec<Vec<Scalar>> },
+    // Raw values of clickhouse dialect
     RawValues { data: String, start: usize },
 }
 
@@ -114,124 +116,133 @@ impl Insert {
             .collect::<Vec<_>>()
             .join(",");
 
-        let mut children = vec![
+        let children = vec![
             FormatTreeNode::new(format!("table: {table_name}")),
             FormatTreeNode::new(format!("inserted columns: [{inserted_columns}]")),
             FormatTreeNode::new(format!("overwrite: {overwrite}")),
         ];
 
-        let mut formatted_plan = String::new();
-
-        match source {
-            InsertInputSource::SelectPlan(plan) => {
-                if let Plan::Query {
-                    s_expr, metadata, ..
-                } = &**plan
-                {
-                    let metadata = &*metadata.read();
-                    let sub_tree = s_expr.to_format_tree(metadata, verbose)?;
-                    children.push(sub_tree);
-                    formatted_plan = FormatTreeNode::with_children(
-                        "InsertPlan (subquery):".to_string(),
-                        children,
-                    )
-                    .format_pretty()?;
-                }
-            }
-            InsertInputSource::Values(values) => match values {
-                InsertValue::Values { .. } => {
-                    formatted_plan =
-                        FormatTreeNode::with_children("InsertPlan (values):".to_string(), children)
-                            .format_pretty()?;
-                }
-                InsertValue::RawValues { .. } => {
-                    formatted_plan = FormatTreeNode::with_children(
-                        "InsertPlan (rawvalues):".to_string(),
-                        children,
-                    )
-                    .format_pretty()?;
-                }
-            },
-            InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::CopyIntoTable(copy_plan) => {
-                    let CopyIntoTablePlan {
-                        no_file_to_copy,
-                        from_attachment,
-                        required_values_schema,
-                        required_source_schema,
-                        write_mode,
-                        validation_mode,
-                        force,
-                        stage_table_info,
-                        enable_distributed,
-                        ..
-                    } = &*copy_plan;
-                    let required_values_schema = required_values_schema
-                        .fields()
-                        .iter()
-                        .map(|field| field.name().to_string())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let required_source_schema = required_source_schema
-                        .fields()
-                        .iter()
-                        .map(|field| field.name().to_string())
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let stage_node = vec![
-                        FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
-                        FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
-                        FormatTreeNode::new(format!(
-                            "required_values_schema: [{required_values_schema}]"
-                        )),
-                        FormatTreeNode::new(format!(
-                            "required_source_schema: [{required_source_schema}]"
-                        )),
-                        FormatTreeNode::new(format!("write_mode: {write_mode}")),
-                        FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
-                        FormatTreeNode::new(format!("force: {force}")),
-                        FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
-                        FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
-                    ];
-                    children.extend(stage_node);
-                    formatted_plan =
-                        FormatTreeNode::with_children("InsertPlan (stage):".to_string(), children)
-                            .format_pretty()?;
-                }
-                _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
-            },
-            InsertInputSource::StreamingWithFileFormat {
-                format,
-                on_error_mode,
-                start,
-                ..
-            } => {
-                let stage_node = vec![
-                    FormatTreeNode::new(format!("format: {format}")),
-                    FormatTreeNode::new(format!("on_error_mode: {on_error_mode}")),
-                    FormatTreeNode::new(format!("start: {start}")),
-                ];
-                children.extend(stage_node);
-                formatted_plan = FormatTreeNode::with_children(
-                    "InsertPlan (StreamingWithFileFormat):".to_string(),
-                    children,
-                )
-                .format_pretty()?;
-            }
-            InsertInputSource::StreamingWithFormat(_, _, _) => {
-                // used in clickhouse handler only; will discard soon
-                formatted_plan = FormatTreeNode::with_children(
-                    "InsertPlan (StreamingWithFormat):".to_string(),
-                    children,
-                )
-                .format_pretty()?;
-            }
-        };
+        let formatted_plan = format_insert_source("InsertPlan", source, verbose, children)?;
 
         let line_split_result: Vec<&str> = formatted_plan.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         result.push(DataBlock::new_from_columns(vec![formatted_plan]));
         Ok(vec![DataBlock::concat(&result)?])
+    }
+}
+
+pub(crate) fn format_insert_source(
+    plan_name: &str,
+    source: &InsertInputSource,
+    verbose: bool,
+    mut children: Vec<FormatTreeNode>,
+) -> databend_common_exception::Result<String> {
+    match source {
+        InsertInputSource::SelectPlan(plan) => {
+            if let Plan::Query {
+                s_expr, metadata, ..
+            } = &**plan
+            {
+                let metadata = &*metadata.read();
+                let sub_tree = s_expr.to_format_tree(metadata, verbose)?;
+                children.push(sub_tree);
+
+                return Ok(FormatTreeNode::with_children(
+                    format!("{plan_name} (subquery):"),
+                    children,
+                )
+                .format_pretty()?);
+            }
+            Ok(String::new())
+        }
+        InsertInputSource::Values(values) => match values {
+            InsertValue::Values { .. } => Ok(FormatTreeNode::with_children(
+                format!("{plan_name} (values):"),
+                children,
+            )
+            .format_pretty()?),
+            InsertValue::RawValues { .. } => Ok(FormatTreeNode::with_children(
+                format!("{plan_name} (rawvalues):"),
+                children,
+            )
+            .format_pretty()?),
+        },
+        InsertInputSource::Stage(plan) => match *plan.clone() {
+            Plan::CopyIntoTable(copy_plan) => {
+                let CopyIntoTablePlan {
+                    no_file_to_copy,
+                    from_attachment,
+                    required_values_schema,
+                    required_source_schema,
+                    write_mode,
+                    validation_mode,
+                    force,
+                    stage_table_info,
+                    enable_distributed,
+                    ..
+                } = &*copy_plan;
+                let required_values_schema = required_values_schema
+                    .fields()
+                    .iter()
+                    .map(|field| field.name().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let required_source_schema = required_source_schema
+                    .fields()
+                    .iter()
+                    .map(|field| field.name().to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let stage_node = vec![
+                    FormatTreeNode::new(format!("no_file_to_copy: {no_file_to_copy}")),
+                    FormatTreeNode::new(format!("from_attachment: {from_attachment}")),
+                    FormatTreeNode::new(format!(
+                        "required_values_schema: [{required_values_schema}]"
+                    )),
+                    FormatTreeNode::new(format!(
+                        "required_source_schema: [{required_source_schema}]"
+                    )),
+                    FormatTreeNode::new(format!("write_mode: {write_mode}")),
+                    FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
+                    FormatTreeNode::new(format!("force: {force}")),
+                    FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
+                    FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
+                ];
+                children.extend(stage_node);
+                Ok(
+                    FormatTreeNode::with_children(format!("{plan_name} (stage):"), children)
+                        .format_pretty()?,
+                )
+            }
+            _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
+        },
+        InsertInputSource::StreamingWithFileFormat {
+            format,
+            on_error_mode,
+            start,
+            ..
+        } => {
+            let stage_node = vec![
+                FormatTreeNode::new(format!("format: {format}")),
+                FormatTreeNode::new(format!("on_error_mode: {on_error_mode}")),
+                FormatTreeNode::new(format!("start: {start}")),
+            ];
+            children.extend(stage_node);
+
+            Ok(FormatTreeNode::with_children(
+                "InsertPlan (StreamingWithFileFormat):".to_string(),
+                children,
+            )
+            .format_pretty()?)
+        }
+        InsertInputSource::StreamingWithFormat(_, _, _) => {
+            // used in clickhouse handler only; will discard soon
+            Ok(FormatTreeNode::with_children(
+                "InsertPlan (StreamingWithFormat):".to_string(),
+                children,
+            )
+            .format_pretty()?)
+        }
     }
 }
 

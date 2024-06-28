@@ -38,10 +38,8 @@ use crate::ast::UriLocation;
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
-    #[drive(skip)]
     pub full: bool,
     pub limit: Option<ShowLimit>,
-    #[drive(skip)]
     pub with_history: bool,
 }
 
@@ -140,10 +138,8 @@ pub struct CreateTableStmt {
     pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Vec<Expr>,
-    #[drive(skip)]
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
-    #[drive(skip)]
     pub transient: bool,
 }
 
@@ -206,7 +202,6 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
-    #[drive(skip)]
     pub read_only: bool,
 }
 
@@ -286,12 +281,10 @@ impl Display for DescribeTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    #[drive(skip)]
     pub all: bool,
 }
 
@@ -338,7 +331,6 @@ impl Display for UndropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AlterTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub table_reference: TableReference,
     pub action: AlterTableAction,
@@ -369,7 +361,6 @@ pub enum AlterTableAction {
         new_column: Identifier,
     },
     ModifyTableComment {
-        #[drive(skip)]
         new_comment: String,
     },
     ModifyColumn {
@@ -383,17 +374,14 @@ pub enum AlterTableAction {
     },
     DropTableClusterKey,
     ReclusterTable {
-        #[drive(skip)]
         is_final: bool,
         selection: Option<Expr>,
-        #[drive(skip)]
         limit: Option<u64>,
     },
     FlashbackTo {
         point: TimeTravelPoint,
     },
     SetOptions {
-        #[drive(skip)]
         set_options: BTreeMap<String, String>,
     },
 }
@@ -478,7 +466,6 @@ impl Display for AddColumnOption {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct RenameTableStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -580,7 +567,6 @@ impl Display for VacuumDropTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTemporaryFiles {
-    #[drive(skip)]
     pub limit: Option<u64>,
     #[drive(skip)]
     pub retain: Option<Duration>,
@@ -614,7 +600,6 @@ pub struct OptimizeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
-    #[drive(skip)]
     pub limit: Option<u64>,
 }
 
@@ -712,7 +697,6 @@ pub enum CompactTarget {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
 }
@@ -731,10 +715,8 @@ impl Display for VacuumTableOption {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct VacuumDropTableOption {
-    #[drive(skip)]
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
-    #[drive(skip)]
     pub limit: Option<usize>,
 }
 
@@ -821,7 +803,6 @@ pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
     pub expr: Option<ColumnExpr>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -842,9 +823,7 @@ impl Display for ColumnDefinition {
 pub struct InvertedIndexDefinition {
     pub index_name: Identifier,
     pub columns: Vec<Identifier>,
-    #[drive(skip)]
     pub sync_creation: bool,
-    #[drive(skip)]
     pub index_options: BTreeMap<String, String>,
 }
 
@@ -891,7 +870,7 @@ impl Display for CreateDefinition {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
-    SetMaskingPolicy(Identifier, #[drive(skip)] String),
+    SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
     // vec<ColumnDefinition>

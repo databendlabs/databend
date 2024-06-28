@@ -26,6 +26,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
@@ -47,11 +48,15 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogInfo;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::CreateIndexReply;
@@ -123,6 +128,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
+use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
@@ -156,7 +162,7 @@ impl Catalog for FakedCatalog {
         "FakedCatalog".to_string()
     }
 
-    fn info(&self) -> CatalogInfo {
+    fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
     }
 
@@ -208,6 +214,10 @@ impl Catalog for FakedCatalog {
         self.cat.mget_database_names_by_ids(tenant, db_ids).await
     }
 
+    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+        self.cat.get_table_name_by_id(table_id).await
+    }
+
     async fn get_table(
         &self,
         tenant: &Tenant,
@@ -238,6 +248,10 @@ impl Catalog for FakedCatalog {
     }
 
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+        todo!()
+    }
+
+    async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
         todo!()
     }
 
@@ -622,6 +636,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
+    ) -> Result<()> {
+        todo!()
+    }
+
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
@@ -699,8 +722,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_data_operator()
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
@@ -845,6 +868,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn clear_runtime_filter(&self) {
+        todo!()
+    }
+
     fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, BinaryFuse16)> {
         todo!()
     }
@@ -882,6 +909,16 @@ impl TableContext for CtxDelegation {
     }
 
     fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
     }
 }

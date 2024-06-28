@@ -32,6 +32,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::ConditionResult::Eq;
@@ -43,6 +44,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
 use log::debug;
+use log::error;
 use minitrace::func_name;
 
 use crate::role::role_api::RoleApi;
@@ -165,7 +167,7 @@ impl RoleApi for RoleMgr {
             Ok(_) => {
                 let mut quota = Quota::new(func_name!());
 
-                let u = check_and_upgrade_to_pb(&mut quota, key, &seq_value, self.kv_api.as_ref())
+                let u = check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref())
                     .await?;
 
                 // Keep the original seq.
@@ -180,20 +182,26 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
-        let role_prefix = self.role_prefix();
-        let values = self.kv_api.prefix_list_kv(role_prefix.as_str()).await?;
+    async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
+        let values = self.get_raw_meta_roles().await?;
 
         let mut r = vec![];
 
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(&mut quota, key, &val, self.kv_api.as_ref()).await?;
+            let u = check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await?;
             r.push(u);
         }
 
         Ok(r)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
+        let role_prefix = self.role_prefix();
+        Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
@@ -210,8 +218,16 @@ impl RoleApi for RoleMgr {
         let mut quota = Quota::new(func_name!());
 
         for (key, val) in values {
-            let u = check_and_upgrade_to_pb(&mut quota, key, &val, self.kv_api.as_ref()).await?;
-            r.push(u);
+            match check_and_upgrade_to_pb(&mut quota, &key, &val, self.kv_api.as_ref()).await {
+                Ok(u) => r.push(u),
+                // If we add a new item in OwnershipObject, and generate a new kv about this new item,
+                // After rollback the old version, deserialize will return Err Ownership can not be none.
+                // But get ownerships should try to ensure success because in this version.
+                Err(err) => error!(
+                    "deserialize key {} Got err {} while (get_ownerships)",
+                    &key, err
+                ),
+            }
         }
 
         Ok(r)
@@ -350,31 +366,13 @@ impl RoleApi for RoleMgr {
                         &grant_object,
                         make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                     );
+                    old_role_info.update_role_time();
                     condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                     if_then.push(txn_op_put(
                         &old_key,
                         serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
                     ));
                 }
-            }
-
-            // account_admin has all privilege, no need to grant ownership.
-            if new_role != BUILTIN_ROLE_ACCOUNT_ADMIN {
-                let new_key = self.role_ident(new_role);
-                let SeqV {
-                    seq: new_seq,
-                    data: mut new_role_info,
-                    ..
-                } = self.get_role(&new_role.to_owned(), MatchSeq::GE(1)).await?;
-                new_role_info.grants.grant_privileges(
-                    &grant_object,
-                    make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
-                );
-                condition.push(txn_cond_seq(&new_key, Eq, new_seq));
-                if_then.push(txn_op_put(
-                    &new_key,
-                    serialize_struct(&new_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                ));
             }
 
             let txn_req = TxnRequest {
@@ -415,7 +413,7 @@ impl RoleApi for RoleMgr {
 
         // if can not get ownership, will directly return None.
         let seq_val =
-            check_and_upgrade_to_pb(&mut quota, key, &seq_value, self.kv_api.as_ref()).await?;
+            check_and_upgrade_to_pb(&mut quota, &key, &seq_value, self.kv_api.as_ref()).await?;
 
         Ok(Some(seq_val.data))
     }
@@ -443,6 +441,7 @@ impl RoleApi for RoleMgr {
                     &grant_object,
                     make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
                 );
+                old_role_info.update_role_time();
                 condition.push(txn_cond_seq(&old_key, Eq, old_seq));
                 if_then.push(txn_op_put(
                     &old_key,

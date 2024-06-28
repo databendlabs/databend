@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
@@ -30,7 +31,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -65,7 +65,6 @@ use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::locks::LockManager;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -108,21 +107,10 @@ impl Interpreter for DeleteInterpreter {
         let is_distributed = !self.ctx.get_cluster().is_empty();
 
         let catalog_name = self.plan.catalog_name.as_str();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
-
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-        let tbl = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
 
-        // Add table lock.
-        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
-        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
-
-        // refresh table.
-        let tbl = tbl.refresh(self.ctx.as_ref()).await?;
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         // check mutability
         tbl.check_mutable()?;
@@ -207,7 +195,9 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         }
 
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         // check if unconditional deletion
         let Some(filters) = filters else {
             let progress_values = ProgressValues {
@@ -274,7 +264,6 @@ impl Interpreter for DeleteInterpreter {
             fuse_table.get_table_info().clone(),
             col_indices,
             snapshot,
-            catalog_info,
             is_distributed,
             query_row_id_col,
         )?;
@@ -289,7 +278,7 @@ impl Interpreter for DeleteInterpreter {
                 tbl_name.to_string(),
                 MutationKind::Delete,
                 // table lock has been added, no need to check.
-                false,
+                LockTableOption::NoLock,
             );
             hook_operator
                 .execute_refresh(&mut build_res.main_pipeline)
@@ -308,7 +297,6 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: CatalogInfo,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
@@ -317,7 +305,6 @@ impl DeleteInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
@@ -338,11 +325,9 @@ impl DeleteInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Delete,
             update_stream_meta: vec![],
             merge_meta,
-            need_lock: false,
             deduplicated_label: None,
             plan_id: u32::MAX,
         }));

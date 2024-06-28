@@ -31,6 +31,7 @@ fn test_map() {
     test_map_values(file);
     test_map_size(file);
     test_map_cat(file);
+    test_map_delete(file);
     test_map_contains_key(file);
 }
 
@@ -222,6 +223,7 @@ fn test_map_contains_key(file: &mut impl Write) {
 
 fn test_map_values(file: &mut impl Write) {
     run_ast(file, "map_values({})", &[]);
+    run_ast(file, "map_values({})", &[]);
     run_ast(file, "map_values({'a':1,'b':2,'c':3})", &[]);
     run_ast(file, "map_values({1:'a',2:'b',3:'c'})", &[]);
     run_ast(file, "map_values({'a':NULL,'b':2,'c':NULL})", &[]);
@@ -275,6 +277,107 @@ fn test_map_size(file: &mut impl Write) {
     run_ast(
         file,
         "map_size(map([a_col, b_col, c_col], [d_col, e_col, f_col]))",
+        &columns,
+    );
+}
+
+fn test_map_delete(file: &mut impl Write) {
+    // Deleting keys from an empty map
+    run_ast(file, "map_delete({}, 'a', 'b')", &[]);
+
+    run_ast(file, "map_delete({})", &[]);
+
+    run_ast(file, "map_delete({}, NULL, NULL)", &[]);
+
+    // Deleting keys from a map literal
+    run_ast(file, "map_delete({}, ['k3'], ['k2'])", &[]);
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, 'k3', 'k2')",
+        &[],
+    );
+
+    // Deleting keys from a nested map
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", StringType::from_data(vec!["b_k1", "b_k2", "b_k3"])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", StringType::from_data(vec!["bbb1", "bbb2", "bbb3"])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')",
+        &columns,
+    );
+
+    let columns = [(
+        "string_key_col",
+        StringType::from_data(vec![r#"k3"#, r#"k2"#]),
+    )];
+
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'}, string_key_col)",
+        &columns,
+    );
+
+    // Deleting all keys from a map
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k2', 'k3')",
+        &[],
+    );
+
+    // Deleting keys from a map with duplicate keys
+    run_ast(
+        file,
+        "map_delete({'k1': 'v1', 'k2': 'v2', 'k3': 'v3'}, 'k1', 'k1')",
+        &[],
+    );
+
+    // Deleting non-existent keys
+    run_ast(file, "map_delete({'k1': 'v1', 'k2': 'v2'}, 'k3', 'k4')", &[
+    ]);
+
+    // Deleting keys from a nested map
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", Int16Type::from_data(vec![555i16, 3])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", Int16Type::from_data(vec![666i16, 3])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, b_col], [d_col, e_col]), 'a_k2', 'b_k3')",
+        &columns,
+    );
+
+    // Deleting keys from nested maps with different data types
+    let columns = [
+        ("a_col", StringType::from_data(vec!["a_k1", "a_k2", "a_k3"])),
+        ("b_col", Int16Type::from_data(vec![555i16, 557i16, 559i16])),
+        ("d_col", StringType::from_data(vec!["aaa1", "aaa2", "aaa3"])),
+        ("e_col", Int16Type::from_data(vec![666i16, 664i16, 662i16])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, d_col], [b_col, e_col]), 'a_k2', 'aaa3')",
+        &columns,
+    );
+
+    let columns = [
+        ("a_col", Int16Type::from_data(vec![222i16, 223i16, 224i16])),
+        ("b_col", Int16Type::from_data(vec![555i16, 557i16, 559i16])),
+        ("d_col", Int16Type::from_data(vec![444i16, 445i16, 446i16])),
+        ("e_col", Int16Type::from_data(vec![666i16, 664i16, 662i16])),
+    ];
+
+    run_ast(
+        file,
+        "map_delete(map([a_col, d_col], [b_col, e_col]), 224, 444)",
         &columns,
     );
 }

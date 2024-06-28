@@ -46,8 +46,12 @@ select typeof(1e38);
 ----
 DECIMAL(39, 0)
 
+
 statement ok
-drop table if exists t;
+create or replace database decimal_t;
+
+statement ok
+use decimal_t;
 
 ##  p in [1, 76]; s in [0, p]
 statement ok
@@ -262,6 +266,10 @@ SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS re
 ----
 802970992.95934959
 
+query I
+SELECT 404.754480000000000000000001 / 563.653044520000000000000001, 404.754480000000000000000000 / 563.653044520000000000000000;
+----
+0.718091535094401799683905 0.718091535094401799683905
 
 ## negative
 
@@ -427,6 +435,20 @@ query II
 select a > b, a < b, a = b, a != b, a <= b, a >= b from (values( '5497.0000000000000000'::DECIMAL(20, 15) , '5497.0000000000000000'::DECIMAL(60, 30) )) t(a,b);
 ----
 0 0 1 0 1 1
+
+statement ok
+CREATE TABLE test3 (
+amount1 DECIMAL(38, 18) NULL,
+amount2 DECIMAL(28, 8) NULL
+);
+
+statement ok
+insert into test3 values('30.60616846','30.60616846');
+
+query BBBB
+select sum(amount1) = sum(amount2), sum(amount1) > sum(amount2), sum(amount1) < sum(amount2), sum(amount1) != sum(amount2) from test3;
+----
+1 0 0 0
 
 query T
 select typeof(a = b) from (select 3::Decimal(13,2) a , 2.9 b);
@@ -1097,4 +1119,15 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 -2 -2 -2
 
 statement ok
-drop table t
+create table decimal_test2(a decimal(28,8), b decimal(24,16));
+
+statement ok
+insert into decimal_test2 values(300.07878791,5325.0000000000000000),(2.00000000,10491.0000000000000000);
+
+query I
+select sum(a * b) / sum(a * b), sum(a + b) / sum(a + b), sum(a - b) / sum(a - b) from decimal_test2;
+----
+1.000000000000000000000000	1.0000000000000000	1.0000000000000000
+
+statement ok
+drop database decimal_t;

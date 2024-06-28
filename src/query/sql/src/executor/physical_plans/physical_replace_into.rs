@@ -14,7 +14,6 @@
 
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::FieldIndex;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
@@ -32,7 +31,6 @@ pub struct ReplaceInto {
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
-    pub catalog_info: CatalogInfo,
     pub segments: Vec<(usize, Location)>,
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,

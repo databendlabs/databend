@@ -124,7 +124,7 @@ impl GrpcHelper {
     ) -> Result<Result<T, RaftError<E>>, serde_json::Error>
     where
         T: serde::de::DeserializeOwned,
-        E: serde::Serialize + serde::de::DeserializeOwned,
+        E: serde::de::DeserializeOwned,
     {
         let raft_reply = reply.into_inner();
 
@@ -133,6 +133,23 @@ impl GrpcHelper {
             Ok(Err(e))
         } else {
             let d: T = serde_json::from_str(&raft_reply.data)?;
+            Ok(Ok(d))
+        }
+    }
+
+    /// Parse RaftReply to `Result<T,E>`
+    pub fn parse_raft_reply_generic<T, E>(
+        reply: RaftReply,
+    ) -> Result<Result<T, E>, serde_json::Error>
+    where
+        T: serde::de::DeserializeOwned,
+        E: serde::Serialize + serde::de::DeserializeOwned,
+    {
+        if !reply.error.is_empty() {
+            let e: E = serde_json::from_str(&reply.error)?;
+            Ok(Err(e))
+        } else {
+            let d: T = serde_json::from_str(&reply.data)?;
             Ok(Ok(d))
         }
     }

@@ -130,7 +130,6 @@ fn test_decode_v23_table_meta() -> anyhow::Result<()> {
             ],
             btreemap! {s("a") => s("b")},
         )),
-        catalog: "never-gonna-give-you-up".to_string(),
         engine: "44".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         storage_params: Some(StorageParams::default()),

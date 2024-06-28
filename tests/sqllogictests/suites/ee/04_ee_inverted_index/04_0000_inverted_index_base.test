@@ -191,7 +191,7 @@ CREATE TABLE books(
 )
 
 statement ok
-CREATE INVERTED INDEX IF NOT EXISTS idx1 ON books(title, author, description) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
+CREATE INVERTED INDEX IF NOT EXISTS idx2 ON books(title, author, description) tokenizer = 'chinese' filters = 'english_stop,english_stemmer,chinese_stop'
 
 statement ok
 INSERT INTO books VALUES
@@ -342,10 +342,10 @@ SELECT id, score(), title FROM books WHERE query('title:(设计 实现)^5 descri
 
 # index without optional filters and index rocord is basic
 statement ok
-CREATE OR REPLACE INVERTED INDEX idx1 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
+CREATE OR REPLACE INVERTED INDEX idx2 ON books(title, author, description) tokenizer = 'chinese' index_record='basic'
 
 statement ok
-REFRESH INVERTED INDEX idx1 ON books
+REFRESH INVERTED INDEX idx2 ON books
 
 query IFT
 SELECT id, score(), title FROM books WHERE match('title^5, description^1.2', 'python') ORDER BY score() DESC
@@ -412,6 +412,27 @@ SELECT id, score(), body FROM t1 WHERE query('body.metadata.tags:技术')
 ----
 6 2.4057739 {"metadata":{"author":"张三","publishedDate":"2023-10-23","tags":["人工智能","机器学习","技术"]},"title":"人工智能与机器学习"}
 10 2.4057739 {"metadata":{"author":"刘七","publishedDate":"2023-06-25","tags":["网络安全","隐私保护","信息技术"]},"title":"网络安全与隐私保护"}
+
+statement error 1118
+ALTER TABLE t1 DROP COLUMN body
+
+statement error 1118
+ALTER TABLE books MODIFY COLUMN title int;
+
+statement ok
+ALTER TABLE books MODIFY COLUMN title string not null
+
+query TTT
+SELECT name, type, definition FROM system.indexes order by name
+----
+idx INVERTED t1(body)tokenizer='chinese'
+idx1 INVERTED t(content)index_record='"basic"' tokenizer='chinese'
+idx2 INVERTED books(title, author, description)index_record='"basic"' tokenizer='chinese'
+
+query III
+select row_count, bloom_filter_size, inverted_index_size from fuse_block('test_index', 't1')
+----
+10 465 3534
 
 statement ok
 use default

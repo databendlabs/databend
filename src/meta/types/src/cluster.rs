@@ -22,7 +22,7 @@ use serde::Serialize;
 
 use crate::Endpoint;
 
-#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub struct Node {
     /// Node name for display.
     pub name: String,
@@ -32,8 +32,8 @@ pub struct Node {
 
     /// For backward compatibility, it can not be removed.
     /// 2023-02-09
+    //#[deprecated(note = "it is listening addr, not advertise addr")]
     #[serde(skip)]
-    #[deprecated(note = "it is listening addr, not advertise addr")]
     pub grpc_api_addr: Option<String>,
 
     /// The address `ip:port` for a meta-client to connect to.

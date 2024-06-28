@@ -6,16 +6,18 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 doctest = false
 test = true
 
 [dependencies]
-databend-common-ast = { path = "../../../query/ast" }
-databend-common-catalog = { path = "../../catalog" }
-databend-common-meta-app = { path = "../../../meta/app" }
-databend-common-storages-view = { path = "../view" }
+databend-common-ast = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-storages-view = { workspace = true }
 
 [build-dependencies]
-databend-common-building = { path = "../../../common/building" }
+databend-common-building = { workspace = true }
+
+[lints]
+workspace = true

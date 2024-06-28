@@ -129,6 +129,21 @@ impl Filter for Xor8Filter {
 impl Index for Xor8Filter {
     fn supported_type(data_type: &DataType) -> bool {
         let inner_type = data_type.remove_nullable();
+        if let DataType::Map(box inner_ty) = inner_type {
+            match inner_ty {
+                DataType::Tuple(kv_tys) => {
+                    return matches!(
+                        kv_tys[1].remove_nullable(),
+                        DataType::Number(_)
+                            | DataType::String
+                            | DataType::Variant
+                            | DataType::Timestamp
+                            | DataType::Date
+                    );
+                }
+                _ => unreachable!(),
+            };
+        }
         matches!(
             inner_type,
             DataType::Number(_) | DataType::String | DataType::Timestamp | DataType::Date

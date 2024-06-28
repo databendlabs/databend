@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -61,6 +63,7 @@ pub struct HashJoin {
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
+    pub is_null_equal: HashSet<usize>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
@@ -85,6 +88,10 @@ pub struct HashJoin {
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
+
+    // Hash join build side cache information for ExpressionScan, which includes the cache index and
+    // a HashMap for mapping the column indexes to the BlockEntry indexes in DataBlock.
+    pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 }
 
 impl HashJoin {
@@ -98,13 +105,14 @@ impl PhysicalPlanBuilder {
         &mut self,
         join: &Join,
         s_expr: &SExpr,
-        required: (ColumnSet, ColumnSet),
+        left_required: ColumnSet,
+        right_required: ColumnSet,
         mut pre_column_projections: Vec<IndexType>,
         column_projections: Vec<IndexType>,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let mut probe_side = Box::new(self.build(s_expr.child(0)?, required.0).await?);
-        let mut build_side = Box::new(self.build(s_expr.child(1)?, required.1).await?);
+        let mut probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
+        let mut build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
 
         let mut is_broadcast = false;
         // Check if join is broadcast join
@@ -326,6 +334,13 @@ impl PhysicalPlanBuilder {
                 .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
 
+        let mut cache_column_map = HashMap::new();
+        let cached_column = if let Some(cache_info) = &join.build_side_cache_info {
+            cache_info.columns.clone().into_iter().collect()
+        } else {
+            HashSet::new()
+        };
+        pre_column_projections.extend(cached_column.iter());
         let mut probe_projections = ColumnSet::new();
         let mut build_projections = ColumnSet::new();
         for column in pre_column_projections.iter() {
@@ -333,9 +348,19 @@ impl PhysicalPlanBuilder {
                 probe_projections.insert(index);
             }
             if let Some((index, _)) = build_schema.column_with_name(&column.to_string()) {
+                if cached_column.contains(column) {
+                    cache_column_map.insert(*column, index);
+                }
                 build_projections.insert(index);
             }
         }
+
+        let build_side_cache_info = if let Some(cache_info) = &join.build_side_cache_info {
+            probe_to_build_index.clear();
+            Some((cache_info.cache_idx, cache_column_map))
+        } else {
+            None
+        };
 
         // for distributed merge into, there is a field called "_row_number", but
         // it's not an internal row_number, we need to add it here
@@ -478,7 +503,6 @@ impl PhysicalPlanBuilder {
             }
         }
         let output_schema = DataSchemaRefExt::create(output_fields);
-
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -489,6 +513,7 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
+            is_null_equal: join.is_null_equal.iter().cloned().collect(),
             probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions
@@ -518,6 +543,7 @@ impl PhysicalPlanBuilder {
                 s_expr,
             )
             .await?,
+            build_side_cache_info,
         }))
     }
 }

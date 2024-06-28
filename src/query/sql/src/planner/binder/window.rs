@@ -17,9 +17,9 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::WindowSpec;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;
@@ -28,10 +28,13 @@ use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::Sort;
+use crate::plans::SortItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::plans::Window;
@@ -41,13 +44,14 @@ use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::Binder;
+use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(super) async fn bind_window_function(
+    pub(super) fn bind_window_function(
         &mut self,
         window_info: &WindowFunctionInfo,
         child: SExpr,
@@ -61,6 +65,67 @@ impl Binder {
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
             limit: None,
+        };
+
+        // eval scalars before sort
+        // Generate a `EvalScalar` as the input of `Window`.
+        let mut scalar_items: Vec<ScalarItem> = Vec::new();
+        for arg in &window_plan.arguments {
+            scalar_items.push(arg.clone());
+        }
+        for part in &window_plan.partition_by {
+            scalar_items.push(part.clone());
+        }
+        for order in &window_plan.order_by {
+            scalar_items.push(order.order_by_item.clone())
+        }
+
+        let child = if !scalar_items.is_empty() {
+            let eval_scalar_plan = EvalScalar {
+                items: scalar_items,
+            };
+            SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
+        } else {
+            child
+        };
+
+        let default_nulls_first = !self
+            .ctx
+            .get_settings()
+            .get_sql_dialect()
+            .unwrap()
+            .is_null_biggest();
+
+        let mut sort_items: Vec<SortItem> = vec![];
+        if !window_plan.partition_by.is_empty() {
+            for part in window_plan.partition_by.iter() {
+                sort_items.push(SortItem {
+                    index: part.index,
+                    asc: true,
+                    nulls_first: default_nulls_first,
+                });
+            }
+        }
+
+        for order in window_plan.order_by.iter() {
+            sort_items.push(SortItem {
+                index: order.order_by_item.index,
+                asc: order.asc.unwrap_or(true),
+                nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+            });
+        }
+
+        let child = if !sort_items.is_empty() {
+            let sort_plan = Sort {
+                items: sort_items,
+                limit: window_plan.limit,
+                after_exchange: None,
+                pre_projection: None,
+                window_partition: window_plan.partition_by.clone(),
+            };
+            SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
+        } else {
+            child
         };
 
         Ok(SExpr::create_unary(
@@ -330,10 +395,11 @@ impl<'a> WindowRewriter<'a> {
             });
         }
 
-        let index = self
-            .metadata
-            .write()
-            .add_derived_column(window.display_name.clone(), window.func.return_type());
+        let index = self.metadata.write().add_derived_column(
+            window.display_name.clone(),
+            window.func.return_type(),
+            Some(ScalarExpr::WindowFunction(window.clone())),
+        );
 
         // create window info
         let window_info = WindowFunctionInfo {
@@ -404,11 +470,39 @@ impl<'a> WindowRewriter<'a> {
         if let ScalarExpr::BoundColumnRef(col) = &arg {
             Ok(col.clone())
         } else {
+            for entry in self.metadata.read().columns() {
+                if let ColumnEntry::DerivedColumn(DerivedColumn {
+                    scalar_expr,
+                    alias,
+                    column_index,
+                    data_type,
+                    ..
+                }) = entry
+                {
+                    if scalar_expr.as_ref() == Some(arg) {
+                        // Generate a ColumnBinding for each argument of aggregates
+                        let column = ColumnBindingBuilder::new(
+                            alias.to_string(),
+                            *column_index,
+                            Box::new(data_type.clone()),
+                            Visibility::Visible,
+                        )
+                        .build();
+
+                        return Ok(BoundColumnRef {
+                            span: arg.span(),
+                            column,
+                        });
+                    }
+                }
+            }
             let ty = arg.data_type()?;
-            let index = self
-                .metadata
-                .write()
-                .add_derived_column(name.to_string(), ty.clone());
+
+            let index = self.metadata.write().add_derived_column(
+                name.to_string(),
+                ty.clone(),
+                Some(arg.clone()),
+            );
 
             // Generate a ColumnBinding for each argument of aggregates
             let column = ColumnBindingBuilder::new(

@@ -23,10 +23,7 @@ use databend_common_expression::block_debug::pretty_format_blocks;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserOption;
-use databend_common_meta_app::principal::UserQuota;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
@@ -69,7 +66,9 @@ async fn run_table_tests(
     let table_info = table.get_table_info();
     writeln!(file, "---------- TABLE INFO ------------").unwrap();
     writeln!(file, "{table_info}").unwrap();
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -103,7 +102,9 @@ async fn test_build_options_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = BuildOptionsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -133,7 +134,9 @@ async fn test_clusters_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = ClustersTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -187,7 +190,9 @@ async fn test_configs_table_redact() -> Result<()> {
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -205,7 +210,9 @@ async fn test_contributors_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = ContributorsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -221,7 +228,9 @@ async fn test_credits_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = CreditsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -280,7 +289,9 @@ async fn test_functions_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = FunctionsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -296,7 +307,9 @@ async fn test_metrics_table() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
 
     let table = MetricsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
     let counter1 =
         databend_common_base::runtime::metrics::register_counter("test_metrics_table_count");
     let histogram1 = databend_common_base::runtime::metrics::register_histogram_in_milliseconds(
@@ -328,9 +341,6 @@ async fn test_metrics_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_roles_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
-
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
@@ -352,63 +362,69 @@ async fn test_roles_table() -> Result<()> {
             .await?;
     }
     let table = RolesTable::create(1);
-    run_table_tests(file, ctx, table).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 5);
+    assert_eq!(block.num_rows(), 4);
+
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
+    assert!(output.contains("test"));
+    assert!(output.contains("test1"));
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_users_table() -> Result<()> {
-    let mut mint = Mint::new("tests/it/storages/testdata");
-    let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
-
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_max_threads(2)?;
 
     let tenant = ctx.get_tenant();
     let auth_data = AuthInfo::None;
+    let user_info = UserInfo::new("test", "%", auth_data);
     UserApiProvider::instance()
-        .add_user(
-            &tenant,
-            UserInfo {
-                auth_info: auth_data,
-                name: "test".to_string(),
-                hostname: "%".to_string(),
-                grants: UserGrantSet::empty(),
-                quota: UserQuota::no_limit(),
-                option: UserOption::default(),
-                history_auth_infos: vec![],
-                password_fails: vec![],
-                password_update_on: None,
-                lockout_time: None,
-            },
-            &CreateOption::Create,
-        )
+        .add_user(&tenant, user_info, &CreateOption::Create)
         .await?;
     let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
     assert!(auth_data.is_ok());
+    let mut user_info = UserInfo::new("test1", "%", auth_data?);
+    user_info.option.set_default_role(Some("role1".to_string()));
     UserApiProvider::instance()
-        .add_user(
-            &tenant,
-            UserInfo {
-                auth_info: auth_data.unwrap(),
-                name: "test1".to_string(),
-                hostname: "%".to_string(),
-                grants: UserGrantSet::empty(),
-                quota: UserQuota::no_limit(),
-                option: UserOption::default().with_default_role(Some("role1".to_string())),
-                history_auth_infos: vec![],
-                password_fails: vec![],
-                password_update_on: None,
-                lockout_time: None,
-            },
-            &CreateOption::Create,
-        )
+        .add_user(&tenant, user_info, &CreateOption::Create)
         .await?;
 
     let table = UsersTable::create(1);
-    run_table_tests(file, ctx, table).await?;
+    let source_plan = table
+        .read_plan(ctx.clone(), None, None, false, true)
+        .await?;
+    let stream = table.read_data_block_stream(ctx, &source_plan).await?;
+    let result = stream.try_collect::<Vec<_>>().await?;
+    let block = &result[0];
+    assert_eq!(block.num_columns(), 9);
+    assert!(block.num_rows() >= 2);
+
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
+    assert!(output.contains("test"));
+    assert!(output.contains("test1"));
 
     Ok(())
 }

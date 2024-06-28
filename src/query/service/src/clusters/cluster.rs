@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
@@ -31,6 +32,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 pub use databend_common_catalog::cluster_info::Cluster;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
@@ -51,6 +53,8 @@ use log::error;
 use log::warn;
 use rand::thread_rng;
 use rand::Rng;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::servers::flight::FlightClient;
 
@@ -73,6 +77,13 @@ pub trait ClusterHelper {
     fn local_id(&self) -> String;
     async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
+
+    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+        &self,
+        path: &str,
+        message: HashMap<String, T>,
+        timeout: u64,
+    ) -> Result<HashMap<String, Res>>;
 }
 
 #[async_trait::async_trait]
@@ -133,6 +144,47 @@ impl ClusterHelper for Cluster {
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.nodes.to_vec()
+    }
+
+    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+        &self,
+        path: &str,
+        message: HashMap<String, T>,
+        timeout: u64,
+    ) -> Result<HashMap<String, Res>> {
+        fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
+            for node in nodes {
+                if node.id == id {
+                    return Ok(node);
+                }
+            }
+
+            Err(ErrorCode::NotFoundClusterNode(format!(
+                "Not found node {} in cluster",
+                id
+            )))
+        }
+
+        let mut futures = Vec::with_capacity(message.len());
+        for (id, message) in message {
+            let node = get_node(&self.nodes, &id)?;
+
+            futures.push({
+                let config = GlobalConfig::instance();
+                let flight_address = node.flight_address.clone();
+
+                async move {
+                    let mut conn = create_client(&config, &flight_address).await?;
+                    Ok::<_, ErrorCode>((
+                        id,
+                        conn.do_action::<_, Res>(path, message, timeout).await?,
+                    ))
+                }
+            });
+        }
+
+        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
+        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
     }
 }
 

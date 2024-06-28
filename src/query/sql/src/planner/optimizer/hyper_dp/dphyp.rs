@@ -142,6 +142,9 @@ impl DPhpy {
                 Ok((Arc::new(s_expr.clone()), true))
             }
             RelOperator::Join(op) => {
+                if op.build_side_cache_info.is_some() {
+                    return Ok((Arc::new(s_expr.clone()), true));
+                }
                 let mut is_inner_join = true;
                 if !matches!(op.join_type, JoinType::Inner)
                     && !matches!(op.join_type, JoinType::Cross)
@@ -260,9 +263,13 @@ impl DPhpy {
             }
             RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
+            | RelOperator::ExpressionScan(_)
+            | RelOperator::CacheScan(_)
             | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::MaterializedCte(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::MaterializedCte(_)
+            | RelOperator::RecursiveCteScan(_)
+            | RelOperator::MergeInto(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 

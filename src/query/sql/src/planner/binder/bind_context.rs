@@ -21,11 +21,11 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::WindowSpec;
+use databend_common_ast::Span;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::Span;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -154,10 +154,11 @@ pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
     pub materialized: bool,
+    pub recursive: bool,
     pub cte_idx: IndexType,
     // Record how many times this cte is used
     pub used_count: usize,
-    // If cte is materialized, save it's columns
+    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }
 
@@ -231,28 +232,7 @@ impl BindContext {
         alias: &TableAlias,
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<()> {
-        for column in self.columns.iter_mut() {
-            column.database_name = None;
-            column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
-        }
-
-        if alias.columns.len() > self.columns.len() {
-            return Err(ErrorCode::SemanticError(format!(
-                "table has {} columns available but {} columns specified",
-                self.columns.len(),
-                alias.columns.len()
-            ))
-            .set_span(alias.name.span));
-        }
-        for (index, column_name) in alias
-            .columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
-            .enumerate()
-        {
-            self.columns[index].column_name = column_name;
-        }
-        Ok(())
+        apply_alias_for_columns(&mut self.columns, alias, name_resolution_ctx)
     }
 
     /// Try to find a column binding with given table name and column name.
@@ -637,4 +617,33 @@ impl Default for BindContext {
     fn default() -> Self {
         BindContext::new()
     }
+}
+
+pub fn apply_alias_for_columns(
+    columns: &mut [ColumnBinding],
+    alias: &TableAlias,
+    name_resolution_ctx: &NameResolutionContext,
+) -> Result<()> {
+    for column in columns.iter_mut() {
+        column.database_name = None;
+        column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
+    }
+
+    if alias.columns.len() > columns.len() {
+        return Err(ErrorCode::SemanticError(format!(
+            "table has {} columns available but {} columns specified",
+            columns.len(),
+            alias.columns.len()
+        ))
+        .set_span(alias.name.span));
+    }
+    for (index, column_name) in alias
+        .columns
+        .iter()
+        .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
+        .enumerate()
+    {
+        columns[index].column_name = column_name;
+    }
+    Ok(())
 }

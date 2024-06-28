@@ -33,9 +33,7 @@ pub struct CreateShareEndpointStmt {
     pub endpoint: Identifier,
     pub url: UriLocation,
     pub tenant: Identifier,
-    #[drive(skip)]
     pub args: BTreeMap<String, String>,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -63,10 +61,8 @@ impl Display for CreateShareEndpointStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct CreateShareStmt {
-    #[drive(skip)]
     pub if_not_exists: bool,
     pub share: Identifier,
-    #[drive(skip)]
     pub comment: Option<String>,
 }
 
@@ -86,7 +82,6 @@ impl Display for CreateShareStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropShareStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub share: Identifier,
 }
@@ -144,10 +139,8 @@ impl Display for RevokeShareObjectStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct AlterShareTenantsStmt {
     pub share: Identifier,
-    #[drive(skip)]
     pub if_exists: bool,
     pub tenants: Vec<Identifier>,
-    #[drive(skip)]
     pub is_add: bool,
 }
 
@@ -210,14 +203,19 @@ impl Display for ShowShareEndpointStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropShareEndpointStmt {
-    #[drive(skip)]
     pub if_exists: bool,
     pub endpoint: Identifier,
 }
 
 impl Display for DropShareEndpointStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DROP SHARE ENDPOINT {}", self.endpoint)?;
+        write!(f, "DROP SHARE ENDPOINT ")?;
+
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+
+        write!(f, "{}", self.endpoint)?;
 
         Ok(())
     }
@@ -238,7 +236,6 @@ impl Display for ShowObjectGrantPrivilegesStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowGrantsOfShareStmt {
-    #[drive(skip)]
     pub share_name: String,
 }
 

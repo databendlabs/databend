@@ -145,6 +145,7 @@ build_exceptions! {
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
     ColumnReferencedByComputedColumn(1117),
+    ColumnReferencedByInvertedIndex(1118),
     // The table is not a clustered table.
     UnclusteredTable(1118),
     UnknownCatalog(1119),
@@ -191,6 +192,7 @@ build_exceptions! {
     ///
     /// For example: license key is expired
     LicenseKeyInvalid(1402),
+    EnterpriseFeatureNotEnable(1403),
 
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
@@ -281,6 +283,9 @@ build_exceptions! {
     /// data mask error codes
     DatamaskAlreadyExists(2321),
 
+    CommitTableMetaError(2322),
+    CreateAsDropTableWithoutDropTime(2323),
+
 
     // Cluster error codes.
     ClusterUnknownNode(2401),
@@ -331,7 +336,7 @@ build_exceptions! {
     ShareEndpointAlreadyExists(2714),
     UnknownShareEndpoint(2715),
     UnknownShareEndpointId(2716),
-    UnknownShareTable(2717),
+    CannotAccessShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
     ShareStorageError(2719),
 
