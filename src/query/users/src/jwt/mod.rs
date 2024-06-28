@@ -19,3 +19,5 @@ pub use authenticator::CustomClaims;
 pub use authenticator::EnsureUser;
 pub use authenticator::JwtAuthenticator;
 pub use authenticator::PubKey;
+pub use jwk::JwkKey;
+pub use jwk::JwkKeyStore;

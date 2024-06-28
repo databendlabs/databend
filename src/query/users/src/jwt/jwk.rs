@@ -99,6 +99,7 @@ pub struct JwkKeyStore {
     keys: Arc<RwLock<HashMap<String, PubKey>>>,
     pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
     pub(crate) refresh_interval: Duration,
+    pub(crate) load_keys_func: Option<Box<dyn Fn() -> HashMap<String, PubKey>>>,
 }
 
 impl JwkKeyStore {
@@ -110,8 +111,16 @@ impl JwkKeyStore {
             keys,
             refresh_interval,
             last_refreshed_at: RwLock::new(None),
+            load_keys_func: None,
         }
     }
+
+    // only for test to mock the keys
+    pub fn with_load_keys_func(mut self, func: Box<dyn Fn() -> HashMap<String, PubKey>>) -> Self {
+        self.load_keys_func = Some(func);
+        self
+    }
+
     pub fn url(&self) -> String {
         self.url.clone()
     }
@@ -120,6 +129,10 @@ impl JwkKeyStore {
 impl JwkKeyStore {
     #[async_backtrace::framed]
     async fn load_keys(&self) -> Result<HashMap<String, PubKey>> {
+        if let Some(load_keys_func) = &self.load_keys_func {
+            return Ok(load_keys_func());
+        }
+
         let response = reqwest::get(&self.url).await.map_err(|e| {
             ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
         })?;
@@ -152,7 +165,7 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
+    pub async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
         self.maybe_refresh_keys(false).await?;
 
         // if the key_id is not set, and there is only one key in the store, return it
@@ -187,7 +200,7 @@ impl JwkKeyStore {
         let key = match self.keys.read().get(&key_id) {
             None => {
                 return Err(ErrorCode::AuthenticateFailure(format!(
-                    "key_id {} not found in jwk store",
+                    "key id {} not found in jwk store",
                     key_id
                 )));
             }
