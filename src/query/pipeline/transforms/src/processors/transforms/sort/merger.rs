@@ -181,10 +181,10 @@ where
         };
 
         let input_index = cursor.input_index;
+        let start = cursor.row_index;
 
         let cursor_finished = match (whole_block, next_cursor) {
             (true, None) => {
-                let start = cursor.row_index;
                 let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
 
                 self.temp_sorted_num_rows += count;
@@ -204,11 +204,7 @@ where
                 cursor_finished
             }
             (false, Some(next_cursor)) => {
-                let mut cursor = cursor.clone();
-                // We copy current cursor for advancing,
-                // and we will use this copied cursor to update the top of the sorted_cursors at last
-                // (let sorted_cursors adjust itself without popping and pushing any element).
-                let start = cursor.row_index;
+                let mut cursor = cursor.cursor_mut();
                 while !cursor.is_finished()
                     && cursor.le(next_cursor)
                     && self.temp_sorted_num_rows < max_rows
@@ -217,15 +213,18 @@ where
                     self.temp_sorted_num_rows += 1;
                     cursor.advance();
                 }
-                self.temp_output_indices
-                    .push((input_index, start, cursor.row_index - start));
+
                 let cursor_finished = cursor.is_finished();
-                if !cursor_finished {
-                    // Update the top of the sorted_cursors.
-                    self.sorted_cursors.update_top(Reverse(cursor));
-                } else {
+                let row_index = cursor.row_index;
+
+                self.temp_output_indices
+                    .push((input_index, start, row_index - start));
+
+                if cursor_finished {
                     // Pop the current `cursor`.
                     self.sorted_cursors.pop();
+                } else {
+                    self.sorted_cursors.peek_mut().0.row_index = row_index;
                 }
                 cursor_finished
             }
