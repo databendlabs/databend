@@ -170,7 +170,7 @@ impl JwkKeyStore {
             }
         };
 
-        // the JWKS keys are not always changed, but when it changes, we can have a log about this.
+        // the JWKS keys are not always changes, but when it changed, we can have a log about this.
         if !new_keys.keys().eq(old_keys.keys()) {
             info!("JWKS keys changed.");
         }
