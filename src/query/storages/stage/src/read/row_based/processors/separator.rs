@@ -32,6 +32,7 @@ pub struct Separator {
 }
 
 impl Separator {
+    // TODO remove Result from return type
     pub fn try_create(ctx: Arc<LoadContext>, format: Arc<dyn RowBasedFileFormat>) -> Result<Self> {
         Ok(Separator {
             ctx,

@@ -30,14 +30,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFType;
 use parking_lot::RwLock;
-
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 
 /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
 #[cfg(feature = "python-udf")]
@@ -188,17 +183,15 @@ pub struct TransformUdfScript {
 unsafe impl Send for TransformUdfScript {}
 
 impl TransformUdfScript {
-    pub fn try_create(
+    pub fn new(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
         script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(Transformer::create(input, output, Self {
+    ) -> Self {
+        Self {
             funcs,
             script_runtimes,
-        }))
+        }
     }
 }
 
