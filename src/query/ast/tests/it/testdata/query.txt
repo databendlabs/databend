@@ -346,6 +346,7 @@ Query {
                                                 },
                                             ],
                                             params: [],
+                                            window_ignore_null: None,
                                             window: None,
                                             lambda: None,
                                         },
@@ -3422,6 +3423,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            window_ignore_null: None,
                             window: None,
                             lambda: None,
                         },
@@ -3569,6 +3571,7 @@ Query {
                                                     },
                                                 ],
                                                 params: [],
+                                                window_ignore_null: None,
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -5601,6 +5604,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -5969,6 +5973,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            window_ignore_null: None,
                             window: Some(
                                 WindowReference(
                                     WindowRef {
@@ -6166,6 +6171,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            window_ignore_null: None,
                             window: Some(
                                 WindowReference(
                                     WindowRef {
@@ -6222,6 +6228,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            window_ignore_null: None,
                             window: Some(
                                 WindowReference(
                                     WindowRef {
@@ -6278,6 +6285,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            window_ignore_null: None,
                             window: Some(
                                 WindowReference(
                                     WindowRef {
@@ -7296,6 +7304,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },

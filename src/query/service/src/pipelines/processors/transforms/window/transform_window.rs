@@ -543,7 +543,7 @@ impl<T: Number> TransformWindow<T> {
             }
             WindowFunctionImpl::LagLead(ll) => {
                 let value = if self.frame_start == self.frame_end {
-                    let default_value = match ll.default.clone() {
+                    match ll.default.clone() {
                         LagLeadDefault::Null => Scalar::Null,
                         LagLeadDefault::Index(col) => {
                             let block =
@@ -551,8 +551,7 @@ impl<T: Number> TransformWindow<T> {
                             let value = &block.get_by_offset(col).value;
                             value.index(self.current_row.row).unwrap().to_owned()
                         }
-                    };
-                    default_value
+                    }
                 } else {
                     let block = &self
                         .blocks
@@ -560,10 +559,25 @@ impl<T: Number> TransformWindow<T> {
                         .unwrap()
                         .block;
                     let value = &block.get_by_offset(ll.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
+                    let col = block.get_by_offset(ll.arg).to_column(block.num_rows());
+                    let value = value.index(self.frame_start.row).unwrap().to_owned();
+                    let cur = self.current_row;
+                    if ll.ignore_null {
+                        match self.start_bound {
+                            FrameBound::Preceding(Some(v)) => {
+                                let offset = v.to_i32().unwrap();
+                                self.find_lead_lag_non_null_value(cur, &col, false, offset)
+                            }
+                            FrameBound::Following(Some(v)) => {
+                                let offset = v.to_i32().unwrap();
+                                self.find_lead_lag_non_null_value(cur, &col, true, offset)
+                            }
+                            _ => value,
+                        }
+                    } else {
+                        value
+                    }
                 };
-                // TODO: ignore null should do some processing
-                if ll.ignore_null {}
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
@@ -581,7 +595,7 @@ impl<T: Number> TransformWindow<T> {
                     if cur != self.frame_end {
                         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
                         let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                        col.index(cur.row).unwrap().to_owned()
+                        self.find_non_null_value(cur, &col, func.ignore_null, true, 1)
                     } else {
                         // No such row
                         Scalar::Null
@@ -592,10 +606,8 @@ impl<T: Number> TransformWindow<T> {
                     debug_assert!(self.frame_start <= cur);
                     let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
                     let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                    col.index(cur.row).unwrap().to_owned()
+                    self.find_non_null_value(cur, &col, func.ignore_null, false, 1)
                 };
-                // TODO: ignore null should do some processing
-                if func.ignore_null {}
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
             }
@@ -655,6 +667,74 @@ impl<T: Number> TransformWindow<T> {
             return true;
         }
         false
+    }
+
+    #[inline]
+    fn find_lead_lag_non_null_value(
+        &self,
+        mut cur: RowPtr,
+        col: &Column,
+        advance: bool,
+        offset: i32,
+    ) -> Scalar {
+        let mut none_null_count = 0;
+        let mut result = Scalar::Null;
+        while (advance && cur < self.partition_end) || (!advance && cur > self.partition_start) {
+            cur = if advance {
+                self.advance_row(cur)
+            } else {
+                self.goback_row(cur)
+            };
+            let value = col.index(cur.row).unwrap();
+            if value != ScalarRef::Null {
+                none_null_count += 1;
+                if none_null_count == offset {
+                    result = value.to_owned();
+                    break;
+                }
+            }
+            if !advance && cur == self.partition_start && none_null_count < offset {
+                break;
+            }
+
+            if advance && cur == self.partition_end && none_null_count < offset {
+                break;
+            }
+        }
+        result
+    }
+
+    #[inline]
+    fn find_non_null_value(
+        &self,
+        mut cur: RowPtr,
+        col: &Column,
+        ignore_null: bool,
+        advance: bool,
+        offset: i32,
+    ) -> Scalar {
+        if !ignore_null {
+            return col.index(cur.row).unwrap().to_owned();
+        }
+
+        let mut none_null_count = 0;
+        let mut result = Scalar::Null;
+        while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
+            let value = col.index(cur.row).unwrap();
+            if value != ScalarRef::Null {
+                none_null_count += 1;
+                if none_null_count == offset {
+                    result = value.to_owned();
+                    break;
+                }
+            }
+            cur = if advance {
+                self.advance_row(cur)
+            } else {
+                self.goback_row(cur)
+            };
+        }
+        result
     }
 }
 
