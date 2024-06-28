@@ -96,7 +96,7 @@ pub struct JwkKeys {
 
 pub struct JwkKeyStore {
     pub(crate) url: String,
-    keys: Arc<RwLock<HashMap<String, PubKey>>>,
+    cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
     pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
     pub(crate) refresh_interval: Duration,
     pub(crate) load_keys_func: Option<Box<dyn Fn() -> HashMap<String, PubKey>>>,
@@ -108,7 +108,7 @@ impl JwkKeyStore {
         let keys = Arc::new(RwLock::new(HashMap::new()));
         Self {
             url,
-            keys,
+            cached_keys: keys,
             refresh_interval,
             last_refreshed_at: RwLock::new(None),
             load_keys_func: None,
@@ -147,32 +147,46 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    async fn maybe_refresh_keys(&self, force: bool) -> Result<()> {
-        let need_reload = match *self.last_refreshed_at.read() {
-            None => true,
-            Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
-        };
-        if need_reload || force {
-            let old_keys = self.keys.read().clone();
-            let new_keys = self.load_keys().await?;
-            if !new_keys.keys().eq(old_keys.keys()) {
-                info!("JWKS keys changed.");
-            }
-            *self.keys.write() = new_keys;
-            self.last_refreshed_at.write().replace(Instant::now());
+    async fn load_keys_with_cache(&self, force: bool) -> Result<HashMap<String, PubKey>> {
+        let need_reload = force
+            || match *self.last_refreshed_at.read() {
+                None => true,
+                Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
+            };
+
+        let old_keys = self.cached_keys.read().clone();
+        if !need_reload {
+            return Ok(old_keys);
         }
-        Ok(())
+
+        // if got network issues on loading JWKS, fallback to the cached keys if available
+        let new_keys = match self.load_keys().await {
+            Ok(new_keys) => new_keys,
+            Err(err) => {
+                if !old_keys.is_empty() {
+                    return Ok(old_keys);
+                }
+                return Err(err.add_message("failed to load JWKS keys, and no available fallback"));
+            }
+        };
+
+        // the JWKS keys are not always changed, but when it changes, we can have a log about this.
+        if !new_keys.keys().eq(old_keys.keys()) {
+            info!("JWKS keys changed.");
+        }
+        *self.cached_keys.write() = new_keys;
+        self.last_refreshed_at.write().replace(Instant::now());
+        Ok(self.cached_keys.read().clone())
     }
 
     #[async_backtrace::framed]
     pub async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
-        self.maybe_refresh_keys(false).await?;
+        let keys = self.load_keys_with_cache(false).await?;
 
         // if the key_id is not set, and there is only one key in the store, return it
         let key_id = match key_id {
             Some(key_id) => key_id,
             None => {
-                let keys = self.keys.read();
                 if keys.len() != 1 {
                     return Err(ErrorCode::AuthenticateFailure(
                         "must specify key_id for jwt when multi keys exists ",
@@ -184,20 +198,21 @@ impl JwkKeyStore {
         };
 
         // happy path: the key_id is found in the store
-        if let Some(key) = self.keys.read().get(&key_id) {
+        if let Some(key) = self.cached_keys.read().get(&key_id) {
             return Ok(key.clone());
         }
 
-        // if the key_id is not set here, it might because the JWKS is refreshed, so we need to reload it.
+        // if the key_id is not set here, it might because the JWKS has been rotated, we need to refresh it.
         warn!(
             "key_id {} not found in jwks store, try to reload keys",
             key_id
         );
-        self.maybe_refresh_keys(true)
+        let keys = self
+            .load_keys_with_cache(true)
             .await
             .map_err(|e| e.add_message("failed to reload JWKS keys"))?;
 
-        let key = match self.keys.read().get(&key_id) {
+        let key = match keys.get(&key_id) {
             None => {
                 return Err(ErrorCode::AuthenticateFailure(format!(
                     "key id {} not found in jwk store",
