@@ -27,6 +27,7 @@ use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
+use crate::optimizer::SubqueryRewriter;
 use crate::plans::DeletePlan;
 use crate::plans::Filter;
 use crate::plans::Operator;
@@ -219,6 +220,8 @@ impl Binder {
         scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan));
         let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
+        let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), None);
+        let filter_expr = rewriter.rewrite(&filter_expr)?;
 
         Ok(SubqueryDesc {
             input_expr: filter_expr,
