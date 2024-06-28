@@ -337,6 +337,49 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
     Ok(())
 }
 
+#[test]
+pub fn test_concat_scalar() -> databend_common_exception::Result<()> {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::Scalar;
+    use databend_common_expression::Value;
+
+    let ty = DataType::Number(NumberDataType::UInt8);
+    let scalar = Value::Scalar(Scalar::Number(NumberScalar::UInt8(1)));
+    let column = Value::Column(UInt8Type::from_data(vec![2, 3]));
+
+    let blocks = [
+        DataBlock::new(
+            vec![
+                BlockEntry::new(ty.clone(), scalar.clone()),
+                BlockEntry::new(ty.clone(), scalar.clone()),
+            ],
+            2,
+        ),
+        DataBlock::new(
+            vec![
+                BlockEntry::new(ty.clone(), scalar.clone()),
+                BlockEntry::new(ty.clone(), column),
+            ],
+            2,
+        ),
+    ];
+    let block = DataBlock::concat(&blocks)?;
+    let expect = DataBlock::new(
+        vec![
+            BlockEntry::new(ty.clone(), scalar.clone()),
+            BlockEntry::new(
+                ty.clone(),
+                Value::Column(UInt8Type::from_data(vec![1, 1, 2, 3])),
+            ),
+        ],
+        4,
+    );
+    assert_eq!(block.columns(), expect.columns());
+    assert_eq!(block.num_rows(), expect.num_rows());
+    Ok(())
+}
+
 /// Add more tests for take_compact.rs.
 #[test]
 pub fn test_take_compact() -> databend_common_exception::Result<()> {

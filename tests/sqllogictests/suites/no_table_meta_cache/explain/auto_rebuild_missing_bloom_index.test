@@ -172,11 +172,20 @@ select * from t where c = 6;
 
 # - c = 6 will trigger the re-building of bloom index for another block
 # expects 2 rows
-query I
-select count() from @rebuild_missing_bloom_index_stage (pattern => '.*/_i_b_v2/.*.parquet');
-----
-2
+# scalar column do not need bloom index (range index is enough), so the re-build index contains only one colum
+# select from parquet do not support merging of schemas now, so use copy as workaround
 
+statement ok
+create or replace table t_index(`bloom(0)` binary, `bloom(1)` binary);
+
+statement ok
+copy into t_index from  @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet' file_format=(type=parquet missing_field_as=field_default);
+
+query I
+select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
+----
+0 0
+0 1
 
 # re-generate other bloom index
 query TT
