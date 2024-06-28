@@ -99,7 +99,7 @@ pub struct JwkKeyStore {
     cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
     pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
     pub(crate) refresh_interval: Duration,
-    pub(crate) load_keys_func: Option<Box<dyn Fn() -> HashMap<String, PubKey>>>,
+    pub(crate) load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
 }
 
 impl JwkKeyStore {
@@ -116,7 +116,10 @@ impl JwkKeyStore {
     }
 
     // only for test to mock the keys
-    pub fn with_load_keys_func(mut self, func: Box<dyn Fn() -> HashMap<String, PubKey>>) -> Self {
+    pub fn with_load_keys_func(
+        mut self,
+        func: Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>,
+    ) -> Self {
         self.load_keys_func = Some(func);
         self
     }

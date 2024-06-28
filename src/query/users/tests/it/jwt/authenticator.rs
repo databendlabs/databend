@@ -80,7 +80,7 @@ async fn test_jwk_key_store_retry_on_key_not_found() -> Result<()> {
     let func_calls = Arc::new(AtomicUsize::new(0));
     let func_calls_cloned = func_calls.clone();
 
-    let mock_load_keys = Box::new(move || -> HashMap<String, PubKey> {
+    let mock_load_keys = Arc::new(move || -> HashMap<String, PubKey> {
         let mut keys_map = HashMap::new();
         keys_map.insert(
             "key1".to_string(),
