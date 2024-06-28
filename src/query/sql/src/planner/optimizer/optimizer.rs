@@ -435,12 +435,20 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    let old_left_conditions = Join::try_from(s_expr.child(0)?.plan().clone())?.left_conditions;
+    let old_left_conditions = Join::try_from(s_expr.child(0)?.plan().clone())?
+        .equi_conditions
+        .iter()
+        .map(|condition| condition.left.clone())
+        .collect::<Vec<_>>();
     let mut join_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     if let &RelOperator::Exchange(_) = join_s_expr.plan() {
         join_s_expr = join_s_expr.child(0)?.clone();
     }
-    let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
+    let left_conditions = Join::try_from(join_s_expr.plan().clone())?
+        .equi_conditions
+        .iter()
+        .map(|condition| condition.left.clone())
+        .collect::<Vec<_>>();
     let mut change_join_order = false;
     if old_left_conditions != left_conditions {
         change_join_order = true;

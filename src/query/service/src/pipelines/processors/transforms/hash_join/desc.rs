@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::Expr;
@@ -37,7 +35,7 @@ pub struct MarkJoinDesc {
 pub struct HashJoinDesc {
     pub(crate) build_keys: Vec<Expr>,
     pub(crate) probe_keys: Vec<Expr>,
-    pub(crate) is_null_equal: HashSet<usize>,
+    pub(crate) is_null_equal: Vec<bool>,
     pub(crate) join_type: JoinType,
     pub(crate) single_to_inner: Option<JoinType>,
     /// when we have non-equal conditions for hash join,

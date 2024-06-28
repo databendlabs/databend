@@ -34,7 +34,7 @@ pub enum PhysicalJoinType {
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.left_conditions.is_empty() {
+    if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
@@ -126,24 +126,22 @@ impl PhysicalPlanBuilder {
         }
         let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
         // Include columns referenced in left conditions and right conditions.
-        let left_required = join
-            .left_conditions
-            .iter()
-            .fold(required.clone(), |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
-        let right_required = join
-            .right_conditions
-            .iter()
-            .fold(required, |acc, v| {
-                acc.union(&v.used_columns()).cloned().collect()
-            })
-            .union(&others_required)
-            .cloned()
-            .collect();
+        let (left_required, right_required) = join.equi_conditions.iter().fold(
+            (required.clone(), required.clone()),
+            |(mut left_required, mut right_required), condition| {
+                left_required = left_required
+                    .union(&condition.left.used_columns())
+                    .cloned()
+                    .collect();
+                right_required = right_required
+                    .union(&condition.right.used_columns())
+                    .cloned()
+                    .collect();
+                (left_required, right_required)
+            },
+        );
+        let left_required = left_required.union(&others_required).cloned().collect();
+        let right_required = right_required.union(&others_required).cloned().collect();
 
         // 2. Build physical plan.
         // Choose physical join type by join conditions

@@ -34,6 +34,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -186,8 +187,11 @@ impl SubqueryRewriter {
         }
 
         let join = Join {
-            left_conditions,
-            right_conditions,
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                vec![],
+            ),
             non_equi_conditions,
             join_type: match &subquery.typ {
                 SubqueryType::Any | SubqueryType::All | SubqueryType::Scalar => {
@@ -202,7 +206,6 @@ impl SubqueryRewriter {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
-            is_null_equal: Vec::new(),
         };
 
         // Rewrite plan to semi-join.
@@ -284,8 +287,11 @@ impl SubqueryRewriter {
                 }
 
                 let join_plan = Join {
-                    left_conditions,
-                    right_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions: vec![],
                     join_type,
                     marker_index: None,
@@ -294,7 +300,6 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
-                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -336,8 +341,11 @@ impl SubqueryRewriter {
                     )
                 };
                 let join_plan = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions: vec![],
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -346,7 +354,6 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
-                    is_null_equal: Vec::new(),
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -403,8 +410,11 @@ impl SubqueryRewriter {
                     )
                 };
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        left_conditions,
+                        right_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -413,7 +423,6 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
-                    is_null_equal: Vec::new(),
                 }
                 .into();
                 Ok((
