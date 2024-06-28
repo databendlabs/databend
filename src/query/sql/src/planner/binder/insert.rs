@@ -102,10 +102,10 @@ impl Binder {
                     match self.name_resolution_ctx.not_found_suggest(table_ident) {
                         NameResolutionSuggest::None => err,
                         NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table {name} (unquoted). Did you mean `{name}` (quoted)?",
+                            "Unknown table {table_ident} (unquoted). Did you mean `{name}` (quoted)?",
                         )),
                         NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table `{name}` (quoted). Did you mean {name} (unquoted)?",
+                            "Unknown table {table_ident} (quoted). Did you mean {name} (unquoted)?",
                         )),
                     }
                 }
