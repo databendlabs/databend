@@ -2593,7 +2593,6 @@ dependencies = [
  "limits-rs",
  "log",
  "opendal",
- "poem",
  "serde",
  "serde_json",
  "serfig",

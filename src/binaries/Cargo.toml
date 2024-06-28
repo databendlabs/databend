@@ -37,7 +37,6 @@ databend-storages-common-table-meta = { workspace = true }
 limits-rs = "0.2.0"
 log = { workspace = true }
 opendal = { workspace = true }
-poem = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
