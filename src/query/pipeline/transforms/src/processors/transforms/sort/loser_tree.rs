@@ -71,7 +71,7 @@ impl<T: Ord> LoserTree<T> {
 
     pub fn update(&mut self, i: usize, v: T) {
         if self.ready && self.winner() == i {
-            if *self.peek() == v {
+            if v >= *self.peek() {
                 self.data[i] = v;
             } else {
                 self.data[i] = v;
@@ -91,7 +91,12 @@ impl<T: Ord> LoserTree<T> {
         &self.data
     }
 
-    pub fn adjust(&mut self, index: usize) {
+    pub fn adjust_top(&mut self) {
+        let win = self.winner();
+        self.adjust(win);
+    }
+
+    fn adjust(&mut self, index: usize) {
         let mut winner: usize = index;
         let mut father_loc = (winner + self.data.len()) / 2;
         while father_loc > 0 {
@@ -129,23 +134,45 @@ mod test {
             Some(3),
             Some(7),
         ];
-        let mut loser_tree = LoserTree::from(data);
-        loser_tree.rebuild();
+        let mut tree = LoserTree::from(data);
+        tree.rebuild();
 
         for i in 2..=9 {
-            assert_eq!(*loser_tree.peek(), Some(11 - i));
-            assert_eq!(*loser_tree.peek(), Some(11 - i));
+            assert_eq!(*tree.peek(), Some(11 - i));
+            assert_eq!(*tree.peek(), Some(11 - i));
             if i == 9 {
-                assert_eq!(*loser_tree.peek_top2(), None);
-                assert_eq!(*loser_tree.peek_top2(), None);
+                assert_eq!(*tree.peek_top2(), None);
+                assert_eq!(*tree.peek_top2(), None);
             } else {
-                assert_eq!(*loser_tree.peek_top2(), Some(10 - i));
-                assert_eq!(*loser_tree.peek_top2(), Some(10 - i));
+                assert_eq!(*tree.peek_top2(), Some(10 - i));
+                assert_eq!(*tree.peek_top2(), Some(10 - i));
             }
-            let win = loser_tree.winner();
-            loser_tree.update(win, None);
+            let win = tree.winner();
+            tree.update(win, None);
         }
-        assert_eq!(*loser_tree.peek(), None);
-        assert_eq!(*loser_tree.peek_top2(), None);
+        assert_eq!(*tree.peek(), None);
+        assert_eq!(*tree.peek_top2(), None);
+    }
+
+    #[test]
+    fn in_place_update() {
+        let data = vec![9, 6, 5, 7, 8];
+        let mut tree = LoserTree::from(data);
+        tree.rebuild();
+
+        *tree.peek_mut() = 4;
+        tree.adjust_top();
+        assert_eq!(tree.winner(), 4);
+        assert_eq!(*tree.peek(), 8);
+
+        *tree.peek_mut() = 3;
+        tree.adjust_top();
+        assert_eq!(tree.winner(), 3);
+        assert_eq!(*tree.peek(), 7);
+
+        *tree.peek_mut() = 2;
+        tree.adjust_top();
+        assert_eq!(tree.winner(), 1);
+        assert_eq!(*tree.peek(), 6);
     }
 }

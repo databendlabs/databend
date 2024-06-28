@@ -147,7 +147,8 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
 
     fn pop(&mut self) {
         debug_assert!(self.length >= 1);
-        self.tree.update(self.tree.winner(), None);
+        self.tree.peek_mut().take();
+        self.tree.adjust_top();
         self.length -= 1;
     }
 
@@ -171,6 +172,7 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
         debug_assert!(this.0.length >= 1);
         this.0.tree.peek_mut().take();
         this.0.length -= 1;
+        // The tree will adjust itself automatically when the `PeekMut` object is dropped (RAII).
     }
 }
 
@@ -192,7 +194,6 @@ impl<R: Rows> DerefMut for LoserTreePeekMut<'_, R> {
 
 impl<R: Rows> Drop for LoserTreePeekMut<'_, R> {
     fn drop(&mut self) {
-        let win = self.0.tree.winner();
-        self.0.tree.adjust(win)
+        self.0.tree.adjust_top();
     }
 }
