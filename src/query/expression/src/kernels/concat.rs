@@ -88,13 +88,12 @@ impl DataBlock {
         );
 
         let entry0 = blocks[0].get_by_offset(column_index);
-        if matches!(entry0.value, Value::Scalar(_)) {
-            if blocks
+        if matches!(entry0.value, Value::Scalar(_))
+            && blocks
                 .iter()
                 .all(|b| b.get_by_offset(column_index) == entry0)
-            {
-                return Ok(entry0.value.clone());
-            }
+        {
+            return Ok(entry0.value.clone());
         }
 
         let columns_iter = blocks.iter().map(|block| {

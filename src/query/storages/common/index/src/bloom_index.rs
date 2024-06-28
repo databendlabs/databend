@@ -260,9 +260,10 @@ impl BloomIndex {
                     }
                 }
                 _ => {
-                    if Self::check_large_string(column) {
+                    if Self::check_large_string(&column) {
                         continue;
                     }
+                    (column, field_type.clone())
                 }
             };
 
