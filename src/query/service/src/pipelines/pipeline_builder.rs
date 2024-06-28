@@ -142,6 +142,7 @@ impl PipelineBuilder {
         }
     }
 
+    #[recursive::recursive]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
         match plan {

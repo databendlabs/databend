@@ -155,6 +155,7 @@ impl SExpr {
     }
 
     /// Check if contain subquery
+    #[recursive::recursive]
     pub(crate) fn contain_subquery(&self) -> bool {
         if !find_subquery(&self.plan) {
             return self.children.iter().any(|child| child.contain_subquery());
@@ -162,6 +163,7 @@ impl SExpr {
         true
     }
 
+    #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
 
@@ -342,6 +344,7 @@ impl SExpr {
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
+        #[recursive::recursive]
         fn add_internal_column_index_into_child(
             s_expr: &SExpr,
             column_index: IndexType,
@@ -384,6 +387,7 @@ impl SExpr {
     }
 
     // The method will clear the applied rules of current SExpr and its children.
+    #[recursive::recursive]
     pub fn clear_applied_rules(&mut self) {
         self.applied_rules.clear();
         let children = self
@@ -397,6 +401,7 @@ impl SExpr {
         self.children = children;
     }
 
+    #[recursive::recursive]
     pub fn has_merge_exchange(&self) -> bool {
         if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
             return true;

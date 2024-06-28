@@ -717,6 +717,7 @@ impl DPhpy {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[recursive::recursive]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         let mut new_s_expr = s_expr.clone();
         match s_expr.plan.as_ref() {

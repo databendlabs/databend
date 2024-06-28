@@ -119,8 +119,7 @@ impl Binder {
     }
 
     // TODO: unify this function with bind_join
-    #[async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
