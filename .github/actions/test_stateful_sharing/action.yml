@@ -14,7 +14,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
-        artifacts: open-sharing,meta,query
+        artifacts: meta,query
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
