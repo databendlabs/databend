@@ -216,8 +216,7 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
     Ok(())
 }
 
-#[async_recursion::async_recursion]
-#[async_backtrace::framed]
+#[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,

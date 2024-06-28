@@ -173,6 +173,7 @@ impl TypeCheck<IndexType> for ScalarExpr {
 impl ScalarExpr {
     /// Lowering `Scalar` into `RawExpr` to utilize with `common_expression::types::type_check`.
     /// Specific variants will be replaced with a `RawExpr::ColumnRef` with a dummy name.
+    #[recursive::recursive]
     pub fn as_raw_expr(&self) -> RawExpr<ColumnBinding> {
         match self {
             ScalarExpr::BoundColumnRef(column_ref) => RawExpr::ColumnRef {
