@@ -142,7 +142,7 @@ impl JwkKeyStore {
         if need_reload || force {
             let old_keys = self.keys.read().clone();
             let new_keys = self.load_keys().await?;
-            if !new_keys.keys().into_iter().eq(old_keys.keys()) {
+            if !new_keys.keys().eq(old_keys.keys()) {
                 info!("JWKS keys changed.");
             }
             *self.keys.write() = new_keys;
