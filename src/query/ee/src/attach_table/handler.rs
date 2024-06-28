@@ -29,7 +29,6 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
 pub struct RealAttachTableHandler {}
 #[async_trait::async_trait]
@@ -53,14 +52,6 @@ impl AttachTableHandler for RealAttachTableHandler {
         let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
-
-        if plan.read_only_attach {
-            // mark table as read_only attached
-            options.insert(
-                OPT_KEY_TABLE_ATTACHED_READ_ONLY.to_string(),
-                "T".to_string(),
-            );
-        }
 
         let params = LoadParams {
             location: snapshot_loc.clone(),

@@ -661,7 +661,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 database,
                 table,
                 uri_location,
-                read_only: true,
             })
         },
     );

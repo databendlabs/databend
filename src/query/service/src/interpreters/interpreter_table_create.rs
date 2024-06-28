@@ -177,8 +177,8 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         assert!(
-            !self.plan.read_only_attach,
-            "There should be no CREATE(not ATTACH) TABLE plan which is READ_ONLY"
+            self.plan.options.get(OPT_KEY_STORAGE_PREFIX).is_none(),
+            "There should be no ATTACH TABLE AS SELECT plan"
         );
 
         let tenant = self.ctx.get_tenant();
