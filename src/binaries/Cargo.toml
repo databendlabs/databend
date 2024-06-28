@@ -33,7 +33,6 @@ databend-common-tracing = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-query = { workspace = true }
-databend-sharing-endpoint = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 limits-rs = "0.2.0"
 log = { workspace = true }
@@ -53,12 +52,6 @@ test = false
 [[bin]]
 name = "databend-query-oss"
 path = "query/oss_main.rs"
-doctest = false
-test = false
-
-[[bin]]
-name = "open-sharing"
-path = "opensharing/main.rs"
 doctest = false
 test = false
 

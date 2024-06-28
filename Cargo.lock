@@ -2589,7 +2589,6 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-query",
  "databend-query",
- "databend-sharing-endpoint",
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
@@ -4778,32 +4777,6 @@ dependencies = [
  "walkdir",
  "wiremock 0.6.0",
  "xorf",
-]
-
-[[package]]
-name = "databend-sharing-endpoint"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "base64 0.22.0",
- "bytes",
- "chrono",
- "clap",
- "databend-common-base",
- "databend-common-config",
- "databend-common-exception",
- "databend-common-meta-app",
- "databend-common-storage",
- "databend-common-storages-share",
- "enumflags2",
- "http 1.1.0",
- "opendal",
- "poem",
- "serde",
- "serde_json",
- "serfig",
- "time",
- "uuid",
 ]
 
 [[package]]

@@ -34,7 +34,6 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/sharing",
-    "src/query/sharing_endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -189,7 +188,6 @@ databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_hand
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
-databend-sharing-endpoint = { path = "src/query/sharing_endpoint" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
