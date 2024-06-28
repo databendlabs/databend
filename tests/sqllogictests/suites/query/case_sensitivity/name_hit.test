@@ -1,0 +1,38 @@
+statement ok
+use default
+
+statement ok
+set unquoted_ident_case_sensitive = 0
+
+statement ok
+set quoted_ident_case_sensitive = 1
+
+statement ok
+CREATE TABLE `Student`(id int)
+
+statement error (?s)1025,.*Unknown table Student \(unquoted\)\. Did you mean `Student` \(quoted\)\?
+INSERT INTO Student VALUES(1)
+
+statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
+update Student set id = 1
+
+statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
+delete from Student
+
+statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
+select * from Student
+
+statement ok
+set unquoted_ident_case_sensitive = 1
+
+statement error 1025,.*Unknown table 'student'
+INSERT INTO student VALUES(1)
+
+statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
+update student set id = 1
+
+statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
+delete from student
+
+statement error Unknown table `default`\.`student` in catalog 'default'
+select * from student
