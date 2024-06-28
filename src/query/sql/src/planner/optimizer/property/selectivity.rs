@@ -16,6 +16,7 @@ use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
 use databend_common_expression::types::DataType;
@@ -356,6 +357,29 @@ impl<'a> SelectivityEstimator<'a> {
                 } = expr
                 {
                     return if v { Ok(1.0) } else { Ok(0.0) };
+                }
+            }
+            (ScalarExpr::FunctionCall(func), ScalarExpr::ConstantExpr(val)) => {
+                if op == ComparisonOp::Equal && func.func_name == "modulo" {
+                    let mod_number = &func.arguments[1];
+                    if let ScalarExpr::ConstantExpr(mod_num) = mod_number {
+                        let mod_num = Datum::from_scalar(mod_num.value.clone());
+                        if let Some(mod_num) = mod_num {
+                            let mod_num = mod_num.to_double()?;
+                            if mod_num == 0.0 {
+                                return Err(ErrorCode::SemanticError(
+                                    "modulus by zero".to_string(),
+                                ));
+                            }
+                            if let Some(remainder) = Datum::from_scalar(val.value.clone()) {
+                                let remainder = remainder.to_double()?;
+                                if remainder >= mod_num {
+                                    return Ok(0.0);
+                                }
+                            }
+                            return Ok(1.0 / mod_num);
+                        }
+                    }
                 }
             }
             _ => (),

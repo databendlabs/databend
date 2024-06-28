@@ -18,6 +18,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -41,11 +42,9 @@ impl PipelineBuilder {
 
         // Fill missing default columns and resort the columns.
         if source_schema != default_schema {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
+            pipeline.try_add_transformer(|| {
+                TransformResortAddOn::try_new(
                     ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
                     source_schema.clone(),
                     default_schema.clone(),
                     table.clone(),
@@ -55,11 +54,9 @@ impl PipelineBuilder {
 
         // Fill computed columns.
         if default_schema != computed_schema {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddComputedColumns::try_create(
+            pipeline.try_add_transformer(|| {
+                TransformAddComputedColumns::try_new(
                     ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
                     default_schema.clone(),
                     computed_schema.clone(),
                 )

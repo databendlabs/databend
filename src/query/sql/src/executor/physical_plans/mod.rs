@@ -108,7 +108,6 @@ mod physical_r_cte_scan;
 pub use physical_r_cte_scan::RecursiveCteScan;
 
 mod physical_udf;
-
 pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;

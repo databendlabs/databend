@@ -177,7 +177,7 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(&table_info.catalog_info, self.txn_mgr())?;
+            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -688,7 +688,6 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
-            force_scalar: false,
         })
     }
 

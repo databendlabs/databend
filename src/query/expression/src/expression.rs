@@ -778,11 +778,3 @@ impl<Index: ColumnIndex> RemoteExpr<Index> {
         }
     }
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
-pub enum FieldDefaultExpr {
-    // including now()
-    Const(Scalar),
-    // all valid: uuid(),rand()
-    Expr(String),
-}
