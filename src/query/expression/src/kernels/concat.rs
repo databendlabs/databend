@@ -87,13 +87,13 @@ impl DataBlock {
                 .all_equal()
         );
 
-        if let Value::Scalar(v0) = &blocks[0].get_by_offset(column_index).value {
-            let v0 = Value::Scalar(v0.clone());
+        let entry0 = blocks[0].get_by_offset(column_index);
+        if matches!(entry0.value, Value::Scalar(_)) {
             if blocks
                 .iter()
-                .all(|b| b.get_by_offset(column_index).value == v0)
+                .all(|b| b.get_by_offset(column_index) == entry0)
             {
-                return Ok(v0);
+                return Ok(entry0.value.clone());
             }
         }
 

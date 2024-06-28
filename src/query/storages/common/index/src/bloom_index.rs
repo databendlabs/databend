@@ -203,6 +203,11 @@ impl BloomIndex {
         let mut filters = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
         for (index, field) in bloom_columns_map.into_iter() {
+            let column = match &block.get_by_offset(index).value {
+                Value::Scalar(_) => continue,
+                Value::Column(c) => c.clone(),
+            };
+
             let field_type = &block.get_by_offset(index).data_type;
             if !Xor8Filter::supported_type(field_type) {
                 continue;
@@ -211,12 +216,6 @@ impl BloomIndex {
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
                     // Add bloom filter for the value of map type
-
-                    let column = match &block.get_by_offset(index).value {
-                        Value::Scalar(_) => continue,
-                        Value::Column(c) => c.clone(),
-                    };
-
                     let map_column = if field_type.is_nullable() {
                         let nullable_column =
                             NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&column)
@@ -261,12 +260,7 @@ impl BloomIndex {
                     }
                 }
                 _ => {
-                    if let Value::Column(column) = &&block.get_by_offset(index).value {
-                        if Self::check_large_string(column) {
-                            continue;
-                        }
-                        (column.clone(), field_type.clone())
-                    } else {
+                    if Self::check_large_string(column) {
                         continue;
                     }
                 }
