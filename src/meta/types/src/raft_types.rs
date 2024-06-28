@@ -18,9 +18,9 @@ use openraft::impls::OneshotResponder;
 use openraft::RaftTypeConfig;
 use openraft::TokioRuntime;
 
+use crate::snapshot_db::DB;
 use crate::AppliedState;
 use crate::LogEntry;
-use crate::SnapshotData;
 
 pub type NodeId = u64;
 pub type MembershipNode = openraft::EmptyNode;
@@ -35,7 +35,7 @@ impl RaftTypeConfig for TypeConfig {
     type NodeId = NodeId;
     type Node = MembershipNode;
     type Entry = openraft::entry::Entry<TypeConfig>;
-    type SnapshotData = SnapshotData;
+    type SnapshotData = DB;
     type AsyncRuntime = TokioRuntime;
     type Responder = OneshotResponder<TypeConfig>;
 }
@@ -52,6 +52,8 @@ pub type Entry = openraft::Entry<TypeConfig>;
 
 pub type SnapshotMeta = openraft::SnapshotMeta<NodeId, MembershipNode>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
+#[allow(dead_code)]
+pub type SnapshotSegmentId = openraft::SnapshotSegmentId;
 
 pub type RaftMetrics = openraft::RaftMetrics<NodeId, MembershipNode>;
 
@@ -69,7 +71,8 @@ pub type Fatal = openraft::error::Fatal<NodeId>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<NodeId>;
 pub type ClientWriteError = openraft::error::ClientWriteError<NodeId, MembershipNode>;
 pub type InitializeError = openraft::error::InitializeError<NodeId, MembershipNode>;
-pub type StreamingError<E> = openraft::error::StreamingError<TypeConfig, E>;
+pub type StreamingError<E = openraft::error::Infallible> =
+    openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<NodeId>;

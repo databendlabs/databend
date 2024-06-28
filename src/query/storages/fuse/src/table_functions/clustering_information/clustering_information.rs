@@ -464,8 +464,8 @@ fn domain_to_minmax(domain: &Domain) -> (Scalar, Scalar) {
         Domain::Tuple(fields) => {
             let mut mins = Vec::with_capacity(fields.len());
             let mut maxs = Vec::with_capacity(fields.len());
-            for filed in fields {
-                let (min, max) = domain_to_minmax(filed);
+            for field in fields {
+                let (min, max) = domain_to_minmax(field);
                 mins.push(min);
                 maxs.push(max);
             }
