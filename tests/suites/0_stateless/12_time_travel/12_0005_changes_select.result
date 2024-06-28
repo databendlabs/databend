@@ -20,6 +20,6 @@ changes default timestamp at the first insertion end the deletion
 changes append_only timestamp at the first insertion
 3	3	INSERT	false
 change tracking is disabled
-Error: APIError: ResponseError with 2733: Change tracking is not enabled on table 'default.t12_0005'
+Error: APIError: ResponseError with 2733: Change tracking is not enabled on table 'default'.'t12_0005'
 change tracking has been missing for the time range requested
-Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'default.t12_0005'
+Error: APIError: ResponseError with 2733: Change tracking has been missing for the time range requested on table 'default'.'t12_0005'

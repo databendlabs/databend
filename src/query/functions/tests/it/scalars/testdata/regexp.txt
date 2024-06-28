@@ -38,7 +38,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr('', '', 0)
-  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('', '', 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('', '', 0)` in expr `regexp_instr('', '', to_int64(0))`
 
 
 
@@ -256,7 +256,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('dog cat dog', 'dog', 0, 1, 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: position must be positive, but got 0 while evaluating function `regexp_instr('dog cat dog', 'dog', 0, 1, 0)` in expr `regexp_instr(source, pat, pos, occur, ro)`
 
 
 
@@ -264,7 +264,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 while evaluating function `regexp_instr('aa aaa aaaa aa aaa aaaa', 'A{2}', 2, 2, 2)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr: return_option must be 1 or 0, but got 2 while evaluating function `regexp_instr('aa aaa aaaa aa aaa aaaa', 'A{2}', 2, 2, 2)` in expr `regexp_instr(source, pat, pos, occur, ro)`
 
 
 
@@ -272,7 +272,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_instr(source, pat, pos, occur, ro, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - while evaluating function `regexp_instr('aa aaa aaaa aa aaa aaaa', 'A{4}', 1, 1, 1, '-i')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_instr match type: - while evaluating function `regexp_instr('aa aaa aaaa aa aaa aaaa', 'A{4}', 1, 1, 1, '-i')` in expr `regexp_instr(source, pat, pos, occur, ro, mt)`
 
 
 
@@ -427,7 +427,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: x while evaluating function `regexp_like('abc', 'abc', 'x')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: x while evaluating function `regexp_like('abc', 'abc', 'x')` in expr `regexp_like(source, pat, mt)`
 
 
 
@@ -435,7 +435,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unsupported arguments to regexp_like match type: u while evaluating function `regexp_like('abc', 'abc', 'u')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unsupported arguments to regexp_like match type: u while evaluating function `regexp_like('abc', 'abc', 'u')` in expr `regexp_like(source, pat, mt)`
 
 
 
@@ -443,7 +443,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like('Abc-', 'abc', '-i')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like('Abc-', 'abc', '-i')` in expr `regexp_like(source, pat, mt)`
 
 
 
@@ -451,7 +451,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_like(source, pat, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like('Abc--', 'abc-', '-')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_like match type: - while evaluating function `regexp_like('Abc--', 'abc-', '-')` in expr `regexp_like(source, pat, mt)`
 
 
 
@@ -698,7 +698,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 while evaluating function `regexp_replace('abc', 'b', 'X', 0)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: position must be positive, but got 0 while evaluating function `regexp_replace('abc', 'b', 'X', 0)` in expr `regexp_replace(source, pat, repl, pos)`
 
 
 
@@ -706,7 +706,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 while evaluating function `regexp_replace('a b c', 'b', 'X', 1, -1)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace: occurrence must not be negative, but got -1 while evaluating function `regexp_replace('a b c', 'b', 'X', 1, -1)` in expr `regexp_replace(source, pat, repl, pos, occur)`
 
 
 
@@ -714,7 +714,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_replace(source, pat, repl, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - while evaluating function `regexp_replace('a b c', 'b', 'X', 1, 0, '-c')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_replace match type: - while evaluating function `regexp_replace('a b c', 'b', 'X', 1, 0, '-c')` in expr `regexp_replace(source, pat, repl, pos, occur, mt)`
 
 
 
@@ -930,7 +930,7 @@ error:
   --> SQL:1:1
   |
 1 | regexp_substr(source, pat, pos, occur, mt)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 while evaluating function `regexp_substr('a b c', 'b', 1, 0, '-c')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Incorrect arguments to regexp_substr: occurrence must be positive, but got 0 while evaluating function `regexp_substr('a b c', 'b', 1, 0, '-c')` in expr `regexp_substr(source, pat, pos, occur, mt)`
 
 
 

@@ -169,7 +169,9 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::Geometry(s) => {
                 let ewkb = Ewkb(s.to_vec());
                 let geos = ewkb.to_geos().unwrap();
-                let geom = geos.to_ewkt(geos.srid()).unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "{geom:?}")
             }
         }
@@ -260,7 +262,9 @@ impl<'a> Display for ScalarRef<'a> {
             ScalarRef::Geometry(s) => {
                 let ewkb = Ewkb(s.to_vec());
                 let geos = ewkb.to_geos().unwrap();
-                let geom = geos.to_ewkt(geos.srid()).unwrap();
+                let geom = geos
+                    .to_ewkt(geos.srid())
+                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "'{geom}'")
             }
         }

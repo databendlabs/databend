@@ -22,6 +22,7 @@ use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
 use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
@@ -56,17 +57,15 @@ impl PipelineBuilder {
 
                 if projection.len() < input_schema.fields().len() {
                     // Only if the projection is not a full projection, we need to add a projection transform.
-                    self.main_pipeline.add_transform(|input, output| {
-                        Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                            input,
-                            output,
-                            input_schema.num_fields(),
-                            self.func_ctx.clone(),
+                    self.main_pipeline.add_transformer(|| {
+                        CompoundBlockOperator::new(
                             vec![BlockOperator::Project {
                                 projection: projection.clone(),
                             }],
-                        )))
-                    })?;
+                            self.func_ctx.clone(),
+                            input_schema.num_fields(),
+                        )
+                    });
                 }
             }
         }
@@ -256,14 +255,7 @@ impl SortPipelineBuilder {
 
     pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         // Partial sort
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
-                input,
-                output,
-                self.limit,
-                self.sort_desc.clone(),
-            )?))
-        })?;
+        pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
 
         self.build_merge_sort_pipeline(pipeline, false)
     }

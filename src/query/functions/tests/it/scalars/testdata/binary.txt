@@ -160,7 +160,7 @@ error:
   --> SQL:1:1
   |
 1 | from_base64('!@#')
-  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. while evaluating function `from_base64('!@#')`
+  | ^^^^^^^^^^^^^^^^^^ Invalid byte 33, offset 0. while evaluating function `from_base64('!@#')` in expr `from_base64('!@#')`
 
 
 
@@ -177,7 +177,7 @@ error:
   --> SQL:1:1
   |
 1 | from_hex('6461746162656e6')
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Odd number of digits while evaluating function `from_hex('6461746162656e6')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Odd number of digits while evaluating function `from_hex('6461746162656e6')` in expr `from_hex('6461746162656e6')`
 
 
 

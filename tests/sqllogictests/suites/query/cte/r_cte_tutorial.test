@@ -54,7 +54,6 @@ statement ok
 INSERT INTO emp VALUES (7934, 'MILLER', 'CLERK', 7782, DATE '1982-01-23', 1300.00, NULL, 10);
 
 
-onlyif http
 query II
 WITH RECURSIVE ctename AS (
       SELECT empno, ename
@@ -72,7 +71,6 @@ SELECT * FROM ctename;
 7902 FORD
 
 
-onlyif http
 query III
 WITH RECURSIVE ctename AS (
       SELECT empno, ename,
@@ -91,7 +89,6 @@ SELECT * FROM ctename;
 7566 JONES 0
 7902 FORD 1
 
-onlyif http
 query III
 WITH RECURSIVE ctename AS (
       SELECT empno, ename
@@ -108,7 +105,6 @@ SELECT * FROM ctename;
 7566 JONES
 7902 FORD
 
-onlyif http
 statement ok
 CREATE OR REPLACE VIEW ctenames AS (
   WITH RECURSIVE ctename AS (
@@ -123,7 +119,6 @@ CREATE OR REPLACE VIEW ctenames AS (
   SELECT * FROM ctename
 );
 
-onlyif http
 query III
 SELECT * FROM ctenames;
 ----
@@ -131,7 +126,6 @@ SELECT * FROM ctenames;
 7566 JONES
 7902 FORD
 
-onlyif http
 statement ok
 drop view ctenames;
 

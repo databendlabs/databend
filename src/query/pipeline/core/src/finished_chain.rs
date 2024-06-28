@@ -153,7 +153,9 @@ impl FinishedCallbackChain {
             });
         }
 
-        Self::log_states(&states);
+        if !states.is_empty() {
+            Self::log_states(&states);
+        }
     }
 
     pub fn extend(&mut self, other: FinishedCallbackChain) {

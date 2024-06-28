@@ -20,6 +20,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::PoisonError;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
@@ -377,7 +378,7 @@ impl ExecutingGraph {
                 };
 
                 let node = &locker.graph[target_index];
-                let node_state = node.state.lock().unwrap();
+                let node_state = node.state.lock().unwrap_or_else(PoisonError::into_inner);
 
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);

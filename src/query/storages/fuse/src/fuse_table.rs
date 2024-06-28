@@ -850,6 +850,7 @@ impl Table for FuseTable {
         table_name: &str,
         _consume: bool,
     ) -> Result<String> {
+        let db_tb_name = format!("'{}'.'{}'", database_name, table_name);
         let Some(ChangesDesc {
             seq,
             desc,
@@ -858,12 +859,11 @@ impl Table for FuseTable {
         }) = self.changes_desc.as_ref()
         else {
             return Err(ErrorCode::Internal(format!(
-                "No changes descriptor found in table {} {}",
-                database_name, table_name
+                "No changes descriptor found in table {db_tb_name}"
             )));
         };
 
-        self.check_changes_valid(database_name, table_name, *seq)?;
+        self.check_changes_valid(&db_tb_name, *seq)?;
         self.get_changes_query(
             mode,
             location,

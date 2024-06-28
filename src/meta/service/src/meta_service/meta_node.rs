@@ -32,7 +32,6 @@ use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_sled_store::openraft;
@@ -86,7 +85,7 @@ use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
-use crate::network::Network;
+use crate::network::NetworkFactory;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
@@ -205,7 +204,7 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
-        let net = Network::new(sto.clone());
+        let net = NetworkFactory::new(sto.clone());
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
@@ -909,12 +908,10 @@ impl MetaNode {
     }
 
     async fn get_key_num(&self) -> u64 {
-        let snapshot_info = self.sto.try_get_snapshot_info().await;
-        if let Some((id, _)) = snapshot_info {
-            id.key_num.unwrap_or_default()
-        } else {
-            0
-        }
+        self.sto
+            .try_get_snapshot_key_num()
+            .await
+            .unwrap_or_default()
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {

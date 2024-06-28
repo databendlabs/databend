@@ -32,8 +32,7 @@ use crate::plans::Sort;
 use crate::plans::SortItem;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_query(
+    pub(crate) fn bind_query(
         &mut self,
         bind_context: &mut BindContext,
         query: &Query,
@@ -46,7 +45,7 @@ impl Binder {
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            Box::pin(self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)).await?;
+            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)?;
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;

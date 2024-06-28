@@ -58,6 +58,7 @@ use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
+use databend_common_meta_app::app_error::UpdateStreamMetasFailed;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
@@ -174,6 +175,7 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
+use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
@@ -2927,6 +2929,46 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[minitrace::trace]
+    async fn update_stream_metas(
+        &self,
+        update_stream_meta_reqs: &[UpdateStreamMetaReq],
+    ) -> Result<(), KVAppError> {
+        if update_stream_meta_reqs.is_empty() {
+            return Ok(());
+        }
+
+        let mut txn_req = TxnRequest {
+            condition: vec![],
+            if_then: vec![],
+            else_then: vec![],
+        };
+
+        append_update_stream_meta_requests(
+            self,
+            &mut txn_req,
+            update_stream_meta_reqs,
+            "update_stream_metas",
+        )
+        .await?;
+
+        let (success, _) = send_txn(self, txn_req).await?;
+
+        if !success {
+            let msg = update_stream_meta_reqs
+                .iter()
+                .map(|req| format!("stream [id {}, seq {} ]", req.stream_id, req.seq))
+                .collect::<Vec<_>>()
+                .join(",");
+            return Err(KVAppError::AppError(AppError::from(
+                UpdateStreamMetasFailed::new(msg),
+            )));
+        } else {
+            Ok(())
+        }
+    }
+
+    #[logcall::logcall]
+    #[minitrace::trace]
     async fn update_table_meta(
         &self,
         req: UpdateTableMetaReq,
@@ -2994,41 +3036,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 txn_req.if_then.extend(match_operations)
             }
 
-            for req in &req.update_stream_meta {
-                let stream_id = TableId {
-                    table_id: req.stream_id,
-                };
-                let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
-                    get_pb_value(self, &stream_id).await?;
-
-                if stream_meta_seq == 0 || stream_meta.is_none() {
-                    return Err(KVAppError::AppError(AppError::UnknownStreamId(
-                        UnknownStreamId::new(req.stream_id, "update_table_meta"),
-                    )));
-                }
-
-                if req.seq.match_seq(stream_meta_seq).is_err() {
-                    return Err(KVAppError::AppError(AppError::from(
-                        StreamVersionMismatched::new(
-                            req.stream_id,
-                            req.seq,
-                            stream_meta_seq,
-                            "update_table_meta",
-                        ),
-                    )));
-                }
-
-                let mut new_stream_meta = stream_meta.unwrap();
-                new_stream_meta.options = req.options.clone();
-                new_stream_meta.updated_on = Utc::now();
-
-                txn_req
-                    .condition
-                    .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
-                txn_req
-                    .if_then
-                    .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
-            }
+            append_update_stream_meta_requests(
+                self,
+                &mut txn_req,
+                &req.update_stream_meta,
+                "update_table_meta",
+            )
+            .await?;
 
             if let Some(deduplicated_label) = req.deduplicated_label.clone() {
                 txn_req
@@ -5789,4 +5803,44 @@ async fn handle_undrop_table(
             }
         }
     }
+}
+
+#[minitrace::trace]
+async fn append_update_stream_meta_requests(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    txn_req: &mut TxnRequest,
+    update_stream_meta: &[UpdateStreamMetaReq],
+    context_msg: impl Into<String>,
+) -> Result<(), KVAppError> {
+    for req in update_stream_meta {
+        let stream_id = TableId {
+            table_id: req.stream_id,
+        };
+        let (stream_meta_seq, stream_meta): (_, Option<TableMeta>) =
+            get_pb_value(kv_api, &stream_id).await?;
+
+        if stream_meta_seq == 0 || stream_meta.is_none() {
+            return Err(KVAppError::AppError(AppError::UnknownStreamId(
+                UnknownStreamId::new(req.stream_id, context_msg),
+            )));
+        }
+
+        if req.seq.match_seq(stream_meta_seq).is_err() {
+            return Err(KVAppError::AppError(AppError::from(
+                StreamVersionMismatched::new(req.stream_id, req.seq, stream_meta_seq, context_msg),
+            )));
+        }
+
+        let mut new_stream_meta = stream_meta.unwrap();
+        new_stream_meta.options = req.options.clone();
+        new_stream_meta.updated_on = Utc::now();
+
+        txn_req
+            .condition
+            .push(txn_cond_seq(&stream_id, Eq, stream_meta_seq));
+        txn_req
+            .if_then
+            .push(txn_op_put(&stream_id, serialize_struct(&new_stream_meta)?));
+    }
+    Ok(())
 }

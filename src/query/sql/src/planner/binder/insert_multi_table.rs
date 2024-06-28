@@ -59,8 +59,7 @@ impl Binder {
                 alias: None,
             };
 
-            let (s_expr, bind_context) =
-                self.bind_table_reference(bind_context, &table_ref).await?;
+            let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;
 
             let select_plan = Plan::Query {
                 s_expr: Box::new(s_expr),

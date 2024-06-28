@@ -162,6 +162,7 @@ impl PhysicalPlanBuilder {
             row_id_col_offset,
             cols_to_fetch,
             fetched_fields,
+            need_wrap_nullable: false,
             stat_info: Some(stat_info),
         }))
     }

@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -33,6 +34,7 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline_core::LockGuard;
 
 use crate::plans::Plan;
 
@@ -66,7 +68,7 @@ impl CreateTablePlan {
 }
 
 /// Desc.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct DescribeTablePlan {
     pub catalog: String,
     pub database: String,
@@ -83,7 +85,7 @@ impl DescribeTablePlan {
 }
 
 /// Drop.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct DropTablePlan {
     pub if_exists: bool,
     pub tenant: Tenant,
@@ -101,7 +103,7 @@ impl DropTablePlan {
 }
 
 /// Vacuum
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct VacuumTablePlan {
     pub catalog: String,
     pub database: String,
@@ -141,7 +143,7 @@ impl VacuumTablePlan {
 }
 
 /// Vacuum drop table
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct VacuumDropTablePlan {
     pub catalog: String,
     pub database: String,
@@ -170,7 +172,7 @@ impl VacuumDropTablePlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct VacuumTemporaryFilesPlan {
     pub limit: Option<u64>,
     pub retain: Option<Duration>,
@@ -185,20 +187,20 @@ impl crate::plans::VacuumTemporaryFilesPlan {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct VacuumDropTableOption {
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
     pub limit: Option<usize>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct VacuumTableOption {
     pub dry_run: Option<bool>,
 }
 
 /// Optimize.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct OptimizeTablePlan {
     pub catalog: String,
     pub database: String,
@@ -214,14 +216,7 @@ impl OptimizeTablePlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LockTableOption {
-    NoLock,
-    LockWithRetry,
-    LockNoRetry,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
@@ -230,7 +225,7 @@ pub enum OptimizeTableAction {
     CompactSegments,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct AnalyzeTablePlan {
     pub catalog: String,
     pub database: String,
@@ -244,7 +239,7 @@ impl AnalyzeTablePlan {
 }
 
 /// Rename.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct RenameTablePlan {
     pub tenant: Tenant,
     pub if_exists: bool,
@@ -262,7 +257,7 @@ impl RenameTablePlan {
 }
 
 /// Modify table comment.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ModifyTableCommentPlan {
     pub new_comment: String,
     pub catalog: String,
@@ -277,7 +272,7 @@ impl ModifyTableCommentPlan {
 }
 
 /// SetOptions
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct SetOptionsPlan {
     pub set_options: TableOptions,
     pub catalog: String,
@@ -292,7 +287,7 @@ impl SetOptionsPlan {
 }
 
 // Table add column
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct AddTableColumnPlan {
     pub tenant: Tenant,
     pub catalog: String,
@@ -309,7 +304,7 @@ impl AddTableColumnPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum AddColumnOption {
     First,
     After(String),
@@ -317,7 +312,7 @@ pub enum AddColumnOption {
 }
 
 // Table rename column
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct RenameTableColumnPlan {
     pub tenant: Tenant,
     pub catalog: String,
@@ -335,7 +330,7 @@ impl RenameTableColumnPlan {
 }
 
 // Table drop column
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct DropTableColumnPlan {
     pub catalog: String,
     pub database: String,
@@ -350,7 +345,7 @@ impl DropTableColumnPlan {
 }
 
 // ModifyColumnAction after name resolved, used in ModifyTableColumnPlan
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum ModifyColumnAction {
     // (column name, masking policy name)
     SetMaskingPolicy(String, String),
@@ -363,12 +358,13 @@ pub enum ModifyColumnAction {
 }
 
 // Table modify column
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub action: ModifyColumnAction,
+    pub lock_guard: Option<Arc<LockGuard>>,
 }
 
 impl ModifyTableColumnPlan {
@@ -377,8 +373,19 @@ impl ModifyTableColumnPlan {
     }
 }
 
+impl std::fmt::Debug for ModifyTableColumnPlan {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("ModifyTableColumn")
+            .field("catalog", &self.catalog)
+            .field("database", &self.database)
+            .field("table", &self.table)
+            .field("action", &self.action)
+            .finish()
+    }
+}
+
 /// Show.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ShowCreateTablePlan {
     /// The catalog name
     pub catalog: String,
@@ -397,7 +404,7 @@ impl ShowCreateTablePlan {
 }
 
 /// Truncate.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct TruncateTablePlan {
     pub catalog: String,
     pub database: String,
@@ -412,7 +419,7 @@ impl TruncateTablePlan {
 }
 
 /// Undrop.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct UndropTablePlan {
     pub tenant: Tenant,
     pub catalog: String,
@@ -440,7 +447,7 @@ impl From<UndropTablePlan> for UndropTableReq {
 }
 
 /// Exists table.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct ExistsTablePlan {
     pub catalog: String,
     pub database: String,
@@ -457,7 +464,7 @@ impl ExistsTablePlan {
 }
 
 /// Cluster key.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct AlterTableClusterKeyPlan {
     pub tenant: Tenant,
     pub catalog: String,
@@ -472,7 +479,7 @@ impl AlterTableClusterKeyPlan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: Tenant,
     pub catalog: String,

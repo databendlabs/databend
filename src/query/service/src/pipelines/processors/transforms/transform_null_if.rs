@@ -48,6 +48,39 @@ pub struct TransformNullIf {
 impl TransformNullIf
 where Self: Transform
 {
+    pub fn try_new(
+        select_schema: DataSchemaRef,
+        insert_schema: DataSchemaRef,
+        func_ctx: FunctionContext,
+        null_str_list: &[String],
+    ) -> Result<Self> {
+        let exprs = select_schema
+            .fields()
+            .iter()
+            .zip(insert_schema.fields().iter().enumerate())
+            .map(|(from, (index, to))| {
+                let expr = Expr::ColumnRef {
+                    span: None,
+                    id: index,
+                    data_type: from.data_type().clone(),
+                    display_name: from.name().clone(),
+                };
+                Self::try_null_if(
+                    None,
+                    expr,
+                    to.data_type(),
+                    &BUILTIN_FUNCTIONS,
+                    null_str_list,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let schema = Self::new_schema(&select_schema);
+        Ok(Self {
+            func_ctx,
+            schema,
+            exprs,
+        })
+    }
     pub fn try_create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,

@@ -30,6 +30,16 @@ pub struct TransformSortPartial {
 }
 
 impl TransformSortPartial {
+    pub fn new(
+        limit: Option<usize>,
+        sort_columns_descriptions: Arc<Vec<SortColumnDescription>>,
+    ) -> Self {
+        Self {
+            limit,
+            sort_columns_descriptions,
+        }
+    }
+
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,

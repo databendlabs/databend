@@ -109,7 +109,6 @@ use crate::plans::GrantShareObjectPlan;
 use crate::plans::Insert;
 use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
-use crate::plans::MergeInto;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTablePlan;
@@ -232,7 +231,10 @@ pub enum Plan {
     Replace(Box<Replace>),
     Delete(Box<DeletePlan>),
     Update(Box<UpdatePlan>),
-    MergeInto(Box<MergeInto>),
+    MergeInto {
+        s_expr: Box<SExpr>,
+        schema: DataSchemaRef,
+    },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),
     CopyIntoLocation(CopyIntoLocationPlan),
@@ -418,7 +420,7 @@ impl Plan {
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
             | Plan::Delete(_)
-            | Plan::MergeInto(_)
+            | Plan::MergeInto { .. }
             | Plan::OptimizeTable(_)
             | Plan::Update(_) => QueryKind::Update,
             _ => QueryKind::Other,
@@ -447,6 +449,7 @@ impl Plan {
             | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
+            Plan::MergeInto { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
@@ -472,7 +475,6 @@ impl Plan {
             Plan::DescPasswordPolicy(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
             Plan::CopyIntoLocation(plan) => plan.schema(),
-            Plan::MergeInto(plan) => plan.schema(),
             Plan::CreateTask(plan) => plan.schema(),
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
