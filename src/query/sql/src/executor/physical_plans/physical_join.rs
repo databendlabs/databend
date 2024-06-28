@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
@@ -126,20 +128,24 @@ impl PhysicalPlanBuilder {
         }
         let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
         // Include columns referenced in left conditions and right conditions.
-        let (left_required, right_required) = join.equi_conditions.iter().fold(
-            (required.clone(), required.clone()),
-            |(mut left_required, mut right_required), condition| {
-                left_required = left_required
-                    .union(&condition.left.used_columns())
-                    .cloned()
-                    .collect();
-                right_required = right_required
-                    .union(&condition.right.used_columns())
-                    .cloned()
-                    .collect();
-                (left_required, right_required)
-            },
-        );
+        let left_required: HashSet<usize> = join
+            .equi_conditions
+            .iter()
+            .fold(required.clone(), |acc, v| {
+                acc.union(&v.left.used_columns()).cloned().collect()
+            })
+            .union(&others_required)
+            .cloned()
+            .collect();
+        let right_required: HashSet<usize> = join
+            .equi_conditions
+            .iter()
+            .fold(required, |acc, v| {
+                acc.union(&v.right.used_columns()).cloned().collect()
+            })
+            .union(&others_required)
+            .cloned()
+            .collect();
         let left_required = left_required.union(&others_required).cloned().collect();
         let right_required = right_required.union(&others_required).cloned().collect();
 
