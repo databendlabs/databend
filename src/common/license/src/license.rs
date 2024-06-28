@@ -63,7 +63,7 @@ pub enum Feature {
     StorageEncryption,
     #[serde(alias = "stream", alias = "STREAM")]
     Stream,
-    #[serde(alias = "stream", alias = "ATTACH_TABLE")]
+    #[serde(alias = "attach_table", alias = "ATTACH_TABLE")]
     AttacheTable,
     #[serde(alias = "compute_quota", alias = "COMPUTE_QUOTA")]
     ComputeQuota(ComputeQuota),
@@ -257,7 +257,7 @@ mod tests {
         );
         assert_eq!(
             Feature::AttacheTable,
-            serde_json::from_str::<Feature>("\"AttachTable\"").unwrap()
+            serde_json::from_str::<Feature>("\"ATTACH_TABLE\"").unwrap()
         );
         assert_eq!(
             Feature::ComputeQuota(ComputeQuota {
