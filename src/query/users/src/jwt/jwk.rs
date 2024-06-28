@@ -23,6 +23,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jwt_simple::prelude::ES256PublicKey;
 use jwt_simple::prelude::RS256PublicKey;
+use log::info;
+use log::warn;
 use p256::EncodedPoint;
 use p256::FieldBytes;
 use parking_lot::RwLock;
@@ -117,7 +119,7 @@ impl JwkKeyStore {
 
 impl JwkKeyStore {
     #[async_backtrace::framed]
-    async fn load_keys(&self) -> Result<()> {
+    async fn load_keys(&self) -> Result<HashMap<String, PubKey>> {
         let response = reqwest::get(&self.url).await.map_err(|e| {
             ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
         })?;
@@ -128,20 +130,22 @@ impl JwkKeyStore {
         for k in &jwk_keys.keys {
             new_keys.insert(k.kid.to_string(), k.get_public_key()?);
         }
-        let mut keys = self.keys.write();
-        *keys = new_keys;
-        Ok(())
+        Ok(new_keys)
     }
 
     #[async_backtrace::framed]
-    async fn maybe_reload_keys(&self) -> Result<()> {
-        let need_reload = {
-            let last_refreshed_at = *self.last_refreshed_at.read();
-            last_refreshed_at.is_none()
-                || last_refreshed_at.unwrap().elapsed() > self.refresh_interval
+    async fn maybe_refresh_keys(&self, force: bool) -> Result<()> {
+        let need_reload = match *self.last_refreshed_at.read() {
+            None => true,
+            Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
         };
-        if need_reload {
-            self.load_keys().await?;
+        if need_reload || force {
+            let old_keys = self.keys.read().clone();
+            let new_keys = self.load_keys().await?;
+            if !new_keys.keys().into_iter().eq(old_keys.keys()) {
+                info!("JWKS keys changed.");
+            }
+            *self.keys.write() = new_keys;
             self.last_refreshed_at.write().replace(Instant::now());
         }
         Ok(())
@@ -149,21 +153,47 @@ impl JwkKeyStore {
 
     #[async_backtrace::framed]
     pub(super) async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
-        self.maybe_reload_keys().await?;
-        let keys = self.keys.read();
-        match key_id {
-            Some(kid) => keys.get(&kid).cloned().ok_or_else(|| {
-                ErrorCode::AuthenticateFailure(format!("key id {} not found", &kid))
-            }),
+        self.maybe_refresh_keys(false).await?;
+
+        // if the key_id is not set, and there is only one key in the store, return it
+        let key_id = match key_id {
+            Some(key_id) => key_id,
             None => {
+                let keys = self.keys.read();
                 if keys.len() != 1 {
-                    Err(ErrorCode::AuthenticateFailure(
+                    return Err(ErrorCode::AuthenticateFailure(
                         "must specify key_id for jwt when multi keys exists ",
-                    ))
+                    ));
                 } else {
-                    Ok((*keys.iter().next().unwrap().1).clone())
+                    return Ok((keys.iter().next().unwrap().1).clone());
                 }
             }
+        };
+
+        // happy path: the key_id is found in the store
+        if let Some(key) = self.keys.read().get(&key_id) {
+            return Ok(key.clone());
         }
+
+        // if the key_id is not set here, it might because the JWKS is refreshed, so we need to reload it.
+        warn!(
+            "key_id {} not found in jwks store, try to reload keys",
+            key_id
+        );
+        self.maybe_refresh_keys(true)
+            .await
+            .map_err(|e| e.add_message("failed to reload JWKS keys"))?;
+
+        let key = match self.keys.read().get(&key_id) {
+            None => {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "key_id {} not found in jwk store",
+                    key_id
+                )));
+            }
+            Some(key) => key.clone(),
+        };
+
+        Ok(key)
     }
 }
