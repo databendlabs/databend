@@ -158,28 +158,53 @@ where
     ///
     /// Return `true` if the batch is full (need to output).
     #[inline(always)]
-    fn evaluate_cursor(&mut self, mut cursor: Cursor<A::Rows>) -> bool {
+    fn evaluate_cursor(&mut self) -> bool {
+        let cursor = if let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
+            cursor
+        } else {
+            return false;
+        };
+
         let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
-        if self.sorted_cursors.len() == 1 {
-            let start = cursor.row_index;
-            let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
-            self.temp_sorted_num_rows += count;
-            cursor.row_index += count;
-            self.temp_output_indices
-                .push((cursor.input_index, start, count));
+        let (whole_block, next_cursor) = if self.sorted_cursors.len() == 1 {
+            (true, None)
         } else {
             let next_cursor = &self.sorted_cursors.peek_top2().0;
             if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
                 // we can drain the whole block.
+                (true, None)
+            } else {
+                (false, Some(next_cursor))
+            }
+        };
+
+        let input_index = cursor.input_index;
+
+        let cursor_finished = match (whole_block, next_cursor) {
+            (true, None) => {
                 let start = cursor.row_index;
                 let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+
                 self.temp_sorted_num_rows += count;
+                self.temp_output_indices.push((input_index, start, count));
+
+                // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
+                // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+                let mut peek_mut = self.sorted_cursors.peek_mut();
+                let cursor = &mut peek_mut.0;
                 cursor.row_index += count;
-                self.temp_output_indices
-                    .push((cursor.input_index, start, count));
-            } else {
+
+                let cursor_finished = cursor.is_finished();
+                if cursor_finished {
+                    // Pop the current `cursor`.
+                    A::pop_mut(peek_mut);
+                }
+                cursor_finished
+            }
+            (false, Some(next_cursor)) => {
+                let mut cursor = cursor.clone();
                 // We copy current cursor for advancing,
                 // and we will use this copied cursor to update the top of the sorted_cursors at last
                 // (let sorted_cursors adjust itself without popping and pushing any element).
@@ -192,34 +217,36 @@ where
                     self.temp_sorted_num_rows += 1;
                     cursor.advance();
                 }
-                self.temp_output_indices.push((
-                    cursor.input_index,
-                    start,
-                    cursor.row_index - start,
-                ));
+                self.temp_output_indices
+                    .push((input_index, start, cursor.row_index - start));
+                let cursor_finished = cursor.is_finished();
+                if !cursor_finished {
+                    // Update the top of the sorted_cursors.
+                    self.sorted_cursors.update_top(Reverse(cursor));
+                } else {
+                    // Pop the current `cursor`.
+                    self.sorted_cursors.pop();
+                }
+                cursor_finished
             }
-        }
+            _ => unreachable!(),
+        };
 
-        if !cursor.is_finished() {
-            // Update the top of the sorted_cursors.
-            self.sorted_cursors.update_top(Reverse(cursor));
-        } else {
-            // Pop the current `cursor`.
-            self.sorted_cursors.pop();
+        if cursor_finished {
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
                 &self.temp_output_indices,
                 None,
             );
-            self.buffer[cursor.input_index] = DataBlock::empty_with_schema(self.schema.clone());
+            self.buffer[input_index] = DataBlock::empty_with_schema(self.schema.clone());
             self.temp_sorted_blocks.push(temp_block);
             self.temp_output_indices.clear();
-            self.pending_streams.push_back(cursor.input_index);
+            self.pending_streams.push_back(input_index);
         }
 
         debug_assert!(self.temp_sorted_num_rows <= max_rows);
-        self.temp_sorted_num_rows == max_rows
+        self.temp_sorted_num_rows != max_rows
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {
@@ -268,10 +295,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
-            if self.evaluate_cursor(cursor.clone()) {
-                break;
-            }
+        while self.evaluate_cursor() {
             if self.has_pending_stream() {
                 self.poll_pending_stream()?;
                 if self.has_pending_stream() {
@@ -305,10 +329,7 @@ where
             };
         }
 
-        while let Some(Reverse(cursor)) = self.sorted_cursors.peek() {
-            if self.evaluate_cursor(cursor.clone()) {
-                break;
-            }
+        while self.evaluate_cursor() {
             if self.has_pending_stream() {
                 self.async_poll_pending_stream().await?;
                 if self.has_pending_stream() {

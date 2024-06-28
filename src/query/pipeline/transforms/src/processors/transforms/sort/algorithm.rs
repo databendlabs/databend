@@ -48,7 +48,7 @@ pub trait SortAlgorithm {
 
     fn peek_top2(&self) -> &Reverse<Cursor<Self::Rows>>;
 
-    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>>;
+    fn peek_mut(&mut self) -> Self::PeekMut<'_>;
 
     fn pop_mut(this: Self::PeekMut<'_>);
 }
@@ -90,8 +90,8 @@ impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
         find_bigger_child_of_root(self)
     }
 
-    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>> {
-        BinaryHeap::peek_mut(self)
+    fn peek_mut(&mut self) -> Self::PeekMut<'_> {
+        BinaryHeap::peek_mut(self).unwrap()
     }
 
     fn pop_mut(this: Self::PeekMut<'_>) {
@@ -163,13 +163,13 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
         self.tree.peek_top2().as_ref().unwrap()
     }
 
-    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>> {
-        Some(LoserTreePeekMut(self))
+    fn peek_mut(&mut self) -> Self::PeekMut<'_> {
+        LoserTreePeekMut(self)
     }
 
     fn pop_mut(this: Self::PeekMut<'_>) {
         debug_assert!(this.0.length >= 1);
-        *this.0.tree.peek_mut() = None;
+        this.0.tree.peek_mut().take();
         this.0.length -= 1;
     }
 }
