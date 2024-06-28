@@ -14,17 +14,20 @@
 
 use core::fmt;
 use std::cmp::Reverse;
+use std::collections::binary_heap;
 use std::collections::BinaryHeap;
+use std::ops::Deref;
+use std::ops::DerefMut;
 
 use super::loser_tree;
 use super::utils::find_bigger_child_of_root;
 use super::Cursor;
 use super::Rows;
 
-pub trait SortAlgorithm
-where <Self as SortAlgorithm>::Rows: Rows
-{
-    type Rows;
+pub trait SortAlgorithm {
+    type Rows: Rows;
+    type PeekMut<'b>: Deref<Target = Reverse<Cursor<Self::Rows>>> + DerefMut
+    where Self: 'b;
     fn with_capacity(capacity: usize) -> Self;
 
     fn is_empty(&self) -> bool {
@@ -44,12 +47,17 @@ where <Self as SortAlgorithm>::Rows: Rows
     fn peek(&self) -> Option<&Reverse<Cursor<Self::Rows>>>;
 
     fn peek_top2(&self) -> &Reverse<Cursor<Self::Rows>>;
+
+    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>>;
+
+    fn pop_mut(this: Self::PeekMut<'_>);
 }
 
 pub type HeapSort<R> = BinaryHeap<Reverse<Cursor<R>>>;
 
 impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     type Rows = R;
+    type PeekMut<'a> = binary_heap::PeekMut<'a, Reverse<Cursor<R>>> where R:'a;
     fn with_capacity(capacity: usize) -> Self {
         BinaryHeap::with_capacity(capacity)
     }
@@ -81,6 +89,14 @@ impl<R: Rows> SortAlgorithm for BinaryHeap<Reverse<Cursor<R>>> {
     fn peek_top2(&self) -> &Reverse<Cursor<Self::Rows>> {
         find_bigger_child_of_root(self)
     }
+
+    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>> {
+        BinaryHeap::peek_mut(self)
+    }
+
+    fn pop_mut(this: Self::PeekMut<'_>) {
+        binary_heap::PeekMut::pop(this);
+    }
 }
 
 pub struct LoserTreeSort<R: Rows> {
@@ -107,6 +123,7 @@ impl<R: Rows> fmt::Debug for LoserTreeSort<R> {
 
 impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
     type Rows = R;
+    type PeekMut<'a> = LoserTreePeekMut<'a,Self::Rows>  where Self: 'a;
     fn with_capacity(capacity: usize) -> Self {
         let data = vec![None; capacity];
         LoserTreeSort {
@@ -144,5 +161,38 @@ impl<R: Rows> SortAlgorithm for LoserTreeSort<R> {
 
     fn peek_top2(&self) -> &Reverse<Cursor<Self::Rows>> {
         self.tree.peek_top2().as_ref().unwrap()
+    }
+
+    fn peek_mut(&mut self) -> Option<Self::PeekMut<'_>> {
+        Some(LoserTreePeekMut(self))
+    }
+
+    fn pop_mut(this: Self::PeekMut<'_>) {
+        debug_assert!(this.0.length >= 1);
+        *this.0.tree.peek_mut() = None;
+        this.0.length -= 1;
+    }
+}
+
+pub struct LoserTreePeekMut<'a, R: Rows>(&'a mut LoserTreeSort<R>);
+
+impl<R: Rows> Deref for LoserTreePeekMut<'_, R> {
+    type Target = Reverse<Cursor<R>>;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.tree.peek().as_ref().unwrap()
+    }
+}
+
+impl<R: Rows> DerefMut for LoserTreePeekMut<'_, R> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0.tree.peek_mut().as_mut().unwrap()
+    }
+}
+
+impl<R: Rows> Drop for LoserTreePeekMut<'_, R> {
+    fn drop(&mut self) {
+        let win = self.0.tree.winner();
+        self.0.tree.adjust(win)
     }
 }

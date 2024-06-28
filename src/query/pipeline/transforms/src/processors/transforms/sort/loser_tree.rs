@@ -52,6 +52,11 @@ impl<T: Ord> LoserTree<T> {
         &self.data[top2]
     }
 
+    pub fn peek_mut(&mut self) -> &mut T {
+        let win = self.winner();
+        &mut self.data[win]
+    }
+
     pub fn rebuild(&mut self) {
         if self.ready {
             return;
@@ -86,7 +91,7 @@ impl<T: Ord> LoserTree<T> {
         &self.data
     }
 
-    fn adjust(&mut self, index: usize) {
+    pub fn adjust(&mut self, index: usize) {
         let mut winner: usize = index;
         let mut father_loc = (winner + self.data.len()) / 2;
         while father_loc > 0 {
