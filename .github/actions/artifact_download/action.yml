@@ -54,11 +54,7 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
-          if [[ "${artifact}" == "open-sharing" ]]; then
-            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
-          else
-            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
-          fi
+          chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
         done
 
     - name: Download artifact from s3
@@ -67,15 +63,9 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
-          if [[ "${artifact}" == "open-sharing" ]]; then
-            echo "==> fetching open-sharing ..."
-            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing --no-progress || true
-            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
-          else
-            echo "==> fetching databend-$artifact ..."
-            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact --no-progress
-            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
-          fi
+          echo "==> fetching databend-$artifact ..."
+          aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact --no-progress
+          chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
         done
 
     - name: Download artifact from gcs
@@ -85,15 +75,9 @@ runs:
         gcloud config set storage/parallel_composite_upload_enabled False
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
-          if [[ "${artifact}" == "open-sharing" ]]; then
-            echo "==> fetching open-sharing ..."
-            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing || true
-            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
-          else
-            echo "==> fetching databend-$artifact ..."
-            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact
-            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
-          fi
+          echo "==> fetching databend-$artifact ..."
+          gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact
+          chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
         done
 
     - name: Check Disk Space

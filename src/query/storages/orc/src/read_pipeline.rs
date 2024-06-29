@@ -18,10 +18,9 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_storage::init_stage_operator;
 
 use super::OrcTable;
@@ -63,18 +62,9 @@ impl OrcTable {
             num_source,
         )?;
         pipeline.try_resize(max_threads)?;
-        pipeline.add_transform(|input, output| {
-            let transformer = StripeDecoder::try_create(
-                ctx.clone(),
-                data_schema.clone(),
-                self.arrow_schema.clone(),
-            )?;
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                input,
-                output,
-                transformer,
-            )))
-        })?;
+        pipeline.add_accumulating_transformer(|| {
+            StripeDecoder::new(ctx.clone(), data_schema.clone(), self.arrow_schema.clone())
+        });
         Ok(())
     }
 }

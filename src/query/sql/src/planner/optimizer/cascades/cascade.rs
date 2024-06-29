@@ -154,6 +154,7 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    #[recursive::recursive]
     fn find_best_plan(
         &self,
         group_index: IndexType,

@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use databend_common_license::license_manager::LicenseManager;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
+use crate::attach_table::RealAttachTableHandler;
 use crate::background_service::RealBackgroundService;
 use crate::data_mask::RealDatamaskHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
@@ -39,6 +40,7 @@ impl EnterpriseServices {
         RealBackgroundService::init(&cfg).await?;
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
+        RealAttachTableHandler::init()?;
         RealInvertedIndexHandler::init()?;
         RealStorageQuotaHandler::init(&cfg)?;
         Ok(())

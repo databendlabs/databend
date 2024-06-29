@@ -28,6 +28,7 @@ use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_exception::ErrorCode;
@@ -237,6 +238,21 @@ impl Binder {
         let (catalog_name, database_name, table_name) =
             self.normalize_object_identifier_triple(catalog, database, table_ident);
 
+        // Add table lock before execution.
+        let lock_guard = if merge_type != MergeIntoType::InsertOnly {
+            self.ctx
+                .clone()
+                .acquire_table_lock(
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                    &LockTableOption::LockWithRetry,
+                )
+                .await?
+        } else {
+            None
+        };
+
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
@@ -261,9 +277,8 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (mut source_expr, mut source_context) = self
-            .bind_table_reference(bind_context, &source_data)
-            .await?;
+        let (mut source_expr, mut source_context) =
+            self.bind_table_reference(bind_context, &source_data)?;
 
         // try add internal_column (_row_id) for source_table
         let mut source_table_index = DUMMY_TABLE_INDEX;
@@ -357,9 +372,8 @@ impl Binder {
         // Todo: (JackTan25) Maybe we can remove bind target_table
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
-        let (mut target_expr, mut target_context) = self
-            .bind_table_reference(bind_context, &target_table)
-            .await?;
+        let (mut target_expr, mut target_context) =
+            self.bind_table_reference(bind_context, &target_table)?;
 
         if table.change_tracking_enabled() && merge_type != MergeIntoType::InsertOnly {
             if let RelOperator::Scan(scan) = target_expr.plan() {
@@ -575,6 +589,7 @@ impl Binder {
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             enable_right_broadcast: false,
             lazy_columns,
+            lock_guard,
         };
 
         let s_expr = SExpr::create_unary(

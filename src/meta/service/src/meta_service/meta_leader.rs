@@ -18,8 +18,7 @@ use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::RwLockReadGuard;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::leveled_store::sys_data_api::SysDataApiRO;
-use databend_common_meta_raft_store::sm_v002::SMV002;
+use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::StreamItem;
@@ -311,7 +310,7 @@ impl<'a> MetaLeader<'a> {
         Ok(Ok(()))
     }
 
-    async fn get_state_machine(&self) -> RwLockReadGuard<'_, SMV002> {
+    async fn get_state_machine(&self) -> RwLockReadGuard<'_, SMV003> {
         self.sto.state_machine.read().await
     }
 }

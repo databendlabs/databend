@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AsyncFunction;
 
 use crate::pipelines::processors::transforms::TransformSequenceNextval;
@@ -24,17 +24,16 @@ impl PipelineBuilder {
         self.build_pipeline(&async_function.input)?;
 
         if async_function.func_name == "nextval" {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(TransformSequenceNextval::try_create(
-                    input,
-                    output,
+            self.main_pipeline.add_async_transformer(|| {
+                TransformSequenceNextval::new(
                     self.ctx.clone(),
                     &async_function.arguments[0],
                     &async_function.return_type,
-                )?))
+                )
             })
         } else {
             unreachable!()
         }
+        Ok(())
     }
 }

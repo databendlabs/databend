@@ -26,6 +26,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::query_spill_prefix;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::AggregateExpand;
 use databend_common_sql::executor::physical_plans::AggregateFinal;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
@@ -86,14 +87,10 @@ impl PipelineBuilder {
             grouping_ids.push(!id & mask);
         }
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(TransformExpandGroupingSets::create(
-                input,
-                output,
-                group_bys.clone(),
-                grouping_ids.clone(),
-            ))
-        })
+        self.main_pipeline.add_transformer(|| {
+            TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
+        });
+        Ok(())
     }
 
     pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
@@ -119,10 +116,8 @@ impl PipelineBuilder {
         )?;
 
         if params.group_columns.is_empty() {
-            return self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    PartialSingleStateAggregator::try_create(input, output, &params)?,
-                ))
+            return self.main_pipeline.try_add_accumulating_transformer(|| {
+                PartialSingleStateAggregator::try_new(&params)
             });
         }
 

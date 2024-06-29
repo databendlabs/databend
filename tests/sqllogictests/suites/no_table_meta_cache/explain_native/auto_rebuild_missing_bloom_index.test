@@ -150,12 +150,17 @@ query TT
 select * from t where c = 6;
 ----
 
-# - c = 6 will trigger the re-building of bloom index for another block
-# expects 2 rows
+statement ok
+create or replace table t_index(`bloom(0)` binary, `bloom(1)` binary);
+
+statement ok
+copy into t_index from  @rebuild_missing_bloom_index_stage pattern = '.*/_i_b_v2/.*.parquet' file_format=(type=parquet missing_field_as=field_default);
+
 query I
-select count() from @rebuild_missing_bloom_index_stage (pattern => '.*/_i_b_v2/.*.parquet');
+select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
 ----
-2
+0 0
+0 1
 
 
 # re-generate other bloom index

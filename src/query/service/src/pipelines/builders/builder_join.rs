@@ -206,8 +206,8 @@ impl PipelineBuilder {
             restore_barrier,
         )?);
         let mut has_string_column = false;
-        for filed in join.output_schema()?.fields() {
-            has_string_column |= filed.data_type().is_string_column();
+        for field in join.output_schema()?.fields() {
+            has_string_column |= field.data_type().is_string_column();
         }
 
         self.main_pipeline.add_transform(|input, output| {

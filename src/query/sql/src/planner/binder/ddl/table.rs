@@ -54,6 +54,7 @@ use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -105,7 +106,6 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
-use crate::plans::LockTableOption;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
@@ -495,7 +495,7 @@ impl Binder {
             (None, Some(query)) => {
                 // `CREATE TABLE AS SELECT ...` without column definitions
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let fields = bind_context
                     .columns
                     .iter()
@@ -515,7 +515,7 @@ impl Binder {
                 let (source_schema, source_comments, inverted_indexes) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
-                let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
+                let (_, bind_context) = self.bind_query(&mut init_bind_context, query)?;
                 let query_fields: Vec<TableField> = bind_context
                     .columns
                     .iter()
@@ -648,7 +648,6 @@ impl Binder {
             engine,
             engine_options,
             storage_params,
-            read_only_attach: false,
             part_prefix,
             options,
             field_comments,
@@ -728,7 +727,6 @@ impl Binder {
             engine: Engine::Fuse,
             engine_options: BTreeMap::new(),
             storage_params: Some(sp),
-            read_only_attach: stmt.read_only,
             part_prefix,
             options,
             field_comments: vec![],
@@ -886,6 +884,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
                         ModifyColumnActionInPlan::SetMaskingPolicy(
@@ -901,6 +900,17 @@ impl Binder {
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
                         let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        // try add lock table.
+                        lock_guard = self
+                            .ctx
+                            .clone()
+                            .acquire_table_lock(
+                                &catalog,
+                                &database,
+                                &table,
+                                &LockTableOption::LockWithRetry,
+                            )
+                            .await?;
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)
@@ -919,6 +929,7 @@ impl Binder {
                     database,
                     table,
                     action: action_in_plan,
+                    lock_guard,
                 })))
             }
             AlterTableAction::DropColumn { column } => {
@@ -960,21 +971,20 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let (_, mut context) = self
-                    .bind_table_reference(bind_context, table_reference)
-                    .await?;
-
-                let mut scalar_binder = ScalarBinder::new(
-                    &mut context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
-                );
-
                 let push_downs = if let Some(expr) = selection {
+                    let (_, mut context) =
+                        self.bind_table_reference(bind_context, table_reference)?;
+
+                    let mut scalar_binder = ScalarBinder::new(
+                        &mut context,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        self.metadata.clone(),
+                        &[],
+                        self.m_cte_bound_ctx.clone(),
+                        self.ctes_map.clone(),
+                    );
+
                     let (scalar, _) = scalar_binder.bind(expr)?;
                     Some(scalar)
                 } else {
@@ -993,7 +1003,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::FlashbackTo { point } => {
-                let point = self.resolve_data_travel_point(bind_context, point).await?;
+                let point = self.resolve_data_travel_point(bind_context, point)?;
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant,
                     catalog,
@@ -1094,7 +1104,7 @@ impl Binder {
             AstOptimizeTableAction::All => OptimizeTableAction::All,
             AstOptimizeTableAction::Purge { before } => {
                 let p = if let Some(point) = before {
-                    let point = self.resolve_data_travel_point(bind_context, point).await?;
+                    let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None

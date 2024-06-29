@@ -21,6 +21,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
@@ -45,9 +46,9 @@ impl PipelineBuilder {
     /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
     pub(crate) fn build_delete_source(&mut self, delete: &DeleteSource) -> Result<()> {
-        let table =
-            self.ctx
-                .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if delete.parts.is_empty() {
@@ -115,13 +116,7 @@ impl PipelineBuilder {
                 true,
             )?;
             self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    TransformAddStreamColumns::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        stream_ctx.clone(),
-                    )
-                })?;
+                .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
         }
 
         let cluster_stats_gen =

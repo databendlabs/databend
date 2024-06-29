@@ -34,8 +34,6 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_byt
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
@@ -43,7 +41,7 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -172,17 +170,15 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_threads = std::cmp::min(block_nums, max_threads);
         pipeline.try_resize(max_threads)?;
-        let _ = pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(InvertedIndexTransform::try_create(
-                input,
-                output,
+        pipeline.add_async_transformer(|| {
+            InvertedIndexTransform::new(
                 index_name.clone(),
                 index_version.clone(),
                 index_options.clone(),
                 data_schema.clone(),
                 index_schema.clone(),
                 operator.clone(),
-            )?))
+            )
         });
 
         pipeline.try_resize(1)?;
@@ -257,24 +253,22 @@ pub struct InvertedIndexTransform {
 }
 
 impl InvertedIndexTransform {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
+    pub fn new(
         index_name: String,
         index_version: String,
         index_options: BTreeMap<String, String>,
         data_schema: DataSchemaRef,
         source_schema: TableSchemaRef,
         operator: Operator,
-    ) -> Result<Box<dyn Processor>> {
-        Ok(AsyncTransformer::create(input, output, Self {
+    ) -> Self {
+        Self {
             index_name,
             index_version,
             index_options,
             data_schema,
             source_schema,
             operator,
-        }))
+        }
     }
 }
 

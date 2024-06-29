@@ -24,10 +24,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::Expr;
-use databend_common_expression::FieldDefaultExpr;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::binder::FieldDefaultExprEvaluator;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use opendal::Operator;
 use parquet::file::metadata::FileMetaData;
@@ -77,17 +76,13 @@ impl RowGroupReaderForCopy {
         op: Operator,
         file_metadata: &FileMetaData,
         output_schema: TableSchemaRef,
-        default_values: Option<Vec<FieldDefaultExpr>>,
+        default_values: Option<Vec<RemoteExpr>>,
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
         let parquet_table_schema = arrow_to_table_schema(&arrow_schema)?;
         let mut pushdown_columns = vec![];
         let mut output_projection = vec![];
-        let default_value_eval = match default_values {
-            Some(vs) => Some(FieldDefaultExprEvaluator::try_create(&ctx, vs)?),
-            None => None,
-        };
 
         let mut num_inputs = 0;
         for (i, to_field) in output_schema.fields().iter().enumerate() {
@@ -98,6 +93,7 @@ impl RowGroupReaderForCopy {
                 .position(|f| f.name() == field_name)
             {
                 Some(pos) => {
+                    num_inputs += 1;
                     pushdown_columns.push(pos);
                     let from_field = parquet_table_schema.field(pos);
                     let expr = Expr::ColumnRef {
@@ -131,8 +127,9 @@ impl RowGroupReaderForCopy {
                     }
                 }
                 None => {
-                    if let Some(default_value_eval) = &default_value_eval {
-                        default_value_eval.get_expr(i, to_field.data_type().into())
+                    if let Some(remote_expr) = &default_values.as_ref().and_then(|vals| vals.get(i))
+                    {
+                        remote_expr.as_expr(&BUILTIN_FUNCTIONS)
                     } else {
                         return Err(ErrorCode::BadDataValueType(format!(
                             "{} missing column {}",
@@ -141,9 +138,6 @@ impl RowGroupReaderForCopy {
                     }
                 }
             };
-            if !matches!(expr, Expr::Constant { .. }) {
-                num_inputs += 1;
-            }
             output_projection.push(expr);
         }
         if num_inputs == 0 {

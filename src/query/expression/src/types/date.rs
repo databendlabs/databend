@@ -19,6 +19,7 @@ use std::ops::Range;
 use chrono::NaiveDate;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use num_traits::AsPrimitive;
@@ -244,14 +245,20 @@ impl ArgType for DateType {
 }
 
 #[inline]
-pub fn string_to_date(date_str: impl AsRef<[u8]>, tz: Tz) -> Option<NaiveDate> {
+pub fn string_to_date(
+    date_str: impl AsRef<[u8]>,
+    tz: Tz,
+) -> databend_common_exception::Result<NaiveDate> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
     match reader.read_date_text(&tz) {
         Ok(d) => match reader.must_eof() {
-            Ok(..) => Some(d),
-            Err(_) => None,
+            Ok(..) => Ok(d),
+            Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
         },
-        Err(_) => None,
+        Err(e) => match e.code() {
+            ErrorCode::BAD_BYTES => Err(e),
+            _ => Err(ErrorCode::BadArguments("unexpected argument")),
+        },
     }
 }
 

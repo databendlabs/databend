@@ -20,7 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::Scalar;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_formats::FieldDecoder;
@@ -54,13 +54,14 @@ impl InputFormatCSV {
     }
 
     fn read_column(
+        input_ctx: &Arc<InputContext>,
         builder: &mut ColumnBuilder,
         field_decoder: &SeparatedTextDecoder,
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
-        default_values: &Option<Vec<Scalar>>,
-        empty_filed_as: &EmptyFieldAs,
+        default_values: &Option<Vec<RemoteExpr>>,
+        empty_field_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             match default_values {
@@ -71,9 +72,9 @@ impl InputFormatCSV {
                 Some(values) => {
                     let field = &schema.fields()[column_index];
                     // copy
-                    match empty_filed_as {
+                    match empty_field_as {
                         EmptyFieldAs::FieldDefault => {
-                            builder.push(values[column_index].as_ref());
+                            input_ctx.push_default_value(values, builder, column_index)?;
                         }
                         EmptyFieldAs::Null => {
                             if !matches!(field.data_type, TableDataType::Nullable(_)) {
@@ -81,7 +82,7 @@ impl InputFormatCSV {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
+                                    empty_field_as: empty_field_as.to_string(),
                                     remedy: format!(
                                         "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
                                         field.name()
@@ -109,7 +110,7 @@ impl InputFormatCSV {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
-                                    empty_field_as: empty_filed_as.to_string(),
+                                    empty_field_as: empty_field_as.to_string(),
                                     remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL."
                                         .to_string(),
                                 });
@@ -126,14 +127,15 @@ impl InputFormatCSV {
     }
 
     fn read_row(
+        input_ctx: &Arc<InputContext>,
         field_decoder: &SeparatedTextDecoder,
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         field_ends: &[usize],
         columns_to_read: &Option<Vec<usize>>,
-        default_values: &Option<Vec<Scalar>>,
-        empty_filed_as: &EmptyFieldAs,
+        default_values: &Option<Vec<RemoteExpr>>,
+        empty_field_as: &EmptyFieldAs,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = columns_to_read {
             for c in columns_to_read {
@@ -144,13 +146,14 @@ impl InputFormatCSV {
                     let field_end = field_ends[*c];
                     let col_data = &buf[field_start..field_end];
                     Self::read_column(
+                        input_ctx,
                         &mut columns[*c],
                         field_decoder,
                         col_data,
                         *c,
                         schema,
                         default_values,
-                        empty_filed_as,
+                        empty_field_as,
                     )?;
                 }
             }
@@ -160,13 +163,14 @@ impl InputFormatCSV {
                 let field_end = field_ends[c];
                 let col_data = &buf[field_start..field_end];
                 Self::read_column(
+                    input_ctx,
                     column,
                     field_decoder,
                     col_data,
                     c,
                     schema,
                     default_values,
-                    empty_filed_as,
+                    empty_field_as,
                 )?;
                 field_start = field_end;
             }
@@ -242,10 +246,12 @@ impl InputFormatTextBase for InputFormatCSV {
             FileFormatParams::Csv(ref p) => p,
             _ => unreachable!(),
         };
+
         for (i, end) in batch.row_ends.iter().enumerate() {
             let num_fields = batch.num_fields[i];
             let buf = &batch.data[start..*end];
             if let Err(e) = Self::read_row(
+                &builder.ctx,
                 field_decoder,
                 buf,
                 columns,

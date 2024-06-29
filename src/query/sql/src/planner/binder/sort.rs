@@ -60,8 +60,7 @@ pub struct OrderItem {
 }
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub async fn analyze_order_items(
+    pub fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
@@ -182,8 +181,7 @@ impl Binder {
         Ok(OrderItems { items: order_items })
     }
 
-    #[async_backtrace::framed]
-    pub async fn bind_order_by(
+    pub fn bind_order_by(
         &mut self,
         from_context: &BindContext,
         order_by: OrderItems,

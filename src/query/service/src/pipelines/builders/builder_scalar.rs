@@ -14,8 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::Transformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::EvalScalar;
@@ -44,17 +43,9 @@ impl PipelineBuilder {
 
         let num_input_columns = input_schema.num_fields();
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Transformer::create(
-                input,
-                output,
-                CompoundBlockOperator::new(
-                    vec![op.clone()],
-                    self.func_ctx.clone(),
-                    num_input_columns,
-                ),
-            )))
-        })?;
+        self.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone(), num_input_columns)
+        });
 
         Ok(())
     }

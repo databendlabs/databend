@@ -1,0 +1,152 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+CREATE OR REPLACE DATABASE issue_15876
+
+statement ok
+use issue_15876
+
+
+statement ok
+create table t (c int);
+
+statement ok
+create stream s on table t;
+
+
+#################################################
+# stream should be consumed in auto commit mode #
+#################################################
+
+statement ok
+insert into t values(1);
+
+statement ok
+create or replace stage test_stage_15876;
+
+statement ok
+copy into @test_stage_15876/case1 from s;
+
+# sqllogic_ee parquet and native both write to the same stage
+# we can not assume the count be exactly 0
+query  T
+select count() > 0 from @test_stage_15876/case1;
+----
+1
+
+# expects empty result set
+query TT
+select c from s;
+----
+
+statement ok
+insert into t values(1);
+
+# nothing should be copied into stage
+statement ok
+copy into @test_stage_15876/empty from (select c from s where 1 = 0);
+
+query T
+list @test_stage_15876/empty;
+----
+
+# stream should be consumed
+query TT
+select c from s;
+----
+
+
+
+##################################################################
+# stream should be rr in txn, and be consumed when txn committed #
+##################################################################
+
+statement ok
+insert into t values(2);
+
+statement ok
+begin;
+
+# check stream
+query T
+select c from s;
+----
+2
+
+statement ok
+copy into @test_stage_15876/case2 from s;
+
+# stream should NOT be consumed yet (txn not ended)
+query T
+select c from s;
+----
+2
+
+statement ok
+commit;
+
+# stream should be consumed now
+query ok
+select * from s;
+----
+
+###############################################################
+# stream should be NOT be consumed in txn failed(auto commit) #
+###############################################################
+
+statement ok
+insert into t values(1);
+
+query TT
+select c from s;
+----
+1
+
+statement error
+copy into @test_stage_15876 from (select c/0 from s);
+
+# stream should NOT be consumed now
+query TT
+select c from s;
+----
+1
+
+
+#############################################################
+# stream should be NOT be consumed if txn failed (explicit) #
+#############################################################
+
+
+# check that stream contains changes
+query TT
+select c from s;
+----
+1
+
+
+statement ok
+begin;
+
+statement error
+copy into @test_stage_15876 from (select c/0 from s);
+
+statement ok
+commit;
+
+# stream should NOT be consumed
+query TT
+select c from s;
+----
+1

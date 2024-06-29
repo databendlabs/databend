@@ -34,7 +34,6 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/sharing",
-    "src/query/sharing_endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -73,6 +72,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
     "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
@@ -177,6 +177,7 @@ databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
+databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
@@ -189,7 +190,6 @@ databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_hand
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
-databend-sharing-endpoint = { path = "src/query/sharing_endpoint" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
@@ -229,7 +229,6 @@ bytes = "1.5.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
-codespan-reporting = "0.11"
 criterion = "0.5"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
@@ -250,11 +249,7 @@ hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
 jsonb = "0.4.0"
-log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
-logcall = "0.1.9"
 match-template = "0.0.1"
-minitrace = { version = "0.6.5", features = ["enable"] }
-minitrace-opentelemetry = "0.6.5"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
@@ -276,15 +271,13 @@ opendal = { version = "0.47.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-opentelemetry = { version = "0.22", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.15", features = [
-    "trace",
-    "logs",
-    "grpc-tonic",
-    "http-proto",
-    "reqwest-client",
+openraft = { version = "0.9.13", features = [
+    "serde",
+    "tracing-log",
+    "generic-snapshot-data",
+    "storage-v2",
+    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
-opentelemetry_sdk = { version = "0.22", features = ["trace", "logs", "rt-tokio"] }
 orc-rust = "0.3"
 ordered-float = { version = "4.1.0", default-features = false }
 ordq = "0.2.0"
@@ -304,6 +297,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls-native-roots",
 ] }
 reqwest-hickory-resolver = "0.1"
+rotbl = { git = "https://github.com/drmingdrmer/rotbl", tag = "v0.1.2-alpha.6", features = [] }
 semver = "1.0.14"
 serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
@@ -320,22 +314,28 @@ tokio-stream = "0.1.11"
 tonic = { version = "0.11.0", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tonic-build = { version = "0.11" }
 tonic-reflection = { version = "0.11.0" }
-tracing = "0.1.40"
-tracing-appender = "0.2.3"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 xorfilter-rs = "0.5"
-# openraft for debugging
-# openraft = { git = "https://github.com/drmingdrmer/openraft", branch = "release-0.9", features = [
-openraft = { version = "0.9.12", features = [
-    "serde",
-    "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
-    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
+
+# Observability
+log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
+logcall = "0.1.9"
+minitrace = { version = "0.6.6", features = ["enable"] }
+minitrace-opentelemetry = "0.6.6"
+opentelemetry = { version = "0.23", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.16", features = [
+    "trace",
+    "logs",
+    "grpc-tonic",
+    "http-proto",
+    "reqwest-client",
 ] }
+opentelemetry_sdk = { version = "0.23", features = ["trace", "logs", "rt-tokio"] }
+tracing = "0.1.40"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
@@ -390,14 +390,13 @@ arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "df
 arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
+async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
+recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
-# TODO: Use the version from crates.io once
-# https://github.com/brendanzab/codespan/pull/331 is released.
-codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
