@@ -207,10 +207,8 @@ impl AsyncSource for FuseAmendTableSource {
             )
             .await?;
 
-        let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|e| {
-            return Err(ErrorCode::StorageOther(
-                "Invalid table engine, only fuse table is supported",
-            ));
+        let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
+            ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
         })?;
 
         self.fail_safe_handler

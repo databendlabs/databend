@@ -86,6 +86,7 @@ use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
@@ -329,8 +330,22 @@ impl FuseTable {
     #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    async fn read_table_snapshot_with_reader(
+        &self,
+        reader: TableSnapshotReader,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version(Some(loc.clone())).await?;
             let params = LoadParams {
                 location: loc,

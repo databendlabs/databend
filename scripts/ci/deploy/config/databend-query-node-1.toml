@@ -93,7 +93,7 @@ auto_sync_interval = 60
 # Storage config.
 [storage]
 # fs | s3 | azblob | obs | oss
-type = "f3"
+type = "fs"
 
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.
@@ -137,7 +137,6 @@ data_path = "./.databend/stateless_test_data"
 # default is "none", which disable table data cache
 # use "disk" to enabled disk cache
 data_cache_storage = "none"
-enable_table_meta_cache = false
 
 [cache.disk]
 # cache path

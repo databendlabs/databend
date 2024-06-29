@@ -62,7 +62,7 @@ impl FailSafeHandler for RealFailSafeHandler {
 
         let fuse_table = FuseTable::do_create(table_info)?;
 
-        let amender = Amender::new(storage_params).await;
+        let amender = Amender::try_new(storage_params).await?;
 
         amender.recover_snapshot(fuse_table).await?;
 
@@ -86,12 +86,17 @@ struct Amender {
 }
 
 impl Amender {
-    async fn new(storage_param: StorageParams) -> Self {
+    async fn try_new(storage_param: StorageParams) -> Result<Self> {
+        // TODO
+        // - replace client with opendal operator
+        // - supports other storage types
+        // when `list_object_versions` or higher level api is supported by opendal
         if let StorageParams::S3(s3_config) = storage_param {
             if s3_config.access_key_id.is_empty() {
                 panic!()
             }
-            // Create credentials from access key and secret key
+
+            // create credentials from access key and secret key
             let base_credentials = Credentials::new(
                 &s3_config.access_key_id,
                 s3_config.secret_access_key,
@@ -104,10 +109,11 @@ impl Amender {
             let region_provider =
                 RegionProviderChain::first_try(Region::new(s3_config.region)).or_else("us-east-1");
 
-            let retry_config = RetryConfig::standard().with_max_attempts(5);
+            let retry_config = RetryConfig::standard();
             let timeout_config = TimeoutConfig::builder()
-                .operation_attempt_timeout(Duration::from_secs(2))
-                .operation_timeout(Duration::from_secs(5))
+                .operation_timeout(Duration::from_secs(30))
+                .operation_attempt_timeout(Duration::from_secs(10))
+                .connect_timeout(Duration::from_secs(3))
                 .build();
 
             // Load the configuration using the base credentials
@@ -124,17 +130,20 @@ impl Amender {
             let bucket = s3_config.bucket;
             let client = Client::new(&config);
 
-            Self {
+            Ok(Self {
                 client,
                 bucket,
                 root,
-            }
+            })
         } else {
-            panic!()
+            Err(ErrorCode::StorageOther(
+                "object storage other than s3 is not supported yet",
+            ))
         }
     }
+
     async fn recover_snapshot(&self, table: Box<FuseTable>) -> Result<()> {
-        match table.read_table_snapshot().await {
+        match table.read_table_snapshot_without_cache().await {
             Ok(Some(snapshot)) => {
                 let schema = table.schema();
                 let operator = table.get_operator();
@@ -165,7 +174,8 @@ impl Amender {
         schema: Arc<TableSchema>,
         operator: Operator,
     ) -> Result<()> {
-        let segment_reader = MetaReaders::segment_info_reader_no_cache(operator.clone(), schema);
+        let segment_reader =
+            MetaReaders::segment_info_reader_without_cache(operator.clone(), schema);
         for (path, ver) in segment_locations {
             let segment = segment_reader
                 .read(&LoadParams {
@@ -331,6 +341,7 @@ impl Amender {
             }
         }
 
+        // TODO replace with Operator, if "get_object_by_version_id" is supported
         // Get the latest version of the object
         let latest_version_id = latest_version.version_id().unwrap();
         let get_object_response = self

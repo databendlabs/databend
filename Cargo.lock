@@ -47,9 +47,9 @@ dependencies = [
 
 [[package]]
 name = "ahash"
-version = "0.8.11"
+version = "0.8.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e89da841a80418a9b391ebaea17f5c112ffaaa96f621d2c285b5174da76b9011"
+checksum = "8b79b82693f705137f8fb9b37871d99e4f9a7df12b917eed79c3d3954830a60b"
 dependencies = [
  "cfg-if",
  "const-random",
@@ -324,7 +324,7 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8010572cf8c745e242d1b632bd97bd6d4f40fefed5ed1290a8f433abaa686fea"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow-buffer",
  "arrow-data",
  "arrow-schema",
@@ -494,7 +494,7 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "848ee52bb92eb459b811fb471175ea3afcf620157674c8794f539838920f9228"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -518,7 +518,7 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "849524fa70e0e3c5ab58394c770cb8f514d0122d20de08475f7b472ed8075830"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -996,11 +996,10 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.38.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ecec5514e9d9c76c5e9489ca65ab9055ae0b3c49da3a1afd452c57cb68734fb"
+checksum = "93d35d39379445970fc3e4ddf7559fff2c32935ce0b279f9cb27080d6b7c6d94"
 dependencies = [
- "ahash 0.8.11",
  "aws-credential-types",
  "aws-runtime",
  "aws-sigv4",
@@ -1015,16 +1014,11 @@ dependencies = [
  "aws-smithy-xml",
  "aws-types",
  "bytes",
- "fastrand 2.1.0",
- "hex",
- "hmac",
  "http 0.2.11",
  "http-body 0.4.6",
- "lru",
  "once_cell",
  "percent-encoding",
  "regex-lite",
- "sha2",
  "tracing",
  "url",
 ]
@@ -1138,9 +1132,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.60.10"
+version = "0.60.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5b30ea96823b8b25fb6471643a516e1bd475fd5575304e6240aea179f213216"
+checksum = "509e33efbd853e1e670c47e49af2f4df3d2ae0de8b845b068ddbf04636a6700d"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -2651,9 +2645,9 @@ dependencies = [
 
 [[package]]
 name = "crc32c"
-version = "0.6.8"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a47af21622d091a8f0fb295b88bc886ac74efcc613efc19f5d0b21de5c89e47"
+checksum = "0227b9f93e535d49bc7ce914c066243424ce85ed90864cebd0874b184e9b6947"
 dependencies = [
  "rustc_version",
 ]
@@ -3043,7 +3037,7 @@ dependencies = [
 name = "databend-common-arrow"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow-array",
  "arrow-buffer",
  "arrow-data",
@@ -3510,7 +3504,7 @@ dependencies = [
 name = "databend-common-hashtable"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "bumpalo",
  "cfg-if",
  "databend-common-arrow",
@@ -4105,7 +4099,7 @@ dependencies = [
 name = "databend-common-sql"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "anyhow",
  "async-backtrace",
  "async-recursion",
@@ -4254,7 +4248,7 @@ dependencies = [
 name = "databend-common-storages-fuse"
 version = "0.1.0"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "async-backtrace",
@@ -5439,7 +5433,7 @@ version = "37.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85069782056753459dc47e386219aa1fdac5b731f26c28abb8c0ffd4b7c5ab11"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "arrow-ipc",
@@ -5490,7 +5484,7 @@ version = "37.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "309d9040751f6dc9e33c85dce6abb55a46ef7ea3644577dd014611c379447ef3"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "arrow-buffer",
@@ -5541,7 +5535,7 @@ version = "37.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a3542aa322029c2121a671ce08000d4b274171070df13f697b14169ccf4f628"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "chrono",
@@ -5621,7 +5615,7 @@ version = "37.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5cabc0d9aaa0f5eb1b472112f16223c9ffd2fb04e58cbf65c0a331ee6e993f96"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "arrow-buffer",
@@ -5656,7 +5650,7 @@ version = "37.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17c0523e9c8880f2492a88bbd857dde02bed1ed23f3e9211a89d3d7ec3b44af9"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow",
  "arrow-array",
  "arrow-buffer",
@@ -8534,7 +8528,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6fb938100651db317719f46877a3cd82105920be4ea2ff49d55d1d65fa7bec1"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "auto_ops",
  "either",
  "float_eq",
@@ -8576,7 +8570,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43a3c133739dddd0d2990f9a4bdf8eb4b21ef50e4851ca85ab661199821d510e"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
 ]
 
 [[package]]
@@ -8585,7 +8579,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290f1a1d9242c78d09ce40a5e87e7554ee637af1351968159f4952f028f75604"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "allocator-api2",
 ]
 
@@ -9175,7 +9169,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e98c1d0ad70fc91b8b9654b1f33db55e59579d3b3de2bffdced0fdb810570cb8"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "hashbrown 0.12.3",
 ]
 
@@ -9244,7 +9238,7 @@ version = "0.11.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "321f0f839cd44a4686e9504b0a62b4d69a50b62072144c71c68f5873c167b8d9"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "indexmap 2.2.5",
  "is-terminal",
  "itoa",
@@ -10200,7 +10194,7 @@ version = "0.7.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4283746e22960db4d36eaac4eece76c84d2047706a2b06c56449cde440691fb9"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "faststr",
  "paste",
  "rustc-hash",
@@ -11299,7 +11293,7 @@ version = "51.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "096795d4f47f65fd3ee1ec5a98b77ab26d602f2cc785b0e4be5443add17ecc32"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
@@ -11519,7 +11513,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e9c5ca077f7e8a8a92c770871f3904fd6b6db3d1dac76fc7f40169b28571ec7"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "anyhow",
  "async-recursion",
  "bytes",
@@ -13895,7 +13889,7 @@ version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbdc537413bd6a291f57e2cc0a17579beb5ccaeea534e9c3001e39d9a07fa14f"
 dependencies = [
- "ahash 0.8.11",
+ "ahash 0.8.10",
  "borsh",
  "serde",
 ]
