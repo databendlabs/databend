@@ -75,8 +75,9 @@ impl InnerConfig {
     pub async fn load() -> Result<Self> {
         let mut cfg: Self = Config::load(true)?.try_into()?;
 
-        // Handle the node_id for query node.
+        // Handle the node_id and node_secret for query node.
         cfg.query.node_id = GlobalUniqName::unique();
+        cfg.query.node_secret = GlobalUniqName::unique();
 
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await?;
@@ -154,6 +155,9 @@ pub struct QueryConfig {
     // ID for the query node.
     // This only initialized when InnerConfig::load().
     pub node_id: String,
+    // ID for the query secret key. Every flight request will check it
+    // This only initialized when InnerConfig::load().
+    pub node_secret: String,
     pub num_cpus: u64,
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
@@ -240,6 +244,7 @@ impl Default for QueryConfig {
             tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
             node_id: "".to_string(),
+            node_secret: "".to_string(),
             num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
@@ -317,6 +322,7 @@ impl QueryConfig {
 
     pub fn sanitize(&self) -> Self {
         let mut sanitized = self.clone();
+        sanitized.node_secret = mask_string(&self.node_secret, 3);
         sanitized.databend_enterprise_license = self
             .databend_enterprise_license
             .clone()

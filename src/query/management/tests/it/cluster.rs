@@ -143,6 +143,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
 fn create_test_node_info() -> NodeInfo {
     NodeInfo {
         id: String::from("test_node"),
+        secret: "".to_string(),
         cpu_nums: 0,
         version: 0,
         flight_address: String::from("ip:port"),
