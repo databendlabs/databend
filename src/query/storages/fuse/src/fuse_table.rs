@@ -352,7 +352,7 @@ impl FuseTable {
             self.snapshot_loc().await?
         };
         // If no snapshot location here, indicates that there are no data of this table yet
-        // in this case, we just returns the current snapshot version
+        // in this case, we just return the current snapshot version
         Ok(location_opt.map_or(TableSnapshot::VERSION, |loc| {
             TableMetaLocationGenerator::snapshot_version(loc.as_str())
         }))

@@ -73,7 +73,7 @@ join_spilling_memory_ratio = 60
 [log]
 
 [log.file]
-level = "DEBUG"
+level = "info"
 format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
@@ -93,7 +93,7 @@ auto_sync_interval = 60
 # Storage config.
 [storage]
 # fs | s3 | azblob | obs | oss
-type = "fs"
+type = "s3"
 
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.
@@ -101,11 +101,11 @@ type = "fs"
 data_path = "./.databend/stateless_test_data"
 
 # To use S3-compatible object storage, uncomment this block and set your values.
-# [storage.s3]
-# bucket = "<your-bucket-name>"
-# endpoint_url = "<your-endpoint>"
-# access_key_id = "<your-key-id>"
-# secret_access_key = "<your-account-key>"
+[storage.s3]
+bucket = "versioned"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
 # enable_virtual_host_style = false
 
 # To use Azure Blob storage, uncomment this block and set your values.
@@ -137,6 +137,7 @@ data_path = "./.databend/stateless_test_data"
 # default is "none", which disable table data cache
 # use "disk" to enabled disk cache
 data_cache_storage = "none"
+enable_table_meta_cache = false
 
 [cache.disk]
 # cache path
