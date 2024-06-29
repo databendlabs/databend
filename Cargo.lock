@@ -4272,6 +4272,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-hashtable",
  "databend-common-io",
+ "databend-common-license",
  "databend-common-meta-app",
  "databend-common-meta-types",
  "databend-common-metrics",

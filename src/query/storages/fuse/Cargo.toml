@@ -28,6 +28,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-license = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }

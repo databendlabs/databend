@@ -20,6 +20,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
@@ -27,6 +28,8 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -46,7 +49,7 @@ use crate::table_functions::TableFunction;
 use crate::FuseTable;
 use crate::Table;
 
-const FUSE_FUNC_AMEND: &str = "fuse_amend_table";
+const FUSE_AEEND_ENGINE_NAME: &str = "fuse_failsafe_amend_table";
 
 pub struct FuseAmendTable {
     table_info: TableInfo,
@@ -61,9 +64,10 @@ impl FuseAmendTable {
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, FUSE_FUNC_AMEND)?;
+        let (arg_database_name, arg_table_name) =
+            parse_db_tb_args(&table_args, FUSE_AEEND_ENGINE_NAME)?;
 
-        let engine = FUSE_FUNC_AMEND.to_owned();
+        let engine = FUSE_AEEND_ENGINE_NAME.to_owned();
 
         let schema =
             TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)]);
@@ -121,9 +125,14 @@ impl Table for FuseAmendTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let license_manager = get_license_manager();
+        license_manager
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::AmendTable)?;
+
         pipeline.add_source(
             |output| {
-                FuseSnapshotSource::create(
+                FuseAmendTableSource::create(
                     ctx.clone(),
                     output,
                     self.arg_database_name.to_owned(),
@@ -148,7 +157,7 @@ impl TableFunction for FuseAmendTable {
     }
 }
 
-struct FuseSnapshotSource {
+struct FuseAmendTableSource {
     finish: bool,
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
@@ -156,7 +165,7 @@ struct FuseSnapshotSource {
     fail_safe_handler: Arc<FailSafeHandlerWrapper>,
 }
 
-impl FuseSnapshotSource {
+impl FuseAmendTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
@@ -164,7 +173,7 @@ impl FuseSnapshotSource {
         arg_table_name: String,
     ) -> Result<ProcessorPtr> {
         let fail_safe_handler = get_fail_safe_handler();
-        AsyncSourcer::create(ctx.clone(), output, FuseSnapshotSource {
+        AsyncSourcer::create(ctx.clone(), output, FuseAmendTableSource {
             ctx,
             finish: false,
             arg_table_name,
@@ -175,8 +184,8 @@ impl FuseSnapshotSource {
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for FuseSnapshotSource {
-    const NAME: &'static str = "fuse_snapshot";
+impl AsyncSource for FuseAmendTableSource {
+    const NAME: &'static str = "fuse_amend";
 
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
@@ -198,7 +207,11 @@ impl AsyncSource for FuseSnapshotSource {
             )
             .await?;
 
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|e| {
+            return Err(ErrorCode::StorageOther(
+                "Invalid table engine, only fuse table is supported",
+            ));
+        })?;
 
         self.fail_safe_handler
             .recover(tbl.table_info.clone())
