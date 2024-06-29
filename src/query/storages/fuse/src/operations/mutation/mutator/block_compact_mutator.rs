@@ -187,7 +187,11 @@ impl BlockCompactMutator {
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
-        let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
+        let enable_distributed_compact = settings.get_enable_distributed_compact()?;
+        let partitions = if !enable_distributed_compact
+            || cluster.is_empty()
+            || parts.len() < cluster.nodes.len() * max_threads
+        {
             // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
                 .compact_params
