@@ -28,11 +28,11 @@ set unquoted_ident_case_sensitive = 1
 statement error 1025,.*Unknown table 'student'
 INSERT INTO student VALUES(1)
 
-statement error (?s)1025,.*Unknown table `default`\.student in catalog 'default'
+statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
 update student set id = 1
 
-statement error (?s)1025,.*Unknown table `default`\.student in catalog 'default'
+statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
 delete from student
 
-statement error Unknown table `default`\.student in catalog 'default'
+statement error Unknown table `default`\.`student` in catalog 'default'
 select * from student

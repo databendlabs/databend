@@ -145,7 +145,7 @@ impl Binder {
                             "Unknown table `{database}`.{table} (quoted) in catalog '{catalog}'. Did you mean {name} (unquoted)?",
                         ),
                         NameResolutionSuggest::None => {
-                            format!("Unknown table `{database}`.{table} in catalog '{catalog}'")
+                            format!("Unknown table `{database}`.`{name}` in catalog '{catalog}'")
                         }
                     };
                     return Err(ErrorCode::UnknownTable(err_message).set_span(*span));
