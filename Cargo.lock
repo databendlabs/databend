@@ -4827,10 +4827,8 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "databend-common-base",
- "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
- "databend-common-sql",
 ]
 
 [[package]]

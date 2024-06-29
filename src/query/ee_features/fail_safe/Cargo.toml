@@ -14,10 +14,8 @@ test = true
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 databend-common-base = { workspace = true }
-databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-sql = { workspace = true }
 
 [build-dependencies]
 
