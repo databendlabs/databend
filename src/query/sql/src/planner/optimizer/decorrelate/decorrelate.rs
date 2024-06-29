@@ -288,8 +288,8 @@ impl SubqueryRewriter {
 
                 let join_plan = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
-                        right_conditions,
                         left_conditions,
+                        right_conditions,
                         vec![],
                     ),
                     non_equi_conditions: vec![],
@@ -411,8 +411,8 @@ impl SubqueryRewriter {
                 };
                 let mark_join = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
-                        left_conditions,
                         right_conditions,
+                        left_conditions,
                         vec![],
                     ),
                     non_equi_conditions,
