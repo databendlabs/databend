@@ -33,7 +33,7 @@ async fn test_successfully_add_node() -> Result<()> {
     let node_info = create_test_node_info();
     cluster_api.add_node(node_info.clone()).await?;
     let value = kv_api
-        .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
+        .get_kv("__fd_clusters_v2/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
     match value {
@@ -122,7 +122,7 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
     cluster_api.add_node(node_info.clone()).await?;
 
     let value = kv_api
-        .get_kv("__fd_clusters/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
+        .get_kv("__fd_clusters_v2/test%2dtenant%2did/test%2dcluster%2did/databend_query/test_node")
         .await?;
 
     let meta = value.unwrap().meta.unwrap();
