@@ -102,16 +102,10 @@ impl<'a> Binder {
             )
             .await
             .map_err(|err| match err.code() {
-                ErrorCode::UNKNOWN_TABLE => {
-                    if let Some(err) = self
-                        .name_resolution_ctx
-                        .table_not_found_suggest_error(table_ident)
-                    {
-                        err
-                    } else {
-                        err
-                    }
-                }
+                ErrorCode::UNKNOWN_TABLE => self
+                    .name_resolution_ctx
+                    .table_not_found_suggest_error(table_ident)
+                    .unwrap_or(err),
                 _ => err,
             })?;
 

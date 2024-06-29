@@ -53,18 +53,16 @@ impl NameResolutionContext {
 
     pub fn table_not_found_suggest_error(&self, table: &Identifier) -> Option<ErrorCode> {
         let name = &table.name;
-        if let Some(suggest) = self.not_found_suggest(table) {
-            Some(ErrorCode::UnknownTable(match suggest {
+        self.not_found_suggest(table).map(|suggest| {
+            ErrorCode::UnknownTable(match suggest {
                 NameResolutionSuggest::Quoted => {
                     format!("Unknown table {table} (unquoted). Did you mean `{name}` (quoted)?",)
                 }
                 NameResolutionSuggest::Unqoted => {
                     format!("Unknown table {table} (quoted). Did you mean {name} (unquoted)?",)
                 }
-            }))
-        } else {
-            None
-        }
+            })
+        })
     }
 }
 
