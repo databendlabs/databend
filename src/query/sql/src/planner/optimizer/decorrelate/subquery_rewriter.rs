@@ -593,8 +593,8 @@ impl SubqueryRewriter {
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
                     equi_conditions: JoinEquiCondition::new_conditions(
-                        left_conditions,
                         right_conditions,
+                        left_conditions,
                         vec![],
                     ),
                     non_equi_conditions,
