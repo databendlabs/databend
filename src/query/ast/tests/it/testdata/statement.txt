@@ -20707,7 +20707,6 @@ AttachTable(
                 },
             },
         },
-        read_only: false,
     },
 )
 

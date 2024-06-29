@@ -72,6 +72,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
     "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
@@ -176,6 +177,7 @@ databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
+databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }

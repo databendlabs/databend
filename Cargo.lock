@@ -4372,6 +4372,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-attach-table"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-common-sql",
+]
+
+[[package]]
 name = "databend-enterprise-background-service"
 version = "0.1.0"
 dependencies = [
@@ -4445,6 +4457,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-enterprise-aggregating-index",
+ "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
@@ -4696,6 +4709,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-enterprise-aggregating-index",
+ "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
