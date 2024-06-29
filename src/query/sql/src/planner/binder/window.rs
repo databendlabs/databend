@@ -57,7 +57,7 @@ impl Binder {
         window_info: &WindowFunctionInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_window_function_info(&self.ctx, window_info, child).await
+        bind_window_function_info(&self.ctx, window_info, child)
     }
 
     pub(super) fn analyze_window_definition(
@@ -544,8 +544,7 @@ pub fn find_replaced_window_function(
         })
 }
 
-#[async_backtrace::framed]
-pub async fn bind_window_function_info(
+pub fn bind_window_function_info(
     ctx: &Arc<dyn TableContext>,
     window_info: &WindowFunctionInfo,
     child: SExpr,

@@ -91,9 +91,7 @@ impl PhysicalPlanBuilder {
         }
         let (window_func, right_column) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
-        let window_plan = self
-            .build_window_plan(&window_func, s_expr, &mut window_index)
-            .await?;
+        let window_plan = self.build_window_plan(&window_func, s_expr, &mut window_index)?;
         self.add_range_condition(
             &window_func,
             window_index,
@@ -304,7 +302,7 @@ impl PhysicalPlanBuilder {
         Ok((window_func, right_column))
     }
 
-    async fn build_window_plan(
+    fn build_window_plan(
         &mut self,
         window: &WindowFunc,
         s_expr: &SExpr,
@@ -373,7 +371,7 @@ impl PhysicalPlanBuilder {
             order_by_items,
             frame: window.frame.clone(),
         };
-        bind_window_function_info(&self.ctx, &window_info, s_expr.child(1)?.clone()).await
+        bind_window_function_info(&self.ctx, &window_info, s_expr.child(1)?.clone())
     }
 
     fn replace_lag_lead_args(
