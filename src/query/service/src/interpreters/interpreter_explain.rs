@@ -480,10 +480,10 @@ impl ExplainInterpreter {
 
         let mut result = vec![];
         // Explain subquery.
-        if !delete.subquery_desc.is_empty() {
+        if let Some(subquery_desc) = &delete.subquery_desc {
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
-                delete.subquery_desc[0].index,
+                subquery_desc.index,
                 Box::new(DataType::Number(NumberDataType::UInt64)),
                 Visibility::InVisible,
             )
@@ -505,7 +505,7 @@ impl ExplainInterpreter {
                         index: 0,
                     }],
                 })),
-                Arc::new(delete.subquery_desc[0].input_expr.clone()),
+                Arc::new(subquery_desc.input_expr.clone()),
             );
 
             let formatted_plan = StringType::from_data(vec!["DeletePlan (subquery):"]);
