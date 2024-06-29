@@ -247,14 +247,18 @@ impl Amender {
             if self.root.is_empty() {
                 key
             } else {
-                full_path = format!("{}/{}", self.root, key);
+                full_path = if self.root.ends_with('/') {
+                    format!("{}{}", self.root, key)
+                } else {
+                    format!("{}/{}", self.root, key)
+                };
                 &full_path
             }
         };
 
         // trim the leading "/"
-        let obj_key = if obj_key.starts_with('/') {
-            &obj_key[1..]
+        let obj_key = if let Some(stripped) = obj_key.strip_prefix('/') {
+            stripped
         } else {
             obj_key
         };
@@ -280,7 +284,7 @@ impl Amender {
         let latest_version = list_object_versions_output
             .versions()
             .iter()
-            .filter(|v| v.key() == Some(key)) // Ensure it matches the specified key
+            .filter(|v| v.key() == Some(obj_key)) // Ensure it matches the specified key
             .filter(|v| v.version_id().is_some()) // Ensure the version_id exists
             .max_by(|a, b| a.last_modified.cmp(&b.last_modified));
 

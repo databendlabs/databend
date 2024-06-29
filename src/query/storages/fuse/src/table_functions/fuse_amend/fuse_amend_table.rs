@@ -204,8 +204,7 @@ impl AsyncSource for FuseSnapshotSource {
             .recover(tbl.table_info.clone())
             .await?;
 
-        let mut col: Vec<String> = Vec::with_capacity(1);
-        col.push("Ok".to_owned());
+        let col: Vec<String> = vec!["Ok".to_owned()];
 
         Ok(Some(DataBlock::new_from_columns(vec![
             StringType::from_data(col),
