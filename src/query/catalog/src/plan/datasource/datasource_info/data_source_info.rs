@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 
+use crate::catalog::CATALOG_DEFAULT;
 use crate::plan::datasource::datasource_info::orc::OrcTableInfo;
 use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
@@ -44,6 +45,19 @@ impl DataSourceInfo {
             DataSourceInfo::ParquetSource(table_info) => table_info.schema(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.schema(),
             DataSourceInfo::ORCSource(table_info) => table_info.schema(),
+        }
+    }
+
+    /// Return the catalog name of the data source.
+    ///
+    /// Only TableSource has meaningful catalog name, other source are all generated at runtime.
+    /// So we will return default as it's catalog.
+    pub fn catalog_name(&self) -> &str {
+        match self {
+            DataSourceInfo::TableSource(table_info) => {
+                &table_info.catalog_info.name_ident.catalog_name
+            }
+            _ => CATALOG_DEFAULT,
         }
     }
 

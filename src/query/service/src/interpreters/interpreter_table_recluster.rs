@@ -25,7 +25,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -224,7 +223,6 @@ impl ReclusterTableInterpreter {
         let physical_plan = build_recluster_physical_plan(
             mutator.tasks,
             table.get_table_info().clone(),
-            catalog.info(),
             mutator.snapshot,
             is_distributed,
         )?;
@@ -257,7 +255,6 @@ impl ReclusterTableInterpreter {
 pub fn build_recluster_physical_plan(
     tasks: ReclusterTasks,
     table_info: TableInfo,
-    catalog_info: Arc<CatalogInfo>,
     snapshot: Arc<TableSnapshot>,
     is_distributed: bool,
 ) -> Result<PhysicalPlan> {
@@ -271,7 +268,6 @@ pub fn build_recluster_physical_plan(
             let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
                 tasks,
                 table_info: table_info.clone(),
-                catalog_info: catalog_info.clone(),
                 plan_id: u32::MAX,
             }));
 
@@ -288,7 +284,6 @@ pub fn build_recluster_physical_plan(
             let mut plan = PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
                 input: Box::new(root),
                 table_info,
-                catalog_info,
                 snapshot,
                 remained_blocks,
                 removed_segment_indexes,
@@ -302,7 +297,6 @@ pub fn build_recluster_physical_plan(
             parts,
             table_info,
             snapshot,
-            catalog_info,
             is_distributed,
         ),
     }

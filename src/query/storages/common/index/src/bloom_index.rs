@@ -183,7 +183,7 @@ impl BloomIndex {
     pub fn try_create(
         func_ctx: FunctionContext,
         version: u64,
-        data_blocks_tobe_indexed: &[&DataBlock],
+        block: &DataBlock,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ) -> Result<Option<Self>> {
         // TODO refactor :
@@ -191,11 +191,11 @@ impl BloomIndex {
         // instead of passing it in
         assert_eq!(version, BlockFilter::VERSION);
 
-        if data_blocks_tobe_indexed.is_empty() {
+        if block.is_empty() {
             return Err(ErrorCode::BadArguments("block is empty"));
         }
 
-        if data_blocks_tobe_indexed[0].num_columns() == 0 {
+        if block.num_columns() == 0 {
             return Ok(None);
         }
 
@@ -203,7 +203,12 @@ impl BloomIndex {
         let mut filters = vec![];
         let mut column_distinct_count = HashMap::<usize, usize>::new();
         for (index, field) in bloom_columns_map.into_iter() {
-            let field_type = &data_blocks_tobe_indexed[0].get_by_offset(index).data_type;
+            let column = match &block.get_by_offset(index).value {
+                Value::Scalar(_) => continue,
+                Value::Column(c) => c.clone(),
+            };
+
+            let field_type = &block.get_by_offset(index).data_type;
             if !Xor8Filter::supported_type(field_type) {
                 continue;
             }
@@ -211,22 +216,15 @@ impl BloomIndex {
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
                     // Add bloom filter for the value of map type
-                    let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
-                        let value = &block.get_by_offset(index).value;
-                        let column = value.convert_to_full_column(field_type, block.num_rows());
-                        let map_column = if field_type.is_nullable() {
-                            let nullable_column =
-                                NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(
-                                    &column,
-                                )
+                    let map_column = if field_type.is_nullable() {
+                        let nullable_column =
+                            NullableType::<MapType<AnyType, AnyType>>::try_downcast_column(&column)
                                 .unwrap();
-                            nullable_column.column
-                        } else {
-                            MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
-                        };
-                        map_column.values.values
-                    });
-                    let column = Column::concat_columns(source_columns_iter)?;
+                        nullable_column.column
+                    } else {
+                        MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
+                    };
+                    let column = map_column.values.values;
 
                     let val_type = match inner_ty {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
@@ -262,16 +260,9 @@ impl BloomIndex {
                     }
                 }
                 _ => {
-                    let source_columns_iter = data_blocks_tobe_indexed.iter().map(|block| {
-                        let value = &block.get_by_offset(index).value;
-                        value.convert_to_full_column(field_type, block.num_rows())
-                    });
-                    let column = Column::concat_columns(source_columns_iter)?;
-
                     if Self::check_large_string(&column) {
                         continue;
                     }
-
                     (column, field_type.clone())
                 }
             };

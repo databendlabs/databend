@@ -38,6 +38,7 @@ use crate::ConstantFolder;
 use crate::FunctionContext;
 use crate::Scalar;
 
+#[recursive::recursive]
 pub fn check<Index: ColumnIndex>(
     expr: &RawExpr<Index>,
     fn_registry: &FunctionRegistry,
@@ -204,6 +205,7 @@ pub fn check_cast<Index: ColumnIndex>(
     }
 }
 
+#[recursive::recursive]
 pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType> {
     match ty {
         DataType::Null => Err(ErrorCode::from_string_no_backtrace(
@@ -258,6 +260,7 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     }
 }
 
+#[recursive::recursive]
 pub fn check_function<Index: ColumnIndex>(
     span: Span,
     name: &str,

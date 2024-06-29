@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   linux:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c16g, gcp]
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c16g, aws]
     strategy:
       matrix:
         include:

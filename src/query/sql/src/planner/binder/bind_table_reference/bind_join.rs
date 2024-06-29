@@ -60,15 +60,12 @@ pub struct JoinConditions {
 }
 
 impl Binder {
-    #[async_recursion]
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_join(
+    pub(crate) fn bind_join(
         &mut self,
         bind_context: &mut BindContext,
         join: &databend_common_ast::ast::Join,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_child, mut left_context) =
-            self.bind_table_reference(bind_context, &join.left).await?;
+        let (left_child, mut left_context) = self.bind_table_reference(bind_context, &join.left)?;
         let left_column_bindings = left_context.columns.clone();
 
         let cache_column_bindings = left_column_bindings.clone();
@@ -81,15 +78,16 @@ impl Binder {
             .add_hash_join_build_cache(cache_column_bindings, cache_column_indexes);
 
         if join.right.is_lateral_table_function() {
-            let (result_expr, bind_context) = self
-                .bind_lateral_table_function(&mut left_context, left_child.clone(), &join.right)
-                .await?;
+            let (result_expr, bind_context) = self.bind_lateral_table_function(
+                &mut left_context,
+                left_child.clone(),
+                &join.right,
+            )?;
             return Ok((result_expr, bind_context));
         }
 
-        let (right_child, right_context) = self
-            .bind_table_reference(&mut left_context, &join.right)
-            .await?;
+        let (right_child, right_context) =
+            self.bind_table_reference(&mut left_context, &join.right)?;
 
         let right_column_bindings = right_context.columns.clone();
 
@@ -97,35 +95,31 @@ impl Binder {
 
         self.check_table_name_and_condition(&left_column_bindings, &right_column_bindings, join)?;
 
-        let join_conditions = self
-            .generate_join_condition(
-                &mut bind_context,
-                join,
-                &left_column_bindings,
-                &right_column_bindings,
-            )
-            .await?;
+        let join_conditions = self.generate_join_condition(
+            &mut bind_context,
+            join,
+            &left_column_bindings,
+            &right_column_bindings,
+        )?;
 
         let build_side_cache_info = self.expression_scan_context.generate_cache_info(cache_idx);
 
         let join_type = join_type(&join.op);
-        let s_expr = self
-            .bind_join_with_type(
-                join_type.clone(),
-                join_conditions,
-                left_child,
-                right_child,
-                build_side_cache_info,
-            )
-            .await?;
+        let s_expr = self.bind_join_with_type(
+            join_type.clone(),
+            join_conditions,
+            left_child,
+            right_child,
+            build_side_cache_info,
+        )?;
+
         let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
 
         Ok((s_expr, bind_context))
     }
 
     // TODO: unify this function with bind_join
-    #[async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
@@ -139,31 +133,27 @@ impl Binder {
 
         let mut bind_context = bind_context.replace();
 
-        let join_conditions = self
-            .generate_join_condition(
-                &mut bind_context,
-                join,
-                &left_context.columns,
-                &right_context.columns,
-            )
-            .await?;
+        let join_conditions = self.generate_join_condition(
+            &mut bind_context,
+            join,
+            &left_context.columns,
+            &right_context.columns,
+        )?;
 
         let join_type = join_type(&join.op);
-        let s_expr = self
-            .bind_join_with_type(
-                join_type.clone(),
-                join_conditions,
-                left_child,
-                right_child,
-                None,
-            )
-            .await?;
+        let s_expr = self.bind_join_with_type(
+            join_type.clone(),
+            join_conditions,
+            left_child,
+            right_child,
+            None,
+        )?;
         let bind_context = join_bind_context(&join_type, bind_context, left_context, right_context);
 
         Ok((s_expr, bind_context))
     }
 
-    async fn generate_join_condition(
+    fn generate_join_condition(
         &self,
         bind_context: &mut BindContext,
         join: &databend_common_ast::ast::Join,
@@ -187,15 +177,13 @@ impl Binder {
             &join.condition,
         );
 
-        join_condition_resolver
-            .resolve(
-                &mut left_join_conditions,
-                &mut right_join_conditions,
-                &mut non_equi_conditions,
-                &mut other_conditions,
-                &join.op,
-            )
-            .await?;
+        join_condition_resolver.resolve(
+            &mut left_join_conditions,
+            &mut right_join_conditions,
+            &mut non_equi_conditions,
+            &mut other_conditions,
+            &join.op,
+        )?;
 
         Ok(JoinConditions {
             left_conditions: left_join_conditions,
@@ -205,7 +193,7 @@ impl Binder {
         })
     }
 
-    pub(crate) async fn bind_join_with_type(
+    pub(crate) fn bind_join_with_type(
         &mut self,
         mut join_type: JoinType,
         join_conditions: JoinConditions,
@@ -560,8 +548,7 @@ impl<'a> JoinConditionResolver<'a> {
         }
     }
 
-    #[async_backtrace::framed]
-    pub async fn resolve(
+    pub fn resolve(
         &mut self,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
@@ -577,8 +564,7 @@ impl<'a> JoinConditionResolver<'a> {
                     right_join_conditions,
                     non_equi_conditions,
                     other_join_conditions,
-                )
-                .await?;
+                )?;
             }
             JoinCondition::Using(identifiers) => {
                 let using_columns = identifiers
@@ -595,8 +581,7 @@ impl<'a> JoinConditionResolver<'a> {
                     left_join_conditions,
                     right_join_conditions,
                     join_op,
-                )
-                .await?;
+                )?;
             }
             JoinCondition::Natural => {
                 // NATURAL is a shorthand form of USING: it forms a USING list consisting of all column names that appear in both input tables
@@ -610,8 +595,7 @@ impl<'a> JoinConditionResolver<'a> {
                     left_join_conditions,
                     right_join_conditions,
                     join_op,
-                )
-                .await?
+                )?
             }
             JoinCondition::None => {
                 wrap_nullable_for_column(
@@ -623,19 +607,15 @@ impl<'a> JoinConditionResolver<'a> {
             }
         }
 
-        self.check_join_allowed_scalar_expr(left_join_conditions)
-            .await?;
-        self.check_join_allowed_scalar_expr(right_join_conditions)
-            .await?;
-        self.check_join_allowed_scalar_expr(non_equi_conditions)
-            .await?;
-        self.check_join_allowed_scalar_expr(other_join_conditions)
-            .await?;
+        self.check_join_allowed_scalar_expr(left_join_conditions)?;
+        self.check_join_allowed_scalar_expr(right_join_conditions)?;
+        self.check_join_allowed_scalar_expr(non_equi_conditions)?;
+        self.check_join_allowed_scalar_expr(other_join_conditions)?;
 
         Ok(())
     }
 
-    async fn check_join_allowed_scalar_expr(&mut self, scalars: &Vec<ScalarExpr>) -> Result<()> {
+    fn check_join_allowed_scalar_expr(&mut self, scalars: &Vec<ScalarExpr>) -> Result<()> {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
@@ -657,8 +637,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_on(
+    fn resolve_on(
         &mut self,
         condition: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -674,8 +653,7 @@ impl<'a> JoinConditionResolver<'a> {
                 right_join_conditions,
                 non_equi_conditions,
                 other_join_conditions,
-            )
-            .await?;
+            )?;
         }
         wrap_nullable_for_column(
             &self.join_op,
@@ -686,8 +664,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_predicate(
+    fn resolve_predicate(
         &self,
         predicate: &Expr,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -728,9 +705,7 @@ impl<'a> JoinConditionResolver<'a> {
             false
         };
         if !added {
-            added = self
-                .add_other_conditions(predicate, other_join_conditions)
-                .await?;
+            added = self.add_other_conditions(predicate, other_join_conditions)?;
             if !added {
                 let (predicate, _) = scalar_binder.bind(predicate)?;
                 non_equi_conditions.push(predicate);
@@ -739,8 +714,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn resolve_using(
+    fn resolve_using(
         &mut self,
         using_columns: Vec<(Span, String)>,
         left_join_conditions: &mut Vec<ScalarExpr>,
@@ -844,8 +818,7 @@ impl<'a> JoinConditionResolver<'a> {
         Ok(false)
     }
 
-    #[async_backtrace::framed]
-    async fn add_other_conditions(
+    fn add_other_conditions(
         &self,
         predicate: &Expr,
         other_join_conditions: &mut Vec<ScalarExpr>,

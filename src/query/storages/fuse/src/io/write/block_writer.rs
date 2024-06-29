@@ -146,7 +146,7 @@ impl BloomIndexBuilder {
         let maybe_bloom_index = BloomIndex::try_create(
             self.table_ctx.get_function_context()?,
             bloom_location.1,
-            &[block],
+            block,
             self.bloom_columns_map.clone(),
         )?;
 
@@ -225,7 +225,7 @@ impl BloomIndexState {
         let maybe_bloom_index = BloomIndex::try_create(
             ctx.get_function_context()?,
             location.1,
-            &[block],
+            block,
             bloom_columns_map,
         )?;
         if let Some(bloom_index) = maybe_bloom_index {

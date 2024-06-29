@@ -31,6 +31,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::plans::CopyIntoTableMode;
@@ -47,9 +48,7 @@ use crate::sessions::QueryContext;
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {
     pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
-        let to_table =
-            self.ctx
-                .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
+        let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
         let source_schema = match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(input)?;
@@ -138,10 +137,8 @@ impl PipelineBuilder {
             Self::need_null_if_processor(plan, &source_schema, plan_required_source_schema)
         {
             let func_ctx = ctx.get_function_context()?;
-            main_pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformNullIf::try_create(
-                    transform_input_port,
-                    transform_output_port,
+            main_pipeline.try_add_transformer(|| {
+                TransformNullIf::try_new(
                     source_schema.clone(),
                     plan_required_source_schema.clone(),
                     func_ctx.clone(),
@@ -156,10 +153,8 @@ impl PipelineBuilder {
         if &source_schema != plan_required_source_schema {
             // only parquet need cast
             let func_ctx = ctx.get_function_context()?;
-            main_pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformCastSchema::try_create(
-                    transform_input_port,
-                    transform_output_port,
+            main_pipeline.try_add_transformer(|| {
+                TransformCastSchema::try_new(
                     source_schema.clone(),
                     plan_required_source_schema.clone(),
                     func_ctx.clone(),
@@ -256,16 +251,13 @@ impl PipelineBuilder {
         output_schema: DataSchemaRef,
         const_values: &[Scalar],
     ) -> Result<()> {
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformAddConstColumns::try_create(
+        pipeline.try_add_transformer(|| {
+            TransformAddConstColumns::try_new(
                 ctx.clone(),
-                transform_input_port,
-                transform_output_port,
                 input_schema.clone(),
                 output_schema.clone(),
                 const_values.to_vec(),
             )
-        })?;
-        Ok(())
+        })
     }
 }

@@ -171,7 +171,7 @@ impl Binder {
                             BindContext::with_parent(Box::new(bind_context.clone()));
                         new_bind_context.planning_agg_index = true;
                         if let Statement::Query(query) = &stmt {
-                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query).await?;
+                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
                             s_exprs.push((index_id, index_meta.query.clone(), s_expr));
                         }
                     }
@@ -232,7 +232,7 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
 
         bind_context.planning_agg_index = true;
-        self.bind_query(bind_context, &query).await?;
+        self.bind_query(bind_context, &query)?;
         bind_context.planning_agg_index = false;
 
         let tables = self.metadata.read().tables().to_vec();

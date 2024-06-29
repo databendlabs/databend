@@ -81,7 +81,7 @@ impl BlockReader {
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
             // - here we may processing a nested type field
-            // - But, even if the field being processed is a filed with multiple leaf columns
+            // - But, even if the field being processed is a field with multiple leaf columns
             //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
             //    even if we are getting data from `column_chunks` using a non-leaf
             //    `column_id` of `projected_schema.fields`

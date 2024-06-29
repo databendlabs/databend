@@ -10,7 +10,6 @@ BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 killall databend-query || true
 killall databend-meta || true
-killall open-sharing || true
 sleep 1
 
 for bin in databend-query databend-meta; do

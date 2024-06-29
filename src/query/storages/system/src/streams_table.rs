@@ -91,7 +91,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let mut table_name = vec![];
         let mut invalid_reason = vec![];
         let mut mode = vec![];
-        let mut names: Vec<String> = vec![];
+        let mut names = vec![];
         let mut stream_id = vec![];
         let mut created_on = vec![];
         let mut updated_on = vec![];
@@ -105,7 +105,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
-                let mut db_name: Vec<String> = Vec::new();
+                let mut db_name = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
@@ -161,6 +161,8 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 HashMap::new()
             };
 
+            let mut source_db_ids = vec![];
+            let mut source_tb_ids = vec![];
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
@@ -194,25 +196,19 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
-                        let source_database_name =
-                            stream_table.source_database_name(ctl.as_ref()).await.ok();
-                        let source_table_name =
-                            stream_table.source_table_name(ctl.as_ref()).await.ok();
-                        let source_desc =
-                            if source_table_name.is_none() || source_database_name.is_none() {
-                                None
-                            } else {
-                                Some(format!(
-                                    "{}.{}",
-                                    source_database_name.unwrap(),
-                                    source_table_name.unwrap()
-                                ))
-                            };
+
+                        source_db_ids.push(
+                            stream_table
+                                .source_database_id(ctl.as_ref())
+                                .await
+                                .unwrap_or(0),
+                        );
+                        let source_tb_id = stream_table.source_table_id().ok();
+                        source_tb_ids.push(source_tb_id.unwrap_or(0));
 
                         catalogs.push(ctl_name.as_str());
                         databases.push(db_name.to_owned());
                         names.push(stream_table.name().to_string());
-                        table_name.push(source_desc);
                         mode.push(stream_table.mode().to_string());
 
                         if T {
@@ -236,7 +232,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             comment.push(stream_info.meta.comment.clone());
 
                             table_version.push(stream_table.offset().ok());
-                            table_id.push(stream_table.source_table_id().ok());
+                            table_id.push(source_tb_id);
                             snapshot_location.push(stream_table.snapshot_loc());
 
                             let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
@@ -278,6 +274,21 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     .await
                     .unwrap_or_default();
                 invalid_reason.append(&mut joint);
+            }
+
+            let source_db_names = ctl
+                .mget_database_names_by_ids(&tenant, &source_db_ids)
+                .await?;
+            let source_table_names = ctl.mget_table_names_by_ids(&tenant, &source_tb_ids).await?;
+            for (db, tb) in source_db_names
+                .into_iter()
+                .zip(source_table_names.into_iter())
+            {
+                let desc = match (db, tb) {
+                    (Some(db), Some(tb)) => Some(format!("{db}.{tb}")),
+                    _ => None,
+                };
+                table_name.push(desc);
             }
         }
 

@@ -37,13 +37,6 @@ runs:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ${{ steps.info.outputs.path }}/databend-*
 
-    - name: Upload open-sharing to github
-      if: env.RUNNER_PROVIDER == 'github' && inputs.category == 'default'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ${{ steps.info.outputs.path }}/open-sharing
-
     - name: Upload artifacts to s3
       if: env.RUNNER_PROVIDER == 'aws'
       shell: bash
@@ -51,7 +44,6 @@ runs:
         aws s3 sync ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/ \
           s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           --exclude "*" --include "databend-*" --no-progress
-        aws s3 cp ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true
 
     - name: Upload artifact to gcs
       if: env.RUNNER_PROVIDER == 'gcp'
@@ -60,5 +52,3 @@ runs:
         gcloud config set storage/parallel_composite_upload_enabled False
         gcloud storage cp --quiet --recursive ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-* \
           gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/
-        gcloud storage cp --quiet ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing \
-          gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ || true

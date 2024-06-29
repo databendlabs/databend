@@ -33,8 +33,7 @@ impl Binder {
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
     #[allow(clippy::too_many_arguments)]
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_table(
+    pub(crate) fn bind_table(
         &mut self,
         bind_context: &mut BindContext,
         span: &Span,
@@ -76,38 +75,31 @@ impl Binder {
                 }
                 return if cte_info.materialized {
                     self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                        .await
                 } else if cte_info.recursive {
                     if self.bind_recursive_cte {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
-                            .await
                     } else {
                         self.bind_r_cte(bind_context, cte_info, &table_name, alias)
-                            .await
                     }
                 } else {
                     self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                        .await
                 };
             }
         }
 
         let tenant = self.ctx.get_tenant();
 
-        let navigation = self.resolve_temporal_clause(bind_context, temporal).await?;
+        let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
-        let table_meta = match self
-            .resolve_data_source(
-                tenant.tenant_name(),
-                catalog.as_str(),
-                database.as_str(),
-                table_name.as_str(),
-                navigation.as_ref(),
-                self.ctx.clone().get_abort_checker(),
-            )
-            .await
-        {
+        let table_meta = match self.resolve_data_source(
+            tenant.tenant_name(),
+            catalog.as_str(),
+            database.as_str(),
+            table_name.as_str(),
+            navigation.as_ref(),
+            self.ctx.clone().get_abort_checker(),
+        ) {
             Ok(table) => table,
             Err(e) => {
                 let mut parent = bind_context.parent.as_mut();
@@ -120,10 +112,8 @@ impl Binder {
                     if let Some(cte_info) = ctes_map.get(&table_name) {
                         return if !cte_info.materialized {
                             self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                                .await
                         } else {
                             self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                                .await
                         };
                     }
                     parent = bind_context.parent.as_mut();
@@ -166,9 +156,12 @@ impl Binder {
                     false,
                     consume,
                 );
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index, change_type)
-                    .await?;
+                let (s_expr, mut bind_context) = self.bind_base_table(
+                    bind_context,
+                    database.as_str(),
+                    table_index,
+                    change_type,
+                )?;
 
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -176,14 +169,13 @@ impl Binder {
                 return Ok((s_expr, bind_context));
             }
 
-            let query = table_meta
-                .generage_changes_query(
+            let query =
+                databend_common_base::runtime::block_on(table_meta.generage_changes_query(
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
                     consume,
-                )
-                .await?;
+                ))?;
 
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
             let tokens = tokenize_sql(query.as_str())?;
@@ -191,8 +183,7 @@ impl Binder {
             let Statement::Query(query) = &stmt else {
                 unreachable!()
             };
-            let (s_expr, mut new_bind_context) =
-                self.bind_query(&mut new_bind_context, query).await?;
+            let (s_expr, mut new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
 
             let cols = table_meta
                 .schema()
@@ -243,7 +234,7 @@ impl Binder {
                         false,
                     );
                     let (s_expr, mut new_bind_context) =
-                        self.bind_query(&mut new_bind_context, query).await?;
+                        self.bind_query(&mut new_bind_context, query)?;
                     if let Some(alias) = alias {
                         // view maybe has alias, e.g. select v1.col1 from v as v1;
                         new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -275,9 +266,8 @@ impl Binder {
                     false,
                 );
 
-                let (s_expr, mut bind_context) = self
-                    .bind_base_table(bind_context, database.as_str(), table_index, None)
-                    .await?;
+                let (s_expr, mut bind_context) =
+                    self.bind_base_table(bind_context, database.as_str(), table_index, None)?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
