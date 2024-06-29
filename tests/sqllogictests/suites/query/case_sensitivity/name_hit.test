@@ -16,7 +16,7 @@ INSERT INTO Student VALUES(1)
 statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
 update Student set id = 1
 
-statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
+statement error (?s)1025,.*Unknown table Student \(unquoted\)\. Did you mean `Student` \(quoted\)?
 delete from Student
 
 statement error (?s)1025,.*Unknown table `default`\.Student \(unquoted\) in catalog 'default'\. Did you mean `Student` \(quoted\)\?
@@ -28,10 +28,10 @@ set unquoted_ident_case_sensitive = 1
 statement error 1025,.*Unknown table 'student'
 INSERT INTO student VALUES(1)
 
-statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
+statement error (?s)1025,.*Unknown table 'student'
 update student set id = 1
 
-statement error (?s)1025,.*Unknown table `default`\.`student` in catalog 'default'
+statement error (?s)1025,.*Unknown table 'student'
 delete from student
 
 statement error Unknown table `default`\.`student` in catalog 'default'

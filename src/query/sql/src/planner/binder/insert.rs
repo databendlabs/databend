@@ -35,7 +35,6 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::BindContext;
-use crate::NameResolutionSuggest;
 
 impl Binder {
     pub fn schema_project(
@@ -98,15 +97,13 @@ impl Binder {
             .await
             .map_err(|err| match err.code() {
                 ErrorCode::UNKNOWN_TABLE => {
-                    let name = &table_ident.name;
-                    match self.name_resolution_ctx.not_found_suggest(table_ident) {
-                        NameResolutionSuggest::None => err,
-                        NameResolutionSuggest::Quoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table {table_ident} (unquoted). Did you mean `{name}` (quoted)?",
-                        )),
-                        NameResolutionSuggest::Unqoted => ErrorCode::UnknownTable(format!(
-                            "Unknown table {table_ident} (quoted). Did you mean {name} (unquoted)?",
-                        )),
+                    if let Some(err) = self
+                        .name_resolution_ctx
+                        .table_not_found_suggest_error(table_ident)
+                    {
+                        err
+                    } else {
+                        err
                     }
                 }
                 _ => err,

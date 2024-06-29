@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
+use databend_common_exception::ErrorCode;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
@@ -24,13 +25,12 @@ pub struct NameResolutionContext {
 }
 
 pub enum NameResolutionSuggest {
-    None,
     Quoted,
     Unqoted,
 }
 
 impl NameResolutionContext {
-    pub fn not_found_suggest(&self, ident: &Identifier) -> NameResolutionSuggest {
+    pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
         match (
             self.unquoted_ident_case_sensitive,
             self.quoted_ident_case_sensitive,
@@ -38,17 +38,33 @@ impl NameResolutionContext {
         ) {
             (false, true, false) => {
                 if ident.name.to_lowercase() != ident.name {
-                    return NameResolutionSuggest::Quoted;
+                    return Some(NameResolutionSuggest::Quoted);
                 }
             }
             (true, false, true) => {
                 if ident.name.to_lowercase() != ident.name {
-                    return NameResolutionSuggest::Unqoted;
+                    return Some(NameResolutionSuggest::Unqoted);
                 }
             }
             (_, _, _) => (),
         };
-        NameResolutionSuggest::None
+        None
+    }
+
+    pub fn table_not_found_suggest_error(&self, table: &Identifier) -> Option<ErrorCode> {
+        let name = &table.name;
+        if let Some(suggest) = self.not_found_suggest(table) {
+            Some(ErrorCode::UnknownTable(match suggest {
+                NameResolutionSuggest::Quoted => {
+                    format!("Unknown table {table} (unquoted). Did you mean `{name}` (quoted)?",)
+                }
+                NameResolutionSuggest::Unqoted => {
+                    format!("Unknown table {table} (quoted). Did you mean {name} (unquoted)?",)
+                }
+            }))
+        } else {
+            None
+        }
     }
 }
 
