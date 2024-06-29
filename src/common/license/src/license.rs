@@ -63,6 +63,8 @@ pub enum Feature {
     StorageEncryption,
     #[serde(alias = "stream", alias = "STREAM")]
     Stream,
+    #[serde(alias = "attach_table", alias = "ATTACH_TABLE")]
+    AttacheTable,
     #[serde(alias = "compute_quota", alias = "COMPUTE_QUOTA")]
     ComputeQuota(ComputeQuota),
     #[serde(alias = "storage_quota", alias = "STORAGE_QUOTA")]
@@ -85,6 +87,7 @@ impl Display for Feature {
             Feature::ComputedColumn => write!(f, "computed_column"),
             Feature::StorageEncryption => write!(f, "storage_encryption"),
             Feature::Stream => write!(f, "stream"),
+            Feature::AttacheTable => write!(f, "attach_table"),
             Feature::ComputeQuota(v) => {
                 write!(f, "compute_quota(")?;
 
@@ -148,6 +151,7 @@ impl Feature {
             | (Feature::DataMask, Feature::DataMask)
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
+            | (Feature::AttacheTable, Feature::AttacheTable)
             | (Feature::StorageEncryption, Feature::StorageEncryption) => true,
             (_, _) => false,
         }
@@ -250,6 +254,10 @@ mod tests {
         assert_eq!(
             Feature::Stream,
             serde_json::from_str::<Feature>("\"Stream\"").unwrap()
+        );
+        assert_eq!(
+            Feature::AttacheTable,
+            serde_json::from_str::<Feature>("\"ATTACH_TABLE\"").unwrap()
         );
         assert_eq!(
             Feature::ComputeQuota(ComputeQuota {

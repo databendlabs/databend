@@ -225,6 +225,7 @@ impl<'a> TypeChecker<'a> {
         Ok((scalar.clone(), data_type.clone()))
     }
 
+    #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         if let Some(scalar) = self.bind_context.srfs.get(&expr.to_string()) {
             if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
@@ -2687,9 +2688,7 @@ impl<'a> TypeChecker<'a> {
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
         let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
-        let (s_expr, output_context) = databend_common_base::runtime::block_on(
-            binder.bind_query(&mut bind_context, subquery),
-        )?;
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1

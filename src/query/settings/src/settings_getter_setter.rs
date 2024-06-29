@@ -286,6 +286,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
 
+    pub fn get_join_spilling_buffer_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
+    }
+
     pub fn get_inlist_to_join_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("inlist_to_join_threshold")? as usize)
     }

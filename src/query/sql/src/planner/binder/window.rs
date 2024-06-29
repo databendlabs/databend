@@ -52,8 +52,7 @@ use crate::MetadataRef;
 use crate::Visibility;
 
 impl Binder {
-    #[async_backtrace::framed]
-    pub(super) async fn bind_window_function(
+    pub(super) fn bind_window_function(
         &mut self,
         window_info: &WindowFunctionInfo,
         child: SExpr,

@@ -449,17 +449,15 @@ impl InsertIntoBranches {
 
     async fn build_fill_and_reorder(
         &self,
-        ctx: Arc<dyn TableContext>,
+        _ctx: Arc<dyn TableContext>,
     ) -> Result<Vec<Option<FillAndReorder>>> {
         let mut fill_and_reorders = vec![];
         for (table, casted_schema) in self.tables.iter().zip(self.casted_schemas.iter()) {
             let target_schema: DataSchemaRef = Arc::new(table.schema().into());
             if target_schema.as_ref() != casted_schema.as_ref() {
                 let table_info = table.get_table_info();
-                let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
                 fill_and_reorders.push(Some(FillAndReorder {
                     source_schema: casted_schema.clone(),
-                    catalog_info,
                     target_table_info: table_info.clone(),
                 }));
             } else {

@@ -23,9 +23,8 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::ReclusterSink;
@@ -51,14 +50,11 @@ impl PipelineBuilder {
         match recluster_source.tasks.len() {
             0 => self.main_pipeline.add_source(EmptySource::create, 1),
             1 => {
-                let table = self.ctx.build_table_by_table_info(
-                    &recluster_source.catalog_info,
-                    &recluster_source.table_info,
-                    None,
-                )?;
+                let table = self
+                    .ctx
+                    .build_table_by_table_info(&recluster_source.table_info, None)?;
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
-                let catalog_info = recluster_source.catalog_info.clone();
                 let task = &recluster_source.tasks[0];
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
@@ -66,7 +62,6 @@ impl PipelineBuilder {
                 let schema = table.schema_with_stream();
                 let description = task.stats.get_description(&table_info.desc);
                 let plan = DataSourcePlan {
-                    catalog_info,
                     source_info: DataSourceInfo::TableSource(table_info.clone()),
                     output_schema: schema.clone(),
                     parts: task.parts.clone(),
@@ -105,15 +100,8 @@ impl PipelineBuilder {
                         table_info.ident.seq,
                         false,
                     )?;
-                    self.main_pipeline.add_transform(
-                        |transform_input_port, transform_output_port| {
-                            TransformAddStreamColumns::try_create(
-                                transform_input_port,
-                                transform_output_port,
-                                stream_ctx.clone(),
-                            )
-                        },
-                    )?;
+                    self.main_pipeline
+                        .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
                 }
 
                 let cluster_stats_gen = table.get_cluster_stats_gen(
@@ -125,15 +113,13 @@ impl PipelineBuilder {
                 let operators = cluster_stats_gen.operators.clone();
                 if !operators.is_empty() {
                     let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-                    self.main_pipeline.add_transform(move |input, output| {
-                        Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                            input,
-                            output,
-                            num_input_columns,
-                            func_ctx2.clone(),
+                    self.main_pipeline.add_transformer(move || {
+                        CompoundBlockOperator::new(
                             operators.clone(),
-                        )))
-                    })?;
+                            func_ctx2.clone(),
+                            num_input_columns,
+                        )
+                    });
                 }
 
                 // merge sort
@@ -205,26 +191,21 @@ impl PipelineBuilder {
     pub(crate) fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {
         self.build_pipeline(&recluster_sink.input)?;
 
-        let table = self.ctx.build_table_by_table_info(
-            &recluster_sink.catalog_info,
-            &recluster_sink.table_info,
-            None,
-        )?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&recluster_sink.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         self.main_pipeline.try_resize(1)?;
-        self.main_pipeline.add_transform(|input, output| {
-            let aggregator = ReclusterAggregator::new(
+        self.main_pipeline.add_async_accumulating_transformer(|| {
+            ReclusterAggregator::new(
                 table,
                 self.ctx.clone(),
                 recluster_sink.remained_blocks.clone(),
                 recluster_sink.removed_segment_indexes.clone(),
                 recluster_sink.removed_segment_summary.clone(),
-            );
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
+            )
+        });
 
         let snapshot_gen =
             MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);

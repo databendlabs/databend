@@ -43,14 +43,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Evaluator;
-use databend_common_expression::FieldDefaultExpr;
+use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -439,11 +435,7 @@ impl<'a> Binder {
                     },
                 }],
             };
-            if let Some(e) = self
-                .opt_hints_set_var(&mut output_context, &hints)
-                .await
-                .err()
-            {
+            if let Some(e) = self.opt_hints_set_var(&mut output_context, &hints).err() {
                 warn!(
                     "In COPY resolve optimize hints {:?} failed, err: {:?}",
                     hints, e
@@ -552,7 +544,7 @@ impl<'a> Binder {
         &mut self,
         bind_context: &mut BindContext,
         data_schema: &DataSchemaRef,
-    ) -> Result<Vec<FieldDefaultExpr>> {
+    ) -> Result<Vec<RemoteExpr>> {
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -562,36 +554,10 @@ impl<'a> Binder {
             HashMap::new(),
             Box::new(IndexMap::new()),
         );
-        let input = DataBlock::empty();
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
-
-        let mut force_scalar_func_ctx = self.ctx.get_function_context()?;
-        force_scalar_func_ctx.force_scalar = true;
-        let force_scalar_evaluator =
-            Evaluator::new(&input, &force_scalar_func_ctx, &BUILTIN_FUNCTIONS);
-
-        let mut values = vec![];
+        let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {
             let expr = scalar_binder.get_default_value(field, data_schema).await?;
-            let value = evaluator.run(&expr)?;
-            match value {
-                Value::Scalar(scalar) => values.push(FieldDefaultExpr::Const(scalar.clone())),
-                Value::Column(_) => match force_scalar_evaluator.run(&expr)? {
-                    Value::Scalar(_) => {
-                        values.push(FieldDefaultExpr::Expr(
-                            field.default_expr().unwrap().clone(),
-                        ));
-                    }
-                    Value::Column(_) => {
-                        return Err(ErrorCode::BadArguments(format!(
-                            "default value {:?} (of field {}) for missing/empty value is not supported when copy into table",
-                            field.default_expr(),
-                            field.name(),
-                        )));
-                    }
-                },
-            }
+            values.push(expr.as_remote_expr());
         }
         Ok(values)
     }

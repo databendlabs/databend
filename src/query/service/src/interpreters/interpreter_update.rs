@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
@@ -33,7 +31,6 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -50,7 +47,6 @@ use log::debug;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::create_push_down_filters;
-use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
@@ -137,7 +133,7 @@ impl UpdateInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        let selection = if !self.plan.subquery_desc.is_empty() {
+        let selection = if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -152,7 +148,7 @@ impl UpdateInterpreter {
                 .get_table_index(Some(self.plan.database.as_str()), self.plan.table.as_str());
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
-                self.plan.subquery_desc[0].index,
+                subquery_desc.index,
                 Box::new(DataType::Number(NumberDataType::UInt64)),
                 Visibility::InVisible,
             )
@@ -160,21 +156,14 @@ impl UpdateInterpreter {
             .table_name(Some(self.plan.table.clone()))
             .table_index(table_index)
             .build();
-            let mut filters = VecDeque::new();
-            for subquery_desc in &self.plan.subquery_desc {
-                let filter = subquery_filter(
-                    self.ctx.clone(),
-                    self.plan.metadata.clone(),
-                    &row_id_column_binding,
-                    subquery_desc,
-                )
-                .await?;
-                filters.push_front(filter);
-            }
-            // Traverse `selection` and put `filters` into `selection`.
-            let mut selection = self.plan.selection.clone().unwrap();
-            replace_subquery(&mut filters, &mut selection)?;
-            Some(selection)
+            let filter = subquery_filter(
+                self.ctx.clone(),
+                self.plan.metadata.clone(),
+                &row_id_column_binding,
+                subquery_desc,
+            )
+            .await?;
+            Some(filter)
         } else {
             self.plan.selection.clone()
         };
@@ -190,14 +179,15 @@ impl UpdateInterpreter {
                 ));
             }
 
-            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
-                let mut col_indices = HashSet::new();
-                for subquery_desc in &self.plan.subquery_desc {
-                    col_indices.extend(subquery_desc.outer_columns.iter());
-                }
+            let mut used_columns = scalar.used_columns().clone();
+            let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
+                // add scalar.used_columns() but ignore _row_id index
+                let mut col_indices = subquery_desc.outer_columns.clone();
+                used_columns.remove(&subquery_desc.index);
+                col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
-                scalar.used_columns().into_iter().collect()
+                used_columns.into_iter().collect()
             };
             (Some(filters), col_indices)
         } else {
@@ -229,7 +219,7 @@ impl UpdateInterpreter {
             ))
         })?;
 
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        let query_row_id_col = self.plan.subquery_desc.is_some();
         if let Some(snapshot) = fuse_table
             .fast_update(
                 self.ctx.clone(),
@@ -251,7 +241,6 @@ impl UpdateInterpreter {
                 .await?;
 
             let is_distributed = !self.ctx.get_cluster().is_empty();
-            let catalog_info = self.ctx.get_catalog(catalog_name).await?.info();
             let physical_plan = Self::build_physical_plan(
                 filters,
                 update_list,
@@ -260,7 +249,6 @@ impl UpdateInterpreter {
                 fuse_table.get_table_info().clone(),
                 col_indices,
                 snapshot,
-                catalog_info,
                 query_row_id_col,
                 is_distributed,
                 self.ctx.clone(),
@@ -278,7 +266,6 @@ impl UpdateInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: Arc<CatalogInfo>,
         query_row_id_col: bool,
         is_distributed: bool,
         ctx: Arc<QueryContext>,
@@ -288,7 +275,6 @@ impl UpdateInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             update_list,
@@ -310,7 +296,6 @@ impl UpdateInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Update,
             update_stream_meta: vec![],
             merge_meta,

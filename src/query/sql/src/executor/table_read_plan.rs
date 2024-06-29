@@ -54,22 +54,9 @@ use crate::Visibility;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
-    /// Real read_plan to access partitions/push_downs
-    #[async_backtrace::framed]
     async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        dry_run: bool,
-    ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, false, dry_run)
-            .await
-    }
-
-    async fn read_plan_with_catalog(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         update_stream_columns: bool,
@@ -80,17 +67,14 @@ pub trait ToReadDataSourcePlan {
 #[async_trait::async_trait]
 impl ToReadDataSourcePlan for dyn Table {
     #[async_backtrace::framed]
-    async fn read_plan_with_catalog(
+    async fn read_plan(
         &self,
         ctx: Arc<dyn TableContext>,
-        catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
         update_stream_columns: bool,
         dry_run: bool,
     ) -> Result<DataSourcePlan> {
-        let catalog_info = ctx.get_catalog(&catalog).await?.info();
-
         let start = std::time::Instant::now();
 
         let (statistics, mut parts) = if let Some(PushDownInfo {
@@ -282,10 +266,8 @@ impl ToReadDataSourcePlan for dyn Table {
             "build physical plan - built data source plan, time used {:?}",
             start.elapsed()
         ));
-        // TODO pass in catalog name
 
         Ok(DataSourcePlan {
-            catalog_info,
             source_info,
             output_schema,
             parts,

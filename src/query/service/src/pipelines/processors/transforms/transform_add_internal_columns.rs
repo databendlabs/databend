@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnMeta;
@@ -22,11 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::Transform;
-use databend_common_pipeline_transforms::processors::Transformer;
 
 pub struct TransformAddInternalColumns {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,
@@ -35,16 +30,8 @@ pub struct TransformAddInternalColumns {
 impl TransformAddInternalColumns
 where Self: Transform
 {
-    pub fn try_create(
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-        internal_columns: BTreeMap<FieldIndex, InternalColumn>,
-    ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            Self { internal_columns },
-        )))
+    pub fn new(internal_columns: BTreeMap<FieldIndex, InternalColumn>) -> Self {
+        Self { internal_columns }
     }
 }
 

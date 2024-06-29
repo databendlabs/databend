@@ -101,10 +101,16 @@ impl OpenTelemetryLogger {
         config: &OTLPEndpointConfig,
         labels: &BTreeMap<String, String>,
     ) -> Self {
+        let endpoint = if !config.endpoint.trim_end_matches('/').ends_with("/v1/logs") {
+            format!("{}/v1/logs", config.endpoint)
+        } else {
+            config.endpoint.clone()
+        };
+
         let exporter = match config.protocol {
             OTLPProtocol::Grpc => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::Grpc,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
@@ -121,7 +127,7 @@ impl OpenTelemetryLogger {
             }
             OTLPProtocol::Http => {
                 let export_config = opentelemetry_otlp::ExportConfig {
-                    endpoint: config.endpoint.clone(),
+                    endpoint,
                     protocol: opentelemetry_otlp::Protocol::HttpBinary,
                     timeout: Duration::from_secs(
                         opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
@@ -156,12 +162,7 @@ impl OpenTelemetryLogger {
                     .with_resource(opentelemetry_sdk::Resource::new(kvs)),
             )
             .build();
-        let library = Arc::new(InstrumentationLibrary::new(
-            name.to_string(),
-            None::<&str>,
-            None::<&str>,
-            None,
-        ));
+        let library = Arc::new(InstrumentationLibrary::builder(name.to_string()).build());
         Self {
             name: name.to_string(),
             category: category.to_string(),
@@ -183,18 +184,16 @@ impl log::Log for OpenTelemetryLogger {
 
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
-        let config = provider.config();
-        let builder = opentelemetry::logs::LogRecord::builder()
-            .with_observed_timestamp(SystemTime::now())
-            .with_severity_number(map_severity_to_otel_severity(log_record.level()))
-            .with_severity_text(log_record.level().as_str())
-            .with_body(AnyValue::from(log_record.args().to_string()));
-        let record = builder.build();
+        let mut record = opentelemetry_sdk::logs::LogRecord::default();
+        record.observed_timestamp = Some(SystemTime::now());
+        record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
+        record.severity_text = Some(log_record.level().as_str().into());
+        record.body = Some(AnyValue::from(log_record.args().to_string()));
+
         for processor in provider.log_processors() {
             let record = record.clone();
             let data = opentelemetry_sdk::export::logs::LogData {
                 record,
-                resource: config.resource.clone(),
                 instrumentation: self.instrumentation_library().clone(),
             };
             processor.emit(data);

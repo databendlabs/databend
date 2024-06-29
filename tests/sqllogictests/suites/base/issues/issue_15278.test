@@ -24,6 +24,17 @@ select a from test;
 ----
 
 statement ok
+insert into test(a,b,c) values('a','update','table38426');
+
+statement ok
+update test set a = 'test' where (a) in(select a from test_tmp where b in ('update', 'delete')) and c in ('table38426');
+
+query TTT
+select * from test;
+----
+test update table38426
+
+statement ok
 drop table if exists test;
 
 statement ok

@@ -216,8 +216,7 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
     Ok(())
 }
 
-#[async_recursion::async_recursion]
-#[async_backtrace::framed]
+#[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
@@ -299,7 +298,6 @@ async fn create_memory_table_for_cte_scan(
                 engine: Engine::Memory,
                 engine_options: Default::default(),
                 storage_params: None,
-                read_only_attach: false,
                 part_prefix: "".to_string(),
                 options: Default::default(),
                 field_comments: vec![],
@@ -337,6 +335,8 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::MergeIntoAddRowNumber(_)
         | PhysicalPlan::MergeIntoSplit(_)
         | PhysicalPlan::MergeIntoManipulate(_)
+        | PhysicalPlan::MergeIntoOrganize(_)
+        | PhysicalPlan::MergeIntoSerialize(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::ReclusterSource(_)

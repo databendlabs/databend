@@ -51,6 +51,8 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoAddRowNumber;
 use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSerialize;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -93,7 +95,7 @@ impl PhysicalPlan {
                     None => Ok(FormatTreeNode::with_children(
                         format!(
                             "Scan: {}.{} (read rows: {})",
-                            plan.source.catalog_info.name_ident.catalog_name,
+                            plan.source.source_info.catalog_name(),
                             plan.source.source_info.desc(),
                             plan.source.statistics.read_rows
                         ),
@@ -200,6 +202,7 @@ impl PhysicalPlan {
     }
 }
 
+#[recursive::recursive]
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &Metadata,
@@ -256,6 +259,10 @@ fn to_format_tree(
         PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
         PhysicalPlan::MergeIntoManipulate(plan) => {
             format_merge_into_manipulate(plan, metadata, profs)
+        }
+        PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
+        PhysicalPlan::MergeIntoSerialize(plan) => {
+            format_merge_into_serialize(plan, metadata, profs)
         }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
@@ -435,6 +442,30 @@ fn format_merge_into_manipulate(
     ))
 }
 
+fn format_merge_into_organize(
+    plan: &MergeIntoOrganize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoOrganize".to_string(),
+        vec![child],
+    ))
+}
+
+fn format_merge_into_serialize(
+    plan: &MergeIntoSerialize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let child = to_format_tree(&plan.input, metadata, profs)?;
+    Ok(FormatTreeNode::with_children(
+        "MergeIntoSerialize".to_string(),
+        vec![child],
+    ))
+}
+
 fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "CopyIntoTable: {}",
@@ -458,7 +489,7 @@ fn table_scan_to_format_tree(
     let table_name = match plan.table_index {
         None => format!(
             "{}.{}",
-            plan.source.catalog_info.name_ident.catalog_name,
+            plan.source.source_info.catalog_name(),
             plan.source.source_info.desc()
         ),
         Some(table_index) => {

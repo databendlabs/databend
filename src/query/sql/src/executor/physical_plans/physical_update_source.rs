@@ -13,13 +13,11 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::Partitions;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -27,7 +25,6 @@ pub struct UpdateSource {
     pub plan_id: u32,
     pub parts: Partitions,
     pub table_info: TableInfo,
-    pub catalog_info: Arc<CatalogInfo>,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
 

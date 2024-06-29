@@ -26,7 +26,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-// TODO: maybe we also need async transform for `SELECT sleep(1)`?
 pub trait Transform: Send {
     const NAME: &'static str;
     const SKIP_EMPTY_DATA_BLOCK: bool = false;

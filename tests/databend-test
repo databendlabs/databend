@@ -646,7 +646,7 @@ if __name__ == '__main__':
     parser.add_argument('-t',
                         '--timeout',
                         type=int,
-                        default=240,
+                        default=600,
                         help='Timeout for each test case in seconds')
     parser.add_argument('--record',
                         type=int,

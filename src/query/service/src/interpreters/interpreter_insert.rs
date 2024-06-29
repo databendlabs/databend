@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -72,7 +73,7 @@ impl InsertInterpreter {
         }
 
         // check if cast needed
-        let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
+        let cast_needed = select_schema.as_ref() != &DataSchema::from(output_schema.as_ref());
         Ok(cast_needed)
     }
 }
@@ -108,6 +109,7 @@ impl Interpreter for InsertInterpreter {
         table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
+        let main_pipeline = &mut build_res.main_pipeline;
 
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
@@ -145,23 +147,15 @@ impl Interpreter for InsertInterpreter {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
-                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                    .exec_stream(input_context.clone(), main_pipeline)?;
 
                 match StageFileFormatType::from_str(format) {
                     Ok(f) if f.has_inner_schema() => {
                         let dest_schema = self.plan.dest_schema();
                         let func_ctx = self.ctx.get_function_context()?;
-
-                        build_res.main_pipeline.add_transform(
-                            |transform_input_port, transform_output_port| {
-                                TransformRuntimeCastSchema::try_create(
-                                    transform_input_port,
-                                    transform_output_port,
-                                    dest_schema.clone(),
-                                    func_ctx.clone(),
-                                )
-                            },
-                        )?;
+                        build_res.main_pipeline.add_transformer(|| {
+                            TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
+                        });
                     }
                     _ => {}
                 }
@@ -174,22 +168,15 @@ impl Interpreter for InsertInterpreter {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
-                    .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
+                    .exec_stream(input_context.clone(), main_pipeline)?;
 
                 if format.get_type().has_inner_schema() {
                     let dest_schema = self.plan.dest_schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
-                    build_res.main_pipeline.add_transform(
-                        |transform_input_port, transform_output_port| {
-                            TransformRuntimeCastSchema::try_create(
-                                transform_input_port,
-                                transform_output_port,
-                                dest_schema.clone(),
-                                func_ctx.clone(),
-                            )
-                        },
-                    )?;
+                    main_pipeline.add_transformer(|| {
+                        TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
+                    });
                 }
             }
             InsertInputSource::SelectPlan(plan) => {
@@ -220,9 +207,6 @@ impl Interpreter for InsertInterpreter {
                 let update_stream_meta =
                     dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
 
-                let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-                let catalog_info = catalog.info();
-
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
@@ -234,7 +218,6 @@ impl Interpreter for InsertInterpreter {
                                 // which is not correct. We should generate a new id for insert.
                                 plan_id: exchange.plan_id,
                                 input,
-                                catalog_info,
                                 table_info: table1.get_table_info().clone(),
                                 select_schema: plan.schema(),
                                 select_column_bindings,
@@ -251,7 +234,6 @@ impl Interpreter for InsertInterpreter {
                             // which is not correct. We should generate a new id for insert.
                             plan_id: other_plan.get_id(),
                             input: Box::new(other_plan),
-                            catalog_info,
                             table_info: table1.get_table_info().clone(),
                             select_schema: plan.schema(),
                             select_column_bindings,

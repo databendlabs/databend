@@ -24,9 +24,8 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -221,15 +220,9 @@ impl FuseTable {
 
         if is_lazy {
             pipeline.try_resize(1)?;
-            pipeline.add_transform(|input, output| {
-                let mutation_aggregator =
-                    TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact);
-                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                    input,
-                    output,
-                    mutation_aggregator,
-                )))
-            })?;
+            pipeline.add_async_accumulating_transformer(|| {
+                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact)
+            });
         }
         Ok(())
     }

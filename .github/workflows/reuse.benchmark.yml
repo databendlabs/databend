@@ -209,7 +209,7 @@ jobs:
             aws s3 sync "s3://benchmark/clickbench/release/${dataset}/latest/" ./results/${dataset}/ --exclude "*" --include "*.json"
             ./update_results.py --dataset $dataset --pr ${{ inputs.source_id }}
             aws s3 cp ./results/${dataset}.html ${REPORT_S3_PREFIX}/${dataset}.html
-            echo "* **${dataset}**: https://benchmark.databend.rs/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
+            echo "* **${dataset}**: https://benchmark.databend.com/clickbench/pr/${{ inputs.source_id }}/${{ inputs.run_id }}/${dataset}.html" >> /tmp/body
           done
       - name: Comment on PR
         uses: everpcpc/comment-on-pr-action@v1

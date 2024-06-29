@@ -126,14 +126,7 @@ impl CopyIntoTableInterpreter {
             let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
 
             let data_source_plan = stage_table
-                .read_plan_with_catalog(
-                    self.ctx.clone(),
-                    plan.catalog_info.catalog_name().to_string(),
-                    None,
-                    None,
-                    false,
-                    false,
-                )
+                .read_plan(self.ctx.clone(), None, None, false, false)
                 .await?;
 
             let mut name_mapping = BTreeMap::new();
@@ -156,7 +149,6 @@ impl CopyIntoTableInterpreter {
 
         let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
             plan_id: 0,
-            catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
@@ -297,7 +289,6 @@ impl CopyIntoTableInterpreter {
         Ok(())
     }
 
-    // things should be done when there is no files to be copied
     async fn on_no_files_to_copy(&self) -> Result<PipelineBuildResult> {
         // currently, there is only one thing that we care about:
         //
