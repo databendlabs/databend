@@ -786,9 +786,8 @@ dependencies = [
 
 [[package]]
 name = "async-recursion"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd55a5ba1179988837d24ab4c7cc8ed6efdeff578ede0416b4225a5fca35bd0"
+version = "1.1.1"
+source = "git+https://github.com/zhang2014/async-recursion.git?rev=a353334#a353334ceb408c80a802634ff0cfeeb7a50d0ef7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2589,12 +2588,10 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-query",
  "databend-query",
- "databend-sharing-endpoint",
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
  "opendal",
- "poem",
  "serde",
  "serde_json",
  "serfig",
@@ -2704,6 +2701,7 @@ dependencies = [
  "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
+ "recursive",
  "regex",
  "rspack-codespan-reporting",
  "serde",
@@ -2974,6 +2972,7 @@ dependencies = [
  "ordered-float 4.2.0",
  "pretty_assertions",
  "rand 0.8.5",
+ "recursive",
  "rmp-serde",
  "roaring",
  "rust_decimal",
@@ -3744,6 +3743,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "prqlc",
+ "recursive",
  "regex",
  "roaring",
  "serde",
@@ -3932,6 +3932,7 @@ dependencies = [
  "minitrace",
  "opendal",
  "ordered-float 4.2.0",
+ "recursive",
  "serde",
  "typetag",
  "volo-thrift",
@@ -4371,6 +4372,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-attach-table"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
+ "databend-common-base",
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-common-sql",
+]
+
+[[package]]
 name = "databend-enterprise-background-service"
 version = "0.1.0"
 dependencies = [
@@ -4444,6 +4457,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-enterprise-aggregating-index",
+ "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
@@ -4695,6 +4709,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-users",
  "databend-enterprise-aggregating-index",
+ "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
@@ -4750,6 +4765,7 @@ dependencies = [
  "pretty_assertions",
  "prost 0.12.3",
  "rand 0.8.5",
+ "recursive",
  "regex",
  "reqwest 0.12.4",
  "rmp-serde",
@@ -4778,32 +4794,6 @@ dependencies = [
  "walkdir",
  "wiremock 0.6.0",
  "xorf",
-]
-
-[[package]]
-name = "databend-sharing-endpoint"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "base64 0.22.0",
- "bytes",
- "chrono",
- "clap",
- "databend-common-base",
- "databend-common-config",
- "databend-common-exception",
- "databend-common-meta-app",
- "databend-common-storage",
- "databend-common-storages-share",
- "enumflags2",
- "http 1.1.0",
- "opendal",
- "poem",
- "serde",
- "serde_json",
- "serfig",
- "time",
- "uuid",
 ]
 
 [[package]]
@@ -12131,6 +12121,24 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "recursive"
+version = "0.1.1"
+source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+dependencies = [
+ "recursive-proc-macro-impl",
+ "stacker",
+]
+
+[[package]]
+name = "recursive-proc-macro-impl"
+version = "0.1.1"
+source = "git+https://github.com/zhang2014/recursive.git?rev=6af35a1#6af35a1e59e7050f86ee19fbd0a79535d016c87d"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]

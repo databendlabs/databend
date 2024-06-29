@@ -115,10 +115,12 @@ impl<'a> RecursiveOptimizer<'a> {
     }
 
     /// Run the optimizer on the given expression.
+    #[recursive::recursive]
     pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr)
     }
 
+    #[recursive::recursive]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
@@ -157,7 +159,7 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
-#[async_recursion]
+#[async_recursion(#[recursive::recursive])]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {

@@ -66,6 +66,7 @@ impl<'a> RelExpr<'a> {
         }
     }
 
+    #[recursive::recursive]
     pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
         match self {
             RelExpr::SExpr { expr } => {
@@ -100,6 +101,7 @@ impl<'a> RelExpr<'a> {
     }
 
     // Derive cardinality and statistics
+    #[recursive::recursive]
     pub fn derive_cardinality(&self) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
@@ -129,6 +131,7 @@ impl<'a> RelExpr<'a> {
         }
     }
 
+    #[recursive::recursive]
     pub fn derive_physical_prop(&self) -> Result<PhysicalProperty> {
         let plan = match self {
             RelExpr::SExpr { expr } => expr.plan(),

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod inner;
-mod outer_v0;
+mod handler;
 
-pub use inner::Config;
+pub use handler::get_attach_table_handler;
+pub use handler::AttachTableHandler;
+pub use handler::AttachTableHandlerWrapper;

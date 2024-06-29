@@ -52,7 +52,6 @@ pub struct CreateTablePlan {
     pub engine: Engine,
     pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
-    pub read_only_attach: bool,
     pub part_prefix: String,
     pub options: TableOptions,
     pub field_comments: Vec<String>,

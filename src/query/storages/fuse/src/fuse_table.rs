@@ -76,7 +76,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::warn;
@@ -133,7 +132,7 @@ impl FuseTable {
             DatabaseType::ShareDB(_) => false,
             DatabaseType::NormalDB => {
                 table_info.meta.storage_params.is_some()
-                    && Self::is_table_attached_read_only(&table_info.meta.options)
+                    && Self::is_table_attached(&table_info.meta.options)
             }
         };
 
@@ -177,9 +176,7 @@ impl FuseTable {
                     Some(sp) => {
                         let table_meta_options = &table_info.meta.options;
 
-                        let table_type = if Self::is_table_attached_read_only(table_meta_options) {
-                            FuseTableType::AttachedReadOnly
-                        } else if Self::is_table_attached(table_meta_options) {
+                        let table_type = if Self::is_table_attached(table_meta_options) {
                             FuseTableType::Attached
                         } else {
                             FuseTableType::External
@@ -381,9 +378,8 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
-                if options.get(OPT_KEY_TABLE_ATTACHED_READ_ONLY).is_some() {
-                    // if table is read-only attached, parse snapshot location from hint
-                    let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
+                if let Some(storage_prefix) = options.get(OPT_KEY_STORAGE_PREFIX) {
+                    // if table is attached, parse snapshot location from hint file
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
                         let hint_content = self.operator.read(&hint).await?.to_vec();
@@ -444,13 +440,6 @@ impl FuseTable {
     fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
         table_meta_options
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
-            .is_some()
-    }
-
-    // Check if table is read-only attached.
-    fn is_table_attached_read_only(table_meta_options: &BTreeMap<String, String>) -> bool {
-        table_meta_options
-            .get(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
             .is_some()
     }
 
@@ -749,7 +738,7 @@ impl Table for FuseTable {
         }
 
         let stats = match self.table_type {
-            FuseTableType::AttachedReadOnly => {
+            FuseTableType::Attached => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus

@@ -48,7 +48,6 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             // database id is required for FUSE

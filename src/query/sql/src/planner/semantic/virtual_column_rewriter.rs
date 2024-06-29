@@ -125,6 +125,7 @@ impl VirtualColumnRewriter {
     // Find the functions that reads the inner fields of variant columns, rewrite them as virtual columns.
     // Add the indices of the virtual columns to the Scan plan of the corresponding table
     // to read the virtual columns at the storage layer.
+    #[recursive::recursive]
     fn rewrite_virtual_column(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
 
