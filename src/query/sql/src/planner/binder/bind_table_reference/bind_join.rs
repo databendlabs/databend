@@ -232,10 +232,6 @@ impl Binder {
         {
             return Err(ErrorCode::SemanticError("Missing inequality condition!"));
         }
-        if join_type == JoinType::RightAsof {
-            join_type = JoinType::LeftAsof;
-            std::mem::swap(&mut left_child, &mut right_child);
-        }
         self.push_down_other_conditions(
             &join_type,
             &mut left_child,

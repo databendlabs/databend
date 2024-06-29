@@ -111,9 +111,9 @@ impl PhysicalPlanBuilder {
         }?;
         let left_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
-        let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
+        let left_required = required.1.union(&left_prop.used_columns).cloned().collect();
         let right_required = required
-            .1
+            .0
             .union(&right_prop.used_columns)
             .cloned()
             .collect();
