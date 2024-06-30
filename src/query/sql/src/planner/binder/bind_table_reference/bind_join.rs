@@ -575,12 +575,11 @@ impl Binder {
                     "cross join should not contain join conditions".to_string(),
                 ));
             }
-            JoinOperator::AsofJoin if join.condition == JoinCondition::None =>
-                {
-                    return Err(ErrorCode::SemanticError(
-                        "asof join should contain join conditions".to_string(),
-                    ));
-                }
+            JoinOperator::Asof if join.condition == JoinCondition::None => {
+                return Err(ErrorCode::SemanticError(
+                    "asof join should contain join conditions".to_string(),
+                ));
+            }
             _ => (),
         };
 
@@ -1024,9 +1023,9 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::RightSemi => JoinType::RightSemi,
         JoinOperator::LeftAnti => JoinType::LeftAnti,
         JoinOperator::RightAnti => JoinType::RightAnti,
-        JoinOperator::AsofJoin => JoinType::Asof,
-        JoinOperator::LeftAsofJoin => JoinType::LeftAsof,
-        JoinOperator::RightAsofJoin => JoinType::RightAsof,
+        JoinOperator::Asof => JoinType::Asof,
+        JoinOperator::LeftAsof => JoinType::LeftAsof,
+        JoinOperator::RightAsof => JoinType::RightAsof,
     }
 }
 
