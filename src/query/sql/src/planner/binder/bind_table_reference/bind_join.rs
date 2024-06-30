@@ -413,7 +413,7 @@ impl Binder {
                     "cross join should not contain join conditions".to_string(),
                 ));
             }
-            JoinOperator::AsofJoin if join.condition == JoinCondition::None => {
+            JoinOperator::Asof if join.condition == JoinCondition::None => {
                 return Err(ErrorCode::SemanticError(
                     "asof join should contain join conditions".to_string(),
                 ));
@@ -433,7 +433,7 @@ fn wrap_nullable_for_column(
     bind_context: &mut BindContext,
 ) {
     match join_type {
-        JoinOperator::LeftOuter => {
+        JoinOperator::LeftOuter | JoinOperator::LeftAsof => {
             for column in left_column_bindings {
                 bind_context.add_column_binding(column.clone());
             }
@@ -443,7 +443,7 @@ fn wrap_nullable_for_column(
                 bind_context.add_column_binding(nullable_column);
             }
         }
-        JoinOperator::RightOuter => {
+        JoinOperator::RightOuter | JoinOperator::RightAsof => {
             for column in left_column_bindings {
                 let mut nullable_column = column.clone();
                 nullable_column.data_type = Box::new(column.data_type.wrap_nullable());
@@ -911,9 +911,9 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::RightSemi => JoinType::RightSemi,
         JoinOperator::LeftAnti => JoinType::LeftAnti,
         JoinOperator::RightAnti => JoinType::RightAnti,
-        JoinOperator::AsofJoin => JoinType::Asof,
-        JoinOperator::LeftAsofJoin => JoinType::LeftAsof,
-        JoinOperator::RightAsofJoin => JoinType::RightAsof,
+        JoinOperator::Asof => JoinType::Asof,
+        JoinOperator::LeftAsof => JoinType::LeftAsof,
+        JoinOperator::RightAsof => JoinType::RightAsof,
     }
 }
 

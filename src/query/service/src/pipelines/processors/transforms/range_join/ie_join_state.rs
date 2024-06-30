@@ -393,15 +393,15 @@ impl RangeJoinState {
         let mut left_result_block =
             DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
         // For right join, wrap nullable for left block
-        if !right_match.is_empty() {
-            let validity = Bitmap::new_constant(true, indices.len());
-            let nullable_left_columns = left_result_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, indices.len(), &validity))
-                .collect::<Vec<_>>();
-            left_result_block = DataBlock::new(nullable_left_columns, indices.len());
-        }
+        // if !right_match.is_empty() {
+        //     let validity = Bitmap::new_constant(true, indices.len());
+        //     let nullable_left_columns = left_result_block
+        //         .columns()
+        //         .iter()
+        //         .map(|c| wrap_true_validity(c, indices.len(), &validity))
+        //         .collect::<Vec<_>>();
+        //     left_result_block = DataBlock::new(nullable_left_columns, indices.len());
+        // }
         indices.clear();
         for res in right_buffer.iter() {
             indices.push((0u32, *res as u32, 1usize));
@@ -415,15 +415,15 @@ impl RangeJoinState {
             indices.len(),
         );
         // For left join, wrap nullable for right block
-        if !left_match.is_empty() {
-            let validity = Bitmap::new_constant(true, indices.len());
-            let nullable_right_columns = right_result_block
-                .columns()
-                .iter()
-                .map(|c| wrap_true_validity(c, indices.len(), &validity))
-                .collect::<Vec<_>>();
-            right_result_block = DataBlock::new(nullable_right_columns, indices.len());
-        }
+        // if !left_match.is_empty() {
+        //     let validity = Bitmap::new_constant(true, indices.len());
+        //     let nullable_right_columns = right_result_block
+        //         .columns()
+        //         .iter()
+        //         .map(|c| wrap_true_validity(c, indices.len(), &validity))
+        //         .collect::<Vec<_>>();
+        //     right_result_block = DataBlock::new(nullable_right_columns, indices.len());
+        // }
         // Merge left_result_block and right_result_block
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
