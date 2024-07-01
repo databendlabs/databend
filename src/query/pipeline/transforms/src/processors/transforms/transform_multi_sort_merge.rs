@@ -159,8 +159,7 @@ fn create_processor(
         let sort_type = args.schema.field(args.sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE =>
-                    create::<SimpleRows<NumberType<NUM_TYPE>>>(args)?,
+                NumberDataType::NUM_TYPE => create::<SimpleRows<NumberType<NUM_TYPE>>>(args)?,
             }),
             DataType::Date => create::<SimpleRows<DateType>>(args)?,
             DataType::Timestamp => create::<SimpleRows<TimestampType>>(args)?,
