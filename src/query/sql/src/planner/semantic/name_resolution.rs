@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
-use databend_common_exception::ErrorCode;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
@@ -49,20 +48,6 @@ impl NameResolutionContext {
             (_, _, _) => (),
         };
         None
-    }
-
-    pub fn table_not_found_suggest_error(&self, table: &Identifier) -> Option<ErrorCode> {
-        let name = &table.name;
-        self.not_found_suggest(table).map(|suggest| {
-            ErrorCode::UnknownTable(match suggest {
-                NameResolutionSuggest::Quoted => {
-                    format!("Unknown table {table} (unquoted). Did you mean `{name}` (quoted)?",)
-                }
-                NameResolutionSuggest::Unqoted => {
-                    format!("Unknown table {table} (quoted). Did you mean {name} (unquoted)?",)
-                }
-            })
-        })
     }
 }
 

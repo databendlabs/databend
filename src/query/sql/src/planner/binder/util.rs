@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::Binder;
+use crate::NameResolutionContext;
+use crate::NameResolutionSuggest;
 
 /// Ident name can not contain ' or "
 /// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
@@ -85,5 +89,72 @@ impl Binder {
             }
         }
         Ok(())
+    }
+}
+
+pub struct FullyTableIdentifier<'a> {
+    name_resolution_ctx: &'a NameResolutionContext,
+    pub catalog: Identifier,
+    pub database: Identifier,
+    pub table: &'a Identifier,
+}
+
+impl FullyTableIdentifier<'_> {
+    pub fn new<'a>(
+        name_resolution_ctx: &'a NameResolutionContext,
+        catalog: Identifier,
+        database: Identifier,
+        table: &'a Identifier,
+    ) -> FullyTableIdentifier<'a> {
+        FullyTableIdentifier {
+            name_resolution_ctx,
+            catalog,
+            database,
+            table,
+        }
+    }
+
+    pub fn catalog_name(&self) -> String {
+        normalize_identifier(&self.catalog, self.name_resolution_ctx).name
+    }
+
+    pub fn database_name(&self) -> String {
+        normalize_identifier(&self.database, self.name_resolution_ctx).name
+    }
+
+    pub fn table_name(&self) -> String {
+        normalize_identifier(self.table, self.name_resolution_ctx).name
+    }
+
+    pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {
+        let Self {
+            catalog,
+            database,
+            table,
+            ..
+        } = self;
+        match err.code() {
+            ErrorCode::UNKNOWN_DATABASE => {
+                ErrorCode::UnknownTable(format!("Unknown database {catalog}.{database}."))
+            }
+            ErrorCode::UNKNOWN_TABLE => {
+                let table_name = &table.name;
+                let error_message = match self.name_resolution_ctx.not_found_suggest(self.table) {
+                    Some(NameResolutionSuggest::Quoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean `{table_name}` (quoted)?"
+                        )
+                    }
+                    Some(NameResolutionSuggest::Unqoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {table_name} (unquoted)?"
+                        )
+                    }
+                    None => format!("Unknown table {catalog}.{database}.{table}."),
+                };
+                ErrorCode::UnknownTable(error_message)
+            }
+            _ => err,
+        }
     }
 }
