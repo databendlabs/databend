@@ -4,51 +4,61 @@ drop table if exists t_lazy
 statement ok
 create table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
+statement ok
+insert into t_lazy select number + 1, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
+
+statement ok
+insert into t_lazy select (number + 1) * 1000, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
+
+statement ok
+insert into t_lazy select (number + 1) * 100000, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
+
 query T
 explain select * from t_lazy order by a desc limit 2
 ----
 RowFetch
 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── columns to fetch: [b, c, d, e]
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── Limit
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
     ├── limit: 2
     ├── offset: 0
-    ├── estimated rows: 0.00
+    ├── estimated rows: 2.00
     └── Sort
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── sort keys: [a DESC NULLS LAST]
-        ├── estimated rows: 0.00
+        ├── estimated rows: 300.00
         └── Exchange
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
             ├── exchange type: Merge
             └── Sort
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
                 ├── sort keys: [a DESC NULLS LAST]
-                ├── estimated rows: 0.00
+                ├── estimated rows: 300.00
                 └── TableScan
                     ├── table: default.default.t_lazy
                     ├── output columns: [a (#0), _row_id (#7)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
+                    ├── read rows: 200
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 3
+                    ├── partitions scanned: 2
+                    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
                     ├── push downs: [filters: [], limit: 2]
-                    └── estimated rows: 0.00
+                    └── estimated rows: 300.00
 
 query T
-explain select * from t_lazy where a > 1 limit 2
+explain select * from t_lazy where a < 100 limit 2
 ----
 RowFetch
 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── columns to fetch: [b, c, d, e]
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 └── Limit
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
     ├── limit: 2
     ├── offset: 0
-    ├── estimated rows: 0.00
+    ├── estimated rows: 1.00
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── exchange type: Merge
@@ -56,20 +66,21 @@ RowFetch
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
             ├── limit: 2
             ├── offset: 0
-            ├── estimated rows: 0.00
+            ├── estimated rows: 1.00
             └── Filter
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-                ├── filters: [t_lazy.a (#0) > 1]
-                ├── estimated rows: 0.00
+                ├── filters: [t_lazy.a (#0) < 100]
+                ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.default.t_lazy
                     ├── output columns: [a (#0), _row_id (#7)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-                    └── estimated rows: 0.00
+                    ├── read rows: 100
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 3
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 3 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: NONE]
+                    └── estimated rows: 300.00
 
 statement ok
 set lazy_read_threshold=0
@@ -81,36 +92,37 @@ Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── limit: 2
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── Sort
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── sort keys: [a DESC NULLS LAST]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 300.00
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
         ├── exchange type: Merge
         └── Sort
             ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
             ├── sort keys: [a DESC NULLS LAST]
-            ├── estimated rows: 0.00
+            ├── estimated rows: 300.00
             └── TableScan
                 ├── table: default.default.t_lazy
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-                ├── read rows: 0
-                ├── read size: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
+                ├── read rows: 200
+                ├── read size: 1.12 KiB
+                ├── partitions total: 3
+                ├── partitions scanned: 2
+                ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
                 ├── push downs: [filters: [], limit: 2]
-                └── estimated rows: 0.00
+                └── estimated rows: 300.00
 
 query T
-explain select * from t_lazy where a > 1 limit 2;
+explain select * from t_lazy where a < 100 limit 2;
 ----
 Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── limit: 2
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 └── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── exchange type: Merge
@@ -118,20 +130,21 @@ Limit
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
         ├── limit: 2
         ├── offset: 0
-        ├── estimated rows: 0.00
+        ├── estimated rows: 1.00
         └── Filter
             ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-            ├── filters: [t_lazy.a (#0) > 1]
-            ├── estimated rows: 0.00
+            ├── filters: [t_lazy.a (#0) < 100]
+            ├── estimated rows: 1.00
             └── TableScan
                 ├── table: default.default.t_lazy
                 ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-                ├── read rows: 0
-                ├── read size: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-                └── estimated rows: 0.00
+                ├── read rows: 100
+                ├── read size: < 1 KiB
+                ├── partitions total: 3
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 3 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [t_lazy.a (#0) < 100], limit: NONE]
+                └── estimated rows: 300.00
 
 query T
 explain select * from t_lazy where true limit 2;
@@ -140,7 +153,7 @@ Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
 ├── limit: 2
 ├── offset: 0
-├── estimated rows: 0.00
+├── estimated rows: 2.00
 └── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── exchange type: Merge
@@ -148,16 +161,17 @@ Limit
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
         ├── limit: 2
         ├── offset: 0
-        ├── estimated rows: 0.00
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t_lazy
             ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
+            ├── read rows: 100
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1>]
             ├── push downs: [filters: [], limit: 2]
-            └── estimated rows: 0.00
+            └── estimated rows: 300.00
 
 
 statement ok
