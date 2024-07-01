@@ -35,12 +35,14 @@ use super::quota_api::QuotaApi;
 use crate::serde::check_and_upgrade_to_pb;
 use crate::serde::Quota;
 
-pub struct QuotaMgr {
+pub struct QuotaMgr<const W: bool = false> {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     ident: TenantQuotaIdent,
 }
 
-impl QuotaMgr {
+impl<const W: bool> QuotaMgr<W> {
+    const WRITE_PB: bool = W;
+
     pub fn create(kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>, tenant: &Tenant) -> Self {
         QuotaMgr {
             kv_api,
@@ -53,10 +55,8 @@ impl QuotaMgr {
     }
 }
 
-const WRITE_PB: bool = false;
-
 #[async_trait::async_trait]
-impl QuotaApi for QuotaMgr {
+impl<const W: bool> QuotaApi for QuotaMgr<W> {
     #[async_backtrace::framed]
     async fn get_quota(&self, seq: MatchSeq) -> Result<SeqV<TenantQuota>> {
         let res = self.kv_api.get_kv(&self.key()).await?;
@@ -65,9 +65,10 @@ impl QuotaApi for QuotaMgr {
             Some(seq_value) => match seq.match_seq(&seq_value) {
                 Err(_) => Err(ErrorCode::TenantQuotaUnknown("Tenant does not exist.")),
                 Ok(_) => {
-                    let mut quota = if WRITE_PB {
+                    let mut quota = if Self::WRITE_PB {
                         Quota::new(func_name!())
                     } else {
+                        // Do not serialize to protobuf format
                         Quota::new_limit(func_name!(), 0)
                     };
 
@@ -88,7 +89,7 @@ impl QuotaApi for QuotaMgr {
 
     #[async_backtrace::framed]
     async fn set_quota(&self, quota: &TenantQuota, seq: MatchSeq) -> Result<u64> {
-        if WRITE_PB {
+        if Self::WRITE_PB {
             let res = self
                 .kv_api
                 .upsert_pb(&UpsertPB::update(self.ident.clone(), quota.clone()).with(seq))
