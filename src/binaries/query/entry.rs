@@ -288,8 +288,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         conf.query
             .idm
             .users
-            .keys()
-            .map(|name| name.to_string())
+            .iter()
+            .map(|config| config.name.clone())
             .collect::<Vec<_>>()
             .join(", ")
     );

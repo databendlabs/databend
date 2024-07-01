@@ -31,7 +31,7 @@ mod visibility_checker;
 
 pub mod connection;
 pub mod file_format;
-pub mod idm_config;
+pub mod idm;
 pub mod role_cache_mgr;
 pub mod role_util;
 

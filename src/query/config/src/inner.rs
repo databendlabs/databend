@@ -31,11 +31,11 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
-use databend_common_users::idm_config::IDMConfig;
 
 use super::config::Commands;
 use super::config::Config;
 use crate::background_config::InnerBackgroundConfig;
+use crate::IDMConfig;
 
 /// Inner config for query.
 ///
@@ -608,6 +608,7 @@ pub enum DiskCacheKeyReloadPolicy {
     // but cache capacity will not be checked
     Fuzzy,
 }
+
 impl Default for DiskCacheKeyReloadPolicy {
     fn default() -> Self {
         Self::Reset

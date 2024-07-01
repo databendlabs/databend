@@ -772,7 +772,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         }
                     }
                 }
@@ -856,7 +856,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for aggregate function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -917,7 +917,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for scalar function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -1828,13 +1828,13 @@ impl<'a> TypeChecker<'a> {
                 "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
                 func_name, params.len()
             ))
-            .set_span(span));
+                .set_span(span));
         } else if func_name == "array_reduce" && params.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
                 func_name, params.len()
             ))
-            .set_span(span));
+                .set_span(span));
         }
 
         if args.len() != 1 {
@@ -1882,7 +1882,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
                 )
-                .set_span(span));
+                    .set_span(span));
             }
         } else if func_name == "array_reduce" {
             // transform arg type
@@ -2047,7 +2047,7 @@ impl<'a> TypeChecker<'a> {
                         "invalid arguments for search function, field must be a column or constant string, but got {}",
                         constant_expr.value
                     ))
-                    .set_span(constant_expr.span));
+                        .set_span(constant_expr.span));
                 };
 
                 // fields are separated by commas and boost is separated by ^
@@ -2060,7 +2060,7 @@ impl<'a> TypeChecker<'a> {
                             "invalid arguments for search function, field string must have only one boost, but got {}",
                             constant_field
                         ))
-                        .set_span(constant_expr.span));
+                            .set_span(constant_expr.span));
                     }
                     let column_expr = Expr::ColumnRef {
                         span: constant_expr.span,
@@ -2089,7 +2089,7 @@ impl<'a> TypeChecker<'a> {
                                     "invalid arguments for search function, boost must be a float value, but got {}",
                                     field_boosts[1]
                                 ))
-                                .set_span(constant_expr.span));
+                                    .set_span(constant_expr.span));
                             }
                         }
                     } else {
@@ -2103,7 +2103,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column or constant string".to_string(),
                 )
-                .set_span(span));
+                    .set_span(span));
             }
         };
 
@@ -2113,14 +2113,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
 
         // match function didn't support query syntax,
@@ -2176,14 +2176,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
 
         let field_strs: Vec<&str> = query_text.split(' ').collect();
@@ -3275,9 +3275,9 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
-        let udf = databend_common_base::runtime::block_on(
-            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name),
-        )?;
+        let udf = databend_common_base::runtime::block_on({
+            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name)
+        })?;
 
         let Some(udf) = udf else {
             return Ok(None);

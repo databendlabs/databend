@@ -31,6 +31,7 @@ mod background_config;
 /// - `From<inner::InnerConfig> for config::Config`
 mod config;
 mod global;
+mod idm;
 mod inner;
 mod mask;
 mod obsolete;
@@ -42,6 +43,7 @@ pub use config::Config;
 pub use config::QueryConfig;
 pub use config::StorageConfig;
 pub use global::GlobalConfig;
+pub use idm::*;
 pub use inner::CacheConfig;
 pub use inner::CacheStorageTypeConfig as CacheStorageTypeInnerConfig;
 pub use inner::CatalogConfig;

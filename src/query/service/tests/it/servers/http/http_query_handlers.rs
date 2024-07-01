@@ -21,9 +21,10 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
@@ -1616,12 +1617,16 @@ async fn test_auth_configured_user() -> Result<()> {
     let hash_method = PasswordHashMethod::DoubleSha1;
     let hash_value = hash_method.hash(pass_word.as_bytes());
 
-    let auth_info = AuthInfo::Password {
-        hash_value,
-        hash_method,
+    let user_config = UserConfig {
+        name: user_name.to_string(),
+        auth: UserAuthConfig {
+            auth_type: "DOUBLE_SHA1_PASSWORD_STR".to_string(),
+            auth_string: Some(hex::encode(hash_value)),
+        },
     };
+
     let config = ConfigBuilder::create()
-        .add_user(user_name, auth_info)
+        .add_user(user_name, user_config)
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
@@ -1653,7 +1658,7 @@ async fn test_txn_error() -> Result<()> {
     {
         let mut session = session.clone();
         session.last_server_info = None;
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1671,7 +1676,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.id = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1686,7 +1691,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.start_time = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1712,7 +1717,7 @@ async fn test_txn_timeout() -> Result<()> {
 
     let session = session.clone();
     let last_query_id = session.last_query_ids.first().unwrap().to_string();
-    let json = serde_json::json! ({
+    let json = serde_json::json!({
         "sql": "select 1",
         "session": session,
         "pagination": {"wait_time_secs": wait_time_secs}

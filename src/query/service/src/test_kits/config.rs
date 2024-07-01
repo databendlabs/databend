@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use databend_common_base::base::GlobalUniqName;
+use databend_common_config::IDMConfig;
 use databend_common_config::InnerConfig;
-use databend_common_meta_app::principal::AuthInfo;
+use databend_common_config::UdfConfig;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_users::idm_config::IDMConfig;
 use tempfile::TempDir;
 
 pub struct ConfigBuilder {
@@ -32,10 +32,27 @@ impl ConfigBuilder {
         let mut conf = InnerConfig::default();
         conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
+
         // add idm users for test
-        let mut users = HashMap::new();
-        users.insert("root".to_string(), AuthInfo::None);
-        conf.query.idm = IDMConfig { users };
+        let users = vec![UserConfig {
+            name: "test".to_string(),
+            auth: UserAuthConfig {
+                auth_type: "NoPassword".to_string(),
+                auth_string: None,
+            },
+        }];
+
+        // add idm udfs for test
+        let udfs = vec![UdfConfig {
+            name: "test_builtin_ping".to_string(),
+            definition: "CREATE OR REPLACE FUNCTION test_builtin_ping (STRING)
+    RETURNS STRING
+    LANGUAGE python
+HANDLER = 'ping'
+ADDRESS = 'https://databend.com';"
+                .to_string(),
+        }];
+        conf.query.idm = IDMConfig { users, udfs };
 
         // set node_id to a unique value
         conf.query.node_id = GlobalUniqName::unique();
@@ -90,10 +107,12 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn add_user(mut self, user_name: &str, auth_info: AuthInfo) -> ConfigBuilder {
-        let mut users = HashMap::new();
-        users.insert(user_name.to_string(), auth_info);
-        self.conf.query.idm = IDMConfig { users };
+    pub fn add_user(mut self, _user_name: &str, user: UserConfig) -> ConfigBuilder {
+        let users = vec![user];
+        self.conf.query.idm = IDMConfig {
+            users,
+            udfs: vec![],
+        };
         self
     }
 

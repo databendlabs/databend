@@ -14,9 +14,23 @@
 
 use std::collections::HashMap;
 
-use databend_common_meta_app::principal::AuthInfo;
+use databend_common_config::UdfConfig;
+use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserDefinedFunction;
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct IDMConfig {
-    pub users: HashMap<String, AuthInfo>,
+pub struct BuiltinUdfs {
+    udf_configs: Vec<UdfConfig>,
+}
+
+impl BuiltinUdfs {
+    pub fn create(udf_configs: Vec<UdfConfig>) -> BuiltinUdfs {
+        BuiltinUdfs { udf_configs }
+    }
+
+    pub fn to_meta_udfs(&self) -> Result<HashMap<String, UserDefinedFunction>> {
+        for _udf_config in self.udf_configs.iter() {}
+        // TODO: udf config to meta udf convert
+        // parse the udf definition
+        Ok(HashMap::new())
+    }
 }

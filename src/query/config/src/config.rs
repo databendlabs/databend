@@ -18,7 +18,6 @@ use std::env;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::str::FromStr;
 
 use clap::ArgAction;
 use clap::Args;
@@ -28,8 +27,6 @@ use clap::ValueEnum;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
-use databend_common_meta_app::principal::AuthType;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
 use databend_common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
@@ -55,7 +52,6 @@ use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
-use databend_common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -72,6 +68,9 @@ use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
+use crate::idm::IDMConfig;
+use crate::idm::UdfConfig;
+use crate::idm::UserConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -88,7 +87,7 @@ const CATALOG_HIVE: &str = "hive";
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = &**DATABEND_COMMIT_VERSION, author)]
+#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
@@ -1407,7 +1406,12 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "false")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        value_parser = clap::value_parser!(bool),
+        default_value = "false"
+    )]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1491,7 +1495,12 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "true")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        value_parser = clap::value_parser!(bool),
+        default_value = "true"
+    )]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, value_name = "VALUE", default_value = "5000")]
@@ -1522,6 +1531,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     users: Vec<UserConfig>,
+
+    #[clap(skip)]
+    udfs: Vec<UdfConfig>,
 
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub share_endpoint_address: String,
@@ -1720,8 +1732,9 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
-            idm: InnerIDMConfig {
-                users: users_to_inner(self.users)?,
+            idm: IDMConfig {
+                users: self.users,
+                udfs: self.udfs,
             },
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
@@ -1805,7 +1818,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-            users: users_from_inner(inner.idm.users),
+            users: inner.idm.users,
+            udfs: inner.idm.udfs,
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
@@ -2013,7 +2027,9 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    #[clap(long = "log-file-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-file-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub file_on: bool,
 
@@ -2090,7 +2106,9 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    #[clap(long = "log-stderr-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-stderr-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
@@ -2143,7 +2161,9 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct OTLPLogConfig {
-    #[clap(long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-otlp-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub otlp_on: bool,
 
@@ -2188,7 +2208,9 @@ impl From<InnerOTLPLogConfig> for OTLPLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-query-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_query_on: bool,
 
@@ -2233,7 +2255,9 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct ProfileLogConfig {
-    #[clap(long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-profile-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_profile_on: bool,
 
@@ -2281,7 +2305,9 @@ impl From<InnerProfileLogConfig> for ProfileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StructLogConfig {
-    #[clap(long = "log-structlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-structlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub log_structlog_on: bool,
 
@@ -2320,7 +2346,9 @@ impl From<InnerStructLogConfig> for StructLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct TracingConfig {
-    #[clap(long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-tracing-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub tracing_on: bool,
 
@@ -2579,90 +2607,6 @@ impl Debug for MetaConfig {
                 &self.rpc_tls_meta_service_domain_name,
             )
             .finish()
-    }
-}
-
-fn users_from_inner(inner: HashMap<String, AuthInfo>) -> Vec<UserConfig> {
-    inner
-        .into_iter()
-        .map(|(name, auth)| UserConfig {
-            name,
-            auth: auth.into(),
-        })
-        .collect()
-}
-
-fn users_to_inner(outer: Vec<UserConfig>) -> Result<HashMap<String, AuthInfo>> {
-    let mut inner = HashMap::new();
-    for c in outer.into_iter() {
-        inner.insert(c.name.clone(), c.auth.try_into()?);
-    }
-    Ok(inner)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserConfig {
-    pub name: String,
-    #[serde(flatten)]
-    pub auth: UserAuthConfig,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserAuthConfig {
-    auth_type: String,
-    auth_string: Option<String>,
-}
-
-fn check_no_auth_string(auth_string: Option<String>, auth_info: AuthInfo) -> Result<AuthInfo> {
-    match auth_string {
-        Some(s) if !s.is_empty() => Err(ErrorCode::InvalidConfig(format!(
-            "should not set auth_string for auth_type {}",
-            auth_info.get_type().to_str()
-        ))),
-        _ => Ok(auth_info),
-    }
-}
-
-impl TryInto<AuthInfo> for UserAuthConfig {
-    type Error = ErrorCode;
-
-    fn try_into(self) -> Result<AuthInfo> {
-        let auth_type = AuthType::from_str(&self.auth_type)?;
-        match auth_type {
-            AuthType::NoPassword => check_no_auth_string(self.auth_string, AuthInfo::None),
-            AuthType::JWT => check_no_auth_string(self.auth_string, AuthInfo::JWT),
-            AuthType::Sha256Password | AuthType::DoubleSha1Password => {
-                let password_type = auth_type.get_password_type().expect("must success");
-                match self.auth_string {
-                    None => Err(ErrorCode::InvalidConfig("must set auth_string")),
-                    Some(s) => {
-                        let p = hex::decode(s).map_err(|e| {
-                            ErrorCode::InvalidConfig(format!("password is not hex: {e:?}"))
-                        })?;
-                        Ok(AuthInfo::Password {
-                            hash_value: p,
-                            hash_method: password_type,
-                        })
-                    }
-                }
-            }
-        }
-    }
-}
-
-impl From<AuthInfo> for UserAuthConfig {
-    fn from(inner: AuthInfo) -> Self {
-        let auth_type = inner.get_type().to_str().to_owned();
-        let auth_string = inner.get_auth_string();
-        let auth_string = if auth_string.is_empty() {
-            None
-        } else {
-            Some(hex::encode(auth_string))
-        };
-        UserAuthConfig {
-            auth_type,
-            auth_string,
-        }
     }
 }
 

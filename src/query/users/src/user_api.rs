@@ -35,6 +35,7 @@ use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_kvapi::kvapi;
@@ -43,20 +44,20 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 
-use crate::idm_config::IDMConfig;
+use crate::idm::IDM;
 use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-    idm_config: IDMConfig,
+    idm_config: IDM,
 }
 
 impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
-        idm_config: IDMConfig,
+        idm_config: IDM,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
@@ -73,7 +74,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
-        idm_config: IDMConfig,
+        idm_config: IDM,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
@@ -106,7 +107,7 @@ impl UserApiProvider {
         conf: RpcClientConf,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, IDMConfig::default(), tenant).await
+        Self::try_create(conf, IDM::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -165,5 +166,13 @@ impl UserApiProvider {
 
     pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
         self.idm_config.users.clone()
+    }
+
+    pub fn get_configured_udf(&self, udf_name: &str) -> Option<UserDefinedFunction> {
+        self.idm_config.udfs.get(udf_name).cloned()
+    }
+
+    pub fn get_configured_udfs(&self) -> HashMap<String, UserDefinedFunction> {
+        self.idm_config.udfs.clone()
     }
 }
