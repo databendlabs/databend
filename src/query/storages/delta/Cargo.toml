@@ -25,7 +25,8 @@ flagset = "0.4"
 futures = "0.3"
 match-template = "0.0.1"
 minitrace = { workspace = true }
-object_store = "0.9"
+object_store = "0.10"
+object_store_opendal = "0.44"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 parquet = { workspace = true }

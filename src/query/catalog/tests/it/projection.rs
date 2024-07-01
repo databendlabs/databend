@@ -20,7 +20,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use parquet_rs::arrow::arrow_to_parquet_schema;
+use parquet::arrow::arrow_to_parquet_schema;
 
 #[test]
 fn test_to_projection_mask() -> Result<()> {

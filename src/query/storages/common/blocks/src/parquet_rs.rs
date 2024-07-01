@@ -19,11 +19,11 @@ use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::table::TableCompression;
-use parquet_rs::arrow::ArrowWriter;
-use parquet_rs::basic::Encoding;
-use parquet_rs::file::properties::EnabledStatistics;
-use parquet_rs::file::properties::WriterProperties;
-use parquet_rs::format::FileMetaData;
+use parquet::arrow::ArrowWriter;
+use parquet::basic::Encoding;
+use parquet::file::properties::EnabledStatistics;
+use parquet::file::properties::WriterProperties;
+use parquet::format::FileMetaData;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(

@@ -204,17 +204,17 @@ databend-storages-common-txn = { path = "src/query/storages/common/txn" }
 # Crates.io dependencies
 anyerror = { version = "=0.1.10" }
 anyhow = { version = "1.0.65" }
-arrow = { version = "51" }
-arrow-array = { version = "51" }
-arrow-buffer = { version = "51" }
-arrow-cast = { version = "51", features = ["prettyprint"] }
-arrow-data = { version = "51" }
-arrow-flight = { version = "51", features = ["flight-sql-experimental", "tls"] }
+arrow = { version = "52" }
+arrow-array = { version = "52" }
+arrow-buffer = { version = "52" }
+arrow-cast = { version = "52", features = ["prettyprint"] }
+arrow-data = { version = "52" }
+arrow-flight = { version = "52", features = ["flight-sql-experimental", "tls"] }
 arrow-format = { version = "0.8.1", features = ["flight-data", "flight-service", "ipc"] }
-arrow-ipc = { version = "51" }
-arrow-ord = { version = "51" }
-arrow-schema = { version = "51", features = ["serde"] }
-arrow-select = { version = "51" }
+arrow-ipc = { version = "52" }
+arrow-ord = { version = "52" }
+arrow-schema = { version = "52", features = ["serde"] }
+arrow-select = { version = "52" }
 arrow-udf-js = "0.3.1"
 arrow-udf-python = "0.2.1"
 arrow-udf-wasm = "0.2.2"
@@ -233,13 +233,13 @@ clap = { version = "4.4.2", features = ["derive"] }
 criterion = "0.5"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
-deltalake = "0.17"
+deltalake = "0.18"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 ethnum = { version = "1.5.0" }
 feature-set = { version = "0.1.1" }
-flatbuffers = "23" # Must use the same version with arrow-ipc
+flatbuffers = "24" # Must use the same version with arrow-ipc
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
 futures-util = "0.3.24"
@@ -283,8 +283,8 @@ orc-rust = "0.3"
 ordered-float = { version = "4.1.0", default-features = false }
 ordq = "0.2.0"
 parking_lot = "0.12.1"
-parquet = { version = "51", features = ["async"] }
-parquet_rs = { package = "parquet", version = "51" }
+paste = "1.0.15"
+parquet = { version = "52", features = ["async"] }
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
@@ -393,11 +393,11 @@ arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
-deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
+deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
+orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "51733de" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
