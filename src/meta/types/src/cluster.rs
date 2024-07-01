@@ -75,6 +75,7 @@ impl fmt::Display for Node {
 #[serde(default)]
 pub struct NodeInfo {
     pub id: String,
+    pub secret: String,
     pub cpu_nums: u64,
     pub version: u32,
     pub flight_address: String,
@@ -84,12 +85,14 @@ pub struct NodeInfo {
 impl NodeInfo {
     pub fn create(
         id: String,
+        secret: String,
         cpu_nums: u64,
         flight_address: String,
         binary_version: String,
     ) -> NodeInfo {
         NodeInfo {
             id,
+            secret,
             cpu_nums,
             version: 0,
             flight_address,

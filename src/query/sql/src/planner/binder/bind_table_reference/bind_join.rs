@@ -44,6 +44,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
@@ -119,8 +120,7 @@ impl Binder {
     }
 
     // TODO: unify this function with bind_join
-    #[async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_merge_into_join(
         &mut self,
         bind_context: &mut BindContext,
@@ -277,8 +277,11 @@ impl Binder {
                 )
             };
         let logical_join = Join {
-            left_conditions,
-            right_conditions,
+            equi_conditions: JoinEquiCondition::new_conditions(
+                left_conditions,
+                right_conditions,
+                is_null_equal,
+            ),
             non_equi_conditions,
             join_type,
             marker_index: None,
@@ -287,7 +290,6 @@ impl Binder {
             is_lateral,
             single_to_inner: None,
             build_side_cache_info,
-            is_null_equal,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),

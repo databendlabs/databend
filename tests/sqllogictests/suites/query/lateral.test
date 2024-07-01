@@ -260,5 +260,65 @@ a c r2021 NULL
 a c r2022 NULL
 a c r2023 2023.1100000000
 
+# futher nulls
+statement ok
+insert into rates values ('a', 'd', 400, null, null, null);
+
+statement ok
+insert into rates values ('a', 'e', null, null, null, null);
+
+query T
+WITH source AS(
+  SELECT
+    origin,
+    dest,
+    distance,
+    "r2023",
+    "r2022",
+    "r2021"
+  FROM
+    "rates"
+)
+SELECT
+  r.origin,
+  r.dest,
+  r.rates,
+  r.values
+FROM
+  (
+    SELECT
+      source.origin,
+      source.dest,
+      v.rates,
+      v.values
+    FROM
+      source
+      JOIN LATERAL (
+        VALUES
+          (source."distance", 'distance'),
+          (source."r2023", 'r2023'),
+          (source."r2022", 'r2022'),
+          (source."r2021", 'r2021')
+      ) AS v ("values", "rates") ON TRUE
+  ) AS r order by r.origin, r.dest, r.rates, r.values;
+  ----
+----
+a b distance 500.0000000000
+a b r2021 2021.3400000000
+a b r2022 2022.2300000000
+a b r2023 2023.1200000000
+a c distance 500.0000000000
+a c r2021 NULL
+a c r2022 NULL
+a c r2023 2023.1100000000
+a d distance 400.0000000000
+a d r2021 NULL
+a d r2022 NULL
+a d r2023 NULL
+a e distance NULL
+a e r2021 NULL
+a e r2022 NULL
+a e r2023 NULL
+
 statement ok
 drop database test_lateral

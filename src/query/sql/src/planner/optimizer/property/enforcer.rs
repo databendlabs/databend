@@ -68,6 +68,7 @@ impl Enforcer for DistributionEnforcer {
 }
 
 /// Require and enforce physical property from a physical `SExpr`
+#[recursive::recursive]
 pub fn require_property(
     ctx: Arc<dyn TableContext>,
     required: &RequiredProperty,

@@ -1676,6 +1676,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
             node_id: "".to_string(),
+            node_secret: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,

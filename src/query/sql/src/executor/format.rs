@@ -202,6 +202,7 @@ impl PhysicalPlan {
     }
 }
 
+#[recursive::recursive]
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &Metadata,

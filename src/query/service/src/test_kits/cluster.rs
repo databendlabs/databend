@@ -36,6 +36,7 @@ impl ClusterDescriptor {
         let mut new_nodes = self.cluster_nodes_list.clone();
         new_nodes.push(Arc::new(NodeInfo::create(
             id.into(),
+            "".to_string(),
             0,
             addr.into(),
             DATABEND_COMMIT_VERSION.to_string(),

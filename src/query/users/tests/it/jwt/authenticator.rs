@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
+use databend_common_users::JwkKeyStore;
 use databend_common_users::JwtAuthenticator;
+use databend_common_users::PubKey;
 use jwt_simple::prelude::*;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -65,5 +72,30 @@ async fn test_parse_non_custom_claim() -> Result<()> {
 
     let res = auth.parse_jwt_claims(token1.as_str()).await?;
     assert_eq!(res.custom.role, None);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_jwk_key_store_retry_on_key_not_found() -> Result<()> {
+    let func_calls = Arc::new(AtomicUsize::new(0));
+    let func_calls_cloned = func_calls.clone();
+
+    let mock_load_keys = Arc::new(move || -> HashMap<String, PubKey> {
+        let mut keys_map = HashMap::new();
+        keys_map.insert(
+            "key1".to_string(),
+            PubKey::RSA256(RS256KeyPair::generate(2048).unwrap().public_key()),
+        );
+        func_calls_cloned.fetch_add(1, Ordering::SeqCst);
+        keys_map
+    });
+    let store = JwkKeyStore::new("".to_string()).with_load_keys_func(mock_load_keys);
+
+    let r = store.get_key(Some("key2".to_string())).await;
+    assert_eq!(
+        r.unwrap_err().message(),
+        "key id key2 not found in jwk store"
+    );
+    assert_eq!(func_calls.load(Ordering::SeqCst), 2);
     Ok(())
 }

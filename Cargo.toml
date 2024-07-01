@@ -34,7 +34,6 @@ members = [
     "src/query/config",
     "src/query/catalog",
     "src/query/sharing",
-    "src/query/sharing_endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -73,6 +72,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee_features/attach_table",
     "src/query/ee_features/vacuum_handler",
     "src/query/ee_features/background_service",
     "src/query/ee_features/aggregating_index",
@@ -177,8 +177,10 @@ databend-common-tracing = { path = "src/common/tracing" }
 databend-common-users = { path = "src/query/users" }
 databend-common-vector = { path = "src/common/vector" }
 databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregating_index" }
+databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
+databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
@@ -189,7 +191,6 @@ databend-enterprise-vacuum-handler = { path = "src/query/ee_features/vacuum_hand
 databend-enterprise-virtual-column = { path = "src/query/ee_features/virtual_column" }
 databend-meta = { path = "src/meta/service" }
 databend-query = { path = "src/query/service" }
-databend-sharing-endpoint = { path = "src/query/sharing_endpoint" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }
@@ -390,11 +391,13 @@ arrow-udf-js = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "df
 arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
+async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "81593e9" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", branch = "pub" }
+recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

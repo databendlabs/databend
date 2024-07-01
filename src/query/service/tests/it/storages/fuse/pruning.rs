@@ -97,7 +97,6 @@ async fn test_block_pruner() -> Result<()> {
         engine: Engine::Fuse,
         engine_options: Default::default(),
         storage_params: None,
-        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),
