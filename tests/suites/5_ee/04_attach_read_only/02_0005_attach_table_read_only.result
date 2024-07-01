@@ -1,0 +1,62 @@
+sum of base table
+4950
+sum of attach_read_only table
+4950
+attach table should reflects the mutation of table being attached
+content of base table after deletion
+0
+content of test attach only table after deletion
+0
+count() of base table after deletion
+1
+count() of test attach only table
+1
+alter table modify column
+expects column number as varchar
+number	VARCHAR	YES	NULL	
+expects one row
+0
+alter table add column
+expects 3 columns: number, c1, c2
+number	VARCHAR	YES	NULL	
+c1	VARCHAR	NO	'c1'	
+c2	VARCHAR	NO	'c2'	
+expects one row, 3 columns
+0	c1	c2
+alter table drop column
+expects new columns: number, c2
+number	VARCHAR	YES	NULL	
+c2	VARCHAR	NO	'c2'	
+expects one row, 2 columns
+0	c2
+delete not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+update not allowed
+Error: APIError: ResponseError with 1006: Unable to get field named "a". Valid fields: ["number", "c2"]
+truncate not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+alter table column not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+alter table set options not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+alter table flashback not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+alter table recluster not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+analyze table not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+optimize table
+optimize table compact not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+optimize table compact segment not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+optimize table purge not allowed
+Error: APIError: ResponseError with 3905: Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+drop table ALL not allowed
+Error: APIError: ResponseError with 3905:  drop table ALL is not allowed for read only table, please consider remove the option ALL
+Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+drop table IS allowed
+undrop table should work
+0	c2
+show create attach table
+attach_read_only	ATTACH TABLE `default`.`attach_read_only` 'sPLACE_HOLDER://testbucket/admin/PLACE_HOLDER/PLACE_HOLDER/' CONNECTION = ( access_key_id = '******min', endpoint_url = '******PLACE_HOLDER', secret_access_key = '******min' )

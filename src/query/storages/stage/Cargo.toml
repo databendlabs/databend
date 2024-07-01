@@ -24,6 +24,7 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-formats = { workspace = true }
+databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }

@@ -21,6 +21,7 @@ use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::input_formats::InputContext;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use opendal::Operator;
 
 use super::limit_file_size_processor::LimitFileSizeProcessor;
@@ -72,19 +73,20 @@ pub(crate) fn append_data_to_row_based_files(
         .compression();
     let prefix = output_format.serialize_prefix()?;
 
-    pipeline.add_transform(|input, output| {
+    pipeline.try_add_transformer(|| {
         let mut options_ext =
             FileFormatOptionsExt::create_from_settings(&ctx.get_settings(), false)?;
         let output_format = options_ext.get_output_format(
             table_info.schema(),
             table_info.stage_info.file_format_params.clone(),
         )?;
-        SerializeProcessor::try_create(ctx.clone(), input, output, output_format)
+        Ok(SerializeProcessor::new(ctx.clone(), output_format))
     })?;
     pipeline.try_resize(1)?;
     pipeline.add_transform(|input, output| {
         LimitFileSizeProcessor::try_create(input, output, max_file_size)
     })?;
+
     if max_file_size != usize::MAX {
         pipeline.try_resize(max_threads)?;
     }

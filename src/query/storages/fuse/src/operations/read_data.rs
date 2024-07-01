@@ -24,8 +24,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 
@@ -124,16 +124,9 @@ impl FuseTable {
             let query_ctx = ctx.clone();
             let func_ctx = query_ctx.get_function_context()?;
 
-            pipeline.add_transform(|input, output| {
-                let transform = CompoundBlockOperator::create(
-                    input,
-                    output,
-                    num_input_columns,
-                    func_ctx.clone(),
-                    ops.clone(),
-                );
-                Ok(ProcessorPtr::create(transform))
-            })?;
+            pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(ops.clone(), func_ctx.clone(), num_input_columns)
+            });
         }
 
         Ok(())

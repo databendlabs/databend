@@ -84,16 +84,14 @@ impl Dataframe {
             let catalog = CATALOG_DEFAULT;
             let database = "system";
             let tenant = query_ctx.get_tenant();
-            let table_meta: Arc<dyn Table> = binder
-                .resolve_data_source(
-                    tenant.tenant_name(),
-                    catalog,
-                    database,
-                    "one",
-                    None,
-                    query_ctx.clone().get_abort_checker(),
-                )
-                .await?;
+            let table_meta: Arc<dyn Table> = binder.resolve_data_source(
+                tenant.tenant_name(),
+                catalog,
+                database,
+                "one",
+                None,
+                query_ctx.clone().get_abort_checker(),
+            )?;
 
             let table_index = metadata.write().add_table(
                 CATALOG_DEFAULT.to_owned(),
@@ -106,11 +104,9 @@ impl Dataframe {
                 false,
             );
 
-            binder
-                .bind_base_table(&bind_context, database, table_index, None)
-                .await
+            binder.bind_base_table(&bind_context, database, table_index, None)
         } else {
-            binder.bind_table_reference(&mut bind_context, &table).await
+            binder.bind_table_reference(&mut bind_context, &table)
         }?;
 
         Ok(Dataframe {
@@ -170,10 +166,9 @@ impl Dataframe {
     }
 
     pub async fn filter(mut self, expr: Expr) -> Result<Self> {
-        let (s_expr, _) = self
-            .binder
-            .bind_where(&mut self.bind_context, &[], &expr, self.s_expr)
-            .await?;
+        let (s_expr, _) =
+            self.binder
+                .bind_where(&mut self.bind_context, &[], &expr, self.s_expr)?;
         self.s_expr = s_expr;
         Ok(self)
     }
@@ -248,8 +243,7 @@ impl Dataframe {
             .collect::<Vec<_>>();
 
         self.binder
-            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)
-            .await?;
+            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
 
         if !self
             .bind_context
@@ -269,8 +263,7 @@ impl Dataframe {
                     .analyze_aggregate_having(&mut self.bind_context, &aliases, having)?;
             self.s_expr = self
                 .binder
-                .bind_having(&mut self.bind_context, having, self.s_expr)
-                .await?;
+                .bind_having(&mut self.bind_context, having, self.s_expr)?;
         }
 
         let (scalar_items, projections) = self.binder.analyze_projection(
@@ -401,27 +394,21 @@ impl Dataframe {
             &self.bind_context.windows,
             &select_list,
         )?;
-        let order_items = self
-            .binder
-            .analyze_order_items(
-                &mut self.bind_context,
-                &mut scalar_items,
-                &aliases,
-                &projections,
-                &order,
-                distinct,
-            )
-            .await?;
-        self.s_expr = self
-            .binder
-            .bind_order_by(
-                &self.bind_context,
-                order_items,
-                &select_list,
-                &mut scalar_items,
-                self.s_expr,
-            )
-            .await?;
+        let order_items = self.binder.analyze_order_items(
+            &mut self.bind_context,
+            &mut scalar_items,
+            &aliases,
+            &projections,
+            &order,
+            distinct,
+        )?;
+        self.s_expr = self.binder.bind_order_by(
+            &self.bind_context,
+            order_items,
+            &select_list,
+            &mut scalar_items,
+            self.s_expr,
+        )?;
 
         self.s_expr = self.binder.bind_projection(
             &mut self.bind_context,
@@ -437,34 +424,28 @@ impl Dataframe {
     }
 
     pub async fn except(mut self, dataframe: Dataframe) -> Result<Self> {
-        let (s_expr, bind_context) = self
-            .binder
-            .bind_except(
-                None,
-                None,
-                self.bind_context,
-                dataframe.bind_context,
-                self.s_expr,
-                dataframe.s_expr,
-            )
-            .await?;
+        let (s_expr, bind_context) = self.binder.bind_except(
+            None,
+            None,
+            self.bind_context,
+            dataframe.bind_context,
+            self.s_expr,
+            dataframe.s_expr,
+        )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
         Ok(self)
     }
 
     pub async fn intersect(mut self, dataframe: Dataframe) -> Result<Self> {
-        let (s_expr, bind_context) = self
-            .binder
-            .bind_intersect(
-                None,
-                None,
-                self.bind_context,
-                dataframe.bind_context,
-                self.s_expr,
-                dataframe.s_expr,
-            )
-            .await?;
+        let (s_expr, bind_context) = self.binder.bind_intersect(
+            None,
+            None,
+            self.bind_context,
+            dataframe.bind_context,
+            self.s_expr,
+            dataframe.s_expr,
+        )?;
         self.s_expr = s_expr;
         self.bind_context = bind_context;
         Ok(self)
@@ -506,8 +487,7 @@ impl Dataframe {
             .unwrap();
         let (join_expr, ctx) = self
             .binder
-            .bind_table_reference(&mut self.bind_context, &cross_joins)
-            .await?;
+            .bind_table_reference(&mut self.bind_context, &cross_joins)?;
 
         self.s_expr = join_expr;
         self.bind_context = ctx;

@@ -16,6 +16,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::UpdateSource;
 use databend_common_sql::StreamContext;
@@ -27,9 +28,9 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_update_source(&mut self, update: &UpdateSource) -> Result<()> {
-        let table =
-            self.ctx
-                .build_table_by_table_info(&update.catalog_info, &update.table_info, None)?;
+        let table = self
+            .ctx
+            .build_table_by_table_info(&update.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         if update.parts.is_empty() {
@@ -55,13 +56,7 @@ impl PipelineBuilder {
                 false,
             )?;
             self.main_pipeline
-                .add_transform(|transform_input_port, transform_output_port| {
-                    TransformAddStreamColumns::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        stream_ctx.clone(),
-                    )
-                })?;
+                .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
         }
 
         let block_thresholds = table.get_block_thresholds();

@@ -72,7 +72,7 @@ runs:
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
         done
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts

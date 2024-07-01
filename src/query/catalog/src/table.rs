@@ -309,7 +309,6 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[async_backtrace::framed]
     async fn generage_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,

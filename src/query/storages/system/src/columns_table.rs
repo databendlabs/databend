@@ -32,6 +32,8 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::Planner;
+use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 
@@ -148,36 +150,64 @@ impl ColumnsTable {
         let mut rows: Vec<(String, String, String, TableField)> = vec![];
         for (database, tables) in database_and_tables {
             for table in tables {
-                if table.engine() != VIEW_ENGINE {
-                    let schema = table.schema();
-                    let field_comments = table.field_comments();
-                    let n_fields = schema.fields().len();
-                    for (idx, field) in schema.fields().iter().enumerate() {
-                        // compatibility: creating table in the old planner will not have `fields_comments`
-                        let comment = if field_comments.len() == n_fields
-                            && !field_comments[idx].is_empty()
-                        {
-                            // can not use debug print, will add double quote
-                            format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
+                match table.engine() {
+                    VIEW_ENGINE => {
+                        let fields = if let Some(query) = table.options().get(QUERY) {
+                            let mut planner = Planner::new(ctx.clone());
+                            match planner.plan_sql(query).await {
+                                Ok((plan, _)) => {
+                                    infer_table_schema(&plan.schema())?.fields().clone()
+                                }
+                                Err(_) => {
+                                    // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                                    vec![]
+                                }
+                            }
                         } else {
-                            "".to_string()
+                            vec![]
                         };
-                        rows.push((
-                            database.clone(),
-                            table.name().into(),
-                            comment,
-                            field.clone(),
-                        ))
+                        for field in fields {
+                            rows.push((
+                                database.clone(),
+                                table.name().into(),
+                                "".to_string(),
+                                field.clone(),
+                            ))
+                        }
                     }
-                } else {
-                    let fields = generate_fields(&ctx, &table).await?;
-                    for field in fields {
-                        rows.push((
-                            database.clone(),
-                            table.name().into(),
-                            "".to_string(),
-                            field.clone(),
-                        ))
+                    STREAM_ENGINE => {
+                        let stream = StreamTable::try_from_table(table.as_ref())?;
+                        let source_table = stream.source_table(ctx.clone()).await?;
+                        for field in source_table.schema().fields() {
+                            rows.push((
+                                database.clone(),
+                                table.name().into(),
+                                "".to_string(),
+                                field.clone(),
+                            ))
+                        }
+                    }
+                    _ => {
+                        let schema = table.schema();
+                        let field_comments = table.field_comments();
+                        let n_fields = schema.fields().len();
+                        for (idx, field) in schema.fields().iter().enumerate() {
+                            // compatibility: creating table in the old planner will not have `fields_comments`
+                            let comment = if field_comments.len() == n_fields
+                                && !field_comments[idx].is_empty()
+                            {
+                                // can not use debug print, will add double quote
+                                format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
+                            } else {
+                                "".to_string()
+                            };
+                            rows.push((
+                                database.clone(),
+                                table.name().into(),
+                                comment,
+                                field.clone(),
+                            ))
+                        }
                     }
                 }
             }
@@ -277,26 +307,4 @@ pub(crate) async fn dump_tables(
         final_tables.push((database, filtered_tables));
     }
     Ok(final_tables)
-}
-
-async fn generate_fields(
-    ctx: &Arc<dyn TableContext>,
-    table: &Arc<dyn Table>,
-) -> Result<Vec<TableField>> {
-    if table.engine() != VIEW_ENGINE {
-        return Ok(table.schema().fields().clone());
-    }
-
-    Ok(if let Some(query) = table.options().get(QUERY) {
-        let mut planner = Planner::new(ctx.clone());
-        match planner.plan_sql(query).await {
-            Ok((plan, _)) => infer_table_schema(&plan.schema())?.fields().clone(),
-            Err(_) => {
-                // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
-                vec![]
-            }
-        }
-    } else {
-        vec![]
-    })
 }

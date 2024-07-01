@@ -450,6 +450,7 @@ impl Display for Expr {
             false
         }
 
+        #[recursive::recursive]
         fn write_expr(
             expr: &Expr,
             parent: Option<Affix>,

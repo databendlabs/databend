@@ -384,6 +384,20 @@ impl MultiStmtTxnCommitFailed {
     }
 }
 
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UpdateStreamMetasFailed: {message}")]
+pub struct UpdateStreamMetasFailed {
+    message: String,
+}
+
+impl crate::app_error::UpdateStreamMetasFailed {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
@@ -1230,6 +1244,9 @@ pub enum AppError {
     // sequence
     #[error(transparent)]
     SequenceError(#[from] SequenceError),
+
+    #[error(transparent)]
+    UpdateStreamMetasFailed(#[from] UpdateStreamMetasFailed),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1327,6 +1344,8 @@ impl AppErrorMessage for StreamVersionMismatched {}
 impl AppErrorMessage for UnknownStreamId {}
 
 impl AppErrorMessage for MultiStmtTxnCommitFailed {}
+
+impl AppErrorMessage for UpdateStreamMetasFailed {}
 
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
@@ -1773,6 +1792,7 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::UnresolvableConflict(err.message())
             }
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
+            AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
         }
     }
 }

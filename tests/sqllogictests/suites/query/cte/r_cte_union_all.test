@@ -7,7 +7,6 @@ statement ok
 use db;
 
 # simple recursive CTE
-onlyif http
 query I
 with recursive t as (select 1 as x union all select x+1 from t where x < 3) select * from t
 ----
@@ -16,7 +15,6 @@ with recursive t as (select 1 as x union all select x+1 from t where x < 3) sele
 3
 
 # simple recursive CTE with an alias
-onlyif http
 query I
 with recursive t as (select 1 as x union all select x+1 from t as m where m.x < 3) select * from t
 ----
@@ -34,7 +32,6 @@ with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f 
 4
 
 # strings and multiple columns
-onlyif http
 query IT
 with recursive t as (select 1 as x, 'hello' as y union all select x+1, y || '-' || 'hello' from t where x < 3) select * from t;
 ----
@@ -44,14 +41,12 @@ with recursive t as (select 1 as x, 'hello' as y union all select x+1, y || '-' 
 
 onlyif todo
 # referencing same CTE multiple times
-onlyif http
 query I
 with recursive t as (select 1 as x union all select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;
 ----
 1
 
 # nested uncorrelated subquery
-onlyif http
 query I
 with recursive t as (select 1 as x union all select x+(SELECT 1) from t where x < 3) select * from t;
 ----
@@ -61,7 +56,6 @@ with recursive t as (select 1 as x union all select x+(SELECT 1) from t where x 
 
 
 # recursive CTE with table-producing function
-onlyif http
 query I
 WITH RECURSIVE t AS (
 	SELECT 1 AS i

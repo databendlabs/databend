@@ -59,40 +59,53 @@ impl DataBlock {
         if blocks.is_empty() {
             return Err(ErrorCode::EmptyData("Can't concat empty blocks"));
         }
+        let block_refs = blocks.iter().collect::<Vec<_>>();
 
         if blocks.len() == 1 {
             return Ok(blocks[0].clone());
         }
 
-        let concat_columns = (0..blocks[0].num_columns())
-            .map(|i| {
-                debug_assert!(
-                    blocks
-                        .iter()
-                        .map(|block| &block.get_by_offset(i).data_type)
-                        .all_equal()
-                );
-
-                let columns_iter = blocks.iter().map(|block| {
-                    let entry = &block.get_by_offset(i);
-                    match &entry.value {
-                        Value::Scalar(s) => {
-                            ColumnBuilder::repeat(&s.as_ref(), block.num_rows(), &entry.data_type)
-                                .build()
-                        }
-                        Value::Column(c) => c.clone(),
-                    }
-                });
-                Ok(BlockEntry::new(
-                    blocks[0].get_by_offset(i).data_type.clone(),
-                    Value::Column(Column::concat_columns(columns_iter)?),
-                ))
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let num_columns = blocks[0].num_columns();
+        let mut concat_columns = Vec::with_capacity(num_columns);
+        for i in 0..num_columns {
+            concat_columns.push(BlockEntry::new(
+                blocks[0].get_by_offset(i).data_type.clone(),
+                Self::concat_columns(&block_refs, i)?,
+            ))
+        }
 
         let num_rows = blocks.iter().map(|c| c.num_rows()).sum();
 
         Ok(DataBlock::new(concat_columns, num_rows))
+    }
+
+    pub fn concat_columns(blocks: &[&DataBlock], column_index: usize) -> Result<Value<AnyType>> {
+        debug_assert!(
+            blocks
+                .iter()
+                .map(|block| &block.get_by_offset(column_index).data_type)
+                .all_equal()
+        );
+
+        let entry0 = blocks[0].get_by_offset(column_index);
+        if matches!(entry0.value, Value::Scalar(_))
+            && blocks
+                .iter()
+                .all(|b| b.get_by_offset(column_index) == entry0)
+        {
+            return Ok(entry0.value.clone());
+        }
+
+        let columns_iter = blocks.iter().map(|block| {
+            let entry = &block.get_by_offset(column_index);
+            match &entry.value {
+                Value::Scalar(s) => {
+                    ColumnBuilder::repeat(&s.as_ref(), block.num_rows(), &entry.data_type).build()
+                }
+                Value::Column(c) => c.clone(),
+            }
+        });
+        Ok(Value::Column(Column::concat_columns(columns_iter)?))
     }
 }
 

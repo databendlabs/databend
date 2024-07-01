@@ -296,9 +296,21 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Set the spilling buffer threshold (MB) for each join processor.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("disable_merge_into_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable merge into join reorder optimization.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_merge_into_row_fetch", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable merge into row fetch optimization.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
@@ -32,7 +31,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::ColumnBindingBuilder;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -48,7 +46,6 @@ use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::EvalScalar;
 use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::LockTableOption;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::SubqueryDesc;
@@ -113,28 +110,12 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
 
-        // Add table lock.
-        let lock_guard = self
-            .ctx
-            .clone()
-            .acquire_table_lock(
-                catalog_name,
-                db_name,
-                tbl_name,
-                &LockTableOption::LockWithRetry,
-            )
-            .await?;
-
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let catalog_info = catalog.info();
-        let tbl = catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await?;
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         // check mutability
         tbl.check_mutable()?;
 
-        let selection = if !self.plan.subquery_desc.is_empty() {
+        let selection = if let Some(subquery_desc) = &self.plan.subquery_desc {
             let support_row_id = tbl.supported_internal_column(ROW_ID_COLUMN_ID);
             if !support_row_id {
                 return Err(ErrorCode::from_string(format!(
@@ -148,7 +129,7 @@ impl Interpreter for DeleteInterpreter {
             );
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
-                self.plan.subquery_desc[0].index,
+                subquery_desc.index,
                 Box::new(DataType::Number(NumberDataType::UInt64)),
                 Visibility::InVisible,
             )
@@ -156,21 +137,14 @@ impl Interpreter for DeleteInterpreter {
             .table_name(Some(self.plan.table_name.clone()))
             .table_index(table_index)
             .build();
-            let mut filters = VecDeque::new();
-            for subquery_desc in &self.plan.subquery_desc {
-                let filter = subquery_filter(
-                    self.ctx.clone(),
-                    self.plan.metadata.clone(),
-                    &row_id_column_binding,
-                    subquery_desc,
-                )
-                .await?;
-                filters.push_front(filter);
-            }
-            // Traverse `selection` and put `filters` into `selection`.
-            let mut selection = self.plan.selection.clone().unwrap();
-            replace_subquery(&mut filters, &mut selection)?;
-            Some(selection)
+            let filter = subquery_filter(
+                self.ctx.clone(),
+                self.plan.metadata.clone(),
+                &row_id_column_binding,
+                subquery_desc,
+            )
+            .await?;
+            Some(filter)
         } else {
             self.plan.selection.clone()
         };
@@ -187,13 +161,10 @@ impl Interpreter for DeleteInterpreter {
             }
 
             let mut used_columns = scalar.used_columns().clone();
-            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+            let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
                 // add scalar.used_columns() but ignore _row_id index
-                let mut col_indices = HashSet::new();
-                for subquery_desc in &self.plan.subquery_desc {
-                    col_indices.extend(subquery_desc.outer_columns.iter());
-                    used_columns.remove(&subquery_desc.index);
-                }
+                let mut col_indices = subquery_desc.outer_columns.clone();
+                used_columns.remove(&subquery_desc.index);
                 col_indices.extend(used_columns.iter());
                 col_indices.into_iter().collect()
             } else {
@@ -224,7 +195,9 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         }
 
-        build_res.main_pipeline.add_lock_guard(lock_guard);
+        build_res
+            .main_pipeline
+            .add_lock_guard(self.plan.lock_guard.clone());
         // check if unconditional deletion
         let Some(filters) = filters else {
             let progress_values = ProgressValues {
@@ -243,7 +216,7 @@ impl Interpreter for DeleteInterpreter {
             return Ok(build_res);
         };
 
-        let query_row_id_col = !self.plan.subquery_desc.is_empty();
+        let query_row_id_col = self.plan.subquery_desc.is_some();
         if col_indices.is_empty() && !query_row_id_col {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
@@ -291,7 +264,6 @@ impl Interpreter for DeleteInterpreter {
             fuse_table.get_table_info().clone(),
             col_indices,
             snapshot,
-            catalog_info,
             is_distributed,
             query_row_id_col,
         )?;
@@ -325,7 +297,6 @@ impl DeleteInterpreter {
         table_info: TableInfo,
         col_indices: Vec<usize>,
         snapshot: Arc<TableSnapshot>,
-        catalog_info: Arc<CatalogInfo>,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
@@ -334,7 +305,6 @@ impl DeleteInterpreter {
             parts: partitions,
             filters,
             table_info: table_info.clone(),
-            catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
             snapshot: snapshot.clone(),
@@ -355,7 +325,6 @@ impl DeleteInterpreter {
             input: Box::new(root),
             snapshot,
             table_info,
-            catalog_info,
             mutation_kind: MutationKind::Delete,
             update_stream_meta: vec![],
             merge_meta,
@@ -383,7 +352,7 @@ pub async fn subquery_filter(
                     span: None,
                     column: row_id_column_binding.clone(),
                 }),
-                index: 0,
+                index: row_id_column_binding.index,
             }],
         })),
         Arc::new(input_expr),
@@ -452,58 +421,4 @@ pub async fn subquery_filter(
         params: vec![],
         arguments: vec![array_raw_expr, row_id_expr],
     }))
-}
-
-// return false means that doesnot replace a subquery with filter,
-// in this case we need to replace subquery's parent with filter.
-fn do_replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<bool> {
-    let data_type = selection.data_type()?;
-    let mut replace_selection_with_filter = None;
-
-    match selection {
-        ScalarExpr::FunctionCall(func) => {
-            for arg in &mut func.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-        ScalarExpr::UDFCall(udf) => {
-            for arg in &mut udf.arguments {
-                if !do_replace_subquery(filters, arg)? {
-                    replace_selection_with_filter = Some(filters.pop_back().unwrap());
-                    break;
-                }
-            }
-        }
-
-        ScalarExpr::SubqueryExpr { .. } => {
-            if data_type == DataType::Nullable(Box::new(DataType::Boolean)) {
-                let filter = filters.pop_back().unwrap();
-                *selection = filter;
-            } else {
-                return Ok(false);
-            }
-        }
-        _ => {}
-    }
-
-    if let Some(filter) = replace_selection_with_filter {
-        *selection = filter;
-        replace_subquery(filters, selection)?;
-    }
-    Ok(true)
-}
-
-pub fn replace_subquery(
-    filters: &mut VecDeque<ScalarExpr>,
-    selection: &mut ScalarExpr,
-) -> Result<()> {
-    let _ = do_replace_subquery(filters, selection)?;
-
-    Ok(())
 }

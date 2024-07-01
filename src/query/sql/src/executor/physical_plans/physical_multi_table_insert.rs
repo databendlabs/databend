@@ -108,7 +108,6 @@ pub struct ChunkFillAndReorder {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FillAndReorder {
     pub source_schema: DataSchemaRef,
-    pub catalog_info: Arc<CatalogInfo>,
     pub target_table_info: TableInfo,
 }
 

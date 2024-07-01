@@ -1,26 +1,20 @@
 [package]
 name = "databend-common-ast"
-version = { workspace = true }
+version = "0.0.0"
+publish = true
+description = "SQL parser for Databend"
 authors = { workspace = true }
 license = { workspace = true }
-publish = { workspace = true }
 edition = { workspace = true }
 
 [lib]
 doctest = false
 
-# We need to add `geos = { workspace = true }` to enable the feature `static` to pass compilation.
-# This line and `geos = { workspace = true }` in the following lines can be removed if crate `geozero` is fixed and updated.
-[package.metadata.cargo-machete]
-ignored = ["geos"]
-
 [dependencies]
-codespan-reporting = { workspace = true }
 derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
 fast-float = "0.2.0"
-geos = { workspace = true }
 indent = "0.1.1"
 itertools = { workspace = true }
 logos = "0.12.1"
@@ -31,6 +25,8 @@ ordered-float = { workspace = true }
 pratt = "0.4.0"
 pretty = "0.11.3"
 pretty_assertions = "1.3.0"
+recursive = "0.1.1"
+rspack-codespan-reporting = "0.11"
 serde = { workspace = true }
 serde_json = { workspace = true }
 strsim = "0.10"
@@ -42,7 +38,6 @@ url = "2.3.1"
 [dev-dependencies]
 criterion = { workspace = true }
 goldenfile = "1.4"
-pretty_assertions = "1.3.0"
 regex = { workspace = true }
 
 [[bench]]

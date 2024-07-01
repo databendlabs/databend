@@ -233,7 +233,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                 offsets.push(offsets.last().unwrap() + 36u64);
                 write!(&mut values, "{:x}", value).unwrap();
             }
-
             let col = StringColumn::new(values.into(), offsets.into());
             Value::Column(col)
         },

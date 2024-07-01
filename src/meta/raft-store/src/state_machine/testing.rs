@@ -66,10 +66,10 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
             }),
         },
     ];
-    let want = [r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
+    let want = [ //
+        r#"{"Sequences":{"key":"generic-kv","value":1}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":1,"node_id":0},"index":9}}}}"#,
         r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":5},"membership":{"configs":[[4,5,6]],"nodes":{"4":{},"5":{},"6":{}}}}}}}"#,
-        r#"{"Sequences":{"key":"generic-kv","value":1}}"#,
         r#"{"Nodes":{"key":5,"value":{"name":"","endpoint":{"addr":"","port":0},"grpc_api_advertise_address":null}}}"#,
         r#"{"GenericKV":{"key":"a","value":{"seq":1,"meta":null,"data":[65]}}}"#]
     .iter()

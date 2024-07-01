@@ -24,6 +24,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_pipeline_core::processors::PlanProfile;
@@ -131,10 +132,11 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::MergeInto(plan) => {
+                Plan::MergeInto { s_expr, .. } => {
+                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     let mut res = self.explain_plan(&self.plan)?;
                     let input = self
-                        .explain_query(&plan.input, &plan.meta_data, &plan.bind_context, &None)
+                        .explain_query(s_expr.child(0)?, &plan.meta_data, &plan.bind_context, &None)
                         .await?;
                     res.extend(input);
                     vec![DataBlock::concat(&res)?]
@@ -176,9 +178,10 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto(plan) => {
+                Plan::MergeInto { s_expr, .. } => {
+                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
-                        &plan.input,
+                        s_expr.child(0)?,
                         &plan.meta_data,
                         *plan.columns_set.clone(),
                         true,
@@ -194,7 +197,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } | Plan::MergeInto(_) => {
+                    Plan::Query { .. } | Plan::MergeInto { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -219,7 +222,10 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto(merge_into) => self.explain_merge_fragments(merge_into).await?,
+                Plan::MergeInto { s_expr, schema } => {
+                    self.explain_merge_fragments(*s_expr.clone(), schema.clone())
+                        .await?
+                }
                 Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
@@ -474,10 +480,10 @@ impl ExplainInterpreter {
 
         let mut result = vec![];
         // Explain subquery.
-        if !delete.subquery_desc.is_empty() {
+        if let Some(subquery_desc) = &delete.subquery_desc {
             let row_id_column_binding = ColumnBindingBuilder::new(
                 ROW_ID_COL_NAME.to_string(),
-                delete.subquery_desc[0].index,
+                subquery_desc.index,
                 Box::new(DataType::Number(NumberDataType::UInt64)),
                 Visibility::InVisible,
             )
@@ -499,7 +505,7 @@ impl ExplainInterpreter {
                         index: 0,
                     }],
                 })),
-                Arc::new(delete.subquery_desc[0].input_expr.clone()),
+                Arc::new(subquery_desc.input_expr.clone()),
             );
 
             let formatted_plan = StringType::from_data(vec!["DeletePlan (subquery):"]);
@@ -568,9 +574,14 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::concat(&result)?])
     }
 
-    async fn explain_merge_fragments(&self, merge_into: &MergeInto) -> Result<Vec<DataBlock>> {
-        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), merge_into.clone())?;
-        let (plan, _) = interpreter.build_physical_plan().await?;
+    async fn explain_merge_fragments(
+        &self,
+        s_expr: SExpr,
+        schema: DataSchemaRef,
+    ) -> Result<Vec<DataBlock>> {
+        let merge_into: databend_common_sql::plans::MergeInto = s_expr.plan().clone().try_into()?;
+        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let plan = interpreter.build_physical_plan(&merge_into).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());

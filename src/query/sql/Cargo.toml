@@ -18,7 +18,7 @@ storage-hdfs = ["databend-common-config/storage-hdfs"]
 ahash = { version = "0.8.2", features = ["no-rng"] }
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
-async-recursion = "1.0.0"
+async-recursion = "1.1.1"
 async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -44,12 +44,7 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
-databend-common-storages-delta = { workspace = true }
-databend-common-storages-iceberg = { workspace = true }
-databend-common-storages-orc = { workspace = true }
-databend-common-storages-parquet = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
-databend-common-storages-stage = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
@@ -70,11 +65,13 @@ ordered-float = { workspace = true }
 parking_lot = { workspace = true }
 percent-encoding = "2"
 prqlc = "0.11.3"
+recursive = "0.1.1"
 regex = { workspace = true }
 roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
+url = "2.3.1"
 
 [lints]
 workspace = true

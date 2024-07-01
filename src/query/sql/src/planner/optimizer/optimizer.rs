@@ -115,10 +115,12 @@ impl<'a> RecursiveOptimizer<'a> {
     }
 
     /// Run the optimizer on the given expression.
+    #[recursive::recursive]
     pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_expression(s_expr)
     }
 
+    #[recursive::recursive]
     fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
@@ -157,7 +159,7 @@ impl<'a> RecursiveOptimizer<'a> {
 }
 
 #[minitrace::trace]
-#[async_recursion]
+#[async_recursion(#[recursive::recursive])]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
@@ -233,7 +235,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto(plan) => optimize_merge_into(opt_ctx, plan).await,
+        Plan::MergeInto { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -291,8 +293,11 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 }
 
 pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
-    let enable_distributed_query = opt_ctx.enable_distributed_optimization
-        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+    let mut enable_distributed_query = opt_ctx.enable_distributed_optimization;
+    if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
+        enable_distributed_query = false;
+        info!("Disable distributed optimization due to local table scan.");
+    }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
@@ -379,8 +384,11 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
 async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<Memo> {
-    let enable_distributed_query = opt_ctx.enable_distributed_optimization
-        && !contains_local_table_scan(&s_expr, &opt_ctx.metadata);
+    let mut enable_distributed_query = opt_ctx.enable_distributed_optimization;
+    if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
+        enable_distributed_query = false;
+        info!("Disable distributed optimization due to local table scan.");
+    }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
@@ -420,7 +428,8 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     Ok(cascades.memo)
 }
 
-async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>) -> Result<Plan> {
+async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
+    let mut plan: MergeInto = s_expr.plan().clone().try_into()?;
     let enable_distributed_merge_into = opt_ctx
         .table_ctx
         .get_settings()
@@ -428,16 +437,14 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    let old_left_conditions = Join::try_from(plan.input.plan().clone())?.left_conditions;
-    let mut join_s_expr = optimize_query(opt_ctx.clone(), *plan.input.clone()).await?;
+    let original_target_table_position =
+        target_table_position(s_expr.child(0)?, plan.target_table_index)?;
+    let mut join_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     if let &RelOperator::Exchange(_) = join_s_expr.plan() {
         join_s_expr = join_s_expr.child(0)?.clone();
     }
-    let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
-    let mut change_join_order = false;
-    if old_left_conditions != left_conditions {
-        change_join_order = true;
-    }
+    let new_target_table_position = target_table_position(&join_s_expr, plan.target_table_index)?;
+    let join_order_changed = original_target_table_position != new_target_table_position;
     let join_op = Join::try_from(join_s_expr.plan().clone())?;
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
@@ -452,7 +459,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             .get_settings()
             .get_enable_distributed_merge_into()?;
     let mut new_columns_set = plan.columns_set.clone();
-    if change_join_order
+    if join_order_changed
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
             .table_ctx
@@ -468,10 +475,11 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
         opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
             merge_into_join_type: MergeIntoJoinType::Left,
             is_distributed: false,
-            target_tbl_idx: plan.target_table_idx,
+            target_tbl_idx: plan.target_table_index,
         })
     }
 
+    plan.change_join_order = join_order_changed;
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
@@ -495,20 +503,43 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, plan: Box<MergeInto>
             enable_right_broadcast = true;
         }
         let distributed = !join_s_expr.has_merge_exchange();
-        Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: Box::new(join_s_expr),
-            distributed,
-            change_join_order,
-            columns_set: new_columns_set,
-            enable_right_broadcast,
-            ..*plan
-        })))
+        plan.distributed = distributed;
+        plan.enable_right_broadcast = enable_right_broadcast;
+        plan.columns_set = new_columns_set;
+        Ok(Plan::MergeInto {
+            schema: plan.schema(),
+            s_expr: Box::new(SExpr::create_unary(
+                Arc::new(RelOperator::MergeInto(plan)),
+                Arc::new(join_s_expr),
+            )),
+        })
     } else {
-        Ok(Plan::MergeInto(Box::new(MergeInto {
-            input: Box::new(join_s_expr),
-            change_join_order,
-            columns_set: new_columns_set,
-            ..*plan
-        })))
+        plan.columns_set = new_columns_set;
+        Ok(Plan::MergeInto {
+            schema: plan.schema(),
+            s_expr: Box::new(SExpr::create_unary(
+                Arc::new(RelOperator::MergeInto(plan)),
+                Arc::new(join_s_expr),
+            )),
+        })
+    }
+}
+
+fn target_table_position(join_s_expr: &SExpr, target_table_index: usize) -> Result<usize> {
+    fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
+        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+            scan.table_index == target_table_index
+        } else {
+            s_expr
+                .children()
+                .any(|child| contains_target_table(child, target_table_index))
+        }
+    }
+
+    debug_assert!(matches!(join_s_expr.plan(), RelOperator::Join(_)));
+    if contains_target_table(join_s_expr.child(0)?, target_table_index) {
+        Ok(0)
+    } else {
+        Ok(1)
     }
 }
