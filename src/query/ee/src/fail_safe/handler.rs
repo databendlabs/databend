@@ -93,10 +93,11 @@ impl Amender {
         // when `list_object_versions` or higher level api is supported by opendal
         if let StorageParams::S3(s3_config) = storage_param {
             if s3_config.access_key_id.is_empty() {
-                panic!()
+                return Err(ErrorCode::StorageOther(
+                    "credentials other than ak/sk are not supported yet",
+                ));
             }
 
-            // create credentials from access key and secret key
             let base_credentials = Credentials::new(
                 &s3_config.access_key_id,
                 s3_config.secret_access_key,
@@ -105,7 +106,6 @@ impl Amender {
                 "not_secure",
             );
 
-            // Define the region you want to use
             let region_provider =
                 RegionProviderChain::first_try(Region::new(s3_config.region)).or_else("us-east-1");
 
@@ -116,7 +116,6 @@ impl Amender {
                 .connect_timeout(Duration::from_secs(3))
                 .build();
 
-            // Load the configuration using the base credentials
             let config = aws_config::from_env()
                 .region(region_provider)
                 .endpoint_url(s3_config.endpoint_url)
