@@ -356,6 +356,10 @@ impl ReclusterMutator {
         &mut self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     ) -> Result<bool> {
+        let settings = self.ctx.get_settings();
+        let num_block_limit = settings.get_compact_max_block_selection()? as usize;
+        let num_segment_limit = compact_segments.len();
+
         let mut parts = Vec::new();
         let mut checker =
             SegmentCompactChecker::new(self.block_per_seg as u64, Some(self.cluster_key_id));
@@ -366,13 +370,20 @@ impl ReclusterMutator {
             for segments in segments_vec {
                 checker.generate_part(segments, &mut parts);
             }
+
+            if checker.is_limit_reached(num_segment_limit, num_block_limit) {
+                break;
+            }
         }
         // finalize the compaction.
         checker.finalize(&mut parts);
 
         let cluster = self.ctx.get_cluster();
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
+        let max_threads = settings.get_max_threads()? as usize;
+        let partitions = if !self.is_distributed()
+            || cluster.is_empty()
+            || parts.len() < cluster.nodes.len() * max_threads
+        {
             // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self.snapshot.schema.to_leaf_column_id_set();
             let lazy_parts = parts

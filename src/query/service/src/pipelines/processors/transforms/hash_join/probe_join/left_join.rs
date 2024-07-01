@@ -395,7 +395,7 @@ impl HashJoinProbeState {
     #[allow(clippy::too_many_arguments)]
     fn process_left_or_full_join_null_block(
         &self,
-        matched_idx: usize,
+        unmatched_idx: usize,
         input: &DataBlock,
         probe_indexes: &[u32],
         probe_state: &mut ProbeBlockGenerationState,
@@ -410,7 +410,7 @@ impl HashJoinProbeState {
         let probe_block = if probe_state.is_probe_projected {
             let mut probe_block = DataBlock::take(
                 input,
-                &probe_indexes[0..matched_idx],
+                &probe_indexes[0..unmatched_idx],
                 &mut probe_state.string_items_buf,
             )?;
             // For full join, wrap nullable for probe block
@@ -418,9 +418,9 @@ impl HashJoinProbeState {
                 let nullable_probe_columns = probe_block
                     .columns()
                     .iter()
-                    .map(|c| wrap_true_validity(c, matched_idx, &probe_state.true_validity))
+                    .map(|c| wrap_true_validity(c, unmatched_idx, &probe_state.true_validity))
                     .collect::<Vec<_>>();
-                probe_block = DataBlock::new(nullable_probe_columns, matched_idx);
+                probe_block = DataBlock::new(nullable_probe_columns, unmatched_idx);
             }
             Some(probe_block)
         } else {
@@ -438,14 +438,14 @@ impl HashJoinProbeState {
                         value: Value::Scalar(Scalar::Null),
                     })
                     .collect(),
-                matched_idx,
+                unmatched_idx,
             );
             Some(null_build_block)
         } else {
             None
         };
 
-        Ok(self.merge_eq_block(probe_block, build_block, matched_idx))
+        Ok(self.merge_eq_block(probe_block, build_block, unmatched_idx))
     }
 
     #[inline]

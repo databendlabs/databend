@@ -802,11 +802,9 @@ impl<'a> Binder {
             }
             RelOperator::Join(join) => {
                 f.reset_finder();
-                for condition in &join.left_conditions {
-                    f.visit(condition)?;
-                }
-                for condition in &join.right_conditions {
-                    f.visit(condition)?;
+                for condition in join.equi_conditions.iter() {
+                    f.visit(&condition.left)?;
+                    f.visit(&condition.right)?;
                 }
                 for condition in &join.non_equi_conditions {
                     f.visit(condition)?;
