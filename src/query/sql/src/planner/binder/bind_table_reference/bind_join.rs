@@ -86,9 +86,7 @@ impl Binder {
             )?;
             return Ok((result_expr, bind_context));
         }
-
-        let (right_child, right_context) =
-            self.bind_table_reference(&mut left_context, &join.right)?;
+        let (right_child, right_context) = self.bind_table_reference(bind_context, &join.right)?;
 
         let right_column_bindings = right_context.columns.clone();
 
