@@ -646,7 +646,7 @@ impl NumberColumnBuilder {
         })
     }
 
-    pub fn repeat_null(ty: &NumberDataType, len: usize) -> Self {
+    pub fn repeat_default(ty: &NumberDataType, len: usize) -> Self {
         crate::with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
                 let s = NumberScalar::from(NUM_TYPE::default());

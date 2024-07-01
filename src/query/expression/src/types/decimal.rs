@@ -1047,7 +1047,7 @@ impl DecimalColumnBuilder {
         })
     }
 
-    pub fn repeat_null(ty: &DecimalDataType, n: usize) -> Self {
+    pub fn repeat_default(ty: &DecimalDataType, n: usize) -> Self {
         crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
             DecimalDataType::DECIMAL_TYPE(size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(vec![0.into(); n], *size),

@@ -1524,7 +1524,7 @@ impl ColumnBuilder {
                 DataType::Null => ColumnBuilder::Null { len: n },
                 DataType::Nullable(inner) => {
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                        builder: Self::repeat_null(inner, n),
+                        builder: Self::repeat_default(inner, n),
                         validity: MutableBitmap::from_len_zeroed(n),
                     }))
                 }
@@ -1738,7 +1738,7 @@ impl ColumnBuilder {
         }
     }
 
-    pub fn repeat_null(ty: &DataType, len: usize) -> ColumnBuilder {
+    pub fn repeat_default(ty: &DataType, len: usize) -> ColumnBuilder {
         match ty {
             DataType::Null => ColumnBuilder::Null { len },
             DataType::EmptyArray => ColumnBuilder::EmptyArray { len },
@@ -1746,27 +1746,27 @@ impl ColumnBuilder {
 
             // bitmap
             DataType::Nullable(inner) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                builder: Self::repeat_null(inner, len),
+                builder: Self::repeat_default(inner, len),
                 validity: MutableBitmap::from_len_zeroed(len),
             })),
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::from_len_zeroed(len)),
 
             // number based
             DataType::Number(num_ty) => {
-                ColumnBuilder::Number(NumberColumnBuilder::repeat_null(num_ty, len))
+                ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
             }
             DataType::Decimal(decimal_ty) => {
-                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_null(decimal_ty, len))
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(decimal_ty, len))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
             DataType::Date => ColumnBuilder::Date(vec![0; len]),
 
             // binary based
-            DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_null(len)),
-            DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_null(len)),
-            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_null(len)),
-            DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_null(len)),
-            DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_null(len)),
+            DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
+            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
+            DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
 
             DataType::Array(ty) => ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
                 builder: Self::with_capacity(ty, 0),
@@ -1781,7 +1781,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Tuple(
                     fields
                         .iter()
-                        .map(|field| Self::repeat_null(field, len))
+                        .map(|field| Self::repeat_default(field, len))
                         .collect(),
                 )
             }

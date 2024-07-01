@@ -480,7 +480,7 @@ impl StringColumnBuilder {
         }
     }
 
-    pub fn repeat_null(n: usize) -> Self {
+    pub fn repeat_default(n: usize) -> Self {
         StringColumnBuilder {
             data: vec![],
             offsets: vec![0; n + 1],
