@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_channel::Receiver;
@@ -31,6 +32,8 @@ use minitrace::future::FutureExt;
 use minitrace::Span;
 use serde::Deserialize;
 use serde::Serialize;
+use tonic::metadata::AsciiMetadataKey;
+use tonic::metadata::AsciiMetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::Request;
 use tonic::Status;
@@ -55,7 +58,13 @@ impl FlightClient {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
-    pub async fn do_action<T, Res>(&mut self, path: &str, message: T, timeout: u64) -> Result<Res>
+    pub async fn do_action<T, Res>(
+        &mut self,
+        path: &str,
+        secret: String,
+        message: T,
+        timeout: u64,
+    ) -> Result<Res>
     where
         T: Serialize,
         Res: for<'a> Deserialize<'a>,
@@ -78,6 +87,10 @@ impl FlightClient {
             }));
 
         request.set_timeout(Duration::from_secs(timeout));
+        request.metadata_mut().insert(
+            AsciiMetadataKey::from_str("secret").unwrap(),
+            AsciiMetadataValue::from_str(&secret).unwrap(),
+        );
 
         let response = self.inner.do_action(request).await?;
 

@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SetPriorityPlan;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::flight::v1::packets::Packet;
-use crate::servers::flight::v1::packets::SetPriorityPacket;
+use crate::servers::flight::v1::actions::SET_PRIORITY;
 use crate::sessions::QueryContext;
 
 pub struct SetPriorityInterpreter {
@@ -41,50 +41,38 @@ impl SetPriorityInterpreter {
         })
     }
 
-    pub fn from_flight(ctx: Arc<QueryContext>, packet: SetPriorityPacket) -> Result<Self> {
+    pub fn from_flight(ctx: Arc<QueryContext>, plan: SetPriorityPlan) -> Result<Self> {
         Ok(SetPriorityInterpreter {
             ctx,
-            plan: SetPriorityPlan {
-                id: packet.id,
-                priority: packet.priority,
-            },
+            plan,
             proxy_to_cluster: false,
         })
     }
 
     #[async_backtrace::framed]
     async fn set_cluster_priority(&self) -> Result<PipelineBuildResult> {
-        let settings = self.ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
-        let conf = GlobalConfig::instance();
         let cluster = self.ctx.get_cluster();
+
+        let mut message = HashMap::with_capacity(cluster.nodes.len());
         for node_info in &cluster.nodes {
             if node_info.id != cluster.local_id {
-                let set_priority_packet = SetPriorityPacket::create(
-                    self.plan.id.clone(),
-                    self.plan.priority,
-                    node_info.clone(),
-                );
-
-                match set_priority_packet.commit(conf.as_ref(), timeout).await {
-                    Ok(_) => {
-                        return Ok(PipelineBuildResult::create());
-                    }
-                    Err(cause) => match cause.code() == ErrorCode::UNKNOWN_SESSION {
-                        true => {
-                            continue;
-                        }
-                        false => {
-                            return Err(cause);
-                        }
-                    },
-                }
+                message.insert(node_info.id.clone(), self.plan.clone());
             }
         }
-        Err(ErrorCode::UnknownSession(format!(
-            "Not found session id {}",
-            self.plan.id
-        )))
+
+        let settings = self.ctx.get_settings();
+        let timeout = settings.get_flight_client_timeout()?;
+        let res = cluster
+            .do_action::<_, bool>(SET_PRIORITY, message, timeout)
+            .await?;
+
+        match res.values().any(|x| *x) {
+            true => Ok(PipelineBuildResult::create()),
+            false => Err(ErrorCode::UnknownSession(format!(
+                "Not found session id {}",
+                self.plan.id
+            ))),
+        }
     }
 }
 

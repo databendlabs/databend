@@ -403,7 +403,7 @@ impl ShowCreateTablePlan {
 }
 
 /// Truncate.
-#[derive(Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct TruncateTablePlan {
     pub catalog: String,
     pub database: String,

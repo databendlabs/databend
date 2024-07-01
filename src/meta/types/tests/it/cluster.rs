@@ -18,6 +18,7 @@ use databend_common_meta_types::NodeInfo;
 fn test_node_info_ip_port() -> anyhow::Result<()> {
     let n = NodeInfo {
         id: "".to_string(),
+        secret: "".to_string(),
         cpu_nums: 1,
         version: 1,
         flight_address: "1.2.3.4:123".to_string(),

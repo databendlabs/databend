@@ -673,7 +673,7 @@ impl HashJoinBuildState {
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
             for (index, (col, _)) in build_keys.iter().enumerate() {
-                if is_null_equal.contains(&index) {
+                if is_null_equal[index] {
                     continue;
                 }
                 let (is_all_null, tmp_valids) = col.validity();
@@ -725,7 +725,7 @@ impl HashJoinBuildState {
         };
 
         for (index, (col, ty)) in build_keys.iter_mut().enumerate() {
-            if !is_null_equal.contains(&index) {
+            if !is_null_equal[index] {
                 *col = col.remove_nullable();
                 *ty = ty.remove_nullable();
             }
