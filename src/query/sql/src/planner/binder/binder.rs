@@ -770,7 +770,13 @@ impl<'a> Binder {
             quote: Some(self.dialect.default_ident_quote()),
             is_hole: false,
         });
-        FullyTableIdentifier::new(&self.name_resolution_ctx, catalog, database, table)
+        FullyTableIdentifier::new(
+            &self.name_resolution_ctx,
+            self.dialect,
+            catalog,
+            database,
+            table,
+        )
     }
 
     /// Normalize <identifier>

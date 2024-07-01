@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -94,6 +95,7 @@ impl Binder {
 
 pub struct FullyTableIdentifier<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
+    dialect: Dialect,
     pub catalog: Identifier,
     pub database: Identifier,
     pub table: &'a Identifier,
@@ -102,12 +104,14 @@ pub struct FullyTableIdentifier<'a> {
 impl FullyTableIdentifier<'_> {
     pub fn new<'a>(
         name_resolution_ctx: &'a NameResolutionContext,
+        dialect: Dialect,
         catalog: Identifier,
         database: Identifier,
         table: &'a Identifier,
     ) -> FullyTableIdentifier<'a> {
         FullyTableIdentifier {
             name_resolution_ctx,
+            dialect,
             catalog,
             database,
             table,
@@ -135,19 +139,28 @@ impl FullyTableIdentifier<'_> {
         } = self;
         match err.code() {
             ErrorCode::UNKNOWN_DATABASE => {
-                ErrorCode::UnknownTable(format!("Unknown database {catalog}.{database}."))
+                ErrorCode::UnknownDatabase(format!("Unknown database {catalog}.{database}."))
             }
             ErrorCode::UNKNOWN_TABLE => {
-                let table_name = &table.name;
                 let error_message = match self.name_resolution_ctx.not_found_suggest(self.table) {
                     Some(NameResolutionSuggest::Quoted) => {
+                        let ident = Identifier {
+                            name: table.name.clone(),
+                            quote: Some(self.dialect.default_ident_quote()),
+                            ..**table
+                        };
                         format!(
-                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean `{table_name}` (quoted)?"
+                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean {ident} (quoted)?"
                         )
                     }
                     Some(NameResolutionSuggest::Unqoted) => {
+                        let ident = Identifier {
+                            name: table.name.clone(),
+                            quote: None,
+                            ..**table
+                        };
                         format!(
-                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {table_name} (unquoted)?"
+                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {ident} (unquoted)?"
                         )
                     }
                     None => format!("Unknown table {catalog}.{database}.{table}."),
