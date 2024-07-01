@@ -14,7 +14,6 @@
 
 mod http_query_handlers;
 pub mod json_block;
-mod load;
 mod login;
 mod query;
 mod stage;
@@ -28,8 +27,6 @@ pub use http_query_handlers::QueryError;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
 pub(crate) use json_block::JsonBlock;
-pub use load::streaming_load;
-pub use load::LoadResponse;
 pub(crate) use login::login_handler;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
