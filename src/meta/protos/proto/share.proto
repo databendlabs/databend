@@ -79,6 +79,25 @@ message ObjectSharedByShareIds {
   repeated uint64 share_ids = 1;
 }
 
+message ShareCredential {
+  oneof credential {
+    ShareCredentialHMAC hmac = 1;
+    ShareCredentialNone none = 2;
+  }
+}
+
+message ShareCredentialHMAC {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string key = 1;
+}
+
+message ShareCredentialNone {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+}
+
 message ShareEndpointMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -88,6 +107,7 @@ message ShareEndpointMeta {
   map<string, string> args = 3;
   optional string comment = 4;
   string create_on = 5;
+  optional ShareCredential credential = 6;
 }
 
 message ShareEndpointIdent {
