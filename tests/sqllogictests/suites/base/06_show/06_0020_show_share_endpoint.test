@@ -2,10 +2,15 @@ statement ok
 DROP SHARE ENDPOINT IF EXISTS t;
 
 statement ok
-CREATE SHARE ENDPOINT t URL='http://127.0.0.1/' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(key='value',) COMMENT = 'share endpoint comment';
+DROP SHARE ENDPOINT replace_share_endpoint;
 
 statement ok
+CREATE SHARE ENDPOINT t URL='http://127.0.0.1/' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(key='value',) COMMENT = 'share endpoint comment';
+
+query TTTTT
 SHOW SHARE ENDPOINT;
+----
+t http://127.0.0.1/ {TYPE:'HMAC',KEY:'******lo'} {"key": "value"} share endpoint comment
 
 statement ok
 DROP SHARE ENDPOINT t;
@@ -21,6 +26,11 @@ CREATE OR REPLACE SHARE ENDPOINT replace_share_endpoint URL='http://192.168.0.1/
 
 statement ok
 CREATE OR REPLACE SHARE ENDPOINT replace_share_endpoint URL='http://192.168.0.1/' ARGS=(key='value',) COMMENT = 'replace share endpoint comment';
+
+query T
+SHOW SHARE ENDPOINT;
+----
+replace_share_endpoint http://192.168.0.1/ {} {"key": "value"} replace share endpoint comment
 
 statement ok
 DROP SHARE ENDPOINT replace_share_endpoint;

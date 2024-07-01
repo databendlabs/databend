@@ -58,18 +58,16 @@ impl Interpreter for ShowShareEndpointInterpreter {
         let mut credentials: Vec<String> = vec![];
         let mut args: Vec<String> = vec![];
         let mut comments: Vec<String> = vec![];
-        let mut created_on_vec: Vec<String> = vec![];
         for (endpoint, meta) in resp.share_endpoint_meta_vec {
             endpoints.push(endpoint.name().to_string());
             urls.push(meta.url.clone());
             if let Some(credential) = &meta.credential {
-                credentials.push(credential.to_string());
+                credentials.push(format!("{}", credential));
             } else {
-                credentials.push("".to_string());
+                credentials.push("{}".to_string());
             }
             args.push(format!("{:?}", meta.args));
             comments.push(meta.comment.unwrap_or_default());
-            created_on_vec.push(meta.create_on.to_string());
         }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
@@ -78,7 +76,6 @@ impl Interpreter for ShowShareEndpointInterpreter {
             StringType::from_data(credentials),
             StringType::from_data(args),
             StringType::from_data(comments),
-            StringType::from_data(created_on_vec),
         ])])
     }
 }

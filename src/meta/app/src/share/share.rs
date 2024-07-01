@@ -259,14 +259,11 @@ pub struct ShareCredentialHmac {
     pub key: String,
 }
 
-impl ToString for &ShareCredential {
-    fn to_string(&self) -> String {
+impl Display for &ShareCredential {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ShareCredential::HMAC(hmac) => {
-                format!(
-                    "Credential=(TYPE='HMAC' KEY='{}')",
-                    mask_string(&hmac.key, 2)
-                )
+                write!(f, "{{TYPE:'HMAC',KEY:'{}'}}", mask_string(&hmac.key, 2))
             }
         }
     }

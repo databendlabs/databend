@@ -72,7 +72,6 @@ impl ShowShareEndpointPlan {
             DataField::new("Credential", DataType::String),
             DataField::new("Args", DataType::String),
             DataField::new("Comment", DataType::String),
-            DataField::new("Created On", DataType::String),
         ]))
     }
 }
