@@ -86,7 +86,7 @@ impl Database for IcebergDatabase {
 
     #[async_backtrace::framed]
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
-        let table_names = self.ctl.iceberg_catalog().list_tables(self.ident).await?;
+        let table_names = self.ctl.iceberg_catalog().list_tables(&self.ident).await?;
 
         let mut tables = vec![];
 

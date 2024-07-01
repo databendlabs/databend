@@ -2793,7 +2793,7 @@ dependencies = [
  "num",
  "num-traits",
  "opendal",
- "ordered-float 3.9.2",
+ "ordered-float 4.2.0",
  "proptest",
  "quanta 0.11.1",
  "rand 0.8.5",

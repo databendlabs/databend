@@ -109,6 +109,7 @@ use iceberg_catalog_rest::RestCatalog;
 use iceberg_catalog_rest::RestCatalogConfig;
 use minitrace::func_name;
 use opendal::Metakey;
+use tokio::sync::OnceCell;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -138,7 +139,7 @@ pub struct IcebergCatalog {
     info: Arc<CatalogInfo>,
 
     /// iceberg catalogs
-    ctl: Arc<dyn iceberg::Catalog>,
+    ctl: OnceCell<Arc<dyn iceberg::Catalog>>,
 }
 
 impl IcebergCatalog {
@@ -152,7 +153,7 @@ impl IcebergCatalog {
             ),
         };
 
-        let ctl: Arc<dyn iceberg::Catalog> = match opt.catalog_type() {
+        let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
                 let cfg = HmsCatalogConfig::builder()
                     .address(hms.address.clone())
@@ -160,7 +161,9 @@ impl IcebergCatalog {
                     .warehouse(hms.warehouse.clone())
                     .props(hms.props.clone())
                     .build();
-                let ctl = HmsCatalog::new(cfg)?;
+                let ctl = HmsCatalog::new(cfg).map_err(|err| {
+                    ErrorCode::BadArguments("Iceberg build hms catalog failed: {err:?}")
+                })?;
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Rest(rest) => {
@@ -169,20 +172,53 @@ impl IcebergCatalog {
                     .warehouse(rest.warehouse.clone())
                     .props(rest.props.clone())
                     .build();
-                let ctl = RestCatalog::new(cfg)?;
+                let ctl = RestCatalog::new(cfg).await.map_err(|err| {
+                    ErrorCode::BadArguments("Iceberg build rest catalog failed: {err:?}")
+                })?;
                 Arc::new(ctl)
             }
         };
 
         Ok(Self {
             info: info.into(),
-            ctl,
+            ctl: OnceCell::new(),
         })
     }
 
     /// Get the iceberg catalog.
-    pub fn iceberg_catalog(&self) -> Arc<dyn iceberg::Catalog> {
-        self.ctl.clone()
+    pub async fn iceberg_catalog(&self) -> Result<Arc<dyn iceberg::Catalog>> {
+        let ctl = self
+            .ctl
+            .get_or_init(|| async {
+                match &self.info {
+                    IcebergCatalogOption::Hms(hms) => {
+                        let cfg = HmsCatalogConfig::builder()
+                            .address(hms.address.clone())
+                            .thrift_transport(HmsThriftTransport::Buffered)
+                            .warehouse(hms.warehouse.clone())
+                            .props(hms.props.clone())
+                            .build();
+                        let ctl = HmsCatalog::new(cfg).map_err(|err| {
+                            ErrorCode::BadArguments("Iceberg build hms catalog failed: {err:?}")
+                        })?;
+                        Ok(Arc::new(ctl) as Arc<dyn iceberg::Catalog>)
+                    }
+                    IcebergCatalogOption::Rest(rest) => {
+                        let cfg = RestCatalogConfig::builder()
+                            .uri(rest.uri.clone())
+                            .warehouse(rest.warehouse.clone())
+                            .props(rest.props.clone())
+                            .build();
+                        let ctl = RestCatalog::new(cfg).await.map_err(|err| {
+                            ErrorCode::BadArguments("Iceberg build rest catalog failed: {err:?}")
+                        })?;
+                        Ok(Arc::new(ctl) as Arc<dyn iceberg::Catalog>)
+                    }
+                }
+            })
+            .await;
+
+        Ok(ctl.clone())
     }
 }
 
