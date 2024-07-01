@@ -265,13 +265,6 @@ impl Amender {
             }
         };
 
-        // trim the leading "/"
-        let obj_key = if let Some(stripped) = obj_key.strip_prefix('/') {
-            stripped
-        } else {
-            obj_key
-        };
-
         info!("recovering object, key: {}", obj_key);
 
         // list versions of the object.
