@@ -37,7 +37,7 @@ impl ConfigBuilder {
         let users = vec![UserConfig {
             name: "test".to_string(),
             auth: UserAuthConfig {
-                auth_type: "NoPassword".to_string(),
+                auth_type: "no_password".to_string(),
                 auth_string: None,
             },
         }];
