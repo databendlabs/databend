@@ -37,7 +37,7 @@ use databend_common_users::UserApiProvider;
 use databend_storages_common_cache_manager::CacheManager;
 
 use crate::auth::AuthMgr;
-use crate::builtin::BuiltinUdfs;
+use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
@@ -115,10 +115,10 @@ impl GlobalServices {
         // Builtin users and udfs are created here.
         {
             let built_in_users = BuiltinUsers::create(config.query.idm.users.clone());
-            let built_in_udfs = BuiltinUdfs::create(config.query.idm.udfs.clone());
+            let built_in_udfs = BuiltinUDFs::create(config.query.idm.udfs.clone());
             let idm = IDM {
                 users: built_in_users.to_meta_auth_infos()?,
-                udfs: built_in_udfs.to_meta_udfs()?,
+                udfs: built_in_udfs.to_meta_udfs().await?,
             };
             UserApiProvider::init(
                 config.meta.to_meta_grpc_client_conf(),

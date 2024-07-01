@@ -15,5 +15,5 @@
 mod builtin_udfs;
 mod builtin_users;
 
-pub use builtin_udfs::BuiltinUdfs;
+pub use builtin_udfs::BuiltinUDFs;
 pub use builtin_users::BuiltinUsers;

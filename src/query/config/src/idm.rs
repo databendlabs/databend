@@ -18,7 +18,7 @@ use serde::Serialize;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct IDMConfig {
     pub users: Vec<UserConfig>,
-    pub udfs: Vec<UdfConfig>,
+    pub udfs: Vec<UDFConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ pub struct UserAuthConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UdfConfig {
+pub struct UDFConfig {
     pub name: String,
     pub definition: String,
 }

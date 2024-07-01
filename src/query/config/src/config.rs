@@ -69,7 +69,7 @@ use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
 use crate::idm::IDMConfig;
-use crate::idm::UdfConfig;
+use crate::idm::UDFConfig;
 use crate::idm::UserConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
@@ -1533,7 +1533,7 @@ pub struct QueryConfig {
     users: Vec<UserConfig>,
 
     #[clap(skip)]
-    udfs: Vec<UdfConfig>,
+    udfs: Vec<UDFConfig>,
 
     #[clap(long, value_name = "VALUE", default_value = "")]
     pub share_endpoint_address: String,

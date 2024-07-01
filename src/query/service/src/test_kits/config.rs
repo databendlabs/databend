@@ -15,7 +15,7 @@
 use databend_common_base::base::GlobalUniqName;
 use databend_common_config::IDMConfig;
 use databend_common_config::InnerConfig;
-use databend_common_config::UdfConfig;
+use databend_common_config::UDFConfig;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
 use databend_common_meta_app::storage::StorageFsConfig;
@@ -43,7 +43,7 @@ impl ConfigBuilder {
         }];
 
         // add idm udfs for test
-        let udfs = vec![UdfConfig {
+        let udfs = vec![UDFConfig {
             name: "test_builtin_ping".to_string(),
             definition: "CREATE OR REPLACE FUNCTION test_builtin_ping (STRING)
     RETURNS STRING
