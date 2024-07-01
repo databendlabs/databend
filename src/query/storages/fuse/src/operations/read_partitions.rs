@@ -72,10 +72,6 @@ impl FuseTable {
         }
 
         let snapshot = self.read_table_snapshot().await?;
-        let is_lazy = push_downs
-            .as_ref()
-            .map(|p| p.lazy_materialization)
-            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let snapshot_loc = self
