@@ -76,3 +76,104 @@ impl BuiltinUsers {
         Ok(auth_infos)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use databend_common_config::UserAuthConfig;
+    use super::*;
+    use databend_common_meta_app::principal::PasswordHashMethod;
+
+    // Helper function to create a UserConfig for testing
+    fn create_user_config(name: &str, auth_type: &str, auth_string: Option<String>) -> UserConfig {
+        UserConfig {
+            name: name.to_string(),
+            auth: UserAuthConfig {
+                auth_type: auth_type.to_string(),
+                auth_string,
+            },
+        }
+    }
+
+    #[test]
+    fn test_no_password_user() {
+        let user_configs = vec![create_user_config("user1", "no_password", None)];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_info = auth_infos.get("user1").unwrap();
+
+        assert_eq!(auth_info.get_type(), AuthType::NoPassword);
+    }
+
+    #[test]
+    fn test_jwt_user() {
+        let user_configs = vec![create_user_config("user2", "jwt", None)];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_info = auth_infos.get("user2").unwrap();
+
+        assert_eq!(auth_info.get_type(), AuthType::JWT);
+    }
+
+    #[test]
+    fn test_sha256_password_user() {
+        let user_configs = vec![create_user_config("user3", "sha256_password", Some("5e884898da28047151d0e56f8dc6292773603d0d6aabbddde4208fdfb800bde3".to_string()))];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_info = auth_infos.get("user3").unwrap();
+
+        match auth_info {
+            AuthInfo::Password { hash_value, hash_method } => {
+                assert_eq!(hash_method, &PasswordHashMethod::Sha256);
+                assert_eq!(hex::encode(hash_value), "5e884898da28047151d0e56f8dc6292773603d0d6aabbddde4208fdfb800bde3");
+            }
+            _ => panic!("Unexpected auth info type"),
+        }
+    }
+
+    #[test]
+    fn test_double_sha1_password_user() {
+        let user_configs = vec![create_user_config("user4", "double_sha1_password", Some("8bff94b1c58e7733cb1bc36d385bb4986bffeb17".to_string()))];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_info = auth_infos.get("user4").unwrap();
+
+        match auth_info {
+            AuthInfo::Password { hash_value, hash_method } => {
+                assert_eq!(hash_method, &PasswordHashMethod::DoubleSha1);
+                assert_eq!(hex::encode(hash_value), "8bff94b1c58e7733cb1bc36d385bb4986bffeb17");
+            }
+            _ => panic!("Unexpected auth info type"),
+        }
+    }
+
+    #[test]
+    fn test_invalid_auth_string() {
+        let user_configs = vec![create_user_config("user5", "sha256_password", Some("invalid_hex".to_string()))];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let result = builtin_users.to_meta_auth_infos();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_missing_auth_string_for_password() {
+        let user_configs = vec![create_user_config("user6", "sha256_password", None)];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let result = builtin_users.to_meta_auth_infos();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_auth_type() {
+        let user_configs = vec![create_user_config("user7", "InvalidAuthType", None)];
+        let builtin_users = BuiltinUsers::create(user_configs);
+
+        let result = builtin_users.to_meta_auth_infos();
+        assert!(result.is_err());
+    }
+}

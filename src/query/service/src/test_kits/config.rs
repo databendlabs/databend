@@ -35,7 +35,7 @@ impl ConfigBuilder {
 
         // add idm users for test
         let users = vec![UserConfig {
-            name: "test".to_string(),
+            name: "root".to_string(),
             auth: UserAuthConfig {
                 auth_type: "no_password".to_string(),
                 auth_string: None,
