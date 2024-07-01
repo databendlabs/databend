@@ -67,11 +67,22 @@ impl MetaReaders {
         )
     }
 
+    pub fn segment_info_reader_without_cache(
+        dal: Operator,
+        schema: TableSchemaRef,
+    ) -> CompactSegmentInfoReader {
+        CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
+    }
+
     pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
             LoaderWrapper(dal),
         )
+    }
+
+    pub fn table_snapshot_reader_without_cache(dal: Operator) -> TableSnapshotReader {
+        TableSnapshotReader::new(None, LoaderWrapper(dal))
     }
 
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {

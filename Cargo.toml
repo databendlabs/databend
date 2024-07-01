@@ -180,6 +180,7 @@ databend-enterprise-aggregating-index = { path = "src/query/ee_features/aggregat
 databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table" }
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
+databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }

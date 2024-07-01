@@ -237,21 +237,13 @@ impl Binder {
                 }
 
                 // Remove unused join conditions.
-                let join_conditions = [join.left_conditions.clone(), join.right_conditions.clone()];
-                for index in (0..join.left_conditions.len()).rev() {
-                    let mut used = false;
-                    for conditions in join_conditions.iter() {
-                        let used_columns = conditions[index].used_columns();
-                        if used_columns.is_subset(&left_correlated_columns) {
-                            used = true;
-                            break;
-                        }
-                    }
-
-                    if !used {
-                        join.left_conditions.remove(index);
-                        join.right_conditions.remove(index);
-                        join.is_null_equal.retain(|&x| x != index);
+                for index in (0..join.equi_conditions.len()).rev() {
+                    let left_used_columns = join.equi_conditions[index].left.used_columns();
+                    let right_used_columns = join.equi_conditions[index].right.used_columns();
+                    if !left_used_columns.is_subset(&left_correlated_columns)
+                        && !right_used_columns.is_subset(&left_correlated_columns)
+                    {
+                        join.equi_conditions.remove(index);
                     }
                 }
 

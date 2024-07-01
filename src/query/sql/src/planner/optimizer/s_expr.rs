@@ -213,15 +213,15 @@ impl SExpr {
                 }
             }
             RelOperator::Join(op) => {
-                for left in &op.left_conditions {
-                    get_udf_names(left)?.iter().for_each(|udf| {
+                for equi_condition in op.equi_conditions.iter() {
+                    get_udf_names(&equi_condition.left)?.iter().for_each(|udf| {
                         udfs.insert(*udf);
                     });
-                }
-                for right in &op.right_conditions {
-                    get_udf_names(right)?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
+                    get_udf_names(&equi_condition.right)?
+                        .iter()
+                        .for_each(|udf| {
+                            udfs.insert(*udf);
+                        });
                 }
                 for non in &op.non_equi_conditions {
                     get_udf_names(non)?.iter().for_each(|udf| {
@@ -428,9 +428,9 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::RecursiveCteScan(_)
         | RelOperator::MergeInto(_) => false,
         RelOperator::Join(op) => {
-            op.left_conditions.iter().any(find_subquery_in_expr)
-                || op.right_conditions.iter().any(find_subquery_in_expr)
-                || op.non_equi_conditions.iter().any(find_subquery_in_expr)
+            op.equi_conditions.iter().any(|condition| {
+                find_subquery_in_expr(&condition.left) || find_subquery_in_expr(&condition.right)
+            }) || op.non_equi_conditions.iter().any(find_subquery_in_expr)
         }
         RelOperator::EvalScalar(op) => op
             .items
