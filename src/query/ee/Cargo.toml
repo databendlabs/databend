@@ -41,6 +41,7 @@ databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-fail-safe = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-storage-quota = { workspace = true }
@@ -58,6 +59,10 @@ jwt-simple = "0.11.0"
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = "3.4.0"
+
+# aws sdk
+aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "1.17.0"
 
 [dev-dependencies]
 jsonb = { workspace = true }

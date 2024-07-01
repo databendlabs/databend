@@ -19,6 +19,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseColumnTable;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
@@ -119,6 +120,12 @@ impl TableFunctionFactory {
             "fuse_snapshot".to_string(),
             (next_id(), Arc::new(FuseSnapshotTable::create)),
         );
+
+        creators.insert(
+            "fuse_amend".to_string(),
+            (next_id(), Arc::new(FuseAmendTable::create)),
+        );
+
         creators.insert(
             "fuse_segment".to_string(),
             (next_id(), Arc::new(FuseSegmentTable::create)),
