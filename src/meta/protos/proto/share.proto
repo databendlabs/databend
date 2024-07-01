@@ -82,7 +82,6 @@ message ObjectSharedByShareIds {
 message ShareCredential {
   oneof credential {
     ShareCredentialHMAC hmac = 1;
-    ShareCredentialNone none = 2;
   }
 }
 
@@ -91,11 +90,6 @@ message ShareCredentialHMAC {
   uint64 min_reader_ver = 101;
 
   string key = 1;
-}
-
-message ShareCredentialNone {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
 }
 
 message ShareEndpointMeta {

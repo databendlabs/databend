@@ -39,7 +39,7 @@ pub struct CreateShareEndpointPlan {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub credential: ShareCredential,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
 }
@@ -69,7 +69,7 @@ impl ShowShareEndpointPlan {
         Arc::new(DataSchema::new(vec![
             DataField::new("Endpoint", DataType::String),
             DataField::new("URL", DataType::String),
-            DataField::new("To Tenant", DataType::String),
+            DataField::new("Credential", DataType::String),
             DataField::new("Args", DataType::String),
             DataField::new("Comment", DataType::String),
             DataField::new("Created On", DataType::String),

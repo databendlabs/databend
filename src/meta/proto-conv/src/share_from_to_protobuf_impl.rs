@@ -285,7 +285,6 @@ impl FromToProto for mt::ShareCredential {
                     key: hmac.key.clone(),
                 }))
             }
-            Some(pb::share_credential::Credential::None(_)) => Ok(mt::ShareCredential::None),
             None => Err(Incompatible {
                 reason: "ShareCredential cannot be None".to_string(),
             }),
@@ -300,14 +299,6 @@ impl FromToProto for mt::ShareCredential {
                         ver: VER,
                         min_reader_ver: MIN_READER_VER,
                         key: hmac.key.clone(),
-                    },
-                )),
-            }),
-            Self::None => Ok(Self::PB {
-                credential: Some(pb::share_credential::Credential::None(
-                    pb::ShareCredentialNone {
-                        ver: VER,
-                        min_reader_ver: MIN_READER_VER,
                     },
                 )),
             }),
