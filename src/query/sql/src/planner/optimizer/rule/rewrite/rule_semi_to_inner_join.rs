@@ -61,9 +61,15 @@ impl Rule for RuleSemiToInnerJoin {
         }
 
         let conditions = if join.join_type == JoinType::LeftSemi {
-            join.right_conditions.clone()
+            join.equi_conditions
+                .iter()
+                .map(|condition| condition.right.clone())
+                .collect::<Vec<_>>()
         } else {
-            join.left_conditions.clone()
+            join.equi_conditions
+                .iter()
+                .map(|condition| condition.left.clone())
+                .collect::<Vec<_>>()
         };
 
         if conditions.is_empty() {

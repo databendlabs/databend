@@ -437,16 +437,14 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    let old_left_conditions = Join::try_from(s_expr.child(0)?.plan().clone())?.left_conditions;
+    let original_target_table_position =
+        target_table_position(s_expr.child(0)?, plan.target_table_index)?;
     let mut join_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     if let &RelOperator::Exchange(_) = join_s_expr.plan() {
         join_s_expr = join_s_expr.child(0)?.clone();
     }
-    let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
-    let mut change_join_order = false;
-    if old_left_conditions != left_conditions {
-        change_join_order = true;
-    }
+    let new_target_table_position = target_table_position(&join_s_expr, plan.target_table_index)?;
+    let join_order_changed = original_target_table_position != new_target_table_position;
     let join_op = Join::try_from(join_s_expr.plan().clone())?;
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
@@ -461,7 +459,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
             .get_settings()
             .get_enable_distributed_merge_into()?;
     let mut new_columns_set = plan.columns_set.clone();
-    if change_join_order
+    if join_order_changed
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
             .table_ctx
@@ -481,7 +479,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         })
     }
 
-    plan.change_join_order = change_join_order;
+    plan.change_join_order = join_order_changed;
     if opt_ctx.enable_distributed_optimization {
         let merge_source_optimizer = MergeSourceOptimizer::create();
         // Inner join shouldn't add `RowNumber` node.
@@ -524,5 +522,24 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(join_s_expr),
             )),
         })
+    }
+}
+
+fn target_table_position(join_s_expr: &SExpr, target_table_index: usize) -> Result<usize> {
+    fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
+        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+            scan.table_index == target_table_index
+        } else {
+            s_expr
+                .children()
+                .any(|child| contains_target_table(child, target_table_index))
+        }
+    }
+
+    debug_assert!(matches!(join_s_expr.plan(), RelOperator::Join(_)));
+    if contains_target_table(join_s_expr.child(0)?, target_table_index) {
+        Ok(0)
+    } else {
+        Ok(1)
     }
 }
