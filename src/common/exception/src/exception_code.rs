@@ -375,6 +375,9 @@ build_exceptions! {
 
     // sequence
     SequenceError(3101),
+
+    // Share error codes(continue).
+    ErrorShareEndpointCredential(3111),
 }
 
 // Storage errors [3001, 4000].

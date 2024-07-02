@@ -20,6 +20,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::Result;
 use enumflags2::bitflags;
 use enumflags2::BitFlags;
 
@@ -32,6 +33,7 @@ use crate::schema::TableMeta;
 use crate::share::share_name_ident::ShareNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareEndpointIdent;
+use crate::storage::mask_string;
 use crate::tenant::Tenant;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -247,12 +249,32 @@ pub struct GetObjectGrantPrivilegesReply {
     pub privileges: Vec<ObjectGrantPrivilege>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareCredential {
+    HMAC(ShareCredentialHmac),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ShareCredentialHmac {
+    pub key: String,
+}
+
+impl Display for &ShareCredential {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ShareCredential::HMAC(hmac) => {
+                write!(f, "{{TYPE:'HMAC',KEY:'{}'}}", mask_string(&hmac.key, 2))
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateShareEndpointReq {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: Tenant,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
@@ -267,7 +289,7 @@ pub struct CreateShareEndpointReply {
 pub struct UpsertShareEndpointReq {
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: String,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub create_on: DateTime<Utc>,
 }
@@ -305,10 +327,12 @@ pub struct DropShareEndpointReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ShareEndpointMeta {
     pub url: String,
+    // `tenant` is needless anymore, keep it as empty string
     pub tenant: String,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
+    pub credential: Option<ShareCredential>,
 }
 
 impl ShareEndpointMeta {
@@ -319,16 +343,20 @@ impl ShareEndpointMeta {
     pub fn new(req: &CreateShareEndpointReq) -> Self {
         Self {
             url: req.url.clone(),
-            tenant: req.tenant.tenant_name().to_string(),
+            tenant: "".to_string(),
             args: req.args.clone(),
+            credential: req.credential.clone(),
             comment: req.comment.clone(),
             create_on: req.create_on,
         }
     }
 
     pub fn if_need_to_upsert(&self, req: &UpsertShareEndpointReq) -> bool {
-        // upsert only when these fields not equal
-        self.url != req.url || self.args != req.args || self.tenant != req.tenant
+        if self.url != req.url || self.args != req.args || self.credential != req.credential {
+            return true;
+        };
+
+        true
     }
 
     pub fn upsert(&self, req: &UpsertShareEndpointReq) -> Self {
@@ -336,7 +364,7 @@ impl ShareEndpointMeta {
 
         meta.url = req.url.clone();
         meta.args = req.args.clone();
-        meta.tenant = req.tenant.clone();
+        meta.credential = req.credential.clone();
         meta.create_on = req.create_on;
 
         meta
