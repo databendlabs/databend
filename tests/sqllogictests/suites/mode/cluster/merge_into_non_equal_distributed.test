@@ -61,7 +61,7 @@ CommitSink
     ├── output columns: [#_row_number]
     ├── exchange type: Merge
     └── MergeInto
-        ├── target_table: [catalog: default] [database: default] [table: t1]
+        ├── target table: [catalog: default] [database: default] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), a (#0), t1.a (#1))]
         ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
         └── RowFetch
@@ -107,7 +107,7 @@ CommitSink
     ├── output columns: [#_row_id]
     ├── exchange type: Merge
     └── MergeInto
-        ├── target_table: [catalog: default] [database: default] [table: t1]
+        ├── target table: [catalog: default] [database: default] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), a (#0), t1.a (#2))]
         ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
         └── RowFetch
@@ -207,7 +207,7 @@ CommitSink
     ├── output columns: [#_row_number]
     ├── exchange type: Merge
     └── MergeInto
-        ├── target_table: [catalog: default] [database: default] [table: t1]
+        ├── target table: [catalog: default] [database: default] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(a (#0) AS Int32 NULL), t1.a (#1))]
         ├── unmatched insert: [condition: None, insert into (a) values(CAST(a (#0) AS Int32 NULL))]
         └── RowFetch
