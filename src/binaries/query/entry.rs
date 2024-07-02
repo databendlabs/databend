@@ -286,7 +286,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!(
         "Builtin users: {}",
         conf.query
-            .idm
+            .builtin
             .users
             .iter()
             .map(|config| config.name.clone())
@@ -297,7 +297,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!(
         "Builtin UDFs: {}",
         conf.query
-            .idm
+            .builtin
             .udfs
             .iter()
             .map(|config| config.name.clone())

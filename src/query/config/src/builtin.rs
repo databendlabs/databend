@@ -16,7 +16,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct IDMConfig {
+pub struct BuiltInConfig {
     pub users: Vec<UserConfig>,
     pub udfs: Vec<UDFConfig>,
 }

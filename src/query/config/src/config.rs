@@ -68,9 +68,9 @@ use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
 use crate::background_config::BackgroundConfig;
-use crate::idm::IDMConfig;
-use crate::idm::UDFConfig;
-use crate::idm::UserConfig;
+use crate::builtin::BuiltInConfig;
+use crate::builtin::UDFConfig;
+use crate::builtin::UserConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -1732,7 +1732,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
-            idm: IDMConfig {
+            builtin: BuiltInConfig {
                 users: self.users,
                 udfs: self.udfs,
             },
@@ -1818,8 +1818,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-            users: inner.idm.users,
-            udfs: inner.idm.udfs,
+            users: inner.builtin.users,
+            udfs: inner.builtin.udfs,
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,

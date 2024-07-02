@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_base::base::GlobalUniqName;
-use databend_common_config::IDMConfig;
+use databend_common_config::BuiltInConfig;
 use databend_common_config::InnerConfig;
 use databend_common_config::UDFConfig;
 use databend_common_config::UserAuthConfig;
@@ -33,7 +33,7 @@ impl ConfigBuilder {
         conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
 
-        // add idm users for test
+        // add builtin users for test
         let users = vec![UserConfig {
             name: "root".to_string(),
             auth: UserAuthConfig {
@@ -42,7 +42,7 @@ impl ConfigBuilder {
             },
         }];
 
-        // add idm udfs for test
+        // add builtin udfs for test
         let udfs = vec![UDFConfig {
             name: "test_builtin_ping".to_string(),
             definition: "CREATE OR REPLACE FUNCTION test_builtin_ping (STRING)
@@ -52,7 +52,7 @@ HANDLER = 'ping'
 ADDRESS = 'https://databend.com';"
                 .to_string(),
         }];
-        conf.query.idm = IDMConfig { users, udfs };
+        conf.query.builtin = BuiltInConfig { users, udfs };
 
         // set node_id to a unique value
         conf.query.node_id = GlobalUniqName::unique();
@@ -109,7 +109,7 @@ ADDRESS = 'https://databend.com';"
 
     pub fn add_user(mut self, _user_name: &str, user: UserConfig) -> ConfigBuilder {
         let users = vec![user];
-        self.conf.query.idm = IDMConfig {
+        self.conf.query.builtin = BuiltInConfig {
             users,
             udfs: vec![],
         };

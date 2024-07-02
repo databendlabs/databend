@@ -44,24 +44,24 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 
-use crate::idm::IDM;
+use crate::builtin::BuiltIn;
 use crate::BUILTIN_ROLE_PUBLIC;
 
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
-    idm_config: IDM,
+    builtin: BuiltIn,
 }
 
 impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
-        idm_config: IDM,
+        builtin: BuiltIn,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, idm_config, tenant).await?);
+        GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
         let user_mgr = UserApiProvider::instance();
         if let Some(q) = quota {
             let i = user_mgr.tenant_quota_api(tenant);
@@ -74,14 +74,14 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
-        idm_config: IDM,
+        builtin: BuiltIn,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
         let user_mgr = UserApiProvider {
             meta: client.clone(),
             client: client.arc(),
-            idm_config,
+            builtin,
         };
 
         // init built-in role
@@ -107,7 +107,7 @@ impl UserApiProvider {
         conf: RpcClientConf,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, IDM::default(), tenant).await
+        Self::try_create(conf, BuiltIn::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {
@@ -161,18 +161,18 @@ impl UserApiProvider {
     }
 
     pub fn get_configured_user(&self, user_name: &str) -> Option<&AuthInfo> {
-        self.idm_config.users.get(user_name)
+        self.builtin.users.get(user_name)
     }
 
     pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
-        self.idm_config.users.clone()
+        self.builtin.users.clone()
     }
 
     pub fn get_configured_udf(&self, udf_name: &str) -> Option<UserDefinedFunction> {
-        self.idm_config.udfs.get(udf_name).cloned()
+        self.builtin.udfs.get(udf_name).cloned()
     }
 
     pub fn get_configured_udfs(&self) -> HashMap<String, UserDefinedFunction> {
-        self.idm_config.udfs.clone()
+        self.builtin.udfs.clone()
     }
 }
