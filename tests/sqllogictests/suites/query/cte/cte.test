@@ -88,17 +88,12 @@ WITH test1 AS (SELECT * FROM numbers(5)) SELECT * FROM test1
 3
 4
 
-query II
+query error
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM test1
-----
-2 3
-4 5
 
-query II
+query error
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test1)
-----
-2 3
-4 5
+
 
 query III
 SELECT * FROM (WITH t1 AS (SELECT i FROM test1) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i order by l.i, r.j
