@@ -122,9 +122,24 @@ impl PhysicalPlanBuilder {
             ..
         } = merge_into;
 
-        let mut columns_set = if let Some(lazy_columns) = lazy_columns {
+        let settings = self.ctx.get_settings();
+        let mut lazy_columns = lazy_columns.clone();
+        if matches!(
+            merge_type,
+            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
+        ) && settings.get_enable_merge_into_row_fetch()?
+        {
+            lazy_columns.remove(row_id_index);
+        } else if matches!(merge_type, MergeIntoType::InsertOnly) {
+            lazy_columns.insert(*row_id_index);
+        } else {
+            lazy_columns.clear();
+        };
+
+        let mut columns_set = if !lazy_columns.is_empty() {
+            self.metadata.write().add_lazy_columns(lazy_columns.clone());
             columns_set
-                .difference(lazy_columns)
+                .difference(&lazy_columns)
                 .cloned()
                 .collect::<ColumnSet>()
         } else {
@@ -169,9 +184,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        if let Some(lazy_columns) = lazy_columns
-            && !lazy_columns.is_empty()
-        {
+        if !lazy_columns.is_empty() {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
@@ -482,7 +495,7 @@ impl PhysicalPlanBuilder {
             mutation_kind: MutationKind::Update,
             update_stream_meta: merge_into_build_info.update_stream_meta,
             merge_meta: false,
-            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));
         physical_plan.adjust_plan_id(&mut 0);

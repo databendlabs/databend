@@ -27,6 +27,7 @@ use log::info;
 use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
+use crate::binder::target_table_position;
 use crate::binder::MergeIntoType;
 use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
@@ -522,24 +523,5 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(join_s_expr),
             )),
         })
-    }
-}
-
-fn target_table_position(join_s_expr: &SExpr, target_table_index: usize) -> Result<usize> {
-    fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(ref scan) = s_expr.plan() {
-            scan.table_index == target_table_index
-        } else {
-            s_expr
-                .children()
-                .any(|child| contains_target_table(child, target_table_index))
-        }
-    }
-
-    debug_assert!(matches!(join_s_expr.plan(), RelOperator::Join(_)));
-    if contains_target_table(join_s_expr.child(0)?, target_table_index) {
-        Ok(0)
-    } else {
-        Ok(1)
     }
 }
