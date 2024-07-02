@@ -390,7 +390,7 @@ fn format_merge_into(
 ) -> Result<FormatTreeNode<String>> {
     let table_entry = metadata.table(merge_into.target_table_index).clone();
     let target_table = vec![FormatTreeNode::new(format!(
-        "target_table: [catalog: {}] [database: {}] [table: {}]",
+        "target table: [catalog: {}] [database: {}] [table: {}]",
         table_entry.catalog(),
         table_entry.database(),
         table_entry.name()
