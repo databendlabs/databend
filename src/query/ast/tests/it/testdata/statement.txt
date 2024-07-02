@@ -14696,9 +14696,9 @@ Presign(
 
 
 ---------- Input ----------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -14721,13 +14721,9 @@ CreateShareEndpoint(
                 conns: {},
             },
         },
-        tenant: Identifier {
-            span: Some(
-                68..69,
-            ),
-            name: "x",
-            quote: None,
-            is_hole: false,
+        credential_options: {
+            "KEY": "hello",
+            "TYPE": "HMAC",
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",
@@ -14741,9 +14737,9 @@ CreateShareEndpoint(
 
 
 ---------- Input ----------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -14766,13 +14762,9 @@ CreateShareEndpoint(
                 conns: {},
             },
         },
-        tenant: Identifier {
-            span: Some(
-                65..66,
-            ),
-            name: "x",
-            quote: None,
-            is_hole: false,
+        credential_options: {
+            "KEY": "hello",
+            "TYPE": "HMAC",
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",

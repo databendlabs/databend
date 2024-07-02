@@ -32,7 +32,7 @@ pub struct CreateShareEndpointStmt {
     pub create_option: CreateOption,
     pub endpoint: Identifier,
     pub url: UriLocation,
-    pub tenant: Identifier,
+    pub credential_options: BTreeMap<String, String>,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
 }
@@ -49,9 +49,16 @@ impl Display for CreateShareEndpointStmt {
         }
         write!(f, "{}", self.endpoint)?;
         write!(f, " URL={}", self.url)?;
-        write!(f, " TENANT={} ARGS=(", self.tenant)?;
-        write_comma_separated_string_map(f, &self.args)?;
-        write!(f, ")")?;
+        if !self.credential_options.is_empty() {
+            write!(f, " CREDENTIAL=(")?;
+            write_comma_separated_string_map(f, &self.credential_options)?;
+            write!(f, ")")?;
+        }
+        if !self.args.is_empty() {
+            write!(f, " ARGS=(")?;
+            write_comma_separated_string_map(f, &self.args)?;
+            write!(f, ")")?;
+        }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT = '{comment}'")?;
         }
