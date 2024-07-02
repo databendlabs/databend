@@ -182,6 +182,16 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
+        if let Some(cte_name) = &bind_context.cte_name {
+            // `cte_name` exists, which means the current cte is a nested cte
+            // If the `cte_name` is the same as the current cte's name, it means the cte is recursive
+            if cte_name == table_name {
+                return Err(ErrorCode::SemanticError(
+                    "The cte is not recursive, but it references itself.".to_string(),
+                )
+                .set_span(span));
+            }
+        }
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
