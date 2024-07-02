@@ -22,7 +22,4 @@ pub use processors::MergeIntoSplitProcessor;
 pub use processors::MixRowIdKindAndLog;
 pub use processors::RowNumberAndLogSplitProcessor;
 pub use processors::SourceFullMatched;
-pub use processors::TransformAddRowNumberColumnProcessor;
-pub use processors::TransformDistributedMergeIntoBlockDeserialize;
-pub use processors::TransformDistributedMergeIntoBlockSerialize;
 pub use processors::UnMatchedExprs;

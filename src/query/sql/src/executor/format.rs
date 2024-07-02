@@ -48,11 +48,8 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::MergeIntoManipulate;
 use crate::executor::physical_plans::MergeIntoOrganize;
-use crate::executor::physical_plans::MergeIntoSerialize;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -250,20 +247,11 @@ fn to_format_tree(
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::MergeInto(plan) => format_merge_into(plan, metadata, profs),
-        PhysicalPlan::MergeIntoAddRowNumber(plan) => {
-            format_merge_into_add_row_number(plan, metadata, profs)
-        }
-        PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-            format_merge_into_append_not_matched(plan, metadata, profs)
-        }
         PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
         PhysicalPlan::MergeIntoManipulate(plan) => {
             format_merge_into_manipulate(plan, metadata, profs)
         }
         PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
-        PhysicalPlan::MergeIntoSerialize(plan) => {
-            format_merge_into_serialize(plan, metadata, profs)
-        }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
             Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
@@ -394,30 +382,6 @@ fn format_merge_into(
     ))
 }
 
-fn format_merge_into_add_row_number(
-    plan: &MergeIntoAddRowNumber,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAddRowNumber".to_string(),
-        vec![child],
-    ))
-}
-
-fn format_merge_into_append_not_matched(
-    plan: &MergeIntoAppendNotMatched,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAppendNotMatched".to_string(),
-        vec![child],
-    ))
-}
-
 fn format_merge_into_split(
     plan: &MergeIntoSplit,
     metadata: &Metadata,
@@ -450,18 +414,6 @@ fn format_merge_into_organize(
     let child = to_format_tree(&plan.input, metadata, profs)?;
     Ok(FormatTreeNode::with_children(
         "MergeIntoOrganize".to_string(),
-        vec![child],
-    ))
-}
-
-fn format_merge_into_serialize(
-    plan: &MergeIntoSerialize,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoSerialize".to_string(),
         vec![child],
     ))
 }

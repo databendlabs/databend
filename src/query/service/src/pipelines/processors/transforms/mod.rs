@@ -15,9 +15,6 @@
 pub mod aggregator;
 pub mod group_by;
 mod hash_join;
-mod processor_accumulate_row_number;
-mod processor_deduplicate_row_number;
-mod processor_extract_hash_table_by_row_number;
 pub(crate) mod range_join;
 mod transform_add_computed_columns;
 mod transform_add_const_columns;
@@ -45,9 +42,6 @@ mod transform_udf_server;
 mod window;
 
 pub use hash_join::*;
-pub use processor_accumulate_row_number::AccumulateRowNumber;
-pub use processor_deduplicate_row_number::DeduplicateRowNumber;
-pub use processor_extract_hash_table_by_row_number::ExtractHashTableByRowNumber;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_add_internal_columns::TransformAddInternalColumns;

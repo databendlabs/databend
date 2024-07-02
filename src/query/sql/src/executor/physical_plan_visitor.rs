@@ -18,7 +18,6 @@ use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::MergeIntoManipulate;
 use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
@@ -51,8 +50,6 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -101,14 +98,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
-            PhysicalPlan::MergeIntoAddRowNumber(plan) => self.replace_add_row_number(plan),
-            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-                self.replace_merge_into_row_id_apply(plan)
-            }
             PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
             PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
             PhysicalPlan::MergeIntoOrganize(plan) => self.replace_merge_into_organize(plan),
-            PhysicalPlan::MergeIntoSerialize(plan) => self.replace_merge_into_serialize(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
@@ -491,29 +483,6 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
-    fn replace_add_row_number(&mut self, plan: &MergeIntoAddRowNumber) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoAddRowNumber(Box::new(
-            MergeIntoAddRowNumber {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
-    }
-
-    fn replace_merge_into_row_id_apply(
-        &mut self,
-        plan: &MergeIntoAppendNotMatched,
-    ) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoAppendNotMatched(Box::new(
-            MergeIntoAppendNotMatched {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
-    }
-
     fn replace_merge_into_split(&mut self, plan: &MergeIntoSplit) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
@@ -539,16 +508,6 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::MergeIntoOrganize(Box::new(
             MergeIntoOrganize {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
-    }
-
-    fn replace_merge_into_serialize(&mut self, plan: &MergeIntoSerialize) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoSerialize(Box::new(
-            MergeIntoSerialize {
                 input: Box::new(input),
                 ..plan.clone()
             },
@@ -759,12 +718,6 @@ impl PhysicalPlan {
                 PhysicalPlan::MergeInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoAddRowNumber(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
                 PhysicalPlan::MergeIntoSplit(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -772,9 +725,6 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoOrganize(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MergeIntoSerialize(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

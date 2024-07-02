@@ -40,9 +40,6 @@ pub struct MergeIntoManipulate {
     // merge_type
     pub merge_type: MergeIntoType,
     pub row_id_idx: usize,
-    pub source_row_id_idx: Option<usize>,
-    pub source_row_number_idx: Option<usize>,
-    pub enable_right_broadcast: bool,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,
 }

@@ -27,7 +27,7 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::create_dummy_items;
+use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::BlockCompactorForCopy;
 use databend_common_pipeline_transforms::processors::TransformCompact;
@@ -96,20 +96,12 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         block_thresholds: BlockThresholds,
-        specified_mid_len: usize,
-        specified_last_len: usize,
+        transform_len: usize,
+        need_match: bool,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
-        let output_lens = pipeline.output_len();
-        let items1 = create_dummy_items(
-            output_lens - specified_mid_len - specified_last_len,
-            output_lens,
-        );
-        let items2 = create_dummy_items(
-            output_lens - specified_mid_len - specified_last_len,
-            output_lens,
-        );
+
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
@@ -122,10 +114,11 @@ impl FuseTable {
                         num_input_columns,
                     ))
                 },
-                specified_mid_len,
+                transform_len,
             )?;
-            builder.add_items_prepend(items1);
-            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
             pipeline.add_pipe(builder.finalize());
         }
 
@@ -144,10 +137,11 @@ impl FuseTable {
 
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 || Ok(TransformSortPartial::new(None, sort_desc.clone())),
-                specified_mid_len,
+                transform_len,
             )?;
-            builder.add_items_prepend(items2);
-            builder.add_items(create_dummy_items(specified_last_len, specified_last_len));
+            if need_match {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+            }
             pipeline.add_pipe(builder.finalize());
         }
         Ok(cluster_stats_gen)

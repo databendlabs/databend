@@ -195,12 +195,6 @@ impl PipelineBuilder {
 
             // Merge into.
             PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
-            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
-                self.build_merge_into_append_not_matched(merge_into_append_not_matched)
-            }
-            PhysicalPlan::MergeIntoAddRowNumber(merge_into_add_row_number) => {
-                self.build_merge_into_add_row_number(merge_into_add_row_number)
-            }
             PhysicalPlan::MergeIntoSplit(merge_into_split) => {
                 self.build_merge_into_split(merge_into_split)
             }
@@ -209,9 +203,6 @@ impl PipelineBuilder {
             }
             PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
                 self.build_merge_into_organize(merge_into_organize)
-            }
-            PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
-                self.build_merge_into_serialize(merge_into_serialize)
             }
 
             // Commit.

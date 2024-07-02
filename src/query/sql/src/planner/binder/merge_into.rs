@@ -280,20 +280,6 @@ impl Binder {
         let (mut source_expr, mut source_context) =
             self.bind_table_reference(bind_context, &source_data)?;
 
-        // try add internal_column (_row_id) for source_table
-        let mut source_table_index = DUMMY_TABLE_INDEX;
-        let mut source_row_id_index = None;
-
-        if settings.get_enable_distributed_merge_into()? {
-            self.try_add_internal_column_binding(
-                &source_data,
-                &mut source_context,
-                &mut source_expr,
-                &mut source_table_index,
-                &mut source_row_id_index,
-            )?;
-        }
-
         // remove stream column.
         source_context
             .columns
@@ -582,11 +568,8 @@ impl Binder {
             field_index_map,
             merge_type,
             distributed: false,
-            change_join_order: false,
             row_id_index,
-            source_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
-            enable_right_broadcast: false,
             lazy_columns,
             lock_guard,
         };

@@ -309,7 +309,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable merge into row fetch optimization.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -523,7 +523,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
