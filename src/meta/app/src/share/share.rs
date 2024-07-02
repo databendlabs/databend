@@ -305,9 +305,6 @@ pub struct GetShareEndpointReq {
     // If `endpoint` is not None, return the specified endpoint,
     // else return all share endpoints meta of tenant
     pub endpoint: Option<String>,
-
-    // If `to_tenant` is not None, return the specified endpoint to the tenant,
-    pub to_tenant: Option<Tenant>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
