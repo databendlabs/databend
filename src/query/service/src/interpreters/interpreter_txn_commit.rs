@@ -75,6 +75,7 @@ impl Interpreter for CommitInterpreter {
             };
 
             let mismatched_tids = {
+                self.ctx.txn_mgr().lock().set_auto_commit();
                 let ret = catalog.update_multi_table_meta(req).await;
                 if let Err(ref e) = ret {
                     // other errors may occur, especially the version mismatch of streams,

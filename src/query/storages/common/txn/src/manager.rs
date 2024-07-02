@@ -139,6 +139,10 @@ impl TxnManager {
         }
     }
 
+    pub fn set_auto_commit(&mut self) {
+        self.state = TxnState::AutoCommit;
+    }
+
     pub fn force_set_fail(&mut self) {
         self.state = TxnState::Fail;
     }
