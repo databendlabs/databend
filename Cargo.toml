@@ -396,7 +396,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "be8b2c2" }
-object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "eadb6d9b" }
+object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "51733de" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }

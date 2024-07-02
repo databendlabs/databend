@@ -11005,7 +11005,7 @@ dependencies = [
 [[package]]
 name = "object_store_opendal"
 version = "0.44.1"
-source = "git+https://github.com/Xuanwo/opendal?rev=eadb6d9b#eadb6d9bdca04617b1691da1fd572f1ac05d44a7"
+source = "git+https://github.com/Xuanwo/opendal?rev=d6baf68#d6baf6851f6e4ec340e79613db5e83f77092ce11"
 dependencies = [
  "async-trait",
  "bytes",
