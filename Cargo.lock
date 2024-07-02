@@ -3331,8 +3331,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-storage",
  "databend-common-tracing",
- "databend-common-users",
- "hex",
  "log",
  "pretty_assertions",
  "semver",

@@ -286,10 +286,21 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!(
         "Builtin users: {}",
         conf.query
-            .idm
+            .builtin
             .users
-            .keys()
-            .map(|name| name.to_string())
+            .iter()
+            .map(|config| config.name.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    println!();
+    println!(
+        "Builtin UDFs: {}",
+        conf.query
+            .builtin
+            .udfs
+            .iter()
+            .map(|config| config.name.clone())
             .collect::<Vec<_>>()
             .join(", ")
     );
