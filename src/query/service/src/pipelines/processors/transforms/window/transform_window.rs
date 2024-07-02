@@ -249,7 +249,6 @@ impl<T: Number> TransformWindow<T> {
         assert_eq!(self.partition_end.row, block_rows);
         self.partition_end.block += 1;
         self.partition_end.row = 0;
-
         assert!(!self.partition_ended && self.partition_end == end);
     }
 
@@ -257,7 +256,8 @@ impl<T: Number> TransformWindow<T> {
         if self.current_row_in_partition - 1 <= n {
             self.frame_start = self.partition_start;
         } else {
-            self.frame_start = self.advance_row(self.prev_frame_start);
+            let cur = self.advance_row(self.prev_frame_start);
+            self.frame_start = cur;
         }
         self.frame_started = true;
     }
@@ -342,7 +342,6 @@ impl<T: Number> TransformWindow<T> {
     /// if the current row is the last row of the current block, advance the current block and row = 0
     fn advance_row(&self, mut row: RowPtr) -> RowPtr {
         debug_assert!(row.block >= self.first_block);
-
         if row == self.blocks_end() {
             return row;
         }
@@ -359,6 +358,8 @@ impl<T: Number> TransformWindow<T> {
     fn goback_row(&self, mut row: RowPtr) -> RowPtr {
         if row.row != 0 {
             row.row -= 1;
+        } else if row.block == 0 {
+            row.row = self.block_rows(&row) - 1;
         } else {
             row.block -= 1;
             row.row = self.block_rows(&row) - 1;
@@ -543,12 +544,12 @@ impl<T: Number> TransformWindow<T> {
             }
             WindowFunctionImpl::LagLead(ll) => {
                 let value = if self.frame_start == self.frame_end {
-                    match ll.default.clone() {
+                    match &ll.default {
                         LagLeadDefault::Null => Scalar::Null,
                         LagLeadDefault::Index(col) => {
                             let block =
                                 &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(col).value;
+                            let value = &block.get_by_offset(*col).value;
                             value.index(self.current_row.row).unwrap().to_owned()
                         }
                     }
@@ -559,18 +560,42 @@ impl<T: Number> TransformWindow<T> {
                         .unwrap()
                         .block;
                     let value = &block.get_by_offset(ll.arg).value;
-                    let col = block.get_by_offset(ll.arg).to_column(block.num_rows());
                     let value = value.index(self.frame_start.row).unwrap().to_owned();
-                    let cur = self.current_row;
+                    let col = block.get_by_offset(ll.arg).to_column(block.num_rows());
+                    let cur = self.frame_start;
                     if ll.ignore_null {
                         match self.start_bound {
+                            // lag
                             FrameBound::Preceding(Some(v)) => {
                                 let offset = v.to_i32().unwrap();
-                                self.find_lead_lag_non_null_value(cur, &col, false, offset)
+                                if offset == 0 {
+                                    value
+                                } else {
+                                    self.find_lead_lag_non_null_value(
+                                        cur,
+                                        &col,
+                                        ll.arg,
+                                        &ll.default,
+                                        false,
+                                        offset,
+                                    )
+                                }
                             }
+                            // lead
                             FrameBound::Following(Some(v)) => {
                                 let offset = v.to_i32().unwrap();
-                                self.find_lead_lag_non_null_value(cur, &col, true, offset)
+                                if offset == 0 {
+                                    value
+                                } else {
+                                    self.find_lead_lag_non_null_value(
+                                        cur,
+                                        &col,
+                                        ll.arg,
+                                        &ll.default,
+                                        true,
+                                        offset,
+                                    )
+                                }
                             }
                             _ => value,
                         }
@@ -593,9 +618,7 @@ impl<T: Number> TransformWindow<T> {
                         n -= 1;
                     }
                     if cur != self.frame_end {
-                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                        let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                        self.find_non_null_value(cur, &col, func.ignore_null, true, 1)
+                        self.find_nth_non_null_value(cur, func.arg, func.ignore_null, true)
                     } else {
                         // No such row
                         Scalar::Null
@@ -604,9 +627,7 @@ impl<T: Number> TransformWindow<T> {
                     // last_value
                     let cur = self.goback_row(self.frame_end);
                     debug_assert!(self.frame_start <= cur);
-                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    let col = block.get_by_offset(func.arg).to_column(block.num_rows());
-                    self.find_non_null_value(cur, &col, func.ignore_null, false, 1)
+                    self.find_nth_non_null_value(cur, func.arg, func.ignore_null, false)
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
@@ -674,18 +695,24 @@ impl<T: Number> TransformWindow<T> {
         &self,
         mut cur: RowPtr,
         col: &Column,
+        arg: usize,
+        default: &LagLeadDefault,
         advance: bool,
         offset: i32,
     ) -> Scalar {
+        let mut col = col.clone();
         let mut none_null_count = 0;
-        let mut result = Scalar::Null;
-        while (advance && cur < self.partition_end) || (!advance && cur > self.partition_start) {
-            cur = if advance {
-                self.advance_row(cur)
-            } else {
-                self.goback_row(cur)
-            };
+        let mut result = match default {
+            LagLeadDefault::Null => Scalar::Null,
+            LagLeadDefault::Index(col) => {
+                let block = &self.blocks[self.current_row.block - self.first_block].block;
+                let value = &block.get_by_offset(*col).value;
+                value.index(self.current_row.row).unwrap().to_owned()
+            }
+        };
+        while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
             let value = col.index(cur.row).unwrap();
+
             if value != ScalarRef::Null {
                 none_null_count += 1;
                 if none_null_count == offset {
@@ -693,45 +720,89 @@ impl<T: Number> TransformWindow<T> {
                     break;
                 }
             }
-            if !advance && cur == self.partition_start && none_null_count < offset {
+
+            if !advance && cur == self.frame_start && none_null_count < offset {
                 break;
             }
 
-            if advance && cur == self.partition_end && none_null_count < offset {
-                break;
-            }
+            cur = if advance {
+                let advance_cur = self.advance_row(cur);
+                // cur value is null and after advance row, cur is frame_end, directly break
+                if advance_cur == self.frame_end {
+                    break;
+                }
+                if advance_cur.block != cur.block {
+                    let block = &self
+                        .blocks
+                        .get(advance_cur.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    col = block.get_by_offset(arg).to_column(block.num_rows());
+                }
+                advance_cur
+            } else {
+                let back_cur = self.goback_row(cur);
+                if back_cur.block != cur.block {
+                    let block = &self
+                        .blocks
+                        .get(back_cur.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    col = block.get_by_offset(arg).to_column(block.num_rows());
+                }
+                back_cur
+            };
         }
         result
     }
 
     #[inline]
-    fn find_non_null_value(
+    fn find_nth_non_null_value(
         &self,
         mut cur: RowPtr,
-        col: &Column,
+        arg: usize,
         ignore_null: bool,
         advance: bool,
-        offset: i32,
     ) -> Scalar {
+        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+        let mut col = block.get_by_offset(arg).to_column(block.num_rows());
         if !ignore_null {
             return col.index(cur.row).unwrap().to_owned();
         }
 
-        let mut none_null_count = 0;
         let mut result = Scalar::Null;
+
         while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
             let value = col.index(cur.row).unwrap();
             if value != ScalarRef::Null {
-                none_null_count += 1;
-                if none_null_count == offset {
-                    result = value.to_owned();
-                    break;
-                }
+                result = value.to_owned();
+                break;
             }
+
             cur = if advance {
-                self.advance_row(cur)
+                let advance_cur = self.advance_row(cur);
+                if advance_cur.block != cur.block {
+                    let block = &self
+                        .blocks
+                        .get(advance_cur.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    col = block.get_by_offset(arg).to_column(block.num_rows());
+                }
+                advance_cur
+            } else if cur == self.frame_start {
+                return col.index(self.frame_start.row).unwrap().to_owned();
             } else {
-                self.goback_row(cur)
+                let back_cur = self.goback_row(cur);
+                if back_cur.block != cur.block {
+                    let block = &self
+                        .blocks
+                        .get(back_cur.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    col = block.get_by_offset(arg).to_column(block.num_rows());
+                }
+                back_cur
             };
         }
         result
