@@ -293,6 +293,17 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", ")
     );
+    println!();
+    println!(
+        "Builtin UDFs: {}",
+        conf.query
+            .idm
+            .udfs
+            .iter()
+            .map(|config| config.name.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     println!();
     println!("Admin");
