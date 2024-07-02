@@ -417,7 +417,7 @@ fn format_merge_into(
 
     let children = if let PhysicalPlan::MergeIntoManipulate(plan) = merge_into_manipulate {
         // Matched clauses.
-        let mut matched_children = Vec::with_capacity(plan.matched.len());
+        let mut matched_expr_string = Vec::with_capacity(plan.matched.len());
         for evaluator in &plan.matched {
             let condition_format = evaluator.0.as_ref().map_or_else(
                 || "condition: None".to_string(),
@@ -429,10 +429,7 @@ fn format_merge_into(
                 },
             );
             if evaluator.1.is_none() {
-                matched_children.push(FormatTreeNode::new(format!(
-                    "matched delete: [{}]",
-                    condition_format
-                )));
+                matched_expr_string.push(format!("matched delete: [{}]", condition_format));
             } else {
                 let map = evaluator.1.as_ref().unwrap();
                 let mut field_indexes: Vec<usize> =
@@ -448,15 +445,20 @@ fn format_merge_into(
                         )
                     })
                     .join(",");
-                matched_children.push(FormatTreeNode::new(format!(
+                matched_expr_string.push(format!(
                     "matched update: [{}, update set {}]",
                     condition_format, update_format
-                )));
+                ));
             }
         }
+        matched_expr_string.sort();
+        let matched_children = matched_expr_string
+            .into_iter()
+            .map(FormatTreeNode::new)
+            .collect_vec();
 
         // UnMatched clauses.
-        let mut unmatched_children = Vec::with_capacity(plan.unmatched.len());
+        let mut unmatched_expr_string = Vec::with_capacity(plan.unmatched.len());
         for evaluator in &plan.unmatched {
             let condition_format = evaluator.1.as_ref().map_or_else(
                 || "condition: None".to_string(),
@@ -482,11 +484,16 @@ fn format_merge_into(
                 "insert into ({}) values({})",
                 insert_schema_format, values_format
             );
-            unmatched_children.push(FormatTreeNode::new(format!(
+            unmatched_expr_string.push(format!(
                 "unmatched insert: [{}, {}]",
                 condition_format, unmatched_format
-            )));
+            ));
         }
+        unmatched_expr_string.sort();
+        let unmatched_children = unmatched_expr_string
+            .into_iter()
+            .map(FormatTreeNode::new)
+            .collect_vec();
 
         [target_table, matched_children, unmatched_children, vec![
             to_format_tree(&plan.input, metadata, profs)?,
