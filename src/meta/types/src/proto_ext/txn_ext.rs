@@ -82,6 +82,13 @@ impl pb::TxnOp {
         }
     }
 
+    pub fn with_ttl(mut self, ttl_ms: Option<u64>) -> Self {
+        if let Some(pb::txn_op::Request::Put(p)) = &mut self.request {
+            p.ttl_ms = ttl_ms;
+        }
+        self
+    }
+
     /// Create a new `TxnOp` with a `Delete` operation.
     pub fn delete(key: impl ToString) -> Self {
         Self::delete_exact(key, None)
