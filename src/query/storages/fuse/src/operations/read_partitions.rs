@@ -72,10 +72,6 @@ impl FuseTable {
         }
 
         let snapshot = self.read_table_snapshot().await?;
-        let is_lazy = push_downs
-            .as_ref()
-            .map(|p| p.lazy_materialization)
-            .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
                 let snapshot_loc = self
@@ -89,7 +85,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if (!dry_run && snapshot.segments.len() > nodes_num) || is_lazy {
+                if !dry_run && snapshot.segments.len() > nodes_num {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
