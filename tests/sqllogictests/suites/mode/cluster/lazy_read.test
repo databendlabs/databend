@@ -1,8 +1,5 @@
 statement ok
-drop table if exists t_lazy
-
-statement ok
-create table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
+create or replace table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 statement ok
 insert into t_lazy select number + 1, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
@@ -12,6 +9,11 @@ insert into t_lazy select (number + 1) * 1000, 1.1, '1.1', (1,2), '2020-01-01' f
 
 statement ok
 insert into t_lazy select (number + 1) * 100000, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
+
+query T
+select count(), count(distinct _block_name), count(distinct _segment_name) from t_lazy
+----
+300 3 3
 
 query T
 explain select * from t_lazy order by a desc limit 2
