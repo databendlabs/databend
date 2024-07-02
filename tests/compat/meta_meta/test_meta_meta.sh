@@ -101,7 +101,7 @@ bring_up_databend_meta "$leader_meta_ver" "1" --single
 
 echo " === Feed data to leader"
 ./bins/current/bin/databend-metabench \
-    --rpc 'table_copy_file:{"file_cnt":5}' \
+    --rpc 'table_copy_file:{"file_cnt":5,"ttl_ms":86400999}' \
     --client 1 \
     --number 100 \
     --prefix "1" \
@@ -117,7 +117,7 @@ curl -qs $(admin_addr 1)/v1/cluster/status
 
 echo " === Feed more data to leader"
 ./bins/current/bin/databend-metabench \
-    --rpc 'table_copy_file:{"file_cnt":5}' \
+    --rpc 'table_copy_file:{"file_cnt":5,"ttl_ms":86400999}' \
     --client 1 \
     --number 100 \
     --prefix "1" \

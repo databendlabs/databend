@@ -176,6 +176,10 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
 
     // Chain ordq output to writer
     databend_common_base::runtime::spawn_blocking(move || {
+        // snapshot v002 stores expire index(`exp-/`) after kvs(`kv--/`),
+        // We need to store expire index before kvs in snapshot v003.
+        let mut kv_cache = Vec::with_capacity(1_000_000);
+
         while let Some(res) = ordq_rx.recv() {
             let res = res.map_err(|e| {
                 io::Error::new(io::ErrorKind::Other, format!("ordq recv error: {}", e))
@@ -186,16 +190,27 @@ pub async fn upgrade_snapshot_data_v002_to_v003(
             match ent {
                 WriteEntry::Data(lines) => {
                     for (k, v) in lines {
+                        if k.starts_with("kv--/") {
+                            kv_cache.push((k, v));
+                        } else {
+                            writer_tx
+                                .blocking_send(WriteEntry::Data((k, v)))
+                                .map_err(closed_err)?;
+                        }
+                    }
+                }
+                WriteEntry::Finish(_) => {
+                    for (k, v) in kv_cache {
                         writer_tx
                             .blocking_send(WriteEntry::Data((k, v)))
                             .map_err(closed_err)?;
                     }
-                }
-                WriteEntry::Finish(_) => {
+
                     let sys_data = sys_data.lock().unwrap().clone();
                     writer_tx
                         .blocking_send(WriteEntry::Finish(sys_data))
                         .map_err(closed_err)?;
+                    break;
                 }
             }
         }
