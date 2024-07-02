@@ -354,4 +354,7 @@ SELECT a, lag(a, 2) OVER (ORDER BY c) from t4;
 2 2
 
 statement ok
+unset max_block_size;
+
+statement ok
 drop table t4;
