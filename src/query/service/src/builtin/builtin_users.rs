@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
+use log::error;
 
 pub struct BuiltinUsers {
     user_configs: Vec<UserConfig>,
@@ -40,40 +41,52 @@ impl BuiltinUsers {
         }
     }
 
-    /// Convert to auth infos.
-    pub fn to_meta_auth_infos(&self) -> Result<HashMap<String, AuthInfo>> {
-        let mut auth_infos = HashMap::new();
-        for user_config in self.user_configs.iter() {
-            let name = user_config.name.clone();
-            let auth_config = user_config.auth.clone();
-            let auth_type = AuthType::from_str(&auth_config.auth_type)?;
-            let auth_info = match auth_type {
-                AuthType::NoPassword => {
-                    Self::check_no_auth_string(auth_config.auth_string.clone(), AuthInfo::None)
-                }
-                AuthType::JWT => {
-                    Self::check_no_auth_string(auth_config.auth_string.clone(), AuthInfo::JWT)
-                }
-                AuthType::Sha256Password | AuthType::DoubleSha1Password => {
-                    let password_type = auth_type.get_password_type().expect("must success");
-                    match &auth_config.auth_string {
-                        None => Err(ErrorCode::InvalidConfig("must set auth_string")),
-                        Some(s) => {
-                            let p = hex::decode(s).map_err(|e| {
-                                ErrorCode::InvalidConfig(format!("password is not hex: {e:?}"))
-                            })?;
-                            Ok(AuthInfo::Password {
-                                hash_value: p,
-                                hash_method: password_type,
-                            })
-                        }
+    fn parse_user_auth_config(user_config: UserConfig) -> Result<AuthInfo> {
+        let auth_config = user_config.auth.clone();
+        let auth_type = AuthType::from_str(&auth_config.auth_type)?;
+        match auth_type {
+            AuthType::NoPassword => {
+                Self::check_no_auth_string(auth_config.auth_string.clone(), AuthInfo::None)
+            }
+            AuthType::JWT => {
+                Self::check_no_auth_string(auth_config.auth_string.clone(), AuthInfo::JWT)
+            }
+            AuthType::Sha256Password | AuthType::DoubleSha1Password => {
+                let password_type = auth_type.get_password_type().expect("must success");
+                match &auth_config.auth_string {
+                    None => Err(ErrorCode::InvalidConfig("must set auth_string")),
+                    Some(s) => {
+                        let p = hex::decode(s).map_err(|e| {
+                            ErrorCode::InvalidConfig(format!("password is not hex: {e:?}"))
+                        })?;
+                        Ok(AuthInfo::Password {
+                            hash_value: p,
+                            hash_method: password_type,
+                        })
                     }
                 }
-            }?;
-
-            auth_infos.insert(name, auth_info);
+            }
         }
-        Ok(auth_infos)
+    }
+
+    /// Convert to auth infos.
+    /// Skip invalid user auth configs.
+    pub fn to_auth_infos(&self) -> HashMap<String, AuthInfo> {
+        let mut auth_infos = HashMap::new();
+        for user_config in self.user_configs.iter() {
+            match Self::parse_user_auth_config(user_config.clone()) {
+                Ok(auth_info) => {
+                    auth_infos.insert(user_config.name.clone(), auth_info);
+                }
+                Err(e) => {
+                    error!(
+                        "Failed to parse built-in user auth for '{}': {}",
+                        user_config.name, e
+                    );
+                }
+            }
+        }
+        auth_infos
     }
 }
 
@@ -100,7 +113,7 @@ mod tests {
         let user_configs = vec![create_user_config("user1", "no_password", None)];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_infos = builtin_users.to_auth_infos();
         let auth_info = auth_infos.get("user1").unwrap();
 
         assert_eq!(auth_info.get_type(), AuthType::NoPassword);
@@ -111,7 +124,7 @@ mod tests {
         let user_configs = vec![create_user_config("user2", "jwt", None)];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_infos = builtin_users.to_auth_infos();
         let auth_info = auth_infos.get("user2").unwrap();
 
         assert_eq!(auth_info.get_type(), AuthType::JWT);
@@ -126,7 +139,7 @@ mod tests {
         )];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_infos = builtin_users.to_auth_infos();
         let auth_info = auth_infos.get("user3").unwrap();
 
         match auth_info {
@@ -153,7 +166,7 @@ mod tests {
         )];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let auth_infos = builtin_users.to_meta_auth_infos().unwrap();
+        let auth_infos = builtin_users.to_auth_infos();
         let auth_info = auth_infos.get("user4").unwrap();
 
         match auth_info {
@@ -180,8 +193,8 @@ mod tests {
         )];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let result = builtin_users.to_meta_auth_infos();
-        assert!(result.is_err());
+        let auth_infos = builtin_users.to_auth_infos();
+        assert!(auth_infos.get("user5").is_none());
     }
 
     #[test]
@@ -189,8 +202,8 @@ mod tests {
         let user_configs = vec![create_user_config("user6", "sha256_password", None)];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let result = builtin_users.to_meta_auth_infos();
-        assert!(result.is_err());
+        let auth_infos = builtin_users.to_auth_infos();
+        assert!(auth_infos.get("user6").is_none());
     }
 
     #[test]
@@ -198,7 +211,7 @@ mod tests {
         let user_configs = vec![create_user_config("user7", "InvalidAuthType", None)];
         let builtin_users = BuiltinUsers::create(user_configs);
 
-        let result = builtin_users.to_meta_auth_infos();
-        assert!(result.is_err());
+        let auth_infos = builtin_users.to_auth_infos();
+        assert!(auth_infos.get("user7").is_none());
     }
 }

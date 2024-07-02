@@ -34,8 +34,8 @@ impl UserApiProvider {
         create_option: &CreateOption,
     ) -> Result<()> {
         if self.get_configured_udf(&info.name).is_some() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured UDF `{}` already exists",
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "Built-in UDF `{}` already exists",
                 info.name
             )));
         }
@@ -50,7 +50,7 @@ impl UserApiProvider {
     pub async fn update_udf(&self, tenant: &Tenant, info: UserDefinedFunction) -> Result<u64> {
         if self.get_configured_udf(&info.name).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured UDF `{}` cannot be updated",
+                "Built-in UDF `{}` cannot be updated",
                 info.name
             )));
         }
@@ -110,7 +110,7 @@ impl UserApiProvider {
             return Ok(Err(UdfError::Exists {
                 tenant: tenant.tenant_name().to_string(),
                 name: udf_name.to_string(),
-                reason: "Configured UDF cannot be dropped".to_string(),
+                reason: "Built-in UDF cannot be dropped".to_string(),
             }));
         }
 

@@ -25,7 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_sql::resolve_type_name;
-use log::warn;
+use log::error;
 
 pub struct BuiltinUDFs {
     udf_configs: Vec<UDFConfig>,
@@ -37,11 +37,7 @@ impl BuiltinUDFs {
     }
 
     // Parse the UDF definition and return the UserDefinedFunction.
-    async fn parse_udf_definition(
-        &self,
-        name: &str,
-        definition: &str,
-    ) -> Result<UserDefinedFunction> {
+    fn parse_udf_definition(&self, name: &str, definition: &str) -> Result<UserDefinedFunction> {
         let tokens = tokenize_sql(definition)?;
         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
 
@@ -83,27 +79,26 @@ impl BuiltinUDFs {
         }
     }
 
-    pub async fn to_meta_udfs(&self) -> Result<HashMap<String, UserDefinedFunction>> {
+    /// Convert to UDFs.
+    /// Skip invalid UDF configs.
+    pub fn to_udfs(&self) -> HashMap<String, UserDefinedFunction> {
         let mut udf_map = HashMap::new();
 
         for udf_config in self.udf_configs.iter() {
-            match self
-                .parse_udf_definition(&udf_config.name, &udf_config.definition)
-                .await
-            {
+            match self.parse_udf_definition(&udf_config.name, &udf_config.definition) {
                 Ok(user_defined_function) => {
                     udf_map.insert(user_defined_function.name.clone(), user_defined_function);
                 }
                 Err(e) => {
-                    warn!(
-                        "Failed to parse UDF definition for '{}': {}",
+                    error!(
+                        "Failed to parse built-in UDF definition for '{}': {}",
                         udf_config.name, e
                     );
                 }
             }
         }
 
-        Ok(udf_map)
+        udf_map
     }
 }
 
@@ -143,27 +138,19 @@ ADDRESS = 'https://databend.com'"
 
         let builtin_udfs = BuiltinUDFs::create(udf_configs);
 
-        let result = builtin_udfs.to_meta_udfs().await;
+        let udf_map = builtin_udfs.to_udfs();
 
-        // Verify the result
-        match result {
-            Ok(udf_map) => {
-                // Test first UDF
-                assert!(udf_map.contains_key("test_udf1"));
-                let udf1 = udf_map.get("test_udf1").unwrap();
-                assert_eq!(udf1.name, "test_udf1");
+        // Test first UDF
+        assert!(udf_map.contains_key("test_udf1"));
+        let udf1 = udf_map.get("test_udf1").unwrap();
+        assert_eq!(udf1.name, "test_udf1");
 
-                // Test second UDF
-                assert!(udf_map.contains_key("test_udf2"));
-                let udf2 = udf_map.get("test_udf2").unwrap();
-                assert_eq!(udf2.name, "test_udf2");
+        // Test second UDF
+        assert!(udf_map.contains_key("test_udf2"));
+        let udf2 = udf_map.get("test_udf2").unwrap();
+        assert_eq!(udf2.name, "test_udf2");
 
-                // Test invalid UDF is not included
-                assert!(!udf_map.contains_key("invalid_udf"));
-            }
-            Err(e) => {
-                panic!("Unexpected error: {}", e);
-            }
-        }
+        // Test invalid UDF is not included
+        assert!(!udf_map.contains_key("invalid_udf"));
     }
 }

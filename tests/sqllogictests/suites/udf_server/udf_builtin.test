@@ -7,8 +7,8 @@ select ping('test');
 ----
 test
 
-statement error 1105
+statement error 2603
 CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815';
 
-statement error 1105
+statement error 2603
 DROP FUNCTION IF EXISTS ping;

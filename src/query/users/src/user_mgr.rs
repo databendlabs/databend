@@ -177,7 +177,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot grant privileges to configured user `{}`",
+                "Cannot grant privileges to built-in user `{}`",
                 user.username
             )));
         }
@@ -201,7 +201,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot revoke privileges from configured user `{}`",
+                "Cannot revoke privileges from built-in user `{}`",
                 user.username
             )));
         }
@@ -224,7 +224,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot grant role to configured user `{}`",
+                "Cannot grant role to built-in user `{}`",
                 user.username
             )));
         }
@@ -247,7 +247,7 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot revoke role from configured user `{}`",
+                "Cannot revoke role from built-in user `{}`",
                 user.username
             )));
         }
@@ -271,7 +271,7 @@ impl UserApiProvider {
     ) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user `{}` cannot be dropped",
+                "Built-in user `{}` cannot be dropped",
                 user.username
             )));
         }
@@ -318,7 +318,7 @@ impl UserApiProvider {
         }
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user `{}` cannot be updated",
+                "Built-in user `{}` cannot be updated",
                 user.username
             )));
         }

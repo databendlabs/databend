@@ -116,9 +116,11 @@ impl GlobalServices {
         {
             let built_in_users = BuiltinUsers::create(config.query.builtin.users.clone());
             let built_in_udfs = BuiltinUDFs::create(config.query.builtin.udfs.clone());
+
+            // We will ignore the error here, and just log a error.
             let builtin = BuiltIn {
-                users: built_in_users.to_meta_auth_infos()?,
-                udfs: built_in_udfs.to_meta_udfs().await?,
+                users: built_in_users.to_auth_infos(),
+                udfs: built_in_udfs.to_udfs(),
             };
             UserApiProvider::init(
                 config.meta.to_meta_grpc_client_conf(),
