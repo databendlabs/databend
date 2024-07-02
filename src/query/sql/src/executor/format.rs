@@ -414,7 +414,7 @@ fn format_merge_into(
                 "Expect MergeIntoOrganize after MergeIntoSerialize ".to_string(),
             ));
         };
-    
+
     let children = if let PhysicalPlan::MergeIntoManipulate(plan) = merge_into_manipulate {
         // Matched clauses.
         let mut matched_children = Vec::with_capacity(plan.matched.len());
