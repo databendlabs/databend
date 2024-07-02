@@ -122,8 +122,9 @@ impl Binder {
         }
 
         Ok(Plan::MergeInto {
-            schema: merge_into_plan.schema(),
             s_expr: Box::new(s_expr),
+            schema: merge_into_plan.schema(),
+            metadata: self.metadata.clone(),
         })
     }
 

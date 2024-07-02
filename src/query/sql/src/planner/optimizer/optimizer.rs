@@ -513,6 +513,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(RelOperator::MergeInto(plan)),
                 Arc::new(join_s_expr),
             )),
+            metadata: opt_ctx.metadata.clone(),
         })
     } else {
         plan.columns_set = new_columns_set;
@@ -522,6 +523,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(RelOperator::MergeInto(plan)),
                 Arc::new(join_s_expr),
             )),
+            metadata: opt_ctx.metadata.clone(),
         })
     }
 }
