@@ -140,7 +140,8 @@ impl UserApiProvider {
     }
 
     pub fn tenant_quota_api(&self, tenant: &Tenant) -> Arc<dyn QuotaApi> {
-        Arc::new(QuotaMgr::create(self.client.clone(), tenant))
+        const WRITE_PB: bool = false;
+        Arc::new(QuotaMgr::<WRITE_PB>::create(self.client.clone(), tenant))
     }
 
     pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
