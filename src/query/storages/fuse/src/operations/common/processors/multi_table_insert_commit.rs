@@ -107,20 +107,21 @@ impl AsyncSink for CommitMultiTableInsert {
                 deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
             };
 
-            let update_meta_result = {
-                let ret = self
-                    .catalog
-                    .update_multi_table_meta(update_multi_table_meta_req)
-                    .await;
-                if let Err(ref e) = ret {
+            let update_meta_result = match self
+                .catalog
+                .update_multi_table_meta(update_multi_table_meta_req)
+                .await
+            {
+                Ok(ret) => ret,
+                Err(e) => {
                     // other errors may occur, especially the version mismatch of streams,
                     // let's log it here for the convenience of diagnostics
                     error!(
                         "Non-recoverable fault occurred during updating tables. {}",
                         e
                     );
+                    return Err(e);
                 }
-                ret?
             };
 
             let Err(update_failed_tbls) = update_meta_result else {
@@ -193,7 +194,6 @@ impl AsyncSink for CommitMultiTableInsert {
                 }
             }
         }
-        Ok(())
     }
 
     #[unboxed_simple]

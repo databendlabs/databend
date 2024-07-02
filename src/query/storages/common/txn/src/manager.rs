@@ -22,8 +22,10 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::MatchSeq;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -92,8 +94,7 @@ impl TxnBuffer {
 
         self.update_stream_metas(&req.update_stream_metas);
 
-        self.deduplicated_labels
-            .extend(req.deduplicated_labels.into_iter());
+        self.deduplicated_labels.extend(req.deduplicated_labels);
     }
 
     fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -220,35 +221,39 @@ impl TxnManager {
                 copied_files.push((*tbl_id, file.clone()));
             }
         }
-        todo!()
-        // UpdateMultiTableMetaReq {
-        //     update_table_metas: self
-        //         .txn_buffer
-        //         .mutated_tables
-        //         .iter()
-        //         .map(|(id, info)| UpdateTableMetaReq {
-        //             table_id: *id,
-        //             seq: MatchSeq::Exact(info.ident.seq),
-        //             new_table_meta: info.meta.clone(),
-        //             copied_files: None,
-        //             update_stream_meta: vec![],
-        //             deduplicated_label: None,
-        //         })
-        //         .collect(),
-        //     copied_files,
-        //     update_stream_metas: self
-        //         .txn_buffer
-        //         .update_stream_meta
-        //         .values()
-        //         .cloned()
-        //         .collect(),
-        //     deduplicated_labels: self
-        //         .txn_buffer
-        //         .deduplicated_labels
-        //         .iter()
-        //         .cloned()
-        //         .collect(),
-        // }
+        UpdateMultiTableMetaReq {
+            update_table_metas: self
+                .txn_buffer
+                .mutated_tables
+                .iter()
+                .map(|(id, info)| {
+                    (
+                        UpdateTableMetaReq {
+                            table_id: *id,
+                            seq: MatchSeq::Exact(info.ident.seq),
+                            new_table_meta: info.meta.clone(),
+                            copied_files: None,
+                            update_stream_meta: vec![],
+                            deduplicated_label: None,
+                        },
+                        info.clone(),
+                    )
+                })
+                .collect(),
+            copied_files,
+            update_stream_metas: self
+                .txn_buffer
+                .update_stream_meta
+                .values()
+                .cloned()
+                .collect(),
+            deduplicated_labels: self
+                .txn_buffer
+                .deduplicated_labels
+                .iter()
+                .cloned()
+                .collect(),
+        }
     }
 
     pub fn contains_deduplicated_label(&self, label: &str) -> bool {

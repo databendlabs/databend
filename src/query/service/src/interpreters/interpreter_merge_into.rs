@@ -144,7 +144,7 @@ impl MergeIntoInterpreter {
             ))
         });
         let update_stream_meta =
-            build_update_stream_req(self.ctx.clone(), &merge_into.meta_data,false).await?;
+            build_update_stream_req(self.ctx.clone(), &merge_into.meta_data, false).await?;
         let merge_into_build_info = MergeIntoBuildInfo {
             table_snapshot,
             update_stream_meta,
