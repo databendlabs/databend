@@ -3131,7 +3131,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .iter()
             .map(|req| {
                 TableId {
-                    table_id: req.table_id,
+                    table_id: req.0.table_id,
                 }
                 .to_string_key()
             })
@@ -3140,16 +3140,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for (req, (tb_meta_seq, table_meta)) in
             update_table_metas.iter().zip(tb_meta_vec.iter_mut())
         {
-            let req_seq = req.seq;
+            let req_seq = req.0.seq;
 
             if *tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
                 )));
             }
             if req_seq.match_seq(*tb_meta_seq).is_err() {
                 mismatched_tbs.push((
-                    req.table_id,
+                    req.0.table_id,
                     *tb_meta_seq,
                     std::mem::take(table_meta).unwrap(),
                 ));
@@ -3162,15 +3162,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         for (req, (tb_meta_seq, _)) in update_table_metas.iter().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
-                table_id: req.table_id,
+                table_id: req.0.table_id,
             };
-            tbl_seqs.insert(req.table_id, *tb_meta_seq);
+            tbl_seqs.insert(req.0.table_id, *tb_meta_seq);
             txn_req
                 .condition
                 .push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
             txn_req
                 .if_then
-                .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+                .push(txn_op_put(&tbid, serialize_struct(&req.0.new_table_meta)?));
             txn_req.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest {
                     key: tbid.to_string_key(),
@@ -3257,13 +3257,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 (seq_v.seq, deserialize_struct(&seq_v.data)?)
             } else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
                 )));
             };
 
             // check table version
-            if req.seq.match_seq(tb_meta_seq).is_err() {
-                mismatched_tbs.push((req.table_id, tb_meta_seq, table_meta));
+            if req.0.seq.match_seq(tb_meta_seq).is_err() {
+                mismatched_tbs.push((req.0.table_id, tb_meta_seq, table_meta));
             }
         }
 

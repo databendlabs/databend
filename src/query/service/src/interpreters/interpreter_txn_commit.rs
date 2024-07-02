@@ -64,7 +64,7 @@ impl Interpreter for CommitInterpreter {
                 let table_descriptions = req
                     .update_table_metas
                     .iter()
-                    .map(|req| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
+                    .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
                     .collect::<Vec<_>>();
                 let stream_descriptions = req
                     .update_stream_metas

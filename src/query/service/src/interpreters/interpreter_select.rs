@@ -183,7 +183,7 @@ impl SelectInterpreter {
                             info!("(auto) committing stream consumptions");
                             // commit to meta server directly
                             let r = UpdateMultiTableMetaReq {
-                                update_table_metas,
+                                update_table_metas:todo!(),
                                 copied_files: vec![],
                                 update_stream_metas: vec![],
                                 deduplicated_labels: vec![],

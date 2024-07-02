@@ -362,17 +362,7 @@ impl Catalog for SessionCatalog {
         table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
-            TxnState::Active => {
-                self.txn_mgr.lock().update_table_meta(req, table_info);
-                Ok(UpdateTableMetaReply {
-                    share_table_info: None,
-                })
-            }
-            TxnState::Fail => unreachable!(),
-        }
+        todo!()
     }
 
     async fn update_stream_metas(&self, update_stream_metas: &[UpdateStreamMetaReq]) -> Result<()> {
@@ -391,7 +381,15 @@ impl Catalog for SessionCatalog {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.inner.update_multi_table_meta(req).await
+        let state = self.txn_mgr.lock().state();
+        match state {
+            TxnState::AutoCommit => self.inner.update_multi_table_meta(req).await,
+            TxnState::Active => {
+                self.txn_mgr.lock().update_multi_table_meta(req);
+                Ok(Ok(()))
+            }
+            TxnState::Fail => unreachable!(),
+        }
     }
 
     async fn set_table_column_mask_policy(

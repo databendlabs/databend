@@ -717,7 +717,7 @@ pub struct UpdateTableMetaReq {
 }
 
 pub struct UpdateMultiTableMetaReq {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,

@@ -121,7 +121,7 @@ impl AsyncSink for CommitMultiTableInsert {
 
                 loop {
                     let update_multi_table_meta_req = UpdateMultiTableMetaReq {
-                        update_table_metas: update_table_meta_reqs.clone(),
+                        update_table_metas: todo!(),
                         copied_files: vec![],
                         update_stream_metas: self.update_stream_meta.clone(),
                         deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
