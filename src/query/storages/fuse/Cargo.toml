@@ -56,7 +56,7 @@ jsonb = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
