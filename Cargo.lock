@@ -11004,12 +11004,12 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.44.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b95ffc753c0da86e6ab4e7633348e0f31288c5d83eb7ef4f35cbf028238b5d7"
+version = "0.44.2"
+source = "git+https://github.com/Xuanwo/opendal?rev=2d9b0e4#2d9b0e48666f334bd386ce6c5c76df666ca448fc"
 dependencies = [
  "async-trait",
  "bytes",
+ "flagset",
  "futures",
  "futures-util",
  "object_store",

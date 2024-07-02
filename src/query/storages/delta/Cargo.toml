@@ -22,7 +22,7 @@ databend-storages-common-table-meta = { workspace = true }
 deltalake = { workspace = true }
 match-template = "0.0.1"
 minitrace = { workspace = true }
-object_store_opendal = "0.44"
+object_store_opendal = "0.44.2"
 ordered-float = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
