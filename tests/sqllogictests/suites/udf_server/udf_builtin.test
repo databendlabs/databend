@@ -3,12 +3,12 @@
 #
 
 query T
-select ping("test");
+select ping('test');
 ----
 test
 
-statement error 2202
-CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815'
+statement error 1105
+CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815';
 
-statement error 2202
+statement error 1105
 DROP FUNCTION IF EXISTS ping;

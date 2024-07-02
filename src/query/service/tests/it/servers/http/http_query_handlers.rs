@@ -1620,7 +1620,7 @@ async fn test_auth_configured_user() -> Result<()> {
     let user_config = UserConfig {
         name: user_name.to_string(),
         auth: UserAuthConfig {
-            auth_type: "DOUBLE_SHA1_PASSWORD_STR".to_string(),
+            auth_type: "double_sha1_password".to_string(),
             auth_string: Some(hex::encode(hash_value)),
         },
     };
