@@ -139,7 +139,7 @@ pub struct IcebergCatalog {
     info: Arc<CatalogInfo>,
 
     /// iceberg catalogs
-    ctl: OnceCell<Arc<dyn iceberg::Catalog>>,
+    ctl: OnceCell<Result<Arc<dyn iceberg::Catalog>>>,
 }
 
 impl IcebergCatalog {
@@ -190,7 +190,14 @@ impl IcebergCatalog {
         let ctl = self
             .ctl
             .get_or_init(|| async {
-                match &self.info {
+                let CatalogOption::Iceberg(options) = &self.info.meta.catalog_option else {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "Expect iceberg catalog but get other catalog option: {:?}",
+                        &self.info.meta.catalog_option
+                    )));
+                };
+
+                match options {
                     IcebergCatalogOption::Hms(hms) => {
                         let cfg = HmsCatalogConfig::builder()
                             .address(hms.address.clone())
@@ -218,7 +225,7 @@ impl IcebergCatalog {
             })
             .await;
 
-        Ok(ctl.clone())
+        ctl.clone()
     }
 }
 
@@ -239,9 +246,14 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
-        let db_names = self.ctl.list_namespaces(None).await.map_err(|err| {
-            ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
-        })?;
+        let db_names = self
+            .iceberg_catalog()
+            .await?
+            .list_namespaces(None)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+            })?;
 
         let mut dbs = Vec::new();
         for db_name in db_names {

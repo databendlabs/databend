@@ -112,6 +112,7 @@ impl IcebergTable {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
         let table = ctl
             .iceberg_catalog()
+            .await?
             .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
             .await
             .map_err(|err| {

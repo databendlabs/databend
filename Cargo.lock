@@ -3420,7 +3420,7 @@ dependencies = [
  "jsonb",
  "lexical-core",
  "match-template",
- "micromarshal 0.4.1",
+ "micromarshal 0.7.0",
  "num",
  "num-traits",
  "ordered-float 4.2.0",
@@ -10306,19 +10306,19 @@ dependencies = [
 
 [[package]]
 name = "micromarshal"
-version = "0.4.1"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6793011b42fc5acf43fd594545720a69df9a81be80352d57304abf93f3865e9"
+checksum = "08733443a65b4436ce073095a798c81ffcd4644fc7e0733da7375d62b1a4cc44"
 dependencies = [
  "ethnum",
- "ordered-float 3.9.2",
+ "ordered-float 4.2.0",
 ]
 
 [[package]]
 name = "micromarshal"
-version = "0.5.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08733443a65b4436ce073095a798c81ffcd4644fc7e0733da7375d62b1a4cc44"
+checksum = "863693c933db83464c52adf30809f583aae924f30fa114f303aa5360b4a399ec"
 dependencies = [
  "ethnum",
  "ordered-float 4.2.0",
@@ -11289,15 +11289,6 @@ name = "ordered-float"
 version = "2.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "ordered-float"
-version = "3.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1e1c390732d15f1d48471625cd92d154e66db2c56645e29a9cd26f4699f72dc"
 dependencies = [
  "num-traits",
 ]
