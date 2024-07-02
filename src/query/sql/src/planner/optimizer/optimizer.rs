@@ -479,17 +479,19 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         })
     }
 
-    if opt_ctx.enable_distributed_optimization {
+    let distributed = !join_s_expr.has_merge_exchange();
+    if opt_ctx.enable_distributed_optimization && distributed {
         let merge_optimizer = MergeOptimizer::create();
         // now always use shuffle
-        if !matches!(join_op.join_type, JoinType::Right | JoinType::RightAnti)
-            && merge_optimizer.merge_matcher.matches(&join_s_expr)
+        if matches!(
+            join_op.join_type,
+            JoinType::Left | JoinType::LeftAnti | JoinType::Inner
+        ) && merge_optimizer.merge_matcher.matches(&join_s_expr)
         {
             join_s_expr = merge_optimizer.optimize(&join_s_expr)?;
         };
 
-        let distributed = !join_s_expr.has_merge_exchange();
-        plan.distributed = distributed;
+        plan.distributed = true;
         plan.columns_set = new_columns_set;
         Ok(Plan::MergeInto {
             schema: plan.schema(),
