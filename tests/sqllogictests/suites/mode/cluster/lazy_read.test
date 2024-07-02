@@ -2,6 +2,9 @@ statement ok
 create or replace table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 statement ok
+set max_threads = 4;
+
+statement ok
 insert into t_lazy select number + 1, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
 
 statement ok
