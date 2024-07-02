@@ -35,8 +35,8 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 use log::info;
 
+use crate::interpreters::common::build_update_stream_req;
 use crate::interpreters::common::check_deduplicate_label;
-use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -205,7 +205,7 @@ impl Interpreter for InsertInterpreter {
                 info!("Insert select plan: \n{}", explain_plan);
 
                 let update_stream_meta =
-                    dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+                    build_update_stream_req(self.ctx.clone(), metadata, false).await?;
 
                 // here we remove the last exchange merge plan to trigger distribute insert
                 let insert_select_plan = match select_plan {

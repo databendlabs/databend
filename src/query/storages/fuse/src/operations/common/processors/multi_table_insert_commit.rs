@@ -39,7 +39,6 @@ use log::error;
 use log::info;
 
 use crate::operations::set_backoff;
-use crate::operations::update;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;

@@ -34,7 +34,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::interpreters::common::dml_build_update_stream_req;
+use crate::interpreters::common::build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -144,7 +144,7 @@ impl MergeIntoInterpreter {
             ))
         });
         let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &merge_into.meta_data).await?;
+            build_update_stream_req(self.ctx.clone(), &merge_into.meta_data,false).await?;
         let merge_into_build_info = MergeIntoBuildInfo {
             table_snapshot,
             update_stream_meta,

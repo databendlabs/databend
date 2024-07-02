@@ -40,11 +40,14 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
 
-pub async fn dml_build_update_stream_req(
+pub async fn build_update_stream_req(
     ctx: Arc<QueryContext>,
     metadata: &MetadataRef,
+    is_query: bool,
 ) -> Result<Vec<UpdateStreamMetaReq>> {
-    let tables = get_stream_table(metadata, |t| t.table().engine() == STREAM_ENGINE)?;
+    let tables = get_stream_table(metadata, |t| {
+        t.table().engine() == STREAM_ENGINE && (!is_query || t.is_consume())
+    })?;
     if tables.is_empty() {
         return Ok(vec![]);
     }
@@ -118,61 +121,4 @@ where F: Fn(&TableEntry) -> bool {
         }
     }
     Ok(streams)
-}
-
-pub struct StreamTableUpdates {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
-    pub table_infos: Vec<TableInfo>,
-}
-pub async fn query_build_update_stream_req(
-    ctx: &Arc<QueryContext>,
-    metadata: &MetadataRef,
-) -> Result<Option<StreamTableUpdates>> {
-    let streams = get_stream_table(metadata, |t| {
-        t.is_consume() && t.table().engine() == STREAM_ENGINE
-    })?;
-    if streams.is_empty() {
-        return Ok(None);
-    }
-
-    let license_manager = get_license_manager();
-    license_manager
-        .manager
-        .check_enterprise_enabled(ctx.get_license_key(), Feature::Stream)?;
-
-    let cap = streams.len();
-    let mut update_table_meta_reqs = Vec::with_capacity(cap);
-    let mut table_infos = Vec::with_capacity(cap);
-    for table in streams.into_iter() {
-        let stream = StreamTable::try_from_table(table.as_ref())?;
-        let stream_info = stream.get_table_info();
-        table_infos.push(stream_info.clone());
-
-        let source_table = stream.source_table(ctx.clone()).await?;
-        let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
-
-        let table_version = inner_fuse.get_table_info().ident.seq;
-        let mut options = stream.options().clone();
-        options.insert(OPT_KEY_TABLE_VER.to_string(), table_version.to_string());
-        if let Some(snapshot_loc) = inner_fuse.snapshot_loc().await? {
-            options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);
-        }
-        let mut new_table_meta = stream_info.meta.clone();
-        new_table_meta.options = options;
-        new_table_meta.updated_on = Utc::now();
-
-        update_table_meta_reqs.push(UpdateTableMetaReq {
-            table_id: stream_info.ident.table_id,
-            seq: MatchSeq::Exact(stream_info.ident.seq),
-            new_table_meta,
-            copied_files: None,
-            update_stream_meta: vec![],
-            deduplicated_label: None,
-        });
-    }
-
-    Ok(Some(StreamTableUpdates {
-        update_table_metas: update_table_meta_reqs,
-        table_infos,
-    }))
 }

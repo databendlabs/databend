@@ -716,6 +716,7 @@ pub struct UpdateTableMetaReq {
     pub deduplicated_label: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
