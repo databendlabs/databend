@@ -33,9 +33,8 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
@@ -86,13 +85,9 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        pipeline.add_transform(|input, output| {
-            let aggregator =
-                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Insert);
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
+        pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Insert)
+        });
 
         let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
         pipeline.add_sink(|input| {

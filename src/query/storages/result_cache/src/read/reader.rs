@@ -22,9 +22,9 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
 use opendal::Operator;
-use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet_rs::arrow::parquet_to_arrow_schema;
-use parquet_rs::file::footer::parse_metadata;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_schema;
+use parquet::file::footer::parse_metadata;
 
 use crate::common::gen_result_cache_meta_key;
 use crate::common::ResultCacheValue;

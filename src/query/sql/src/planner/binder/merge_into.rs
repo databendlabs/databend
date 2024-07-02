@@ -439,11 +439,10 @@ impl Binder {
         {
             let mut required_columns = HashSet::new();
             let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
-            for (left_condition, right_condition) in join
-                .left_conditions
-                .iter()
-                .zip(join.right_conditions.iter())
-            {
+
+            for condition in join.equi_conditions.iter() {
+                let left_condition = &condition.left;
+                let right_condition = &condition.right;
                 let left_used_columns = left_condition.used_columns();
                 let right_used_columns = right_condition.used_columns();
                 if left_used_columns.is_subset(&target_prop.output_columns) {

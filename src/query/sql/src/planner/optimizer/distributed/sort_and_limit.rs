@@ -87,6 +87,7 @@ impl SortAndLimitPushDownOptimizer {
         }
     }
 
+    #[recursive::recursive]
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut replaced_children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children.iter() {

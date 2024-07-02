@@ -63,7 +63,7 @@ pub struct HashJoin {
     pub probe: Box<PhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
-    pub is_null_equal: HashSet<usize>,
+    pub is_null_equal: Vec<bool>,
     pub non_equi_conditions: Vec<RemoteExpr>,
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
@@ -202,17 +202,15 @@ impl PhysicalPlanBuilder {
             _ => probe_side.output_schema()?,
         };
 
-        assert_eq!(join.left_conditions.len(), join.right_conditions.len());
         let mut left_join_conditions = Vec::new();
         let mut right_join_conditions = Vec::new();
+        let mut is_null_equal = Vec::new();
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut table_index = None;
-        for (left_condition, right_condition) in join
-            .left_conditions
-            .iter()
-            .zip(join.right_conditions.iter())
-        {
+        for condition in join.equi_conditions.iter() {
+            let left_condition = &condition.left;
+            let right_condition = &condition.right;
             let right_expr = right_condition
                 .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
@@ -330,6 +328,7 @@ impl PhysicalPlanBuilder {
 
             left_join_conditions.push(left_expr.as_remote_expr());
             right_join_conditions.push(right_expr.as_remote_expr());
+            is_null_equal.push(condition.is_null_equal);
             left_join_conditions_rt
                 .push(left_expr_for_runtime_filter.map(|(expr, idx)| (expr.as_remote_expr(), idx)));
         }
@@ -513,7 +512,7 @@ impl PhysicalPlanBuilder {
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
-            is_null_equal: join.is_null_equal.iter().cloned().collect(),
+            is_null_equal,
             probe_keys_rt: left_join_conditions_rt,
             non_equi_conditions: join
                 .non_equi_conditions

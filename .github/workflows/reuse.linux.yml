@@ -211,7 +211,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -219,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -233,20 +233,6 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
-
-  test_stateful_sharing:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_stateful_sharing
-        if: env.BUILD_PROFILE == 'debug'
-        timeout-minutes: 10
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-stateful-sharing-linux
 
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]

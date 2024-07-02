@@ -396,7 +396,17 @@ impl Rule for RuleEagerAggregation {
         }
 
         // Using join conditions to propagate group item to another child.
-        let join_conditions = [&join.left_conditions, &join.right_conditions];
+        let left_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.left.clone())
+            .collect::<Vec<_>>();
+        let right_conditions = join
+            .equi_conditions
+            .iter()
+            .map(|condition| condition.right.clone())
+            .collect::<Vec<_>>();
+        let join_conditions = [&left_conditions, &right_conditions];
         let original_group_items_len = final_agg.group_items.len();
         for (idx, conditions) in join_conditions.iter().enumerate() {
             for (cond_idx, cond) in conditions.iter().enumerate() {

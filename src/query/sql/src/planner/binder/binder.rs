@@ -139,8 +139,7 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    #[async_recursion::async_recursion]
-    #[async_backtrace::framed]
+    #[async_recursion::async_recursion(#[recursive::recursive])]
     pub(crate) async fn bind_statement(
         &mut self,
         bind_context: &mut BindContext,
@@ -780,6 +779,7 @@ impl<'a> Binder {
         Self::check_sexpr(s_expr, &mut finder)
     }
 
+    #[recursive::recursive]
     pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
     where F: Fn(&ScalarExpr) -> bool {
         let result = match s_expr.plan.as_ref() {
@@ -802,11 +802,9 @@ impl<'a> Binder {
             }
             RelOperator::Join(join) => {
                 f.reset_finder();
-                for condition in &join.left_conditions {
-                    f.visit(condition)?;
-                }
-                for condition in &join.right_conditions {
-                    f.visit(condition)?;
+                for condition in join.equi_conditions.iter() {
+                    f.visit(&condition.left)?;
+                    f.visit(&condition.right)?;
                 }
                 for condition in &join.non_equi_conditions {
                     f.visit(condition)?;

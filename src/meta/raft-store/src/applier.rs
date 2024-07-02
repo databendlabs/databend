@@ -54,11 +54,11 @@ use log::error;
 use log::info;
 use num::FromPrimitive;
 
-use crate::sm_v002::SMV002;
+use crate::sm_v003::SMV003;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a> {
-    sm: &'a mut SMV002,
+    sm: &'a mut SMV003,
 
     /// The context of the current applying log.
     cmd_ctx: CmdContext,
@@ -68,7 +68,7 @@ pub struct Applier<'a> {
 }
 
 impl<'a> Applier<'a> {
-    pub fn new(sm: &'a mut SMV002) -> Self {
+    pub fn new(sm: &'a mut SMV003) -> Self {
         Self {
             sm,
             cmd_ctx: CmdContext::from_millis(0),

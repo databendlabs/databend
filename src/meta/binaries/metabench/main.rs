@@ -270,11 +270,15 @@ async fn benchmark_get_table(client: &Arc<ClientHandle>, prefix: u64, client_num
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 struct TableCopyFileConfig {
     file_cnt: u64,
+    ttl_ms: Option<u64>,
 }
 
 impl Default for TableCopyFileConfig {
     fn default() -> Self {
-        Self { file_cnt: 100 }
+        Self {
+            file_cnt: 100,
+            ttl_ms: None,
+        }
     }
 }
 
@@ -312,7 +316,9 @@ async fn benchmark_table_copy_file(
         let put_op = txn_op_put(
             &copied_file_ident,
             serialize_struct(&copied_file_value).unwrap(),
-        );
+        )
+        .with_ttl(param.ttl_ms);
+
         txn.if_then.push(put_op);
     }
 

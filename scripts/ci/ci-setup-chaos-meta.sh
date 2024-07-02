@@ -58,7 +58,7 @@ kubectl get pvc -A
 echo "kubectl delete databend-meta pvc"
 kubectl delete pvc --namespace databend data-test-databend-meta-0 data-test-databend-meta-1 data-test-databend-meta-2 --ignore-not-found
 
-helm repo add databend https://charts.databend.rs
+helm repo add databend https://charts.databend.com
 helm install test databend/databend-meta \
 	--namespace databend \
 	--create-namespace \

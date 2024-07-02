@@ -38,7 +38,7 @@ arrow-udf-python = { workspace = true, optional = true }
 arrow-udf-wasm = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
-async-recursion = "1.0.0"
+async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
@@ -105,6 +105,7 @@ databend-common-storages-view = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-aggregating-index = { workspace = true }
+databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
@@ -124,6 +125,7 @@ flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 headers = "0.4.0"
+hex = "0.4.3"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
@@ -145,12 +147,13 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
+recursive = "0.1.1"
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = "0.22"

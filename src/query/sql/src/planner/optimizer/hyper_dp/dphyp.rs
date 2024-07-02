@@ -180,14 +180,14 @@ impl DPhpy {
                     right_is_subquery = true;
                 }
                 // Add join conditions
-                for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
-                    let left_used_tables = condition_pair.0.used_tables()?;
-                    let right_used_tables = condition_pair.1.used_tables()?;
+                for condition in op.equi_conditions.iter() {
+                    let left_used_tables = condition.left.used_tables()?;
+                    let right_used_tables = condition.right.used_tables()?;
                     if left_used_tables.is_empty() || right_used_tables.is_empty() {
                         is_inner_join = false;
                         break;
                     }
-                    join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
+                    join_conditions.push((condition.left.clone(), condition.right.clone()));
                 }
                 if !op.non_equi_conditions.is_empty() {
                     let filter = Filter {
@@ -717,6 +717,7 @@ impl DPhpy {
     }
 
     #[allow(clippy::only_used_in_recursion)]
+    #[recursive::recursive]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         let mut new_s_expr = s_expr.clone();
         match s_expr.plan.as_ref() {

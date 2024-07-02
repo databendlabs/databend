@@ -653,15 +653,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
+        |(_, _, (catalog, database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
-                read_only: opt_read_only.is_some(),
             })
         },
     );
@@ -1532,7 +1531,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
-             ~ TENANT ~ "=" ~ #ident
+             ~ ( CREDENTIAL ~ ^"=" ~ ^#options)?
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
@@ -1546,20 +1545,34 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             _,
             url,
-            _,
-            _,
-            tenant,
+            credential_opt,
             args_opt,
             comment_opt,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
+            let credential_options = if let Some(opt) = credential_opt {
+                opt.2
+                    .iter()
+                    .map(|(k, v)| {
+                        let k = k.to_uppercase();
+                        if k == "TYPE" {
+                            (k, v.to_uppercase())
+                        } else {
+                            (k, v.clone())
+                        }
+                    })
+                    .collect()
+            } else {
+                BTreeMap::new()
+            };
+
             Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 create_option,
                 endpoint,
                 url,
-                tenant,
+                credential_options,
                 args: match args_opt {
                     Some(opt) => opt.2,
                     None => BTreeMap::new(),
