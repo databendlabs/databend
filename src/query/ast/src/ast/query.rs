@@ -675,6 +675,13 @@ impl TableReference {
             _ => false,
         }
     }
+
+    pub fn is_lateral_subquery(&self) -> bool {
+        match self {
+            TableReference::Subquery { lateral, .. } => *lateral,
+            _ => false,
+        }
+    }
 }
 
 impl Display for TableReference {
