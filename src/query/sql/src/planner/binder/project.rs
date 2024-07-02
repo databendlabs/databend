@@ -61,6 +61,7 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::VisitorMut as _;
+use crate::ColumnBindingBuilder;
 use crate::IndexType;
 use crate::TypeChecker;
 use crate::WindowChecker;
@@ -109,11 +110,27 @@ impl Binder {
                     async_func.return_type.as_ref().clone(),
                     Some(item.scalar.clone()),
                 ),
-                _ => self.create_derived_column_binding(
-                    item.alias.clone(),
-                    item.scalar.data_type()?,
-                    Some(item.scalar.clone()),
-                ),
+                _ => {
+                    // group item derived columns have been added
+                    if let Some(idx) = agg_info.group_items_map.get(&item.scalar) {
+                        let scalar_item = &agg_info.group_items[*idx];
+                        let metadata = self.metadata.read();
+                        let column = metadata.column(scalar_item.index);
+                        ColumnBindingBuilder::new(
+                            column.name(),
+                            column.index(),
+                            Box::new(column.data_type()),
+                            Visibility::Visible,
+                        )
+                        .build()
+                    } else {
+                        self.create_derived_column_binding(
+                            item.alias.clone(),
+                            item.scalar.data_type()?,
+                            Some(item.scalar.clone()),
+                        )
+                    }
+                }
             };
 
             if is_grouping_sets_item {
