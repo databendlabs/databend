@@ -69,6 +69,8 @@ pub enum Feature {
     ComputeQuota(ComputeQuota),
     #[serde(alias = "storage_quota", alias = "STORAGE_QUOTA")]
     StorageQuota(StorageQuota),
+    #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
+    AmendTable,
     #[serde(other)]
     Unknown,
 }
@@ -109,6 +111,7 @@ impl Display for Feature {
                     Some(storage_usage) => write!(f, "storage_usage: {}", storage_usage),
                 }
             }
+            Feature::AmendTable => write!(f, "amend_table"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -283,6 +286,11 @@ mod tests {
                 storage_usage: Some(1),
             }),
             serde_json::from_str::<Feature>("{\"StorageQuota\":{\"storage_usage\":1}}").unwrap()
+        );
+
+        assert_eq!(
+            Feature::AmendTable,
+            serde_json::from_str::<Feature>("\"amend_table\"").unwrap()
         );
 
         assert_eq!(
