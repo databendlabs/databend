@@ -66,6 +66,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub output_schema: DataSchemaRef,
     pub merge_into_op: MergeIntoOp,
+    pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
     pub change_join_order: bool,
@@ -439,6 +440,7 @@ impl PhysicalPlanBuilder {
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
                 merge_into_op: merge_into_op.clone(),
+                target_table_index: *target_table_index,
                 need_match: !is_insert_only,
                 change_join_order: *change_join_order,
                 target_build_optimization: false,
@@ -460,6 +462,7 @@ impl PhysicalPlanBuilder {
                     )]))
                 },
                 merge_into_op: merge_into_op.clone(),
+                target_table_index: *target_table_index,
                 need_match: !is_insert_only,
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now.
