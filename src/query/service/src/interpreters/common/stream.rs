@@ -15,14 +15,11 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
-use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::TableEntry;

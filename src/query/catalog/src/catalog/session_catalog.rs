@@ -359,7 +359,7 @@ impl Catalog for SessionCatalog {
 
     async fn update_table_meta(
         &self,
-        table_info: &TableInfo,
+        _table_info: &TableInfo,
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
         todo!()

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::hash::RandomState;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
