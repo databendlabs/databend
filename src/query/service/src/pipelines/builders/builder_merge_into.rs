@@ -28,6 +28,7 @@ use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_sql::binder::MergeIntoType;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -66,9 +67,13 @@ impl PipelineBuilder {
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
-        let serialize_len = merge_into
-            .merge_into_op
-            .get_serialize_len(self.main_pipeline.output_len());
+        let serialize_len = match merge_into.merge_type {
+            MergeIntoType::InsertOnly => self.main_pipeline.output_len(),
+            MergeIntoType::FullOperation | MergeIntoType::MatchedOnly => {
+                // remove row id port
+                self.main_pipeline.output_len() - 1
+            }
+        };
 
         // 1. Fill default and computed columns
         self.build_fill_columns_in_merge_into(

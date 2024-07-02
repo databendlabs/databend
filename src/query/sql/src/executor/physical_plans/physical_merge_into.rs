@@ -60,7 +60,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub merge_into_op: MergeIntoOp,
+    pub merge_type: MergeIntoType,
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
@@ -341,19 +341,10 @@ impl PhysicalPlanBuilder {
             unmatched_schema: join_output_schema.clone(),
         }));
 
-        let merge_into_op = match (merge_type, distributed) {
-            (MergeIntoType::FullOperation, true) => MergeIntoOp::DistributedFullOperation,
-            (MergeIntoType::FullOperation, false) => MergeIntoOp::StandaloneFullOperation,
-            (MergeIntoType::MatchedOnly, true) => MergeIntoOp::DistributedMatchedOnly,
-            (MergeIntoType::MatchedOnly, false) => MergeIntoOp::StandaloneMatchedOnly,
-            (MergeIntoType::InsertOnly, true) => MergeIntoOp::DistributedInsertOnly,
-            (MergeIntoType::InsertOnly, false) => MergeIntoOp::StandaloneInsertOnly,
-        };
-
         plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
-            merge_into_op: merge_into_op.clone(),
+            merge_type: merge_type.clone(),
         }));
 
         let segments: Vec<_> = base_snapshot
@@ -370,7 +361,7 @@ impl PhysicalPlanBuilder {
             segments: segments.clone(),
             distributed: *distributed,
             output_schema: DataSchemaRef::default(),
-            merge_into_op: merge_into_op.clone(),
+            merge_type: merge_type.clone(),
             need_match: !is_insert_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
@@ -419,27 +410,5 @@ impl PhysicalPlanBuilder {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum MergeIntoOp {
-    StandaloneMatchedOnly,
-    StandaloneFullOperation,
-    StandaloneInsertOnly,
-    DistributedMatchedOnly,
-    DistributedFullOperation,
-    DistributedInsertOnly,
-}
-
-impl MergeIntoOp {
-    pub fn get_serialize_len(&self, output_len: usize) -> usize {
-        match self {
-            MergeIntoOp::StandaloneFullOperation
-            | MergeIntoOp::StandaloneMatchedOnly
-            | MergeIntoOp::DistributedMatchedOnly
-            | MergeIntoOp::DistributedFullOperation => output_len - 1, /* remove first row_id port */
-            MergeIntoOp::StandaloneInsertOnly | MergeIntoOp::DistributedInsertOnly => output_len,
-        }
     }
 }
