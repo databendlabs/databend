@@ -143,7 +143,7 @@ impl MySQLFederated {
 
     // Check SHOW VARIABLES LIKE.
     fn federated_show_variables_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        #[allow(clippy::type-complexity)]
+        #![allow(clippy::type_complexity)]
         static SHOW_VARIABLES_RULES: LazyLock<Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)>> =
             LazyLock::new(|| {
                 vec![
@@ -176,7 +176,7 @@ impl MySQLFederated {
 
     // Check for SET or others query, this is the final check of the federated query.
     fn federated_mixed_check(&self, query: &str) -> Option<(TableSchemaRef, DataBlock)> {
-        #[allow(clippy::type-complexity)]
+        #![allow(clippy::type_complexity)]
         static MIXED_RULES: LazyLock<Vec<(Regex, Option<(TableSchemaRef, DataBlock)>)>> =
             LazyLock::new(|| {
                 vec![
