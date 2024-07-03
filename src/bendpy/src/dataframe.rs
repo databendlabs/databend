@@ -78,7 +78,7 @@ impl PyDataFrame {
         let result = blocks.box_render(num, bs.bs_max_width, bs.bs_max_width);
 
         // Note that println! does not print to the Python debug console and is not visible in notebooks for instance
-        let print = py.import("builtins")?.getattr("print")?;
+        let print = py.import_bound("builtins")?.getattr("print")?;
         print.call1((result,))?;
         Ok(())
     }
@@ -146,8 +146,8 @@ impl PyDataFrame {
 
         Python::with_gil(|py| {
             // Instantiate pyarrow Table object and use its from_batches method
-            let table_class = py.import("pyarrow")?.getattr("Table")?;
-            let args = PyTuple::new(py, &[batches, schema]);
+            let table_class = py.import_bound("pyarrow")?.getattr("Table")?;
+            let args = PyTuple::new_bound(py, &[batches, schema]);
             let table: PyObject = table_class.call_method1("from_batches", args)?.into();
             Ok(table)
         })
@@ -171,8 +171,8 @@ impl PyDataFrame {
         let table = self.to_arrow_table(py)?;
 
         Python::with_gil(|py| {
-            let dataframe = py.import("polars")?.getattr("DataFrame")?;
-            let args = PyTuple::new(py, &[table]);
+            let dataframe = py.import_bound("polars")?.getattr("DataFrame")?;
+            let args = PyTuple::new_bound(py, &[table]);
             let result: PyObject = dataframe.call1(args)?.into();
             Ok(result)
         })

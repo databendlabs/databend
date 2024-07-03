@@ -37,7 +37,7 @@ use utils::RUNTIME;
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
+fn databend(m: &Bound<'_, PyModule>) -> PyResult<()> {
     let data_path = env::var("DATABEND_DATA_PATH").unwrap_or(".databend/".to_string());
     let path = Path::new(&data_path);
 

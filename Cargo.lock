@@ -301,6 +301,7 @@ dependencies = [
  "arrow-schema",
  "arrow-select",
  "arrow-string",
+ "pyo3",
 ]
 
 [[package]]
@@ -509,6 +510,7 @@ version = "52.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32aae6a60458a2389c0da89c9de0b7932427776127da1a738e2efc21d32f3393"
 dependencies = [
+ "bitflags 2.4.2",
  "serde",
 ]
 
@@ -568,7 +570,7 @@ dependencies = [
  "arrow-schema",
  "lazy_static",
  "pyo3",
- "pyo3-build-config",
+ "pyo3-build-config 0.21.2",
 ]
 
 [[package]]
@@ -1431,6 +1433,28 @@ name = "beef"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
+
+[[package]]
+name = "bendpy"
+version = "0.0.0"
+dependencies = [
+ "arrow",
+ "arrow-schema",
+ "ctor 0.2.8",
+ "databend-common-config",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-license",
+ "databend-common-meta-app",
+ "databend-common-meta-embedded",
+ "databend-common-users",
+ "databend-query",
+ "pyo3",
+ "pyo3-build-config 0.18.3",
+ "tokio",
+ "tokio-stream",
+ "uuid",
+]
 
 [[package]]
 name = "bigdecimal"
@@ -2916,6 +2940,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3479,7 +3513,7 @@ dependencies = [
  "comfy-table 6.2.0",
  "crc32fast",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -4148,7 +4182,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "cidr",
  "cron",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "databend-common-ast",
  "databend-common-async-functions",
@@ -5108,7 +5142,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "config",
  "criterion",
- "ctor",
+ "ctor 0.1.26",
  "dashmap",
  "databend-common-arrow",
  "databend-common-ast",
@@ -10433,7 +10467,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fb9b5c752f145ac5046bccc3c4f62892e3c950c1d1eab80c5949cd68a2078db"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "web-time",
 ]
 
@@ -12460,10 +12494,20 @@ dependencies = [
  "memoffset",
  "parking_lot 0.12.1",
  "portable-atomic",
- "pyo3-build-config",
+ "pyo3-build-config 0.21.2",
  "pyo3-ffi",
  "pyo3-macros",
  "unindent",
+]
+
+[[package]]
+name = "pyo3-build-config"
+version = "0.18.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cb946f5ac61bb61a5014924910d936ebd2b23b705f7a4a3c40b05c720b079a3"
+dependencies = [
+ "once_cell",
+ "target-lexicon",
 ]
 
 [[package]]
@@ -12483,7 +12527,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01be5843dc60b916ab4dad1dca6d20b9b4e6ddc8e15f50c47fe6d85f1fb97403"
 dependencies = [
  "libc",
- "pyo3-build-config",
+ "pyo3-build-config 0.21.2",
 ]
 
 [[package]]
@@ -12506,7 +12550,7 @@ checksum = "08260721f32db5e1a5beae69a55553f56b99bd0e1c3e6e0a5e8851a9d0f5a85c"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
- "pyo3-build-config",
+ "pyo3-build-config 0.21.2",
  "quote",
  "syn 2.0.52",
 ]

@@ -29,6 +29,7 @@ members = [
     "src/common/license",
     "src/common/parquet2",
     "src/query/ast",
+    "src/bendpy",
     "src/query/async_functions",
     "src/query/codegen",
     "src/query/config",

@@ -72,19 +72,19 @@ pip install "maturin[patchelf]"
 Build bindings:
 
 ```shell
-maturin develop
+maturin develop --features abi
 ```
 
 Run tests:
 
 ```shell
-maturin develop -E test
+maturin develop --features abi -E test
 ```
 
 Build API docs:
 
 ```shell
-maturin develop -E docs
+maturin develop --features abi -E docs
 pdoc databend
 ```
 

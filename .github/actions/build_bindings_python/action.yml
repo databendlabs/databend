@@ -32,9 +32,9 @@ runs:
       shell: bash
       run: |
         if [[ -z "${{ inputs.version }}" ]]; then
-          echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
+          echo "BUILD_ARGS=--features abi --strip --out dist" >> $GITHUB_OUTPUT
         else
-          echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
+          echo "BUILD_ARGS=--features abi --release --strip --out dist" >> $GITHUB_OUTPUT
         fi
 
     - name: Cross setup for macOS

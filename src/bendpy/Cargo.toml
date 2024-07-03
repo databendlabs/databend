@@ -14,6 +14,10 @@ pyo3-build-config = "0.18.3"
 name = "databend"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+abi =  ["pyo3/extension-module", "pyo3/abi3", "pyo3/abi3-py37" ]
+
 [dependencies]
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
@@ -28,8 +32,8 @@ databend-common-users = { workspace = true }
 databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
-], default-features = false }
-pyo3 = { version = "0.20", features = ["extension-module", "abi3", "abi3-py37"] }
+]}
+pyo3 = { version = "0.21.2" }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
 uuid = { workspace = true }
