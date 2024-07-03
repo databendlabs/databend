@@ -100,16 +100,11 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use databend_common_storage::DataOperator;
-use futures::TryStreamExt;
 use iceberg_catalog_hms::HmsCatalog;
 use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
 use iceberg_catalog_rest::RestCatalog;
 use iceberg_catalog_rest::RestCatalogConfig;
-use minitrace::func_name;
-use opendal::Metakey;
-use tokio::sync::OnceCell;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -139,7 +134,7 @@ pub struct IcebergCatalog {
     info: Arc<CatalogInfo>,
 
     /// iceberg catalogs
-    ctl: OnceCell<Result<Arc<dyn iceberg::Catalog>>>,
+    ctl: Arc<dyn iceberg::Catalog>,
 }
 
 impl IcebergCatalog {
@@ -162,7 +157,7 @@ impl IcebergCatalog {
                     .props(hms.props.clone())
                     .build();
                 let ctl = HmsCatalog::new(cfg).map_err(|err| {
-                    ErrorCode::BadArguments("Iceberg build hms catalog failed: {err:?}")
+                    ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
                 })?;
                 Arc::new(ctl)
             }
@@ -172,60 +167,20 @@ impl IcebergCatalog {
                     .warehouse(rest.warehouse.clone())
                     .props(rest.props.clone())
                     .build();
-                let ctl = RestCatalog::new(cfg).await.map_err(|err| {
-                    ErrorCode::BadArguments("Iceberg build rest catalog failed: {err:?}")
-                })?;
+                let ctl = RestCatalog::new(cfg);
                 Arc::new(ctl)
             }
         };
 
         Ok(Self {
             info: info.into(),
-            ctl: OnceCell::new(),
+            ctl,
         })
     }
 
     /// Get the iceberg catalog.
-    pub async fn iceberg_catalog(&self) -> Result<Arc<dyn iceberg::Catalog>> {
-        let ctl = self
-            .ctl
-            .get_or_init(|| async {
-                let CatalogOption::Iceberg(options) = &self.info.meta.catalog_option else {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Expect iceberg catalog but get other catalog option: {:?}",
-                        &self.info.meta.catalog_option
-                    )));
-                };
-
-                match options {
-                    IcebergCatalogOption::Hms(hms) => {
-                        let cfg = HmsCatalogConfig::builder()
-                            .address(hms.address.clone())
-                            .thrift_transport(HmsThriftTransport::Buffered)
-                            .warehouse(hms.warehouse.clone())
-                            .props(hms.props.clone())
-                            .build();
-                        let ctl = HmsCatalog::new(cfg).map_err(|err| {
-                            ErrorCode::BadArguments("Iceberg build hms catalog failed: {err:?}")
-                        })?;
-                        Ok(Arc::new(ctl) as Arc<dyn iceberg::Catalog>)
-                    }
-                    IcebergCatalogOption::Rest(rest) => {
-                        let cfg = RestCatalogConfig::builder()
-                            .uri(rest.uri.clone())
-                            .warehouse(rest.warehouse.clone())
-                            .props(rest.props.clone())
-                            .build();
-                        let ctl = RestCatalog::new(cfg).await.map_err(|err| {
-                            ErrorCode::BadArguments("Iceberg build rest catalog failed: {err:?}")
-                        })?;
-                        Ok(Arc::new(ctl) as Arc<dyn iceberg::Catalog>)
-                    }
-                }
-            })
-            .await;
-
-        ctl.clone()
+    pub fn iceberg_catalog(&self) -> Arc<dyn iceberg::Catalog> {
+        self.ctl.clone()
     }
 }
 
@@ -248,7 +203,6 @@ impl Catalog for IcebergCatalog {
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
             .iceberg_catalog()
-            .await?
             .list_namespaces(None)
             .await
             .map_err(|err| {

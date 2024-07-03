@@ -35,14 +35,12 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_operator;
-use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetFilesPart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
@@ -50,7 +48,6 @@ use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::RangePrunerCreator;
 use iceberg::spec::DataContentType;
 use iceberg::spec::ManifestContentType;
-use opendal::Operator;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
@@ -75,11 +72,11 @@ impl IcebergTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
-        let (db_name, table_name) = info.desc.split_once(",").ok_or_else(|| {
-            ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", info.desc))
+        let (db_name, table_name) = info.desc.as_str().split_once(",").ok_or_else(|| {
+            ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", &info.desc))
         })?;
         Ok(Box::new(Self {
-            info,
+            info: info.clone(),
             ctl,
             database_name: db_name.to_string(),
             table_name: table_name.to_string(),
@@ -112,7 +109,6 @@ impl IcebergTable {
         let db_ident = iceberg::NamespaceIdent::new(database.to_string());
         let table = ctl
             .iceberg_catalog()
-            .await?
             .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
             .await
             .map_err(|err| {

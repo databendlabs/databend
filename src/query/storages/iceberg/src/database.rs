@@ -22,15 +22,10 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_storage::DataOperator;
-use futures::StreamExt;
-use opendal::EntryMode;
-use opendal::Metakey;
 
 use crate::table::IcebergTable;
 use crate::IcebergCatalog;
@@ -89,10 +84,11 @@ impl Database for IcebergDatabase {
         let table_names = self
             .ctl
             .iceberg_catalog()
-            .await?
             .list_tables(&self.ident)
             .await
-            .map_err(|err| ErrorCode::UnknownException("Iceberg list tables failed: {err:?}"))?;
+            .map_err(|err| {
+                ErrorCode::UnknownException(format!("Iceberg list tables failed: {err:?}"))
+            })?;
 
         let mut tables = vec![];
 

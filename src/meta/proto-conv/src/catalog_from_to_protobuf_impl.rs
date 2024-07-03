@@ -64,7 +64,7 @@ impl FromToProto for mt::CatalogMeta {
 impl FromToProto for mt::CatalogOption {
     type PB = pb::CatalogOption;
 
-    fn get_pb_ver(p: &Self::PB) -> u64 {
+    fn get_pb_ver(_: &Self::PB) -> u64 {
         VER
     }
 

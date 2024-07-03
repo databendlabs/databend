@@ -15,8 +15,6 @@
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::storage::StorageS3Config;
 use minitrace::func_name;
 
 use crate::common;

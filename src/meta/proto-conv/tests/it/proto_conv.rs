@@ -37,7 +37,6 @@ use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::ShareCredential;
 use databend_common_meta_app::share::ShareCredentialHmac;
-use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;

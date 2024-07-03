@@ -15,12 +15,9 @@
 use std::collections::HashMap;
 
 use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
-use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -60,8 +57,8 @@ fn get_column_stats(
         null_counts.get(&iceberg_col_id),
     ) {
         (Some(lo), Some(up), Some(nc)) => {
-            let min = parse_datum(&field.data_type, lo)?;
-            let max = parse_datum(&field.data_type, up)?;
+            let min = parse_datum(lo)?;
+            let max = parse_datum(up)?;
             Some(ColumnStatistics::new(
                 min, max, *nc as u64, 0, // this field is not used.
                 None,
@@ -72,8 +69,7 @@ fn get_column_stats(
 }
 
 /// TODO: we need to support more types.
-fn parse_datum(ty: &TableDataType, data: &Datum) -> Option<Scalar> {
-    let ty = ty.remove_nullable();
+fn parse_datum(data: &Datum) -> Option<Scalar> {
     match data.literal() {
         PrimitiveLiteral::Boolean(v) => Some(Scalar::Boolean(*v)),
         PrimitiveLiteral::Int(v) => Some(Scalar::Number(i32::upcast_scalar(*v))),
