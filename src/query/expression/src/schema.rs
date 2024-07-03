@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -821,13 +823,18 @@ impl TableSchema {
             fields_type,
         } = &field.data_type.remove_nullable()
         {
-            let field_name = field.name();
             let mut next_column_id = field.column_id;
             let fields = fields_name
                 .iter()
                 .zip(fields_type)
                 .map(|(name, ty)| {
-                    let inner_name = format!("{}:{}", field_name, name.to_lowercase());
+                    let inner_name = if name.chars().any(|c| c.is_ascii_uppercase())
+                        || ident_needs_quote(name)
+                    {
+                        format!("{}:{}", field.name(), QuotedIdent(name, '"'))
+                    } else {
+                        format!("{}:{}", field.name(), name)
+                    };
                     let field = TableField::new(&inner_name, ty.clone());
                     field.build_column_id(&mut next_column_id)
                 })
@@ -860,9 +867,16 @@ impl TableSchema {
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
+                        let inner_name = if name.chars().any(|c| c.is_ascii_uppercase())
+                            || ident_needs_quote(name)
+                        {
+                            format!("{}:{}", field.name(), QuotedIdent(name, '"'))
+                        } else {
+                            format!("{}:{}", field.name(), name)
+                        };
                         collect_in_field(
                             &TableField::new_from_column_id(
-                                &format!("{}:{}", field.name(), name),
+                                &inner_name,
                                 ty.clone(),
                                 *next_column_id,
                             ),

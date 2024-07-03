@@ -2070,8 +2070,22 @@ CreateTable(
                         data_type: Tuple {
                             fields_name: Some(
                                 [
-                                    "m",
-                                    "n",
+                                    Identifier {
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                        name: "m",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    Identifier {
+                                        span: Some(
+                                            51..52,
+                                        ),
+                                        name: "n",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
                                 ],
                             ),
                             fields_type: [
@@ -2096,6 +2110,83 @@ CreateTable(
                             fields_type: [
                                 Int32,
                                 String,
+                            ],
+                        },
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table a (b tuple("c-1" int, "c-2" uint64));
+---------- Output ---------
+CREATE TABLE a (b TUPLE("c-1" Int32, "c-2" UInt64))
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Tuple {
+                            fields_name: Some(
+                                [
+                                    Identifier {
+                                        span: Some(
+                                            24..29,
+                                        ),
+                                        name: "c-1",
+                                        quote: Some(
+                                            '"',
+                                        ),
+                                        is_hole: false,
+                                    },
+                                    Identifier {
+                                        span: Some(
+                                            35..40,
+                                        ),
+                                        name: "c-2",
+                                        quote: Some(
+                                            '"',
+                                        ),
+                                        is_hole: false,
+                                    },
+                                ],
+                            ),
+                            fields_type: [
+                                Int32,
+                                UInt64,
                             ],
                         },
                         expr: None,

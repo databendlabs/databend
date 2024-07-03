@@ -19,6 +19,8 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_ast::ast::quote::ident_needs_quote;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -3720,14 +3722,10 @@ impl<'a> TypeChecker<'a> {
                                 fields_type.len()
                             )));
                         }
-                        table_data_type = fields_type.get(idx as usize - 1).unwrap().clone();
-                        idx as usize
+                        (idx - 1) as usize
                     }
                     Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
-                        Some(idx) => {
-                            table_data_type = fields_type.get(idx).unwrap().clone();
-                            idx + 1
-                        }
+                        Some(idx) => idx,
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
@@ -3737,10 +3735,11 @@ impl<'a> TypeChecker<'a> {
                     },
                     _ => unreachable!(),
                 };
+                table_data_type = fields_type.get(idx).unwrap().clone();
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
+                    params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3780,7 +3779,7 @@ impl<'a> TypeChecker<'a> {
             } = table_data_type.remove_nullable()
             {
                 let (span, path) = paths.pop_front().unwrap();
-                match path {
+                let idx = match path {
                     Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
@@ -3796,20 +3795,10 @@ impl<'a> TypeChecker<'a> {
                             ))
                             .set_span(span));
                         }
-                        let inner_name = fields_name.get(idx as usize - 1).unwrap();
-                        let inner_type = fields_type.get(idx as usize - 1).unwrap();
-                        names.push(inner_name.clone());
-                        index_with_types.push_back((idx as usize, inner_type.clone()));
-                        *table_data_type = inner_type.clone();
+                        idx as usize - 1
                     }
                     Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
-                        Some(idx) => {
-                            let inner_name = fields_name.get(idx).unwrap();
-                            let inner_type = fields_type.get(idx).unwrap();
-                            names.push(inner_name.clone());
-                            index_with_types.push_back((idx + 1, inner_type.clone()));
-                            *table_data_type = inner_type.clone();
-                        }
+                        Some(idx) => idx,
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
@@ -3819,7 +3808,18 @@ impl<'a> TypeChecker<'a> {
                         }
                     },
                     _ => unreachable!(),
+                };
+                let inner_name = fields_name.get(idx).unwrap();
+                if inner_name.chars().any(|c| c.is_ascii_uppercase())
+                    || ident_needs_quote(inner_name)
+                {
+                    names.push(QuotedIdent(inner_name, '"').to_string());
+                } else {
+                    names.push(inner_name.clone());
                 }
+                let inner_type = fields_type.get(idx).unwrap();
+                index_with_types.push_back((idx + 1, inner_type.clone()));
+                *table_data_type = inner_type.clone();
             } else {
                 // other data types use `get` function.
                 break;
@@ -4350,7 +4350,16 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
                 None => (0..fields_type.len())
                     .map(|i| (i + 1).to_string())
                     .collect(),
-                Some(names) => names.clone(),
+                Some(names) => names
+                    .iter()
+                    .map(|i| {
+                        if i.quote.is_some() {
+                            i.name.clone()
+                        } else {
+                            i.name.to_lowercase()
+                        }
+                    })
+                    .collect(),
             },
             fields_type: fields_type
                 .iter()
