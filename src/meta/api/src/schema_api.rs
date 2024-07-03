@@ -91,8 +91,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -244,11 +242,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply, KVAppError>;
-
-    async fn update_table_meta(
-        &self,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply, KVAppError>;
 
     async fn update_multi_table_meta(
         &self,

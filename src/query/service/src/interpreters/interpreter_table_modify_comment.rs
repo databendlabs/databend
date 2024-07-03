@@ -92,12 +92,9 @@ impl Interpreter for ModifyTableCommentInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            catalog.update_table_meta(table_info, req).await?;
+            catalog.update_single_table_meta(req,table_info).await?;
         };
 
         Ok(PipelineBuildResult::create())

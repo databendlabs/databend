@@ -323,23 +323,16 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             ..Default::default()
         })
         .await
-        .map(|x| ())
+        .map(|_| ())
     }
 
     async fn update_single_table_meta(
         &self,
-        table_id: u64,
-        seq: MatchSeq,
-        new_table_meta: TableMeta,
+        req: UpdateTableMetaReq,
         table_info: &TableInfo,
     ) -> Result<UpdateTableMetaReply> {
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq,
-            new_table_meta,
-        };
         self.update_multi_table_meta(UpdateMultiTableMetaReq {
-            update_table_metas: vec![req, table_info.clone()],
+            update_table_metas: vec![(req, table_info.clone())],
             ..Default::default()
         })
         .await

@@ -37,8 +37,6 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_sharing::ShareEndpointManager;
@@ -176,13 +174,6 @@ impl Database for ShareDatabase {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot upsert table option from a shared database".to_string(),
-        ))
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(&self, _req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::PermissionDenied(
-            "Permission denied, cannot upsert table meta from a shared database".to_string(),
         ))
     }
 

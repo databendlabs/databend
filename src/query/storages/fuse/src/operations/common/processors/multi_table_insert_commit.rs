@@ -254,9 +254,6 @@ async fn build_update_table_meta_req(
         table_id,
         seq: MatchSeq::Exact(table_version),
         new_table_meta,
-        copied_files: None,
-        deduplicated_label: None,
-        update_stream_meta: vec![],
     };
     Ok(req)
 }

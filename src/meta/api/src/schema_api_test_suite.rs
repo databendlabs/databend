@@ -2581,9 +2581,6 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    copied_files: None,
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
                 })
                 .await?;
 

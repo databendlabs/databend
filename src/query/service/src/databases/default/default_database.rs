@@ -37,8 +37,6 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 
@@ -194,12 +192,6 @@ impl Database for DefaultDatabase {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         let res = self.ctx.meta.upsert_table_option(req).await?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
         Ok(res)
     }
 
