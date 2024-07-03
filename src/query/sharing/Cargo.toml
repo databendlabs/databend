@@ -12,6 +12,7 @@ doctest = false
 [dependencies]
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
+base64 = "0.22"
 bytes = { workspace = true }
 databend-common-auth = { workspace = true }
 databend-common-base = { workspace = true }
@@ -25,6 +26,8 @@ http = { workspace = true }
 log = { workspace = true }
 moka = "0.12"
 opendal = { workspace = true }
+reqwest = { workspace = true }
+ring = "0.16.20"
 serde = { workspace = true }
 serde_json = { workspace = true }
 

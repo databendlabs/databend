@@ -25,6 +25,8 @@ use chrono::Utc;
 use super::CreateOption;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
+use crate::share::ShareCredential;
+use crate::share::ShareCredentialHmac;
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -96,7 +98,10 @@ pub struct DatabaseMeta {
     pub drop_on: Option<DateTime<Utc>>,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    // from tenant.share_name
     pub from_share: Option<ShareNameIdentRaw>,
+    // share endpoint name, create with `create share endpoint` ddl
+    pub using_share_endpoint: Option<String>,
 }
 
 impl Default for DatabaseMeta {
@@ -111,6 +116,7 @@ impl Default for DatabaseMeta {
             drop_on: None,
             shared_by: BTreeSet::new(),
             from_share: None,
+            using_share_endpoint: None,
         }
     }
 }
@@ -324,6 +330,25 @@ pub struct ListDatabaseReq {
 impl ListDatabaseReq {
     pub fn tenant(&self) -> &Tenant {
         &self.tenant
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct ShareDBParams {
+    pub share_ident: ShareNameIdentRaw,
+    pub share_endpoint_url: String,
+    pub share_endpoint_credential: ShareCredential,
+}
+
+impl ShareDBParams {
+    pub fn new(share_ident: ShareNameIdentRaw) -> Self {
+        Self {
+            share_ident,
+            share_endpoint_url: "".to_string(),
+            share_endpoint_credential: ShareCredential::HMAC(ShareCredentialHmac {
+                key: "".to_string(),
+            }),
+        }
     }
 }
 
