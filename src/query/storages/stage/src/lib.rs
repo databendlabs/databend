@@ -19,8 +19,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod append;
-mod input_context_bridge;
-mod one_file_partition;
+mod compression;
 mod read;
 mod stage_table;
 
