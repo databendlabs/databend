@@ -232,9 +232,6 @@ impl TxnManager {
                             table_id: *id,
                             seq: MatchSeq::Exact(info.ident.seq),
                             new_table_meta: info.meta.clone(),
-                            copied_files: None,
-                            update_stream_meta: vec![],
-                            deduplicated_label: None,
                         },
                         info.clone(),
                     )

@@ -3201,7 +3201,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
         let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            return Ok(std::result::Result::Ok(()));
+            let mut share_table_info = vec![];
+            for (_, tb_meta) in tb_meta_vec {
+                if let Some(info) =
+                    get_share_table_info_map(self, tb_meta.as_ref().unwrap()).await?
+                {
+                    share_table_info.extend(info);
+                }
+            }
+            return Ok(std::result::Result::Ok(UpdateTableMetaReply {
+                share_table_info: Some(share_table_info),
+            }));
         }
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {

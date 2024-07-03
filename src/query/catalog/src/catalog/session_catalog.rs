@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -34,6 +35,7 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -358,12 +360,19 @@ impl Catalog for SessionCatalog {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
+        if req
+            .update_table_metas
+            .iter()
+            .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
+        {
+            return Err(ErrorCode::StorageOther("share table is read only"));
+        }
         let state = self.txn_mgr.lock().state();
         match state {
             TxnState::AutoCommit => self.inner.retryable_update_multi_table_meta(req).await,
             TxnState::Active => {
                 self.txn_mgr.lock().update_multi_table_meta(req);
-                Ok(Ok(()))
+                Ok(Ok(Default::default()))
             }
             TxnState::Fail => unreachable!(),
         }

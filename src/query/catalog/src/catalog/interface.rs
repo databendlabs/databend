@@ -89,6 +89,8 @@ use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_meta_app::schema::UpdateTableMetaReply;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -286,7 +288,19 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq) -> Result<()> {
+    async fn retryable_update_multi_table_meta(
+        &self,
+        _req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        Err(ErrorCode::Unimplemented(
+            "'update_multi_table_meta' not implemented",
+        ))
+    }
+
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
         self.retryable_update_multi_table_meta(req)
             .await?
             .map_err(|e| {
@@ -304,21 +318,31 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
-        self.retryable_update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
             update_stream_metas,
             ..Default::default()
         })
         .await
-        .map(|_| ())
+        .map(|x| ())
     }
 
-    async fn retryable_update_multi_table_meta(
+    async fn update_single_table_meta(
         &self,
-        _req: UpdateMultiTableMetaReq,
-    ) -> Result<UpdateMultiTableMetaResult> {
-        Err(ErrorCode::Unimplemented(
-            "'update_multi_table_meta' not implemented",
-        ))
+        table_id: u64,
+        seq: MatchSeq,
+        new_table_meta: TableMeta,
+        table_info: &TableInfo,
+    ) -> Result<UpdateTableMetaReply> {
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq,
+            new_table_meta,
+        };
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_table_metas: vec![req, table_info.clone()],
+            ..Default::default()
+        })
+        .await
     }
 
     async fn set_table_column_mask_policy(
