@@ -27,7 +27,6 @@ mod stream_source;
 mod sync_source;
 mod sync_source_receiver;
 
-pub mod input_formats;
 mod prefetch_async_source;
 
 pub use async_source::AsyncSource;

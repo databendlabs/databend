@@ -27,6 +27,7 @@ use databend_common_meta_app::share::CreateShareReq;
 use databend_common_meta_app::share::DropShareEndpointReq;
 use databend_common_meta_app::share::DropShareReq;
 use databend_common_meta_app::share::GetShareEndpointReq;
+use databend_common_meta_app::share::ShareCredential;
 use databend_common_meta_app::share::ShareEndpointIdent;
 use databend_common_meta_app::share::ShareGrantObjectName;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
@@ -38,7 +39,7 @@ pub struct CreateShareEndpointPlan {
     pub create_option: CreateOption,
     pub endpoint: ShareEndpointIdent,
     pub url: String,
-    pub tenant: Tenant,
+    pub credential: Option<ShareCredential>,
     pub args: BTreeMap<String, String>,
     pub comment: Option<String>,
 }
@@ -49,7 +50,7 @@ impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
             create_option: p.create_option,
             endpoint: p.endpoint.clone(),
             url: p.url.clone(),
-            tenant: p.tenant.clone(),
+            credential: p.credential.clone(),
             args: p.args.clone(),
             comment: p.comment,
             create_on: Utc::now(),
@@ -68,10 +69,9 @@ impl ShowShareEndpointPlan {
         Arc::new(DataSchema::new(vec![
             DataField::new("Endpoint", DataType::String),
             DataField::new("URL", DataType::String),
-            DataField::new("To Tenant", DataType::String),
+            DataField::new("Credential", DataType::String),
             DataField::new("Args", DataType::String),
             DataField::new("Comment", DataType::String),
-            DataField::new("Created On", DataType::String),
         ]))
     }
 }
@@ -81,7 +81,6 @@ impl From<ShowShareEndpointPlan> for GetShareEndpointReq {
         GetShareEndpointReq {
             tenant: p.tenant,
             endpoint: None,
-            to_tenant: None,
         }
     }
 }

@@ -17,14 +17,13 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
+use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sharing::ShareEndpointManager;
+use databend_common_sharing::ShareEndpointClient;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
@@ -47,53 +46,56 @@ impl CreateDatabaseInterpreter {
         Ok(CreateDatabaseInterpreter { ctx, plan })
     }
 
-    async fn check_create_database_from_share(
-        &self,
-        tenant: &Tenant,
-        share_name: &ShareNameIdent,
-    ) -> Result<()> {
-        let share_specs = ShareEndpointManager::instance()
-            .get_inbound_shares(tenant, Some(share_name.tenant()), Some(share_name.clone()))
-            .await?;
-        match share_specs.first() {
-            Some((_, share_spec)) => {
-                if !share_spec
-                    .tenants
-                    .contains(&tenant.tenant_name().to_string())
-                {
-                    return Err(ErrorCode::UnknownShareAccounts(format!(
-                        "share {} has not granted privilege to {}",
-                        share_name.display(),
-                        tenant.tenant_name()
-                    )));
-                }
-                match share_spec.db_privileges {
-                    Some(db_privileges) => {
-                        if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                            return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                                "share {} has not granted privilege to {}",
-                                share_name.display(),
-                                tenant.tenant_name()
-                            )));
-                        }
-                    }
-                    None => {
-                        return Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                            "share {} has not granted privilege to {}",
-                            share_name.display(),
-                            tenant.tenant_name()
-                        )));
-                    }
-                }
-            }
-            None => {
-                return Err(ErrorCode::UnknownShare(format!(
-                    "UnknownShare {:?}",
-                    share_name
-                )));
-            }
+    async fn check_create_database_from_share(&self) -> Result<()> {
+        // safe to unwrap
+        let share_name = self.plan.meta.from_share.clone().unwrap();
+        let share_endpoint = self.plan.meta.using_share_endpoint.clone().unwrap();
+        let tenant = self.plan.tenant.clone();
+
+        // 1. get share endpoint
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let req = GetShareEndpointReq {
+            tenant: tenant.clone(),
+            endpoint: Some(share_endpoint.clone()),
+        };
+        let reply = meta_api.get_share_endpoint(req).await?;
+        if reply.share_endpoint_meta_vec.is_empty() {
+            return Err(ErrorCode::UnknownShareEndpoint(format!(
+                "UnknownShareEndpoint {:?}",
+                share_endpoint
+            )));
         }
-        Ok(())
+
+        // 2. get ShareSpec using share endpoint
+        let share_endpoint_meta = &reply.share_endpoint_meta_vec[0].1;
+        let client = ShareEndpointClient::new();
+        let share_spec = client
+            .get_share_spec_by_name(
+                share_endpoint_meta,
+                tenant.tenant_name(),
+                share_name.tenant_name(),
+                share_name.share_name(),
+            )
+            .await?;
+
+        // 2. check ShareSpec
+        if let Some(db_privileges) = share_spec.db_privileges {
+            if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
+                Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
+                    "share {} has not granted privilege to {}",
+                    share_name.display(),
+                    tenant.tenant_name()
+                )))
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
+                "share {} has not granted privilege to {}",
+                share_name.display(),
+                tenant.tenant_name()
+            )))
+        }
     }
 }
 
@@ -124,11 +126,10 @@ impl Interpreter for CreateDatabaseInterpreter {
                 quota.max_databases
             )));
         };
+
         // if create from other tenant, check from share endpoint
-        if let Some(ref share_name) = self.plan.meta.from_share {
-            let share_name_ident = share_name.clone().to_tident(());
-            self.check_create_database_from_share(&tenant, &share_name_ident)
-                .await?;
+        if self.plan.meta.from_share.is_some() {
+            self.check_create_database_from_share().await?;
         }
 
         let create_db_req: CreateDatabaseReq = self.plan.clone().into();

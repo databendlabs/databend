@@ -55,7 +55,6 @@ use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_common_storage::ShareTableConfig;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
@@ -86,6 +85,7 @@ use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
@@ -160,13 +160,8 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => {
-                let operator = create_share_table_operator(
-                    ShareTableConfig::share_endpoint_address(),
-                    ShareTableConfig::share_endpoint_token(),
-                    &share_ident,
-                    &table_info.name,
-                )?;
+            DatabaseType::ShareDB(share_params) => {
+                let operator = create_share_table_operator(&share_params, &table_info.name)?;
                 (operator, FuseTableType::SharedReadOnly)
             }
             DatabaseType::NormalDB => {
@@ -329,8 +324,22 @@ impl FuseTable {
     #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    #[minitrace::trace]
+    #[async_backtrace::framed]
+    pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
+        self.read_table_snapshot_with_reader(reader).await
+    }
+
+    async fn read_table_snapshot_with_reader(
+        &self,
+        reader: TableSnapshotReader,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
             let ver = self.snapshot_format_version(Some(loc.clone())).await?;
             let params = LoadParams {
                 location: loc,
@@ -352,7 +361,7 @@ impl FuseTable {
             self.snapshot_loc().await?
         };
         // If no snapshot location here, indicates that there are no data of this table yet
-        // in this case, we just returns the current snapshot version
+        // in this case, we just return the current snapshot version
         Ok(location_opt.map_or(TableSnapshot::VERSION, |loc| {
             TableMetaLocationGenerator::snapshot_version(loc.as_str())
         }))

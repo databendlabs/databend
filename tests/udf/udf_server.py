@@ -21,7 +21,6 @@ from typing import List, Dict, Any, Tuple, Optional
 # https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
 
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -163,7 +162,7 @@ def json_concat(list: List[Any]) -> Any:
     result_type="TUPLE(VARIANT NULL, VARIANT NULL)",
 )
 def tuple_access(
-    tup: Tuple[List[Any], int, str], idx1: int, idx2: int
+        tup: Tuple[List[Any], int, str], idx1: int, idx2: int
 ) -> Tuple[Any, Any]:
     v1 = None if idx1 == 0 or idx1 > len(tup) else tup[idx1 - 1]
     v2 = None if idx2 == 0 or idx2 > len(tup) else tup[idx2 - 1]
@@ -194,21 +193,21 @@ ALL_SCALAR_TYPES = [
     result_type=f"TUPLE({','.join(f'{t} NULL' for t in ALL_SCALAR_TYPES)})",
 )
 def return_all(
-    bool,
-    i8,
-    i16,
-    i32,
-    i64,
-    u8,
-    u16,
-    u32,
-    u64,
-    f32,
-    f64,
-    date,
-    timestamp,
-    varchar,
-    json,
+        bool,
+        i8,
+        i16,
+        i32,
+        i64,
+        u8,
+        u16,
+        u32,
+        u64,
+        f32,
+        f64,
+        date,
+        timestamp,
+        varchar,
+        json,
 ):
     return (
         bool,
@@ -234,21 +233,21 @@ def return_all(
     result_type=f"TUPLE({','.join(f'ARRAY({t})' for t in ALL_SCALAR_TYPES)})",
 )
 def return_all_arrays(
-    bool,
-    i8,
-    i16,
-    i32,
-    i64,
-    u8,
-    u16,
-    u32,
-    u64,
-    f32,
-    f64,
-    date,
-    timestamp,
-    varchar,
-    json,
+        bool,
+        i8,
+        i16,
+        i32,
+        i64,
+        u8,
+        u16,
+        u32,
+        u64,
+        f32,
+        f64,
+        date,
+        timestamp,
+        varchar,
+        json,
 ):
     return (
         bool,
@@ -274,21 +273,21 @@ def return_all_arrays(
     result_type=f"TUPLE({','.join(f'{t}' for t in ALL_SCALAR_TYPES)})",
 )
 def return_all_non_nullable(
-    bool,
-    i8,
-    i16,
-    i32,
-    i64,
-    u8,
-    u16,
-    u32,
-    u64,
-    f32,
-    f64,
-    date,
-    timestamp,
-    varchar,
-    json,
+        bool,
+        i8,
+        i16,
+        i32,
+        i64,
+        u8,
+        u16,
+        u32,
+        u64,
+        f32,
+        f64,
+        date,
+        timestamp,
+        varchar,
+        json,
 ):
     return (
         bool,
@@ -321,6 +320,11 @@ def wait_concurrent(x):
     return x
 
 
+@udf(input_types=["VARCHAR"], result_type="VARCHAR")
+def ping(s: str) -> str:
+    return s
+
+
 if __name__ == "__main__":
     udf_server = UDFServer("0.0.0.0:8815")
     udf_server.add_function(add_signed)
@@ -347,4 +351,7 @@ if __name__ == "__main__":
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
+
+    # Built-in function
+    udf_server.add_function(ping)
     udf_server.serve()

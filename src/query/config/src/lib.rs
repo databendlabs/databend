@@ -17,6 +17,7 @@
 #![feature(lazy_cell)]
 
 mod background_config;
+mod builtin;
 /// Config mods provide config support.
 ///
 /// We are providing two config types:
@@ -36,6 +37,7 @@ mod mask;
 mod obsolete;
 mod version;
 
+pub use builtin::*;
 pub use config::CacheStorageTypeConfig;
 pub use config::Commands;
 pub use config::Config;

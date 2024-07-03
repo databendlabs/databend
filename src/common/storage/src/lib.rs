@@ -16,7 +16,7 @@
 //! `common_storage` will provide storage related types and functions.
 //!
 //! Databend Query will have three kinds of storage operators, visit
-//! [RFC: Cache](https://databend.rs/doc/contributing/rfcs/cache) for
+//! [RFC: Cache](https://docs.databend.com/guides/community/rfcs/cache) for
 //! more detailed information.
 //!
 //! - data operator: All data will be persisted until users delete them.

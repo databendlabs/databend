@@ -32,10 +32,10 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use parquet_rs::arrow::ArrowWriter;
-use parquet_rs::basic::Encoding;
-use parquet_rs::file::properties::EnabledStatistics;
-use parquet_rs::file::properties::WriterProperties;
+use parquet::arrow::ArrowWriter;
+use parquet::basic::Encoding;
+use parquet::file::properties::EnabledStatistics;
+use parquet::file::properties::WriterProperties;
 
 use super::block_batch::BlockBatch;
 use crate::append::output::DataSummary;

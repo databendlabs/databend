@@ -593,6 +593,13 @@ impl QueryContextShared {
             executor.change_priority(priority)
         }
     }
+
+    pub fn get_profile(&self) -> Option<Vec<PlanProfile>> {
+        self.executor
+            .read()
+            .upgrade()
+            .map(|executor| executor.get_plans_profile())
+    }
 }
 
 impl Drop for QueryContextShared {

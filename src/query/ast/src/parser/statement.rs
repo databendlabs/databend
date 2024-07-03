@@ -48,10 +48,13 @@ pub enum ShowGrantOption {
     ShareName(String),
 }
 
+// (tenant, share name, endpoint name)
+pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
+
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
-    FromShare(ShareNameIdent),
+    FromShare(ShareDatabaseParams),
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -481,16 +484,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         database,
                         engine: Some(engine),
                         options: vec![],
-                        from_share: None,
+                        share_params: None,
                     })
                 }
-                Some(CreateDatabaseOption::FromShare(share_name)) => {
+                Some(CreateDatabaseOption::FromShare(share_params)) => {
                     Statement::CreateDatabase(CreateDatabaseStmt {
                         create_option,
                         database,
                         engine: None,
                         options: vec![],
-                        from_share: Some(share_name),
+                        share_params: Some(share_params),
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
@@ -498,7 +501,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     database,
                     engine: None,
                     options: vec![],
-                    from_share: None,
+                    share_params: None,
                 }),
             };
 
@@ -1531,7 +1534,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             CREATE ~ ( OR ~ ^REPLACE )? ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
-             ~ TENANT ~ "=" ~ #ident
+             ~ ( CREDENTIAL ~ ^"=" ~ ^#options)?
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
@@ -1545,20 +1548,34 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             _,
             url,
-            _,
-            _,
-            tenant,
+            credential_opt,
             args_opt,
             comment_opt,
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
 
+            let credential_options = if let Some(opt) = credential_opt {
+                opt.2
+                    .iter()
+                    .map(|(k, v)| {
+                        let k = k.to_uppercase();
+                        if k == "TYPE" {
+                            (k, v.to_uppercase())
+                        } else {
+                            (k, v.clone())
+                        }
+                    })
+                    .collect()
+            } else {
+                BTreeMap::new()
+            };
+
             Ok(Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 create_option,
                 endpoint,
                 url,
-                tenant,
+                credential_options,
                 args: match args_opt {
                     Some(opt) => opt.2,
                     None => BTreeMap::new(),
@@ -2492,31 +2509,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// `INSERT INTO ... VALUES` statement will
 // stop the parser immediately and return the rest tokens in `InsertSource`.
 //
 // This is a hack to parse large insert statements.
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-            FORMAT ~ #ident ~ #rest_str
-        },
-        |(_, format, (rest_str, start))| InsertSource::Streaming {
-            format: format.name,
-            rest_str,
-            start,
-        },
-    );
-    let streaming_v2 = map(
-        rule! {
-           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
-        },
-        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
-            settings: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            start,
-        },
-    );
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -2533,9 +2530,7 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     );
 
     rule!(
-        #streaming
-        | #streaming_v2
-        | #values
+        #values
         | #query
     )(i)
 }
@@ -3880,10 +3875,10 @@ pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
 
     let share_from = map(
         rule! {
-            FROM ~ SHARE ~ #ident ~ "." ~ #ident
+            FROM ~ SHARE ~ #ident ~ "." ~ #ident ~ USING ~ #ident
         },
-        |(_, _, tenant, _, share)| {
-            CreateDatabaseOption::FromShare(ShareNameIdent { tenant, share })
+        |(_, _, tenant, _, share, _, endpoint)| {
+            CreateDatabaseOption::FromShare((ShareNameIdent { tenant, share }, endpoint))
         },
     );
 

@@ -48,6 +48,7 @@ use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
 use arrow_flight::sql::CommandStatementSubstraitPlan;
 use arrow_flight::sql::CommandStatementUpdate;
+use arrow_flight::sql::DoPutPreparedStatementResult;
 use arrow_flight::sql::DoPutUpdateResult;
 use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::SqlInfo;
@@ -525,7 +526,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         &self,
         query: CommandPreparedStatementQuery,
         request: Request<PeekableFlightDataStream>,
-    ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
+    ) -> Result<DoPutPreparedStatementResult, Status> {
         let session = self.get_session(&request)?;
         let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
             .map_err(|e| Status::internal(format!("Error decoding handle: {e}")))?;
@@ -541,8 +542,10 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let result = PutResult {
             app_metadata: result.as_any().encode_to_vec().into(),
         };
-        let result = futures::stream::iter(vec![Ok(result)]);
-        return Ok(Response::new(Box::pin(result)));
+
+        Ok(DoPutPreparedStatementResult {
+            prepared_statement_handle: Some(result.encode_to_vec().into()),
+        })
     }
 
     // called by JDBC
