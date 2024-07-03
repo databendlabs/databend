@@ -224,7 +224,7 @@ pub async fn parse_error(er: Response<Buffer>) -> Error {
         _ => (ErrorKind::Unexpected, false),
     };
 
-    let mut err = Error::new(kind, &String::from_utf8_lossy(&message));
+    let mut err = Error::new(kind, String::from_utf8_lossy(&message));
 
     if retryable {
         err = err.set_temporary();

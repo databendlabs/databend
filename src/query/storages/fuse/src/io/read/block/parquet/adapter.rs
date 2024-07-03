@@ -18,14 +18,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use parquet_rs::arrow::arrow_reader::RowGroups;
-use parquet_rs::basic::Compression;
-use parquet_rs::column::page::PageIterator;
-use parquet_rs::column::page::PageReader;
-use parquet_rs::errors::Result as ParquetResult;
-use parquet_rs::file::metadata::ColumnChunkMetaData;
-use parquet_rs::file::serialized_reader::SerializedPageReader;
-use parquet_rs::schema::types::SchemaDescriptor;
+use parquet::arrow::arrow_reader::RowGroups;
+use parquet::basic::Compression;
+use parquet::column::page::PageIterator;
+use parquet::column::page::PageReader;
+use parquet::errors::Result as ParquetResult;
+use parquet::file::metadata::ColumnChunkMetaData;
+use parquet::file::serialized_reader::SerializedPageReader;
+use parquet::schema::types::SchemaDescriptor;
 
 pub struct RowGroupImplBuilder<'a> {
     num_rows: usize,

@@ -113,7 +113,7 @@ lz4 = { version = "1.24" }
 num = { version = "0.4", default-features = false, features = ["std"] }
 num-traits = "0.2"
 opendal = { workspace = true }
-ordered-float = "3.7.0"
+ordered-float = { workspace = true }
 parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default_features = false, features = [
     "serde_types",
     "async",

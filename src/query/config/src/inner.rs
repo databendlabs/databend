@@ -31,11 +31,11 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
-use databend_common_users::idm_config::IDMConfig;
 
 use super::config::Commands;
 use super::config::Config;
 use crate::background_config::InnerBackgroundConfig;
+use crate::BuiltInConfig;
 
 /// Inner config for query.
 ///
@@ -210,7 +210,7 @@ pub struct QueryConfig {
     pub jwt_key_files: Vec<String>,
     pub default_storage_format: String,
     pub default_compression: String,
-    pub idm: IDMConfig,
+    pub builtin: BuiltInConfig,
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
@@ -288,7 +288,7 @@ impl Default for QueryConfig {
             jwt_key_files: Vec::new(),
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
-            idm: IDMConfig::default(),
+            builtin: BuiltInConfig::default(),
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
@@ -614,6 +614,7 @@ pub enum DiskCacheKeyReloadPolicy {
     // but cache capacity will not be checked
     Fuzzy,
 }
+
 impl Default for DiskCacheKeyReloadPolicy {
     fn default() -> Self {
         Self::Reset

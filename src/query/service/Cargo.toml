@@ -125,6 +125,7 @@ flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 headers = "0.4.0"
+hex = "0.4.3"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
@@ -146,7 +147,7 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }
