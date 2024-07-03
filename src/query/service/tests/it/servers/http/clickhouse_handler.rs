@@ -137,10 +137,7 @@ async fn test_output_formats() -> PoemResult<()> {
 
     {
         let (status, body) = server
-            .post(
-                "insert into table t1(a, b) values",
-                "(0, 'a'), (1, 'b')",
-            )
+            .post("insert into table t1(a, b) values", "(0, 'a'), (1, 'b')")
             .await;
         assert_ok!(status, body);
         assert_error!(body, "");
