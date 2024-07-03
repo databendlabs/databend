@@ -23,7 +23,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::EmptyFieldAs;
-use databend_common_pipeline_sources::input_formats::error_utils::get_decode_error_by_pos;
 use databend_common_storage::FileParseError;
 
 use crate::read::load_context::LoadContext;
@@ -31,6 +30,7 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::csv::CsvInputFormat;
 use crate::read::row_based::processors::BlockBuilderState;
+use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct CsvDecoder {
     pub load_context: Arc<LoadContext>,
