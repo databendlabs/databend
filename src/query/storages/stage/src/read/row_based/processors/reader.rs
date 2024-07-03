@@ -27,7 +27,7 @@ use futures::AsyncReadExt;
 use log::debug;
 use opendal::Operator;
 
-use crate::one_file_partition::OneFilePartition;
+use crate::read::one_file_partition::OneFilePartition;
 use crate::read::row_based::batch::BytesBatch;
 
 struct FileState {

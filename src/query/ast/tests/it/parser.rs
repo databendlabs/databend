@@ -935,7 +935,6 @@ fn test_raw_insert_stmt() {
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
 
