@@ -82,25 +82,24 @@ impl FromToProto for mt::CatalogOption {
                 mt::CatalogOption::Hive(mt::HiveCatalogOption::from_pb(v)?)
             }
             pb::catalog_option::CatalogOption::Iceberg(v) => {
+                if v.iceberg_catalog_option.is_none() {
+                    return Ok(mt::CatalogOption::Default);
+                }
                 mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
             }
         })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::CatalogOption {
-            catalog_option: Some(match self {
-                mt::CatalogOption::Default => {
-                    return Err(Incompatible {
-                        reason: "CatalogOption.default is invalid for metasrv".to_string(),
-                    });
-                }
-                mt::CatalogOption::Hive(v) => pb::catalog_option::CatalogOption::Hive(v.to_pb()?),
-                mt::CatalogOption::Iceberg(v) => {
-                    pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?)
-                }
-            }),
-        })
+        let catalog_option = match self {
+            mt::CatalogOption::Default => None,
+            mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb()?)),
+            mt::CatalogOption::Iceberg(v) => {
+                Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?))
+            }
+        };
+
+        Ok(pb::CatalogOption { catalog_option })
     }
 }
 
