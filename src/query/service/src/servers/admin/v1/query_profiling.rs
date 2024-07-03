@@ -77,7 +77,7 @@ async fn get_cluster_profile(
         .create_session(SessionType::HTTPAPI("QueryProfiling".to_string()))
         .await?;
 
-    let ctx = session.create_query_context().await?;
+    let ctx = Arc::new(session).create_query_context().await?;
     let cluster = ctx.get_cluster();
     let mut message = HashMap::with_capacity(cluster.nodes.len());
 
@@ -92,5 +92,5 @@ async fn get_cluster_profile(
     let res = cluster
         .do_action::<String, Vec<PlanProfile>>(GET_PROFILE, message, timeout)
         .await?;
-    Ok(res.values().flatten().collect::<Vec<PlanProfile>>())
+    Ok(res.into_iter().flat_map(|(_key, value)| value).collect())
 }
