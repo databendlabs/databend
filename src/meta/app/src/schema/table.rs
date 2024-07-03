@@ -34,8 +34,8 @@ use maplit::hashmap;
 
 use super::CatalogInfo;
 use super::CreateOption;
+use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
-use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
 use crate::storage::StorageParams;
@@ -162,7 +162,7 @@ impl Display for TableIdHistoryIdent {
 pub enum DatabaseType {
     #[default]
     NormalDB,
-    ShareDB(ShareNameIdentRaw),
+    ShareDB(ShareDBParams),
 }
 
 impl Display for DatabaseType {
@@ -171,12 +171,13 @@ impl Display for DatabaseType {
             DatabaseType::NormalDB => {
                 write!(f, "normal database")
             }
-            DatabaseType::ShareDB(share_ident) => {
+            DatabaseType::ShareDB(share_params) => {
                 write!(
                     f,
-                    "share database: {}-{}",
-                    share_ident.tenant_name(),
-                    share_ident.name()
+                    "share database: {}-{} using {}",
+                    share_params.share_ident.tenant_name(),
+                    share_params.share_ident.name(),
+                    share_params.share_endpoint_url,
                 )
             }
         }

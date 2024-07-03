@@ -14,4 +14,5 @@
 
 mod error_handler;
 mod load_context;
+pub(crate) mod one_file_partition;
 pub mod row_based;

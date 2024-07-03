@@ -40,7 +40,6 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
-databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }

@@ -17,11 +17,8 @@ use std::sync::Arc;
 
 use async_stream::stream;
 use databend_common_base::base::short_sql;
-use databend_common_base::base::tokio;
-use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_compress::CompressAlgorithm;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -30,18 +27,12 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_formats::ClickhouseFormatType;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_formats::FileFormatTypeExt;
-use databend_common_pipeline_sources::input_formats::InputContext;
-use databend_common_pipeline_sources::input_formats::StreamingReadBatch;
-use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use http::HeaderMap;
 use http::StatusCode;
-use log::debug;
 use log::info;
-use log::warn;
 use minitrace::full_name;
 use minitrace::prelude::*;
 use naive_cityhash::cityhash128;
@@ -360,108 +351,6 @@ pub async fn clickhouse_handler_post(
 
         let mut handle = None;
         let output_schema = plan.schema();
-        if let Plan::Insert(insert) = &mut plan {
-            let dest_schema = insert.dest_schema();
-            if let InsertInputSource::StreamingWithFormat(format, start, input_context_ref) =
-                &mut insert.source
-            {
-                let (tx, rx) = tokio::sync::mpsc::channel(2);
-                let to_table = ctx
-                    .get_table(&insert.catalog, &insert.database, &insert.table)
-                    .await
-                    .map_err(InternalServerError)?;
-
-                let table_schema = infer_table_schema(&dest_schema)
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(InternalServerError)?;
-                let input_context = Arc::new(
-                    InputContext::try_create_from_insert_clickhouse(
-                        ctx.clone(),
-                        format.as_str(),
-                        rx,
-                        ctx.get_settings(),
-                        table_schema,
-                        ctx.get_scan_progress(),
-                        to_table.get_block_thresholds(),
-                    )
-                    .await
-                    .map_err(InternalServerError)?,
-                );
-                *input_context_ref = Some(input_context.clone());
-                info!(
-                    "clickhouse insert with format {:?}, value {}",
-                    input_context, *start
-                );
-                let compression_alg = input_context
-                    .get_compression_alg("")
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(BadRequest)?;
-                let start = *start;
-                let sql_cloned = sql.clone();
-                handle = Some(ctx.spawn(async move {
-                    gen_batches(
-                        sql_cloned,
-                        start,
-                        input_context.read_batch_size,
-                        tx,
-                        compression_alg,
-                    )
-                    .await
-                }));
-            } else if let InsertInputSource::StreamingWithFileFormat {
-                format,
-                on_error_mode,
-                start,
-                input_context_option,
-            } = &mut insert.source
-            {
-                let (tx, rx) = tokio::sync::mpsc::channel(2);
-                let to_table = ctx
-                    .get_table(&insert.catalog, &insert.database, &insert.table)
-                    .await
-                    .map_err(InternalServerError)?;
-
-                let table_schema = infer_table_schema(&dest_schema)
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(InternalServerError)?;
-                let input_context = Arc::new(
-                    InputContext::try_create_from_insert_file_format(
-                        ctx.clone(),
-                        rx,
-                        ctx.get_settings(),
-                        format.clone(),
-                        table_schema,
-                        ctx.get_scan_progress(),
-                        false,
-                        to_table.get_block_thresholds(),
-                        on_error_mode.clone(),
-                    )
-                    .await
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(InternalServerError)?,
-                );
-
-                *input_context_option = Some(input_context.clone());
-                info!("clickhouse insert with file_format {:?}", input_context);
-
-                let compression_alg = input_context
-                    .get_compression_alg("")
-                    .map_err(|err| err.display_with_sql(&sql))
-                    .map_err(BadRequest)?;
-                let start = *start;
-                let sql_cloned = sql.clone();
-                handle = Some(ctx.spawn(async move {
-                    gen_batches(
-                        sql_cloned,
-                        start,
-                        input_context.read_batch_size,
-                        tx,
-                        compression_alg,
-                    )
-                    .await
-                }));
-            }
-        };
 
         let format = get_format_with_default(extras.format, default_format)?;
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
@@ -551,45 +440,5 @@ fn get_format_with_default(
     match format {
         None => Ok(default_format),
         Some(name) => ClickhouseFormatType::parse_clickhouse_format(&name).map_err(BadRequest),
-    }
-}
-
-async fn gen_batches(
-    data: String,
-    start: usize,
-    batch_size: usize,
-    tx: Sender<Result<StreamingReadBatch>>,
-    compression: Option<CompressAlgorithm>,
-) {
-    let buf = &data.trim_start().as_bytes()[start..];
-    let buf_size = buf.len();
-    let mut is_start = true;
-    let mut start = 0;
-    let path = "clickhouse_insert".to_string();
-    debug!(
-        "begin sending {} bytes, batch_size={}",
-        buf_size, batch_size
-    );
-    while start < buf_size {
-        let data = if buf_size - start >= batch_size {
-            buf[start..start + batch_size].to_vec()
-        } else {
-            buf[start..].to_vec()
-        };
-
-        debug!("sending read {} bytes", data.len());
-        if let Err(e) = tx
-            .send(Ok(StreamingReadBatch {
-                data,
-                path: path.clone(),
-                is_start,
-                compression,
-            }))
-            .await
-        {
-            warn!("clickhouse handler fail to send ReadBatch: {}", e);
-        }
-        is_start = false;
-        start += batch_size;
     }
 }

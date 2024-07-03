@@ -415,9 +415,6 @@ impl ReplaceInterpreter {
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
-            _ => Err(ErrorCode::Unimplemented(
-                "input source other than literal VALUES and sub queries are NOT supported yet.",
-            )),
         }
     }
 

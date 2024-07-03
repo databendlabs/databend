@@ -22,8 +22,8 @@ use databend_common_storage::parquet_rs::build_parquet_schema_tree;
 use databend_common_storage::parquet_rs::traverse_parquet_schema_tree;
 use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
-use parquet_rs::arrow::ProjectionMask;
-use parquet_rs::schema::types::SchemaDescriptor;
+use parquet::arrow::ProjectionMask;
+use parquet::schema::types::SchemaDescriptor;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {

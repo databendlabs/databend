@@ -52,14 +52,14 @@ pub struct BackgroundCompactionConfig {
     // Compact segments if a table has too many small segments
     // `segment_limit` is the maximum number of segments that would be compacted in a batch
     // None represent their is no limit
-    // Details: https://databend.rs/doc/sql-commands/ddl/table/optimize-table#segment-compaction
+    // Details: https://docs.databend.com/sql/sql-commands/ddl/table/optimize-table#segment-compaction
     #[clap(long, value_name = "VALUE")]
     pub segment_limit: Option<u64>,
 
     // Compact small blocks into large one.
     // `block_limit` is the maximum number of blocks that would be compacted in a batch
     // None represent their is no limit
-    // Details: https://databend.rs/doc/sql-commands/ddl/table/optimize-table#block-compaction
+    // Details: https://docs.databend.com/sql/sql-commands/ddl/table/optimize-table#segment-compaction
     #[clap(long, value_name = "VALUE")]
     pub block_limit: Option<u64>,
 

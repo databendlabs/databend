@@ -197,6 +197,11 @@ drop stream t1
 statement ok
 drop table t1 all
 
+query T
+show columns from s2
+----
+a INT YES (empty) NULL NULL
+
 statement ok
 alter table t set options(change_tracking = false)
 
@@ -212,6 +217,10 @@ query TTT
 select name, invalid_reason from system.streams where database='test_stream' order by name
 ----
 s2 Unknown table 't'
+
+query T
+show columns from s2
+----
 
 statement ok
 create table t(a int) change_tracking = true

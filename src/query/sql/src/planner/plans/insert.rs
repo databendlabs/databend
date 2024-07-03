@@ -21,10 +21,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_sources::input_formats::InputContext;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -35,16 +32,6 @@ use crate::plans::CopyIntoTablePlan;
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
     SelectPlan(Box<Plan>),
-    // From outside streaming source with 'FORMAT <format_name>;
-    // used in clickhouse handler only;
-    StreamingWithFormat(String, usize, Option<Arc<InputContext>>),
-    // From outside streaming source with 'FILE_FORMAT = (type=<type_name> ...)
-    StreamingWithFileFormat {
-        format: FileFormatParams,
-        on_error_mode: OnErrorMode,
-        start: usize,
-        input_context_option: Option<Arc<InputContext>>,
-    },
     Values(InsertValue),
     // From stage
     Stage(Box<Plan>),
@@ -216,33 +203,6 @@ pub(crate) fn format_insert_source(
             }
             _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
         },
-        InsertInputSource::StreamingWithFileFormat {
-            format,
-            on_error_mode,
-            start,
-            ..
-        } => {
-            let stage_node = vec![
-                FormatTreeNode::new(format!("format: {format}")),
-                FormatTreeNode::new(format!("on_error_mode: {on_error_mode}")),
-                FormatTreeNode::new(format!("start: {start}")),
-            ];
-            children.extend(stage_node);
-
-            Ok(FormatTreeNode::with_children(
-                "InsertPlan (StreamingWithFileFormat):".to_string(),
-                children,
-            )
-            .format_pretty()?)
-        }
-        InsertInputSource::StreamingWithFormat(_, _, _) => {
-            // used in clickhouse handler only; will discard soon
-            Ok(FormatTreeNode::with_children(
-                "InsertPlan (StreamingWithFormat):".to_string(),
-                children,
-            )
-            .format_pretty()?)
-        }
     }
 }
 

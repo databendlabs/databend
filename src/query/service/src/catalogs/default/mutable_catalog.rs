@@ -554,7 +554,8 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
+            DatabaseType::ShareDB(share_params) => {
+                let share_ident = share_params.share_ident;
                 let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
                 let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.truncate_table(req).await
