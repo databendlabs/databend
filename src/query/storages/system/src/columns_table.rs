@@ -36,6 +36,7 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
+use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -158,8 +159,13 @@ impl ColumnsTable {
                                 Ok((plan, _)) => {
                                     infer_table_schema(&plan.schema())?.fields().clone()
                                 }
-                                Err(_) => {
+                                Err(e) => {
                                     // If VIEW SELECT QUERY plan err, should return empty. not destroy the query.
+                                    warn!(
+                                        "failed to get columns for {}: {}",
+                                        table.get_table_info().desc,
+                                        e
+                                    );
                                     vec![]
                                 }
                             }
@@ -177,14 +183,24 @@ impl ColumnsTable {
                     }
                     STREAM_ENGINE => {
                         let stream = StreamTable::try_from_table(table.as_ref())?;
-                        let source_table = stream.source_table(ctx.clone()).await?;
-                        for field in source_table.schema().fields() {
-                            rows.push((
-                                database.clone(),
-                                table.name().into(),
-                                "".to_string(),
-                                field.clone(),
-                            ))
+                        match stream.source_table(ctx.clone()).await {
+                            Ok(source_table) => {
+                                for field in source_table.schema().fields() {
+                                    rows.push((
+                                        database.clone(),
+                                        table.name().into(),
+                                        "".to_string(),
+                                        field.clone(),
+                                    ))
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    "failed to get columns for {}: {}",
+                                    table.get_table_info().desc,
+                                    e
+                                );
+                            }
                         }
                     }
                     _ => {
