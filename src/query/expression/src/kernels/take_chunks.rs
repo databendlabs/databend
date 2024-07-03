@@ -171,19 +171,44 @@ impl DataBlock {
         let result_size: usize = slices.iter().map(|(_, _, c)| *c).sum();
         let result_size = total_num_rows.min(result_size.min(limit.unwrap_or(result_size)));
 
-        let mut result_columns = Vec::with_capacity(blocks[0].num_columns());
+        let num_rows = limit
+            .unwrap_or(usize::MAX)
+            .min(slices.iter().map(|(_, _, c)| *c).sum());
 
-        for index in 0..blocks[0].num_columns() {
-            let cols = blocks
-                .iter()
-                .map(|c| c.get_by_offset(index).clone())
-                .collect::<Vec<_>>();
+        let mut builders = blocks[0]
+            .columns()
+            .iter()
+            .map(|col| ColumnBuilder::with_capacity(&col.data_type, num_rows))
+            .collect::<Vec<_>>();
 
-            let merged_col = Self::take_column_by_slices_limit(&cols, slices, limit);
+        let mut remain = num_rows;
+        for (block_index, start, len) in slices {
+            let block_columns = blocks[*block_index].columns();
+            let len = (*len).min(remain);
+            remain -= len;
 
-            result_columns.push(merged_col);
+            for (col_index, builder) in builders.iter_mut().enumerate() {
+                let BlockEntry { data_type, value } = &block_columns[col_index];
+                match value {
+                    Value::Scalar(scalar) => {
+                        let other = ColumnBuilder::repeat(&scalar.as_ref(), len, data_type);
+                        builder.append_column(&other.build());
+                    }
+                    Value::Column(c) => {
+                        let c = c.slice(*start..(*start + len));
+                        builder.append_column(&c);
+                    }
+                }
+            }
+            if remain == 0 {
+                break;
+            }
         }
 
+        let result_columns = builders
+            .into_iter()
+            .map(|b| BlockEntry::new(b.data_type(), Value::Column(b.build())))
+            .collect::<Vec<_>>();
         DataBlock::new(result_columns, result_size)
     }
 
