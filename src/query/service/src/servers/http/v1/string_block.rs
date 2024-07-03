@@ -19,19 +19,15 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_formats::field_encoder::FieldEncoderValues;
 use databend_common_io::prelude::FormatSettings;
-use serde_json::Value as JsonValue;
 
 #[derive(Debug, Clone, Default)]
-pub struct JsonBlock {
-    pub(crate) data: Vec<Vec<JsonValue>>,
+pub struct StringBlock {
+    pub(crate) data: Vec<Vec<String>>,
 }
 
-pub type JsonBlockRef = Arc<JsonBlock>;
+pub type StringBlockRef = Arc<StringBlock>;
 
-pub fn block_to_json_value(
-    block: &DataBlock,
-    format: &FormatSettings,
-) -> Result<Vec<Vec<JsonValue>>> {
+pub fn block_to_strings(block: &DataBlock, format: &FormatSettings) -> Result<Vec<Vec<String>>> {
     if block.is_empty() {
         return Ok(vec![]);
     }
@@ -48,29 +44,29 @@ pub fn block_to_json_value(
         FieldEncoderValues::create_for_http_handler(format.timezone, format.geometry_format);
     let mut buf = vec![];
     for row_index in 0..rows_size {
-        let mut row: Vec<JsonValue> = Vec::with_capacity(block.num_columns());
+        let mut row: Vec<String> = Vec::with_capacity(block.num_columns());
         for column in &columns {
             buf.clear();
             encoder.write_field(column, row_index, &mut buf, false);
-            row.push(serde_json::to_value(String::from_utf8_lossy(&buf))?);
+            row.push(String::from_utf8_lossy(&buf).into_owned());
         }
         res.push(row)
     }
     Ok(res)
 }
 
-impl JsonBlock {
+impl StringBlock {
     pub fn empty() -> Self {
         Self { data: vec![] }
     }
 
     pub fn new(block: &DataBlock, format: &FormatSettings) -> Result<Self> {
-        Ok(JsonBlock {
-            data: block_to_json_value(block, format)?,
+        Ok(StringBlock {
+            data: block_to_strings(block, format)?,
         })
     }
 
-    pub fn concat(blocks: Vec<JsonBlock>) -> Self {
+    pub fn concat(blocks: Vec<StringBlock>) -> Self {
         if blocks.is_empty() {
             return Self::empty();
         }
@@ -87,13 +83,13 @@ impl JsonBlock {
         self.data.is_empty()
     }
 
-    pub fn data(&self) -> &Vec<Vec<JsonValue>> {
+    pub fn data(&self) -> &Vec<Vec<String>> {
         &self.data
     }
 }
 
-impl From<JsonBlock> for Vec<Vec<JsonValue>> {
-    fn from(block: JsonBlock) -> Self {
+impl From<StringBlock> for Vec<Vec<String>> {
+    fn from(block: StringBlock) -> Self {
         block.data
     }
 }
