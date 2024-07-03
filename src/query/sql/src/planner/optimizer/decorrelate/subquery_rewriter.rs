@@ -41,6 +41,7 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::RelOperator;
@@ -520,8 +521,7 @@ impl SubqueryRewriter {
                 };
 
                 let cross_join = Join {
-                    left_conditions: vec![],
-                    right_conditions: vec![],
+                    equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
                     non_equi_conditions: vec![],
                     join_type: JoinType::Cross,
                     marker_index: None,
@@ -530,7 +530,6 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
-                    is_null_equal: Vec::new(),
                 }
                 .into();
                 Ok((
@@ -593,8 +592,11 @@ impl SubqueryRewriter {
                 // Will be transferred to:select t1.a, t2.a, marker_index from t1, t2 where t2.a = t1.a;
                 // Note that subquery is the right table, and it'll be the build side.
                 let mark_join = Join {
-                    left_conditions: right_conditions,
-                    right_conditions: left_conditions,
+                    equi_conditions: JoinEquiCondition::new_conditions(
+                        right_conditions,
+                        left_conditions,
+                        vec![],
+                    ),
                     non_equi_conditions,
                     join_type: JoinType::RightMark,
                     marker_index: Some(marker_index),
@@ -603,7 +605,6 @@ impl SubqueryRewriter {
                     is_lateral: false,
                     single_to_inner: None,
                     build_side_cache_info: None,
-                    is_null_equal: Vec::new(),
                 }
                 .into();
                 let s_expr = SExpr::create_binary(
@@ -626,8 +627,7 @@ impl SubqueryRewriter {
         // Such as `SELECT * FROM c WHERE c_id=(SELECT max(c_id) FROM o WHERE ship='WA');`
         // We can push down `c_id = max(c_id)` to cross join then make it as inner join.
         let join_plan = Join {
-            left_conditions: vec![],
-            right_conditions: vec![],
+            equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
             non_equi_conditions: vec![],
             join_type: JoinType::Cross,
             marker_index: None,
@@ -636,7 +636,6 @@ impl SubqueryRewriter {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
-            is_null_equal: Vec::new(),
         }
         .into();
 

@@ -65,6 +65,7 @@ use crate::servers::flight::FlightClient;
 
 pub struct ClusterDiscovery {
     local_id: String,
+    local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
     api_provider: Arc<dyn ClusterApi>,
     cluster_id: String,
@@ -177,12 +178,14 @@ impl ClusterHelper for Cluster {
             futures.push({
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
+                let node_secret = node.secret.clone();
 
                 async move {
                     let mut conn = create_client(&config, &flight_address).await?;
                     Ok::<_, ErrorCode>((
                         id,
-                        conn.do_action::<_, Res>(path, message, timeout).await?,
+                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
+                            .await?,
                     ))
                 }
             });
@@ -222,6 +225,7 @@ impl ClusterDiscovery {
 
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
+            local_secret: cfg.query.node_secret.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -389,6 +393,7 @@ impl ClusterDiscovery {
 
         let node_info = NodeInfo::create(
             self.local_id.clone(),
+            self.local_secret.clone(),
             cpus,
             address,
             DATABEND_COMMIT_VERSION.to_string(),

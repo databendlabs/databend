@@ -77,8 +77,10 @@ impl Rule for RuleCommuteJoinBaseTable {
             | JoinType::RightAnti
             | JoinType::LeftMark => {
                 // Swap the join conditions side
-                (join.left_conditions, join.right_conditions) =
-                    (join.right_conditions, join.left_conditions);
+                for condition in join.equi_conditions.iter_mut() {
+                    (condition.left, condition.right) =
+                        (condition.right.clone(), condition.left.clone());
+                }
                 join.join_type = join.join_type.opposite();
                 let mut result = SExpr::create_binary(
                     Arc::new(join.into()),

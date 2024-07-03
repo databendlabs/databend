@@ -211,7 +211,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -219,7 +219,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]

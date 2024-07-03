@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::set_backtrace;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SystemAction;
 use databend_common_sql::plans::SystemPlan;
 
+use crate::clusters::ClusterHelper;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::flight::v1::packets::Packet;
-use crate::servers::flight::v1::packets::SystemActionPacket;
+use crate::servers::flight::v1::actions::SYSTEM_ACTION;
 use crate::sessions::QueryContext;
 
 pub struct SystemActionInterpreter {
@@ -42,12 +42,10 @@ impl SystemActionInterpreter {
         })
     }
 
-    pub fn from_flight(ctx: Arc<QueryContext>, packet: SystemActionPacket) -> Result<Self> {
+    pub fn from_flight(ctx: Arc<QueryContext>, plan: SystemPlan) -> Result<Self> {
         Ok(SystemActionInterpreter {
             ctx,
-            plan: SystemPlan {
-                action: packet.action,
-            },
+            plan,
             proxy_to_cluster: false,
         })
     }
@@ -67,18 +65,21 @@ impl Interpreter for SystemActionInterpreter {
     #[minitrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         if self.proxy_to_cluster {
-            let settings = self.ctx.get_settings();
-            let timeout = settings.get_flight_client_timeout()?;
-            let conf = GlobalConfig::instance();
             let cluster = self.ctx.get_cluster();
+            let mut message = HashMap::with_capacity(cluster.nodes.len());
             for node_info in &cluster.nodes {
                 if node_info.id != cluster.local_id {
-                    let system_action_packet =
-                        SystemActionPacket::create(self.plan.action.clone(), node_info.clone());
-                    system_action_packet.commit(conf.as_ref(), timeout).await?;
+                    message.insert(node_info.id.clone(), self.plan.clone());
                 }
             }
+
+            let settings = self.ctx.get_settings();
+            let timeout = settings.get_flight_client_timeout()?;
+            cluster
+                .do_action::<_, ()>(SYSTEM_ACTION, message, timeout)
+                .await?;
         }
+
         match self.plan.action {
             SystemAction::Backtrace(switch) => {
                 set_backtrace(switch);

@@ -108,6 +108,8 @@ pub enum Feature {
     StorageQuota(StorageQuota),
     #[serde(alias = "cluster_quota", alias = "CLUSTER_QUOTA")]
     ClusterQuota(ClusterQuota),
+    #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
+    AmendTable,
     #[serde(other)]
     Unknown,
 }
@@ -167,6 +169,7 @@ impl Display for Feature {
 
                 write!(f, ")")
             }
+            Feature::AmendTable => write!(f, "amend_table"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -394,6 +397,11 @@ mod tests {
             }),
             serde_json::from_str::<Feature>("{\"ClusterQuota\":{\"max_nodes_per_cluster\":1}}")
                 .unwrap()
+        );
+
+        assert_eq!(
+            Feature::AmendTable,
+            serde_json::from_str::<Feature>("\"amend_table\"").unwrap()
         );
 
         assert_eq!(

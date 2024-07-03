@@ -43,7 +43,6 @@ use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
-use crate::servers::http::v1::streaming_load;
 use crate::servers::Server;
 
 #[derive(Copy, Clone)]
@@ -99,7 +98,6 @@ impl HttpHandler {
         let ep_v1 = Route::new()
             .nest("/query", query_route())
             .at("/login", post(login_handler))
-            .at("/streaming_load", put(streaming_load))
             .at("/upload_to_stage", put(upload_to_stage))
             .at("/suggested_background_tasks", get(list_suggestions));
         let ep_v1 = self.wrap_auth(ep_v1);

@@ -151,14 +151,7 @@ impl BlockCompactMutator {
                     checker.generate_part(segments, &mut parts);
                 }
 
-                let residual_segment_cnt = checker.segments.len();
-                let residual_block_cnt = checker
-                    .segments
-                    .iter()
-                    .fold(0, |acc, e| acc + e.1.summary.block_count);
-                if checker.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
-                    || checker.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
-                {
+                if checker.is_limit_reached(num_segment_limit, num_block_limit) {
                     is_end = true;
                     break;
                 }
@@ -194,7 +187,11 @@ impl BlockCompactMutator {
         metrics_inc_compact_block_build_lazy_part_milliseconds(elapsed_time.as_millis() as u64);
 
         let cluster = self.ctx.get_cluster();
-        let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
+        let enable_distributed_compact = settings.get_enable_distributed_compact()?;
+        let partitions = if !enable_distributed_compact
+            || cluster.is_empty()
+            || parts.len() < cluster.nodes.len() * max_threads
+        {
             // NOTE: The snapshot schema does not contain the stream column.
             let column_ids = self
                 .compact_params
@@ -388,6 +385,16 @@ impl SegmentCompactChecker {
     pub fn finalize(&mut self, parts: &mut Vec<PartInfoPtr>) {
         let final_segments = std::mem::take(&mut self.segments);
         self.generate_part(final_segments, parts);
+    }
+
+    pub fn is_limit_reached(&self, num_segment_limit: usize, num_block_limit: usize) -> bool {
+        let residual_segment_cnt = self.segments.len();
+        let residual_block_cnt = self
+            .segments
+            .iter()
+            .fold(0, |acc, e| acc + e.1.summary.block_count);
+        self.compacted_segment_cnt + residual_segment_cnt >= num_segment_limit
+            || self.compacted_block_cnt + residual_block_cnt >= num_block_limit as u64
     }
 }
 
