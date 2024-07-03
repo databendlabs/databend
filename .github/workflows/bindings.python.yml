@@ -10,8 +10,8 @@ on:
     branches:
       - main
     paths:
-      - 'sql/**'
-      - 'bindings/python/**'
+      - "sql/**"
+      - "bindings/python/**"
       - ".github/workflows/bindings.python.yml"
 
 concurrency:
@@ -19,45 +19,52 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  integration:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
-          cache-key: bindings-python-integration
+          cache-key: bindings-python-check
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pipenv'
-          cache-dependency-path: 'bindings/python/Pipfile.lock'
-      - name: Install pipenv
-        run: curl https://raw.githubusercontent.com/pypa/pipenv/master/get-pipenv.py | python
+          python-version: "3.11"
       - name: Install dependencies
         working-directory: bindings/python
-        run: pipenv install --dev
+        run: pip install ruff
       - name: Check format
         working-directory: bindings/python
-        run: pipenv run ruff format --check .
-      - name: Setup develop
-        working-directory: bindings/python
-        run: pipenv run maturin develop
-      - name: Test
-        run: make -C tests test-bindings-python
+        run: ruff format --check .
 
   build:
     name: build-${{ matrix.os }}-${{ matrix.arch }}
+    needs: check
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - { os: linux, arch: x86_64, target: x86_64-unknown-linux-gnu, runner: ubuntu-latest }
-          - { os: linux, arch: aarch64, target: aarch64-unknown-linux-gnu, runner: ubuntu-latest }
-          - { os: windows, arch: x86_64, target: x86_64-pc-windows-msvc, runner: windows-2019 }
-          - { os: macos, arch: x86_64, target: x86_64-apple-darwin, runner: macos-11 }
-          - { os: macos, arch: aarch64, target: aarch64-apple-darwin, runner: macos-11 }
+          - os: linux
+            arch: x86_64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - os: linux
+            arch: aarch64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - os: windows
+            arch: x86_64
+            target: x86_64-pc-windows-msvc
+            runner: windows-2019
+          - os: macos
+            arch: x86_64
+            target: x86_64-apple-darwin
+            runner: macos-13
+          - os: macos
+            arch: aarch64
+            target: aarch64-apple-darwin
+            runner: macos-14
     steps:
       - uses: actions/checkout@v4
       - name: Get opts
@@ -85,7 +92,7 @@ jobs:
           working-directory: bindings/python
           target: ${{ matrix.target }}
           manylinux: ${{ steps.opts.outputs.MANYLINUX }}
-          sccache: 'true'
+          sccache: "true"
           args: ${{ steps.opts.outputs.BUILD_ARGS }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -93,9 +100,39 @@ jobs:
           name: bindings-python-${{ matrix.os }}-${{ matrix.arch }}
           path: bindings/python/dist/*.whl
 
+  integration:
+    name: integration-${{ matrix.pyver }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pyver: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.pyver }}
+      - name: Prepare
+        working-directory: tests
+        run: make up
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bindings-python-linux-x86_64
+          path: bindings/python/artifacts
+      - name: Install dependencies
+        working-directory: bindings/python
+        run: |
+          pip install behave
+          pip install artifacts/*.whl
+      - name: Test
+        working-directory: bindings/python
+        run: behave tests/*
+
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, integration]
+    needs: [check, build, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read
