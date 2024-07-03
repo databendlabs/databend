@@ -60,7 +60,7 @@ fn get_column_stats(
             let min = parse_datum(lo)?;
             let max = parse_datum(up)?;
             Some(ColumnStatistics::new(
-                min, max, *nc as u64, 0, // this field is not used.
+                min, max, *nc, 0, // this field is not used.
                 None,
             ))
         }

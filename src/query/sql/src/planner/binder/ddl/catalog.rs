@@ -227,12 +227,12 @@ fn parse_iceberg_rest_catalog(
         "rest" => IcebergCatalogOption::Rest(IcebergRestCatalogOption {
             uri: address,
             warehouse,
-            props: HashMap::from_iter(options.into_iter()),
+            props: HashMap::from_iter(options),
         }),
         "hive" => IcebergCatalogOption::Hms(IcebergHmsCatalogOption {
             address,
             warehouse,
-            props: HashMap::from_iter(options.into_iter()),
+            props: HashMap::from_iter(options),
         }),
         v => {
             return Err(ErrorCode::InvalidArgument(format!(

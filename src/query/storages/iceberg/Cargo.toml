@@ -34,9 +34,9 @@ typetag = { workspace = true }
 #iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "def6114b9" }
 #iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "def6114b9" }
 #iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "def6114b9" }
-iceberg = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg", rev = "eb3c78c" }
-iceberg-catalog-rest = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg-catalog-rest", rev = "eb3c78c" }
-iceberg-catalog-hms = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg-catalog-hms", rev = "eb3c78c" }
+iceberg = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg", rev = "e9529b6d9" }
+iceberg-catalog-rest = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg-catalog-rest", rev = "e9529b6d9" }
+iceberg-catalog-hms = { git = "https://github.com/Xuanwo/iceberg-rust", package = "iceberg-catalog-hms", rev = "e9529b6d9" }
 
 [lints]
 workspace = true

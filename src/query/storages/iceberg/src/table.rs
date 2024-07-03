@@ -72,7 +72,7 @@ impl IcebergTable {
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
         let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
-        let (db_name, table_name) = info.desc.as_str().split_once(",").ok_or_else(|| {
+        let (db_name, table_name) = info.desc.as_str().split_once(',').ok_or_else(|| {
             ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", &info.desc))
         })?;
         Ok(Box::new(Self {
@@ -315,8 +315,8 @@ impl IcebergTable {
                         Ok(Arc::new(
                             Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
                                 ParquetFilesPart {
-                                    files: vec![(location, v.file_size_in_bytes() as u64)],
-                                    estimated_uncompressed_size: v.file_size_in_bytes() as u64,
+                                    files: vec![(location, v.file_size_in_bytes())],
+                                    estimated_uncompressed_size: v.file_size_in_bytes(),
                                 },
                             ))) as Box<dyn PartInfo>,
                         ))

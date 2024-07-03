@@ -172,10 +172,7 @@ impl IcebergCatalog {
             }
         };
 
-        Ok(Self {
-            info: info.into(),
-            ctl,
-        })
+        Ok(Self { info, ctl })
     }
 
     /// Get the iceberg catalog.
