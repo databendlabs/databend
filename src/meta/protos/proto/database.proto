@@ -53,10 +53,13 @@ message DatabaseMeta {
 
   optional TIdent from_share = 25;
 
-  optional string using_share_endpoint = 26;
-
   // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
   // optional Ownership owner = 26;
+  reserved 26;
+
+  // share endpoint name
+  optional string using_share_endpoint = 27;
+
   reserved 30;
 }
 

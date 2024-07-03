@@ -98,7 +98,9 @@ pub struct DatabaseMeta {
     pub drop_on: Option<DateTime<Utc>>,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    // from tenant.share_name
     pub from_share: Option<ShareNameIdentRaw>,
+    // share endpoint name, create with `create share endpoint` ddl
     pub using_share_endpoint: Option<String>,
 }
 
