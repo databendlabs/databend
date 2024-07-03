@@ -2506,31 +2506,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-// `INSERT INTO ... FORMAT ...` and `INSERT INTO ... VALUES` statements will
+// `INSERT INTO ... VALUES` statement will
 // stop the parser immediately and return the rest tokens in `InsertSource`.
 //
 // This is a hack to parse large insert statements.
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-            FORMAT ~ #ident ~ #rest_str
-        },
-        |(_, format, (rest_str, start))| InsertSource::Streaming {
-            format: format.name,
-            rest_str,
-            start,
-        },
-    );
-    let streaming_v2 = map(
-        rule! {
-           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
-        },
-        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
-            settings: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            start,
-        },
-    );
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -2547,9 +2527,7 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     );
 
     rule!(
-        #streaming
-        | #streaming_v2
-        | #values
+        #values
         | #query
     )(i)
 }

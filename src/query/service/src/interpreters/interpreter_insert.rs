@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
@@ -21,9 +20,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_pipeline_sources::AsyncSourcer;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -40,7 +37,6 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -109,7 +105,6 @@ impl Interpreter for InsertInterpreter {
         table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
-        let main_pipeline = &mut build_res.main_pipeline;
 
         match &self.plan.source {
             InsertInputSource::Stage(_) => {
@@ -142,42 +137,6 @@ impl Interpreter for InsertInterpreter {
                     },
                     1,
                 )?;
-            }
-            InsertInputSource::StreamingWithFormat(format, _, input_context) => {
-                let input_context = input_context.as_ref().expect("must success").clone();
-                input_context
-                    .format
-                    .exec_stream(input_context.clone(), main_pipeline)?;
-
-                match StageFileFormatType::from_str(format) {
-                    Ok(f) if f.has_inner_schema() => {
-                        let dest_schema = self.plan.dest_schema();
-                        let func_ctx = self.ctx.get_function_context()?;
-                        build_res.main_pipeline.add_transformer(|| {
-                            TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
-                        });
-                    }
-                    _ => {}
-                }
-            }
-            InsertInputSource::StreamingWithFileFormat {
-                format,
-                input_context_option: input_context,
-                ..
-            } => {
-                let input_context = input_context.as_ref().expect("must success").clone();
-                input_context
-                    .format
-                    .exec_stream(input_context.clone(), main_pipeline)?;
-
-                if format.get_type().has_inner_schema() {
-                    let dest_schema = self.plan.dest_schema();
-                    let func_ctx = self.ctx.get_function_context()?;
-
-                    main_pipeline.add_transformer(|| {
-                        TransformRuntimeCastSchema::new(dest_schema.clone(), func_ctx.clone())
-                    });
-                }
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
@@ -274,12 +233,6 @@ impl Interpreter for InsertInterpreter {
             }
         };
 
-        let append_mode = match &self.plan.source {
-            InsertInputSource::StreamingWithFormat(..)
-            | InsertInputSource::StreamingWithFileFormat { .. } => AppendMode::Copy,
-            _ => AppendMode::Normal,
-        };
-
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut build_res.main_pipeline,
@@ -288,7 +241,7 @@ impl Interpreter for InsertInterpreter {
             None,
             vec![],
             self.plan.overwrite,
-            append_mode,
+            AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 

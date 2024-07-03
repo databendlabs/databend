@@ -20,13 +20,13 @@ use databend_common_exception::Result;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::input_formats::InputContext;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use opendal::Operator;
 
 use super::limit_file_size_processor::LimitFileSizeProcessor;
 use super::serialize_processor::SerializeProcessor;
 use super::writer_processor::RowBasedFileWriter;
+use crate::utils::get_compression_alg_copy;
 
 /// SerializeProcessor * N: serialize each data block to many small byte buffers.
 /// LimitFileSizeProcessor * 1:  group small byte buffers to batches (as a block meta) that are large enough as a file.
@@ -91,7 +91,7 @@ pub(crate) fn append_data_to_row_based_files(
         pipeline.try_resize(max_threads)?;
     }
 
-    let compression = InputContext::get_compression_alg_copy(compression, "")?;
+    let compression = get_compression_alg_copy(compression, "")?;
 
     pipeline.add_transform(|input, output| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

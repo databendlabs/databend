@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_sources::input_formats::InputContext;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
@@ -36,6 +35,7 @@ use crate::read::row_based::processors::BlockBuilder;
 use crate::read::row_based::processors::BytesReader;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
+use crate::utils::get_compression_alg_copy;
 
 pub struct RowBasedReadPipelineBuilder<'a> {
     pub(crate) stage_table_info: &'a StageTableInfo,
@@ -115,7 +115,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         {
             StageFileCompression::None => {}
             compression => {
-                let algo = InputContext::get_compression_alg_copy(compression, "")?;
+                let algo = get_compression_alg_copy(compression, "")?;
                 pipeline.try_add_accumulating_transformer(|| {
                     Decompressor::try_create(load_ctx.clone(), algo)
                 })?;

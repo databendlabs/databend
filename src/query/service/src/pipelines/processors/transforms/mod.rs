@@ -69,7 +69,6 @@ pub use transform_recursive_cte_scan::TransformRecursiveCteScan;
 pub use transform_recursive_cte_source::TransformRecursiveCteSource;
 pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithoutSourceSchema;
-pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_sequence_nextval::TransformSequenceNextval;
 pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;

@@ -37,7 +37,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use opendal::Operator;
 
-use crate::one_file_partition::OneFilePartition;
+use crate::read::one_file_partition::OneFilePartition;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -144,18 +144,18 @@ impl Table for StageTable {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        let settings = ctx.get_settings();
         let stage_table_info = &self.table_info;
         match stage_table_info.stage_info.file_format_params {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_)
-                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
-            {
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
                 self.read_partitions_simple(ctx, stage_table_info).await
             }
-            _ => self.read_partition_old(&ctx).await,
+            _ => unreachable!(
+                "unexpected format {} in StageTable::read_partition",
+                stage_table_info.stage_info.file_format_params
+            ),
         }
     }
 
@@ -170,7 +170,6 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
-        let settings = ctx.get_settings();
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -181,9 +180,7 @@ impl Table for StageTable {
             FileFormatParams::Parquet(_) => {
                 ParquetTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_)
-                if settings.get_enable_new_copy_for_text_formats()? == 1 =>
-            {
+            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
                 let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
                     stage_table_info,
@@ -191,7 +188,10 @@ impl Table for StageTable {
                 }
                 .read_data(ctx, plan, pipeline)
             }
-            _ => self.read_data_old(ctx, plan, pipeline, stage_table_info),
+            _ => unreachable!(
+                "unexpected format {} in StageTable::read_partition",
+                stage_table_info.stage_info.file_format_params
+            ),
         }
     }
 
