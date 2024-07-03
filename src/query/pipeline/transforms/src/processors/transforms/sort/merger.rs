@@ -165,28 +165,31 @@ where
             return false;
         };
 
+        let input_index = cursor.input_index;
+        let start = cursor.row_index;
+
         let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
-        let (whole_block, next_cursor) = if self.sorted_cursors.len() == 1 {
-            (true, None)
+        let (count, next_cursor) = if self.sorted_cursors.len() == 1 {
+            let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+            (count, None)
+        } else if !A::SHOULD_PEEK_TOP2 {
+            debug_assert!(!cursor.is_finished());
+            (1, None)
         } else {
             let next_cursor = &self.sorted_cursors.peek_top2().0;
             if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
                 // we can drain the whole block.
-                (true, None)
+                let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+                (count, None)
             } else {
-                (false, Some(next_cursor))
+                (0, Some(next_cursor))
             }
         };
 
-        let input_index = cursor.input_index;
-        let start = cursor.row_index;
-
-        let cursor_finished = match (whole_block, next_cursor) {
-            (true, None) => {
-                let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
-
+        let cursor_finished = match (count, next_cursor) {
+            (count, None) => {
                 self.temp_sorted_num_rows += count;
                 self.temp_output_indices.push((input_index, start, count));
 
@@ -203,7 +206,7 @@ where
                 }
                 cursor_finished
             }
-            (false, Some(next_cursor)) => {
+            (0, Some(next_cursor)) => {
                 let mut cursor = cursor.cursor_mut();
                 while !cursor.is_finished()
                     && cursor.le(next_cursor)
