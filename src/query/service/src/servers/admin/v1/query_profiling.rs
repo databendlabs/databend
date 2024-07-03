@@ -55,7 +55,7 @@ pub async fn query_profiling_handler(
                 .await
                 .map_err(|cause| {
                     poem::Error::from_string(
-                        format!("Failed to fetch cluster nodes list. cause: {cause}"),
+                        format!("Failed to fetch cluster node profile. cause: {cause}"),
                         StatusCode::INTERNAL_SERVER_ERROR,
                     )
                 })?
