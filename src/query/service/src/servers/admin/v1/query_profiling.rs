@@ -47,7 +47,7 @@ pub async fn query_profiling_handler(
     let res = match session_manager.get_session_by_id(&query_id) {
         Some(session) => {
             // can get profile from current node
-            session.get_profile()
+            session.get_profile().unwrap_or_default()
         }
         None => {
             // need get profile from clusters
@@ -64,7 +64,7 @@ pub async fn query_profiling_handler(
 
     Ok(Json(QueryProfiles {
         query_id: query_id.clone(),
-        profiles: res.unwrap_or_default(),
+        profiles: res,
         statistics_desc: get_statistics_desc(),
     }))
 }
@@ -72,12 +72,12 @@ pub async fn query_profiling_handler(
 async fn get_cluster_profile(
     session_manager: &SessionManager,
     query_id: &str,
-) -> Result<Option<Vec<PlanProfile>>, ErrorCode> {
+) -> Result<Vec<PlanProfile>, ErrorCode> {
     let session = session_manager
         .create_session(SessionType::HTTPAPI("QueryProfiling".to_string()))
         .await?;
 
-    let ctx = Arc::new(session).create_query_context().await?;
+    let ctx = session.create_query_context().await?;
     let cluster = ctx.get_cluster();
     let mut message = HashMap::with_capacity(cluster.nodes.len());
 
@@ -90,12 +90,7 @@ async fn get_cluster_profile(
     let settings = ctx.get_settings();
     let timeout = settings.get_flight_client_timeout()?;
     let res = cluster
-        .do_action::<String, Option<Vec<PlanProfile>>>(GET_PROFILE, message, timeout)
+        .do_action::<String, Vec<PlanProfile>>(GET_PROFILE, message, timeout)
         .await?;
-    for (_, profile) in res {
-        if let Some(profile) = profile {
-            return Ok(Some(profile));
-        }
-    }
-    Ok(None)
+    Ok(res.values().flatten().collect::<Vec<PlanProfile>>())
 }
