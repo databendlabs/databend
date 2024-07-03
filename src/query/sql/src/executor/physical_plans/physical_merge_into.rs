@@ -66,6 +66,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub output_schema: DataSchemaRef,
     pub merge_into_op: MergeIntoOp,
+    pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
     pub change_join_order: bool,
@@ -122,7 +123,25 @@ impl PhysicalPlanBuilder {
             ..
         } = merge_into;
 
-        let mut columns_set = if let Some(lazy_columns) = lazy_columns {
+        let settings = self.ctx.get_settings();
+        let mut lazy_columns = if matches!(
+            merge_type,
+            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
+        ) && settings.get_enable_merge_into_row_fetch()?
+        {
+            let mut lazy_columns = lazy_columns.clone();
+            lazy_columns.remove(row_id_index);
+            self.metadata.write().add_lazy_columns(lazy_columns.clone());
+            Some(lazy_columns)
+        } else if matches!(merge_type, MergeIntoType::InsertOnly) {
+            let mut lazy_columns = lazy_columns.clone();
+            lazy_columns.insert(*row_id_index);
+            Some(lazy_columns)
+        } else {
+            None
+        };
+
+        let mut columns_set = if let Some(lazy_columns) = &lazy_columns {
             columns_set
                 .difference(lazy_columns)
                 .cloned()
@@ -130,6 +149,10 @@ impl PhysicalPlanBuilder {
         } else {
             *columns_set.clone()
         };
+
+        if matches!(merge_type, MergeIntoType::InsertOnly) {
+            lazy_columns = None;
+        }
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
@@ -169,9 +192,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        if let Some(lazy_columns) = lazy_columns
-            && !lazy_columns.is_empty()
-        {
+        if let Some(lazy_columns) = lazy_columns {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
@@ -419,6 +440,7 @@ impl PhysicalPlanBuilder {
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
                 merge_into_op: merge_into_op.clone(),
+                target_table_index: *target_table_index,
                 need_match: !is_insert_only,
                 change_join_order: *change_join_order,
                 target_build_optimization: false,
@@ -440,6 +462,7 @@ impl PhysicalPlanBuilder {
                     )]))
                 },
                 merge_into_op: merge_into_op.clone(),
+                target_table_index: *target_table_index,
                 need_match: !is_insert_only,
                 change_join_order: *change_join_order,
                 target_build_optimization: false, // we don't support for distributed mode for now.
@@ -482,7 +505,7 @@ impl PhysicalPlanBuilder {
             mutation_kind: MutationKind::Update,
             update_stream_meta: merge_into_build_info.update_stream_meta,
             merge_meta: false,
-            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));
         physical_plan.adjust_plan_id(&mut 0);
