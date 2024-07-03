@@ -15,16 +15,24 @@
 use std::collections::HashMap;
 use std::u64::MAX;
 
+use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use itertools::Itertools;
 
 use crate::binder::MergeIntoType;
@@ -41,6 +49,8 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans;
+use crate::plans::BoundColumnRef;
+use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -149,6 +159,64 @@ impl PhysicalPlanBuilder {
                     break;
                 }
             }
+        }
+
+        if *distributed && !is_insert_only {
+            let mut row_id_column = None;
+            for column_binding in bind_context.columns.iter() {
+                if BindContext::match_column_binding(
+                    Some(database.as_str()),
+                    Some(table_name.as_str()),
+                    ROW_ID_COL_NAME,
+                    column_binding,
+                ) {
+                    row_id_column = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: column_binding.clone(),
+                    }));
+                    break;
+                }
+            }
+            let row_id_column = row_id_column.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+            let row_id_expr = row_id_column
+                .type_check(join_output_schema.as_ref())?
+                .project_column_ref(|index| {
+                    join_output_schema.index_of(&index.to_string()).unwrap()
+                });
+
+            let expr = check_function(
+                None,
+                "bit_and",
+                &[],
+                &[
+                    check_function(
+                        None,
+                        "bit_shift_right",
+                        &[],
+                        &[row_id_expr, Expr::Constant {
+                            span: None,
+                            scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
+                            data_type: DataType::Number(NumberDataType::UInt64),
+                        }],
+                        &BUILTIN_FUNCTIONS,
+                    )?,
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number((((1 << NUM_BLOCK_ID_BITS) - 1) as u64).into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )?;
+            plan = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(plan),
+                kind: FragmentKind::Normal,
+                keys: vec![expr.as_remote_expr()],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
         }
 
         if let Some(merge_into_split_idx) = merge_into_split_idx {
