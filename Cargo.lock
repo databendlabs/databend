@@ -2369,6 +2369,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "color-backtrace"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "150fd80a270c0671379f388c8204deb6a746bb4eac8a6c03fe2460b2c0127ea0"
+dependencies = [
+ "backtrace",
+ "termcolor",
+]
+
+[[package]]
 name = "color-eyre"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2916,6 +2926,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3358,6 +3378,8 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
+ "color-backtrace",
+ "ctor 0.2.8",
  "databend-common-arrow",
  "databend-common-ast",
  "geos",
@@ -3480,7 +3502,7 @@ dependencies = [
  "comfy-table 6.2.0",
  "crc32fast",
  "criterion",
- "ctor",
+ "ctor 0.2.8",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -4133,7 +4155,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "cidr",
  "cron",
- "ctor",
+ "ctor 0.2.8",
  "dashmap",
  "databend-common-ast",
  "databend-common-async-functions",
@@ -5092,7 +5114,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "config",
  "criterion",
- "ctor",
+ "ctor 0.2.8",
  "dashmap",
  "databend-common-arrow",
  "databend-common-ast",
@@ -10416,7 +10438,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fb9b5c752f145ac5046bccc3c4f62892e3c950c1d1eab80c5949cd68a2078db"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "web-time",
 ]
 

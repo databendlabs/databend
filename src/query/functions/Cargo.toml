@@ -19,7 +19,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 crc32fast = "1.3.2"
 criterion = { workspace = true }
-ctor = "0.1.26"
+ctor = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
