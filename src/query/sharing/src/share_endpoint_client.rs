@@ -14,7 +14,7 @@
 
 use std::collections::BTreeMap;
 
-use base64::engine::general_purpose::URL_SAFE;
+use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
@@ -52,9 +52,10 @@ impl ShareEndpointClient {
                     hmac_credential.key.as_bytes().to_vec().as_ref(),
                 );
                 headers.insert(AUTH_METHOD_HEADER, HMAC_AUTH_METHOD.parse().unwrap());
+                // signature = HMAC(from_tenant@path, key)
                 let auth = format!("{}@{}", from_tenant, path);
                 let signature = hmac::sign(&key, auth.as_bytes());
-                let signature = URL_SAFE.encode(signature.as_ref());
+                let signature = BASE64_STANDARD.encode(signature.as_ref());
                 headers.insert(SIGNATURE_HEADER, signature.parse().unwrap());
             }
         }

@@ -234,6 +234,7 @@ pub enum Plan {
     MergeInto {
         s_expr: Box<SExpr>,
         schema: DataSchemaRef,
+        metadata: MetadataRef,
     },
 
     CopyIntoTable(Box<CopyIntoTablePlan>),

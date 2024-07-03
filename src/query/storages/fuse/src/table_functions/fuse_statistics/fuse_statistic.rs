@@ -15,7 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -58,24 +60,30 @@ impl<'a> FuseStatistic<'a> {
         _summy: &Statistics,
         table_statistics: &Option<Arc<TableSnapshotStatistics>>,
     ) -> Result<DataBlock> {
-        let mut col_ndvs: Vec<String> = Vec::with_capacity(1);
+        let mut col_names = vec![];
+        let mut col_ndvs = vec![];
         if let Some(table_statistics) = table_statistics {
-            let mut ndvs: String = "".to_string();
             for (i, n) in table_statistics.column_distinct_values().iter() {
-                ndvs.push_str(&format!("({},{});", *i, *n));
+                // Get column name by column id
+                let table_filed = self.table.table_info.meta.schema.field_of_column_id(*i)?;
+                col_names.push(table_filed.name.clone());
+                col_ndvs.push(*n);
             }
-            col_ndvs.push(ndvs);
         };
 
-        Ok(DataBlock::new_from_columns(vec![StringType::from_data(
-            col_ndvs,
-        )]))
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(col_names),
+            UInt64Type::from_data(col_ndvs),
+        ]))
     }
 
     pub fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![TableField::new(
-            "column_distinct_values",
-            TableDataType::String,
-        )])
+        TableSchemaRefExt::create(vec![
+            TableField::new("column_name", TableDataType::String),
+            TableField::new(
+                "distinct_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+        ])
     }
 }
