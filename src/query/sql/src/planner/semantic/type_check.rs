@@ -137,6 +137,7 @@ use crate::plans::SubqueryType;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
+use crate::plans::Visitor as ScalarVisitor;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -1878,8 +1879,12 @@ impl<'a> TypeChecker<'a> {
             .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
-        let box (lambda_expr, lambda_type) =
-            parse_lambda_expr(self.ctx.clone(), &columns, &lambda.expr)?;
+        let box (lambda_expr, lambda_type) = parse_lambda_expr(
+            self.ctx.clone(),
+            self.bind_context.clone(),
+            &columns,
+            &lambda.expr,
+        )?;
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1888,7 +1893,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid lambda function for `array_filter`, the result data type of lambda function must be boolean".to_string()
                 )
-                    .set_span(span));
+                .set_span(span));
             }
         } else if func_name == "array_reduce" {
             // transform arg type
@@ -1937,15 +1942,51 @@ impl<'a> TypeChecker<'a> {
                 DataType::EmptyArray,
             ),
             _ => {
-                // generate lambda expression
-                let lambda_schema = if inner_tys.len() == 1 {
-                    let lambda_field = DataField::new("0", inner_tys[0].clone());
-                    DataSchema::new(vec![lambda_field])
-                } else {
-                    let lambda_field0 = DataField::new("0", inner_tys[0].clone());
-                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
-                    DataSchema::new(vec![lambda_field0, lambda_field1])
+                struct LambdaVisitor<'a> {
+                    bind_context: &'a BindContext,
+                    args: Vec<ScalarExpr>,
+                    fields: Vec<DataField>,
+                }
+
+                impl<'a> ScalarVisitor<'a> for LambdaVisitor<'a> {
+                    fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+                        let contains = self
+                            .bind_context
+                            .all_column_bindings()
+                            .iter()
+                            .map(|c| c.index)
+                            .contains(&col.column.index);
+                        // add outer scope columns first
+                        if contains {
+                            let arg = ScalarExpr::BoundColumnRef(col.clone());
+                            self.args.push(arg);
+                            let field = DataField::new(
+                                &format!("{}", col.column.index),
+                                *col.column.data_type.clone(),
+                            );
+                            self.fields.push(field);
+                        }
+                        Ok(())
+                    }
+                }
+
+                let mut lambda_visitor = LambdaVisitor {
+                    bind_context: self.bind_context,
+                    args: Vec::new(),
+                    fields: Vec::new(),
                 };
+                lambda_visitor.visit(&lambda_expr)?;
+
+                // add lambda columns at end
+                let mut fields = lambda_visitor.fields.clone();
+                let column_len = self.bind_context.all_column_bindings().len();
+                for (i, inner_ty) in inner_tys.into_iter().enumerate() {
+                    let lambda_field = DataField::new(&format!("{}", column_len + i), inner_ty);
+                    fields.push(lambda_field);
+                }
+                let lambda_schema = DataSchema::new(fields);
+                let mut args = lambda_visitor.args.clone();
+                args.push(arg);
 
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
@@ -1960,7 +2001,7 @@ impl<'a> TypeChecker<'a> {
                     LambdaFunc {
                         span,
                         func_name: func_name.to_string(),
-                        args: vec![arg],
+                        args,
                         lambda_expr: Box::new(remote_lambda_expr),
                         lambda_display,
                         return_type: Box::new(return_type.clone()),
