@@ -58,7 +58,6 @@ use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::app_error::UpdateStreamMetasFailed;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
@@ -2924,46 +2923,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     share_table_info: get_share_table_info_map(self, &table_meta).await?,
                 });
             }
-        }
-    }
-
-    #[logcall::logcall]
-    #[minitrace::trace]
-    async fn update_stream_metas(
-        &self,
-        update_stream_meta_reqs: &[UpdateStreamMetaReq],
-    ) -> Result<(), KVAppError> {
-        if update_stream_meta_reqs.is_empty() {
-            return Ok(());
-        }
-
-        let mut txn_req = TxnRequest {
-            condition: vec![],
-            if_then: vec![],
-            else_then: vec![],
-        };
-
-        append_update_stream_meta_requests(
-            self,
-            &mut txn_req,
-            update_stream_meta_reqs,
-            "update_stream_metas",
-        )
-        .await?;
-
-        let (success, _) = send_txn(self, txn_req).await?;
-
-        if !success {
-            let msg = update_stream_meta_reqs
-                .iter()
-                .map(|req| format!("stream [id {}, seq {} ]", req.stream_id, req.seq))
-                .collect::<Vec<_>>()
-                .join(",");
-            return Err(KVAppError::AppError(AppError::from(
-                UpdateStreamMetasFailed::new(msg),
-            )));
-        } else {
-            Ok(())
         }
     }
 

@@ -101,9 +101,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -511,41 +508,6 @@ impl Catalog for MutableCatalog {
     ) -> Result<UpsertTableOptionReply> {
         let db = self.get_database(tenant, db_name).await?;
         db.upsert_table_option(req).await
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
-                info!(
-                    "updating table meta. table desc: [{}], has copied files: [{}]?",
-                    table_info.desc,
-                    req.copied_files.is_some()
-                );
-                let begin = Instant::now();
-                let res = self.ctx.meta.update_table_meta(req).await;
-                info!(
-                    "update table meta done. table id: {:?}, time used {:?}",
-                    table_info.ident,
-                    begin.elapsed()
-                );
-                Ok(res?)
-            }
-            DatabaseType::ShareDB(share_ident) => {
-                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
-                let db = self.get_database(&tenant, share_ident.share_name()).await?;
-                db.update_table_meta(req).await
-            }
-        }
-    }
-
-    async fn update_stream_metas(&self, reqs: &[UpdateStreamMetaReq]) -> Result<()> {
-        self.ctx.meta.update_stream_metas(reqs).await?;
-        Ok(())
     }
 
     #[async_backtrace::framed]

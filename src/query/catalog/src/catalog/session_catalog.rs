@@ -87,9 +87,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -355,26 +352,6 @@ impl Catalog for SessionCatalog {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         self.inner.upsert_table_option(tenant, db_name, req).await
-    }
-
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        _req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        todo!()
-    }
-
-    async fn update_stream_metas(&self, update_stream_metas: &[UpdateStreamMetaReq]) -> Result<()> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::AutoCommit => self.inner.update_stream_metas(update_stream_metas).await,
-            TxnState::Active => {
-                self.txn_mgr.lock().update_stream_metas(update_stream_metas);
-                Ok(())
-            }
-            TxnState::Fail => unreachable!(),
-        }
     }
 
     async fn update_multi_table_meta(

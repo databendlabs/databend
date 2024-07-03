@@ -157,7 +157,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
             move |info: &ExecutionInfo| match &info.res {
                 Ok(_) => GlobalIORuntime::instance().block_on(async move {
                     info!("Updating the stream meta for COPY INTO LOCATION statement",);
-                    catalog.update_stream_metas(&update_stream_reqs).await?;
+                    catalog.update_stream_metas(update_stream_reqs).await?;
                     Ok(())
                 }),
                 Err(e) => Err(e.clone()),

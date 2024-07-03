@@ -117,8 +117,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -266,18 +264,6 @@ impl Catalog for FakedCatalog {
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         todo!()
-    }
-
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        if let Some(e) = &self.error_injection {
-            Err(e.clone())
-        } else {
-            self.cat.update_table_meta(table_info, req).await
-        }
     }
 
     async fn set_table_column_mask_policy(

@@ -290,13 +290,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_table_meta(
         &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply>;
+        _table_info: &TableInfo,
+        _req: UpdateTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        todo!()
+    }
 
     // update stream metas, currently used by "copy into location form stream"
-    async fn update_stream_metas(&self, _update_stream_meta: &[UpdateStreamMetaReq]) -> Result<()> {
-        Ok(())
+    async fn update_stream_metas(
+        &self,
+        update_stream_metas: Vec<UpdateStreamMetaReq>,
+    ) -> Result<()> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_stream_metas,
+            ..Default::default()
+        })
+        .await
+        .map(|_| ())
     }
 
     async fn update_multi_table_meta(
