@@ -94,7 +94,7 @@ impl Interpreter for ModifyTableCommentInterpreter {
                 new_table_meta,
             };
 
-            catalog.update_single_table_meta(req,table_info).await?;
+            catalog.update_single_table_meta(req, table_info).await?;
         };
 
         Ok(PipelineBuildResult::create())

@@ -724,7 +724,8 @@ pub struct UpdateMultiTableMetaReq {
 /// The result of updating multiple table meta
 ///
 /// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
-pub type UpdateMultiTableMetaResult = std::result::Result<UpdateTableMetaReply, Vec<(u64, u64, TableMeta)>>;
+pub type UpdateMultiTableMetaResult =
+    std::result::Result<UpdateTableMetaReply, Vec<(u64, u64, TableMeta)>>;
 
 impl UpsertTableOptionReq {
     pub fn new(
@@ -777,7 +778,7 @@ pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq,Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateTableMetaReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }

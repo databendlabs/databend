@@ -151,7 +151,6 @@ type MetaType = (String, String, String);
 #[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
-    error_injection: Option<ErrorCode>,
 }
 
 #[async_trait::async_trait]
@@ -926,10 +925,7 @@ async fn test_get_same_table_once() -> Result<()> {
     fixture.create_default_table().await?;
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
-    let faked_catalog = FakedCatalog {
-        cat: catalog,
-        error_injection: None,
-    };
+    let faked_catalog = FakedCatalog { cat: catalog };
 
     let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
 
