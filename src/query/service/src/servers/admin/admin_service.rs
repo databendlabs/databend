@@ -73,6 +73,10 @@ impl AdminService {
                 "/v1/cluster/list",
                 get(super::v1::cluster::cluster_list_handler),
             )
+            .at(
+                "v1/queries/:query_id/profiling",
+                get(super::v1::query_profiling::query_profiling_handler),
+            )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
             .at("/debug/async_tasks/dump", get(debug_dump_stack));

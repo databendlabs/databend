@@ -27,6 +27,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_txn::TxnManagerRef;
@@ -347,6 +348,12 @@ impl Session {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
         }
+    }
+
+    pub fn get_profile(&self) -> Option<Vec<PlanProfile>> {
+        self.session_ctx
+            .get_query_context_shared()
+            .and_then(|x| x.get_profile())
     }
 }
 

@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod background_tasks;
-pub mod cluster;
-pub mod config;
-pub mod instance_status;
-pub mod processes;
-pub mod query_profiling;
-pub mod settings;
-pub mod stream_status;
-pub mod system;
-pub mod tenant_tables;
+use std::sync::Arc;
+
+use databend_common_exception::Result;
+use databend_common_pipeline_core::PlanProfile;
+
+use crate::servers::flight::v1::actions::create_session;
+
+pub static GET_PROFILE: &str = "/actions/get_profile";
+
+pub async fn get_profile(query_id: String) -> Result<Option<Vec<PlanProfile>>> {
+    let session = create_session()?;
+    let query_context = Arc::new(session).create_query_context().await?;
+    match query_context.get_session_by_id(&query_id) {
+        Some(session) => Ok(session.get_profile()),
+        None => Ok(None),
+    }
+}
