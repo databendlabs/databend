@@ -36,7 +36,6 @@ mod transform_recursive_cte_scan;
 mod transform_recursive_cte_source;
 mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
-mod transform_runtime_cast_schema;
 mod transform_sequence_nextval;
 mod transform_sort_spill;
 mod transform_srf;

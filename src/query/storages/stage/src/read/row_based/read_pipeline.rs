@@ -29,13 +29,13 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_settings::Settings;
 use databend_common_storage::init_stage_operator;
 
+use crate::compression::get_compression_alg_copy;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
 use crate::read::row_based::processors::BytesReader;
 use crate::read::row_based::processors::Decompressor;
 use crate::read::row_based::processors::Separator;
-use crate::utils::get_compression_alg_copy;
 
 pub struct RowBasedReadPipelineBuilder<'a> {
     pub(crate) stage_table_info: &'a StageTableInfo,

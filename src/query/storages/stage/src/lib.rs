@@ -19,8 +19,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod append;
+mod compression;
 mod read;
 mod stage_table;
-mod utils;
 
 pub use stage_table::StageTable;
