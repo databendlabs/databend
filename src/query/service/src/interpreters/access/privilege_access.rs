@@ -555,9 +555,7 @@ impl PrivilegeAccess {
             InsertInputSource::Stage(plan) => {
                 self.check(ctx, plan).await?;
             }
-            InsertInputSource::StreamingWithFormat(..)
-            | InsertInputSource::StreamingWithFileFormat { .. }
-            | InsertInputSource::Values(_) => {}
+            InsertInputSource::Values(_) => {}
         }
         Ok(())
     }

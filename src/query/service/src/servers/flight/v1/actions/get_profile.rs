@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod beyond_end_reader;
-pub mod error_utils;
-mod impls;
-mod input_context;
-mod input_format;
-mod input_format_text;
-mod input_pipeline;
-mod input_split;
-mod source_aligner;
-mod transform_deserializer;
+use databend_common_exception::Result;
+use databend_common_pipeline_core::PlanProfile;
 
-pub use beyond_end_reader::BeyondEndReader;
-pub use input_context::InputContext;
-pub use input_context::InputPlan;
-pub use input_context::StreamPlan;
-pub use input_format::InputFormat;
-pub use input_format_text::*;
-pub use input_pipeline::StreamingReadBatch;
-pub use input_split::split_by_size;
-pub use input_split::SplitInfo;
-pub use source_aligner::Aligner;
+use crate::servers::flight::v1::actions::create_session;
+
+pub static GET_PROFILE: &str = "/actions/get_profile";
+
+pub async fn get_profile(query_id: String) -> Result<Vec<PlanProfile>> {
+    let session = create_session()?;
+    let query_context = session.create_query_context().await?;
+    match query_context.get_session_by_id(&query_id) {
+        Some(session) => Ok(session.get_profile().unwrap_or_default()),
+        None => Ok(vec![]),
+    }
+}

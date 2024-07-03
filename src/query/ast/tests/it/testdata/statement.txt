@@ -2921,7 +2921,7 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
@@ -2958,7 +2958,7 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
@@ -2986,15 +2986,15 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
 
 ---------- Input ----------
-create database t FROM SHARE a.s;
+create database t FROM SHARE a.s using b;
 ---------- Output ---------
-CREATE DATABASE t FROM SHARE a.s
+CREATE DATABASE t FROM SHARE a.s USING b
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -3012,25 +3012,35 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: Some(
-            ShareNameIdent {
-                tenant: Identifier {
+        share_params: Some(
+            (
+                ShareNameIdent {
+                    tenant: Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "a",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    share: Identifier {
+                        span: Some(
+                            31..32,
+                        ),
+                        name: "s",
+                        quote: None,
+                        is_hole: false,
+                    },
+                },
+                Identifier {
                     span: Some(
-                        29..30,
+                        39..40,
                     ),
-                    name: "a",
+                    name: "b",
                     quote: None,
                     is_hole: false,
                 },
-                share: Identifier {
-                    span: Some(
-                        31..32,
-                    ),
-                    name: "s",
-                    quote: None,
-                    is_hole: false,
-                },
-            },
+            ),
         ),
     },
 )
@@ -3143,7 +3153,7 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 

@@ -12,33 +12,14 @@ test = true
 
 [dependencies]
 async-backtrace = { workspace = true }
-async-channel = "1.7.1"
 async-trait = { workspace = true }
-bstr = "1.0.1"
-csv-core = "0.1.10"
-dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
-databend-common-compress = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
-databend-common-formats = { workspace = true }
-databend-common-functions = { workspace = true }
-databend-common-io = { workspace = true }
-databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
-databend-common-settings = { workspace = true }
-databend-common-storage = { workspace = true }
 futures = { workspace = true }
-futures-util = { workspace = true }
-log = { workspace = true }
-minitrace = { workspace = true }
-opendal = { workspace = true }
 parking_lot = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-typetag = { workspace = true }
 
 [lints]
 workspace = true
