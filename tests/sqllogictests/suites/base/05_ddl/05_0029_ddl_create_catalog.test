@@ -10,7 +10,7 @@ SHOW CATALOGS;
 default
 
 statement ok
-CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=( URL='fs:///tmp/test/' );
+CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(TYPE=REST URI='http://127.0.0.1:1000' WAREHOUSE='default' );
 
 query T
 SHOW CATALOGS LIKE 'ctl';
