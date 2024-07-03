@@ -23,10 +23,8 @@ databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-futures = { workspace = true }
 match-template = { workspace = true }
 minitrace = { workspace = true }
-opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
