@@ -89,8 +89,6 @@ use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -288,12 +286,17 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        _req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        todo!()
+    async fn update_multi_table_meta(&self, req: UpdateMultiTableMetaReq) -> Result<()> {
+        self.retryable_update_multi_table_meta(req)
+            .await?
+            .map_err(|e| {
+                ErrorCode::TableVersionMismatched(format!(
+                    "Fail to update table metas, conflict tables: {:?}",
+                    e.iter()
+                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                        .collect::<Vec<_>>()
+                ))
+            })
     }
 
     // update stream metas, currently used by "copy into location form stream"
@@ -301,7 +304,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         update_stream_metas: Vec<UpdateStreamMetaReq>,
     ) -> Result<()> {
-        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+        self.retryable_update_multi_table_meta(UpdateMultiTableMetaReq {
             update_stream_metas,
             ..Default::default()
         })
@@ -309,7 +312,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         .map(|_| ())
     }
 
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {

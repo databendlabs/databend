@@ -354,13 +354,13 @@ impl Catalog for SessionCatalog {
         self.inner.upsert_table_option(tenant, db_name, req).await
     }
 
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         let state = self.txn_mgr.lock().state();
         match state {
-            TxnState::AutoCommit => self.inner.update_multi_table_meta(req).await,
+            TxnState::AutoCommit => self.inner.retryable_update_multi_table_meta(req).await,
             TxnState::Active => {
                 self.txn_mgr.lock().update_multi_table_meta(req);
                 Ok(Ok(()))

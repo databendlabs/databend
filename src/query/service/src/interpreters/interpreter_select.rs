@@ -156,7 +156,10 @@ impl SelectInterpreter {
                         update_stream_metas,
                         ..Default::default()
                     };
-                    catalog.update_multi_table_meta(r).await.map(|_| ())
+                    catalog
+                        .retryable_update_multi_table_meta(r)
+                        .await
+                        .map(|_| ())
                 }),
                 Err(error_code) => Err(error_code.clone()),
             });

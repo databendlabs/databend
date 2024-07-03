@@ -109,7 +109,7 @@ impl AsyncSink for CommitMultiTableInsert {
 
             let update_meta_result = match self
                 .catalog
-                .update_multi_table_meta(update_multi_table_meta_req)
+                .retryable_update_multi_table_meta(update_multi_table_meta_req)
                 .await
             {
                 Ok(ret) => ret,

@@ -571,11 +571,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.mutable_catalog.update_multi_table_meta(reqs).await
+        self.mutable_catalog
+            .retryable_update_multi_table_meta(reqs)
+            .await
     }
 
     #[async_backtrace::framed]
