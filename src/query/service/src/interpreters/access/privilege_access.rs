@@ -555,9 +555,7 @@ impl PrivilegeAccess {
             InsertInputSource::Stage(plan) => {
                 self.check(ctx, plan).await?;
             }
-            InsertInputSource::StreamingWithFormat(..)
-            | InsertInputSource::StreamingWithFileFormat { .. }
-            | InsertInputSource::Values(_) => {}
+            InsertInputSource::Values(_) => {}
         }
         Ok(())
     }
@@ -1075,8 +1073,17 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }
-            Plan::AlterUser(_)
-            | Plan::RenameDatabase(_)
+            Plan::AlterUser(plan) => {
+                let current_user = self.ctx.get_current_user()?;
+                // Only alter current user's password do not need to check privileges.
+                if plan.user.username == current_user.name && plan.user_option.is_none() {
+                    return Ok(());
+                }
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
+                    .await?;
+            }
+
+            Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)

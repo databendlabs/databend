@@ -480,6 +480,14 @@ impl StringColumnBuilder {
         }
     }
 
+    pub fn repeat_default(n: usize) -> Self {
+        StringColumnBuilder {
+            data: vec![],
+            offsets: vec![0; n + 1],
+            need_estimated: false,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
     }

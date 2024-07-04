@@ -2108,11 +2108,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             "get_table"
         );
 
-        let db_type = db_meta
-            .from_share
-            .map_or(DatabaseType::NormalDB, |share_ident| {
-                DatabaseType::ShareDB(share_ident)
-            });
+        let db_type = DatabaseType::NormalDB;
 
         let tb_info = TableInfo {
             ident: TableIdent {
@@ -2153,7 +2149,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
+        let (_db_id_seq, db_id, _db_meta_seq, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
@@ -2238,12 +2234,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             table_name: table_id_list_key.table_name.clone(),
                         };
 
-                        let db_type = db_meta
-                            .from_share
-                            .clone()
-                            .map_or(DatabaseType::NormalDB, |share_ident| {
-                                DatabaseType::ShareDB(share_ident)
-                            });
+                        let db_type = DatabaseType::NormalDB;
 
                         let tb_info = TableInfo {
                             ident: TableIdent {

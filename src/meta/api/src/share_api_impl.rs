@@ -1214,13 +1214,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 get_pb_value(self, &id_key).await?;
 
             if let Some(share_endpoint_meta) = share_endpoint_meta {
-                if let Some(to_tenant) = &req.to_tenant {
-                    if to_tenant.tenant_name() == share_endpoint_meta.tenant {
-                        share_endpoint_meta_vec.push((share_endpoint, share_endpoint_meta));
-                    }
-                } else {
-                    share_endpoint_meta_vec.push((share_endpoint, share_endpoint_meta));
-                }
+                share_endpoint_meta_vec.push((share_endpoint, share_endpoint_meta));
             }
         }
 

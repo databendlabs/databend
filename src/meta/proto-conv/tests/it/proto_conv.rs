@@ -34,6 +34,8 @@ use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use databend_common_meta_app::share::ShareCredential;
+use databend_common_meta_app::share::ShareCredentialHmac;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
@@ -57,6 +59,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
+        using_share_endpoint: Some("endpoint".to_string()),
     }
 }
 
@@ -71,6 +74,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
+        using_share_endpoint: None,
     }
 }
 
@@ -127,6 +131,22 @@ fn new_share_meta() -> share::ShareMeta {
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
+    }
+}
+
+fn new_share_endpoint_meta() -> share::ShareEndpointMeta {
+    let create_on = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
+    let mut args: BTreeMap<String, String> = BTreeMap::new();
+    args.insert("key".to_string(), "value".to_string());
+    share::ShareEndpointMeta {
+        url: "http://127.0.0.1:2222".to_string(),
+        tenant: "".to_string(),
+        args,
+        comment: Some("comment".to_string()),
+        create_on,
+        credential: Some(ShareCredential::HMAC(ShareCredentialHmac {
+            key: "hello".to_string(),
+        })),
     }
 }
 
@@ -358,6 +378,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = share::ShareAccountMeta::from_pb(p)?;
     assert_eq!(share_account_meta, got);
 
+    let share_endpoint_meta = new_share_endpoint_meta();
+    let p = share_endpoint_meta.to_pb()?;
+    let got = share::ShareEndpointMeta::from_pb(p)?;
+    assert_eq!(share_endpoint_meta, got);
+
     let index = new_index_meta();
     let p = index.to_pb()?;
     let got = mt::IndexMeta::from_pb(p)?;
@@ -417,9 +442,19 @@ fn test_incompatible() -> anyhow::Result<()> {
 fn test_build_pb_buf() -> anyhow::Result<()> {
     // build serialized buf of protobuf data, for backward compatibility test with a new version binary.
 
-    // DatabaseMeta
+    // share DatabaseMeta
     {
         let db_meta = new_db_meta_share();
+        let p = db_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("db from share:{:?}", buf);
+    }
+
+    // DatabaseMeta
+    {
+        let db_meta = new_db_meta();
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];
@@ -458,6 +493,17 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
+    }
+
+    // ShareEndpointMeta
+    {
+        let share_endpoint_meta = new_share_endpoint_meta();
+
+        let p = share_endpoint_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share endpoint meta:{:?}", buf);
     }
 
     // IndexMeta

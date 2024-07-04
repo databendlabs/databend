@@ -16,7 +16,6 @@
 #![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::diverging_sub_expression)]
 
-mod dal;
 mod partition;
 mod partition_columns;
 mod table;

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_pipeline_sources::input_formats::split_by_size;
+use std::collections::HashMap;
 
-#[test]
-fn test_split_by_size() {
-    assert_eq!(split_by_size(10, 3), vec![(0, 3), (3, 3), (6, 3), (9, 1)]);
-    assert_eq!(split_by_size(9, 3), vec![(0, 3), (3, 3), (6, 3)]);
-    assert_eq!(split_by_size(8, 3), vec![(0, 3), (3, 3), (6, 2)]);
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserDefinedFunction;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BuiltIn {
+    pub users: HashMap<String, AuthInfo>,
+    pub udfs: HashMap<String, UserDefinedFunction>,
 }

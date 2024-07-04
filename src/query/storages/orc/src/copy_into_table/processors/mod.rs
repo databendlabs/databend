@@ -12,11 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
-use databend_common_meta_app::principal::AuthInfo;
-
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct IDMConfig {
-    pub users: HashMap<String, AuthInfo>,
-}
+pub(crate) mod decoder;
+pub(crate) mod source;

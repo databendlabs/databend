@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Identifier;
@@ -23,9 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_meta_app::principal::FileFormatOptionsReader;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::OnErrorMode;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -105,39 +101,6 @@ impl Binder {
         let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
-            InsertSource::Streaming {
-                format,
-                rest_str,
-                start,
-            } => {
-                if format.to_uppercase() == "VALUES" {
-                    let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                    Ok(InsertInputSource::Values(InsertValue::RawValues {
-                        data,
-                        start,
-                    }))
-                } else {
-                    Ok(InsertInputSource::StreamingWithFormat(format, start, None))
-                }
-            }
-            InsertSource::StreamingV2 {
-                settings,
-                on_error_mode,
-                start,
-            } => {
-                let params = FileFormatParams::try_from_reader(
-                    FileFormatOptionsReader::from_ast(&settings),
-                    false,
-                )?;
-                Ok(InsertInputSource::StreamingWithFileFormat {
-                    format: params,
-                    start,
-                    on_error_mode: OnErrorMode::from_str(
-                        &on_error_mode.unwrap_or("abort".to_string()),
-                    )?,
-                    input_context_option: None,
-                })
-            }
             InsertSource::Values { rows } => {
                 let mut new_rows = Vec::with_capacity(rows.len());
                 for row in rows {

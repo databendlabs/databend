@@ -31,11 +31,14 @@ use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
 use databend_common_storages_iceberg::IcebergCreator;
 use databend_common_tracing::GlobalLogger;
+use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_cache_manager::CacheManager;
 
 use crate::auth::AuthMgr;
+use crate::builtin::BuiltinUDFs;
+use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
@@ -107,13 +110,27 @@ impl GlobalServices {
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config)?;
-        UserApiProvider::init(
-            config.meta.to_meta_grpc_client_conf(),
-            config.query.idm.clone(),
-            &config.query.tenant_id,
-            config.query.tenant_quota.clone(),
-        )
-        .await?;
+
+        // Init user manager.
+        // Builtin users and udfs are created here.
+        {
+            let built_in_users = BuiltinUsers::create(config.query.builtin.users.clone());
+            let built_in_udfs = BuiltinUDFs::create(config.query.builtin.udfs.clone());
+
+            // We will ignore the error here, and just log a error.
+            let builtin = BuiltIn {
+                users: built_in_users.to_auth_infos(),
+                udfs: built_in_udfs.to_udfs(),
+            };
+            UserApiProvider::init(
+                config.meta.to_meta_grpc_client_conf(),
+                builtin,
+                &config.query.tenant_id,
+                config.query.tenant_quota.clone(),
+            )
+            .await?;
+        }
+
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
 

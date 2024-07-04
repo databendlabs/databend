@@ -58,6 +58,7 @@ pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
 
+mod builtin;
 mod global_services;
 
 pub use databend_common_sql as sql;

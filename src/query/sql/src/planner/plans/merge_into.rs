@@ -88,7 +88,7 @@ pub struct MergeInto {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub enable_right_broadcast: bool,
-    pub lazy_columns: Option<HashSet<usize>>,
+    pub lazy_columns: HashSet<usize>,
     pub lock_guard: Option<Arc<LockGuard>>,
 }
 

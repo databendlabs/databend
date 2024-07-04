@@ -38,6 +38,11 @@ auth_type = "no_password"
 name = "default"
 auth_type = "no_password"
 
+# This for test
+[[query.udfs]]
+name = "ping"
+definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815'"
+
 [log]
 
 [log.file]

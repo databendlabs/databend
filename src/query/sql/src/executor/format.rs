@@ -18,6 +18,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -383,14 +384,120 @@ fn append_profile_info(
 }
 
 fn format_merge_into(
-    plan: &MergeInto,
+    merge_into: &MergeInto,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
+    let table_entry = metadata.table(merge_into.target_table_index).clone();
+    let target_table = vec![FormatTreeNode::new(format!(
+        "target table: [catalog: {}] [database: {}] [table: {}]",
+        table_entry.catalog(),
+        table_entry.database(),
+        table_entry.name()
+    ))];
+    let target_schema = table_entry.table().schema_with_stream();
+
+    let merge_into_serialize: &PhysicalPlan = &merge_into.input;
+    let merge_into_organize: &PhysicalPlan =
+        if let PhysicalPlan::MergeIntoSerialize(plan) = merge_into_serialize {
+            &plan.input
+        } else {
+            return Err(ErrorCode::Internal(
+                "Expect MergeIntoSerialize after MergeInto ".to_string(),
+            ));
+        };
+    let merge_into_manipulate: &PhysicalPlan =
+        if let PhysicalPlan::MergeIntoOrganize(plan) = merge_into_organize {
+            &plan.input
+        } else {
+            return Err(ErrorCode::Internal(
+                "Expect MergeIntoOrganize after MergeIntoSerialize ".to_string(),
+            ));
+        };
+
+    let children = if let PhysicalPlan::MergeIntoManipulate(plan) = merge_into_manipulate {
+        // Matched clauses.
+        let mut matched_children = Vec::with_capacity(plan.matched.len());
+        for evaluator in &plan.matched {
+            let condition_format = evaluator.0.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+            if evaluator.1.is_none() {
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched delete: [{}]",
+                    condition_format
+                )));
+            } else {
+                let mut update_list = evaluator.1.as_ref().unwrap().clone();
+                update_list.sort_by(|a, b| a.0.cmp(&b.0));
+                let update_format = update_list
+                    .iter()
+                    .map(|(field_idx, expr)| {
+                        format!(
+                            "{} = {}",
+                            target_schema.field(*field_idx).name(),
+                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        )
+                    })
+                    .join(",");
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched update: [{}, update set {}]",
+                    condition_format, update_format
+                )));
+            }
+        }
+
+        // UnMatched clauses.
+        let mut unmatched_children = Vec::with_capacity(plan.unmatched.len());
+        for evaluator in &plan.unmatched {
+            let condition_format = evaluator.1.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+            let insert_schema_format = evaluator
+                .0
+                .fields
+                .iter()
+                .map(|field| field.name())
+                .join(",");
+            let values_format = evaluator
+                .2
+                .iter()
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(",");
+            let unmatched_format = format!(
+                "insert into ({}) values({})",
+                insert_schema_format, values_format
+            );
+            unmatched_children.push(FormatTreeNode::new(format!(
+                "unmatched insert: [{}, {}]",
+                condition_format, unmatched_format
+            )));
+        }
+
+        [target_table, matched_children, unmatched_children, vec![
+            to_format_tree(&plan.input, metadata, profs)?,
+        ]]
+        .concat()
+    } else {
+        return Err(ErrorCode::Internal(
+            "Expect MergeIntoManipulate after MergeIntoOrganize ".to_string(),
+        ));
+    };
     Ok(FormatTreeNode::with_children(
         "MergeInto".to_string(),
-        vec![child],
+        children,
     ))
 }
 
@@ -399,11 +506,7 @@ fn format_merge_into_add_row_number(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAddRowNumber".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into_append_not_matched(
@@ -411,11 +514,7 @@ fn format_merge_into_append_not_matched(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoAppendNotMatched".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into_split(
@@ -423,11 +522,7 @@ fn format_merge_into_split(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoSplit".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into_manipulate(
@@ -435,11 +530,7 @@ fn format_merge_into_manipulate(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoManipulate".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into_organize(
@@ -447,11 +538,7 @@ fn format_merge_into_organize(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoOrganize".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into_serialize(
@@ -459,11 +546,7 @@ fn format_merge_into_serialize(
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let child = to_format_tree(&plan.input, metadata, profs)?;
-    Ok(FormatTreeNode::with_children(
-        "MergeIntoSerialize".to_string(),
-        vec![child],
-    ))
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {

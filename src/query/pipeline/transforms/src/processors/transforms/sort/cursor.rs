@@ -71,6 +71,13 @@ impl<R: Rows> Cursor<R> {
     pub fn to_column(&self) -> Column {
         self.rows.to_column()
     }
+
+    pub fn cursor_mut(&self) -> CursorMut<'_, R> {
+        CursorMut {
+            row_index: self.row_index,
+            cursor: self,
+        }
+    }
 }
 
 impl<R: Rows> Ord for Cursor<R> {
@@ -96,5 +103,46 @@ impl<R: Rows> Eq for Cursor<R> {}
 impl<R: Rows> PartialOrd for Cursor<R> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<'a, R: Rows> PartialEq<Cursor<R>> for CursorMut<'a, R> {
+    fn eq(&self, other: &Cursor<R>) -> bool {
+        (self.cursor.input_index == other.input_index && self.row_index == other.row_index)
+            || self.current() == other.current()
+    }
+}
+
+impl<'a, R: Rows> PartialOrd<Cursor<R>> for CursorMut<'a, R> {
+    fn partial_cmp(&self, other: &Cursor<R>) -> Option<Ordering> {
+        Some(if self.cursor.input_index == other.input_index {
+            self.row_index.cmp(&other.row_index)
+        } else {
+            self.current()
+                .cmp(&other.current())
+                .then_with(|| self.cursor.input_index.cmp(&other.input_index))
+        })
+    }
+}
+
+pub struct CursorMut<'a, R: Rows> {
+    pub row_index: usize,
+
+    cursor: &'a Cursor<R>,
+}
+
+impl<'a, R: Rows> CursorMut<'a, R> {
+    pub fn advance(&mut self) -> usize {
+        let res = self.row_index;
+        self.row_index += 1;
+        res
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.row_index == self.cursor.num_rows
+    }
+
+    pub fn current(&self) -> R::Item<'_> {
+        self.cursor.rows.row(self.row_index)
     }
 }

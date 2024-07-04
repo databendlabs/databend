@@ -35,7 +35,7 @@ databend-storages-common-txn = { workspace = true }
 dyn-clone = "1.0.9"
 log = { workspace = true }
 parking_lot = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
