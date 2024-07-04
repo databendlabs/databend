@@ -18,14 +18,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_ast::ast::quote::ident_needs_quote;
-use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::display::display_tuple_field_name;
 use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
@@ -750,7 +749,11 @@ impl TableSchema {
                     for ((i, inner_field_name), inner_field_type) in
                         fields_name.iter().enumerate().zip(fields_type.iter())
                     {
-                        let inner_name = format!("{}:{}", field_name, inner_field_name);
+                        let inner_name = format!(
+                            "{}:{}",
+                            field_name,
+                            display_tuple_field_name(inner_field_name)
+                        );
                         if col_name.starts_with(&inner_name) {
                             return collect_inner_column_ids(
                                 col_name,
@@ -828,13 +831,7 @@ impl TableSchema {
                 .iter()
                 .zip(fields_type)
                 .map(|(name, ty)| {
-                    let inner_name = if name.chars().any(|c| c.is_ascii_uppercase())
-                        || ident_needs_quote(name)
-                    {
-                        format!("{}:{}", field.name(), QuotedIdent(name, '"'))
-                    } else {
-                        format!("{}:{}", field.name(), name)
-                    };
+                    let inner_name = format!("{}:{}", field.name(), display_tuple_field_name(name));
                     let field = TableField::new(&inner_name, ty.clone());
                     field.build_column_id(&mut next_column_id)
                 })
@@ -867,13 +864,8 @@ impl TableSchema {
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
-                        let inner_name = if name.chars().any(|c| c.is_ascii_uppercase())
-                            || ident_needs_quote(name)
-                        {
-                            format!("{}:{}", field.name(), QuotedIdent(name, '"'))
-                        } else {
-                            format!("{}:{}", field.name(), name)
-                        };
+                        let inner_name =
+                            format!("{}:{}", field.name(), display_tuple_field_name(name));
                         collect_in_field(
                             &TableField::new_from_column_id(
                                 &inner_name,

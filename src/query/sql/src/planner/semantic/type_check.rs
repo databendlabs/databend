@@ -19,8 +19,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
 
-use databend_common_ast::ast::quote::ident_needs_quote;
-use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
@@ -59,6 +57,7 @@ use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -3809,14 +3808,9 @@ impl<'a> TypeChecker<'a> {
                     },
                     _ => unreachable!(),
                 };
-                let inner_name = fields_name.get(idx).unwrap();
-                if inner_name.chars().any(|c| c.is_ascii_uppercase())
-                    || ident_needs_quote(inner_name)
-                {
-                    names.push(QuotedIdent(inner_name, '"').to_string());
-                } else {
-                    names.push(inner_name.clone());
-                }
+                let inner_field_name = fields_name.get(idx).unwrap();
+                let inner_name = display_tuple_field_name(inner_field_name);
+                names.push(inner_name);
                 let inner_type = fields_type.get(idx).unwrap();
                 index_with_types.push_back((idx + 1, inner_type.clone()));
                 *table_data_type = inner_type.clone();

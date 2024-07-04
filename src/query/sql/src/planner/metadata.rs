@@ -19,12 +19,11 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use ahash::HashMap;
-use databend_common_ast::ast::quote::ident_needs_quote;
-use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
+use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::Scalar;
@@ -383,13 +382,11 @@ impl Metadata {
                     let mut inner_indices = indices.clone();
                     inner_indices.push(i);
                     // create tuple inner field
-                    let inner_name = if inner_field_name.chars().any(|c| c.is_ascii_uppercase())
-                        || ident_needs_quote(inner_field_name)
-                    {
-                        format!("{}:{}", field.name(), QuotedIdent(inner_field_name, '"'))
-                    } else {
-                        format!("{}:{}", field.name(), inner_field_name)
-                    };
+                    let inner_name = format!(
+                        "{}:{}",
+                        field.name(),
+                        display_tuple_field_name(inner_field_name)
+                    );
                     let inner_field = TableField::new(&inner_name, inner_field_type.clone());
                     fields.push_front((inner_indices, inner_field));
                 }
