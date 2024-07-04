@@ -261,13 +261,13 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_stateful_standalone_iceberg_rest
+      - uses: ./.github/actions/test_stateful_iceberg_rest_standalone
         timeout-minutes: 10
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-stateful-standalone-iceberg-rest
+          name: test-stateful-iceberg-rest-standalone
 
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
