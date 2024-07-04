@@ -96,7 +96,7 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
+            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &Some(&meta.col_stats), &None)
             .await?;
 
         self.deserialize_chunks_with_meta(meta, storage_format, merge_io_read_result)

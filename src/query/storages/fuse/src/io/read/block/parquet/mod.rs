@@ -118,9 +118,7 @@ impl BlockReader {
                     }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
                 }
-                Some(DataItem::Scalar(scalar)) => {
-                    Value::Scalar(scalar)
-                }
+                Some(DataItem::Scalar(scalar)) => Value::Scalar((*scalar).clone()),
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
             columns.push(BlockEntry::new(data_type, value));

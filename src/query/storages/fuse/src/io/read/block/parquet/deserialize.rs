@@ -57,6 +57,7 @@ pub fn column_chunks_to_record_batch(
                 builder.add_column_chunk(dfs_id, bytes.clone());
             }
             DataItem::ColumnArray(_) => {}
+            DataItem::Scalar(_) => {}
         }
     }
     let row_group = Box::new(builder.build());

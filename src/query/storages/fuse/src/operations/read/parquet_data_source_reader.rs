@@ -301,6 +301,7 @@ impl Processor for ReadParquetDataSource<false> {
                                 &settings,
                                 &part.location,
                                 &part.columns_meta,
+                                &part.columns_stat,
                                 ignore_column_ids,
                             )
                             .await?;

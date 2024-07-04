@@ -142,6 +142,7 @@ pub async fn read_block(
             read_settings,
             &block_meta.location.0,
             &block_meta.col_metas,
+            &Some(&block_meta.col_stats),
             &None,
         )
         .await?;

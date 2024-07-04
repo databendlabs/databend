@@ -244,6 +244,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                         &settings,
                         &part.location,
                         &part.columns_meta,
+                        &part.columns_stat,
                         &None,
                     )
                     .await?;

@@ -238,6 +238,10 @@ impl BlockReader {
                             // since it is not nested, one column is enough
                             return Ok(Some(DeserializedArray::Cached(column_array)));
                         }
+
+                        DataItem::Scalar(_scalar) => {
+                            todo!()
+                        }
                     }
                 } else {
                     // If the column is the source of virtual columns, it may be ignored.

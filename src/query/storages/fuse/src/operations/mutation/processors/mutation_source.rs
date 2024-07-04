@@ -420,6 +420,7 @@ impl Processor for MutationSource {
                                     &settings,
                                     &fuse_part.location,
                                     &fuse_part.columns_meta,
+                                    &fuse_part.columns_stat,
                                     &None,
                                 )
                                 .await?;
@@ -442,6 +443,7 @@ impl Processor for MutationSource {
                             &settings,
                             &fuse_part.location,
                             &fuse_part.columns_meta,
+                            &fuse_part.columns_stat,
                             &None,
                         )
                         .await?;

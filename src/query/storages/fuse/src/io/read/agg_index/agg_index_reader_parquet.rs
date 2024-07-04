@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_arrow::arrow::io::parquet::read as pread;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use log::debug;
 
 use super::AggIndexReader;
@@ -91,9 +95,16 @@ impl AggIndexReader {
                 debug_assert_eq!(metadata.row_groups.len(), 1);
                 let row_group = &metadata.row_groups[0];
                 let columns_meta = build_columns_meta(row_group);
+                let column_stats: Option<HashMap<ColumnId, ColumnStatistics>> = None;
                 let res = self
                     .reader
-                    .read_columns_data_by_merge_io(read_settings, loc, &columns_meta, &None)
+                    .read_columns_data_by_merge_io(
+                        read_settings,
+                        loc,
+                        &columns_meta,
+                        &column_stats,
+                        &None,
+                    )
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;

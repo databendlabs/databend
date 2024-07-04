@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Range;
@@ -23,11 +24,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
-use databend_common_sql::optimizer::ColumnStat;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
-use databend_storages_common_table_meta::meta::{ColumnMeta, ColumnStatistics};
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::future::try_join_all;
 use opendal::Operator;
 
@@ -131,11 +132,12 @@ impl BlockReader {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_columns_data_by_merge_io(
+    pub async fn read_columns_data_by_merge_io<T: Borrow<HashMap<ColumnId, ColumnStatistics>>>(
         &self,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        cols_stats: &Option<T>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
         // Perf
@@ -157,13 +159,15 @@ impl BlockReader {
                 }
             }
 
-            let cols_stats: &HashMap<ColumnId, ColumnStatistics>;
-
-            // do not bother reading it at all
-            if let Some(col) = cols_stats.get(column_id) {
-                if col.min == col.max {
-                    scalars.push((*column_id, col.min.clone()));
-                    continue;
+            if let Some(stats) = cols_stats {
+                let stats = stats.borrow();
+                if let Some(stats) = stats.get(column_id) {
+                    // do not bother reading it at all
+                    if stats.min == stats.max {
+                        scalars.push((*column_id, stats.min.clone()));
+                        metrics_inc_remote_io_columns_as_scalar(1);
+                        continue;
+                    }
                 }
             }
 
