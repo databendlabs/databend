@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::OrcFileFormatParams;
 use minitrace::func_name;
 
@@ -29,30 +29,20 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v92_orc_file_format_params() -> anyhow::Result<()> {
-    let orc_file_format_params_v92 = vec![160, 6, 92, 168, 6, 24];
+fn test_decode_v97_orc_file_format_params() -> anyhow::Result<()> {
+    let orc_file_format_params_v97 = vec![
+        10, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 160, 6, 97, 168, 6, 24,
+    ];
+
     let want = || OrcFileFormatParams {
-        missing_field_as: Default::default(),
+        missing_field_as: NullAs::FieldDefault,
     };
     common::test_load_old(
         func_name!(),
-        orc_file_format_params_v92.as_slice(),
-        92,
+        orc_file_format_params_v97.as_slice(),
+        97,
         want(),
     )?;
-    common::test_pb_from_to(func_name!(), want())?;
-    Ok(())
-}
-
-#[test]
-fn test_decode_v92_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v92 = vec![58, 6, 160, 6, 92, 168, 6, 24];
-    let want = || {
-        FileFormatParams::Orc(OrcFileFormatParams {
-            missing_field_as: Default::default(),
-        })
-    };
-    common::test_load_old(func_name!(), file_format_params_v92.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }

@@ -32,8 +32,8 @@ use crate::common;
 //
 // The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
 #[test]
-fn test_decode_v97_catalog() -> anyhow::Result<()> {
-    let catalog_meta_v97 = vec![
+fn test_decode_v98_catalog() -> anyhow::Result<()> {
+    let catalog_meta_v98 = vec![
         18, 55, 26, 53, 18, 45, 10, 21, 104, 116, 116, 112, 58, 47, 47, 49, 50, 55, 46, 48, 46, 48,
         46, 49, 58, 57, 57, 48, 48, 18, 14, 115, 51, 58, 47, 47, 109, 121, 95, 98, 117, 99, 107,
         101, 116, 160, 6, 97, 168, 6, 24, 160, 6, 97, 168, 6, 24, 162, 1, 23, 50, 48, 49, 52, 45,
@@ -53,7 +53,7 @@ fn test_decode_v97_catalog() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), catalog_meta_v97.as_slice(), 97, want())?;
+    common::test_load_old(func_name!(), catalog_meta_v98.as_slice(), 98, want())?;
 
     Ok(())
 }
