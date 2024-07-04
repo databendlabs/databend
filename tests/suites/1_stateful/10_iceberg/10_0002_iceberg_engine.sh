@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 ROOT=$(realpath "$CURDIR"/../../../data/iceberg/iceberg_ctl/iceberg_db/iceberg_tbl/)
 
-stmt "drop table if exists test_iceberg;"
+#stmt "drop table if exists test_iceberg;"
 
 #echo ">>>> create table test_iceberg engine = iceberg location = 'fs://\${ROOT}/';"
 #echo "create table test_iceberg engine = iceberg location = 'fs://${ROOT}/';" | $BENDSQL_CLIENT_CONNECT
