@@ -20,8 +20,8 @@ use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::utils::column_merge_validity;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_io::prelude::BinaryWrite;
 
 use crate::aggregates::AggregateFunction;
@@ -110,7 +110,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -121,8 +121,12 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             not_null_columns.push(col.remove_nullable());
         }
 
-        self.nested
-            .accumulate(place, &not_null_columns, validity.as_ref(), input_rows)?;
+        self.nested.accumulate(
+            place,
+            not_null_columns.as_slice().into(),
+            validity.as_ref(),
+            input_rows,
+        )?;
 
         if validity
             .as_ref()
@@ -138,7 +142,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
@@ -157,14 +161,21 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
                     if valid {
                         self.set_flag(place.next(offset), 1);
-                        self.nested
-                            .accumulate_row(place.next(offset), &not_null_columns, row)?;
+                        self.nested.accumulate_row(
+                            place.next(offset),
+                            (&not_null_columns).into(),
+                            row,
+                        )?;
                     }
                 }
             }
             _ => {
-                self.nested
-                    .accumulate_keys(places, offset, &not_null_columns, input_rows)?;
+                self.nested.accumulate_keys(
+                    places,
+                    offset,
+                    (&not_null_columns).into(),
+                    input_rows,
+                )?;
                 places
                     .iter()
                     .for_each(|place| self.set_flag(place.next(offset), 1));
@@ -173,7 +184,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = None;
         for col in columns.iter() {
@@ -190,11 +201,13 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
                 if unsafe { v.get_bit_unchecked(row) } {
                     self.set_flag(place, 1);
-                    self.nested.accumulate_row(place, &not_null_columns, row)?;
+                    self.nested
+                        .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
                 }
             }
             _ => {
-                self.nested.accumulate_row(place, &not_null_columns, row)?;
+                self.nested
+                    .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
                 self.set_flag(place, 1);
             }
         }
@@ -273,7 +286,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.nested.convert_const_to_full()
     }
 
-    fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: InputColumns) -> Option<Bitmap> {
         self.nested.get_if_condition(columns)
     }
 }

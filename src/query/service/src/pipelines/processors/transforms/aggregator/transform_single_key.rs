@@ -27,6 +27,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::aggregates::AggregateFunctionRef;
@@ -92,17 +93,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         let block = block.convert_to_full();
 
         for (idx, func) in self.funcs.iter().enumerate() {
-            let mut arg_columns = vec![];
-            for index in self.arg_indices[idx].iter() {
-                arg_columns.push(
-                    block
-                        .get_by_offset(*index)
-                        .value
-                        .as_column()
-                        .unwrap()
-                        .clone(),
-                );
-            }
             let place = self.places[idx];
             if is_agg_index_block {
                 // Aggregation states are in the back of the block.
@@ -111,7 +101,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
                 func.batch_merge_single(place, agg_state)?;
             } else {
-                func.accumulate(place, &arg_columns, None, block.num_rows())?;
+                let columns =
+                    InputColumns::new_block_proxy(self.arg_indices[idx].as_slice(), &block);
+                func.accumulate(place, columns, None, block.num_rows())?;
             }
         }
 

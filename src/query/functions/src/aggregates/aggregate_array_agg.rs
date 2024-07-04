@@ -29,6 +29,7 @@ use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use ethnum::i256;
@@ -256,7 +257,7 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -277,7 +278,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         match &columns[0] {
@@ -310,7 +311,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0] {
             Column::Nullable(box nullable_column) => {
