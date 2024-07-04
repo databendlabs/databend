@@ -27,8 +27,8 @@ use databend_common_storage::StageFilesInfo;
 use log::debug;
 use log::info;
 
-use crate::interpreters::common::build_update_stream_req;
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -74,7 +74,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        let update_stream_meta = build_update_stream_req(self.ctx.clone(), metadata, false).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
 
         Ok((select_interpreter, update_stream_meta))
     }

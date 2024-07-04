@@ -44,7 +44,7 @@ use databend_common_users::UserApiProvider;
 use log::error;
 use log::info;
 
-use crate::interpreters::common::build_update_stream_req;
+use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
@@ -138,8 +138,7 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        let update_stream_metas =
-            build_update_stream_req(self.ctx.clone(), &self.metadata, true).await?;
+        let update_stream_metas = query_build_update_stream_req(&self.ctx, &self.metadata).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
         let query_id = self.ctx.get_id();
@@ -152,14 +151,16 @@ impl SelectInterpreter {
                         query_id
                     );
 
-                    let r = UpdateMultiTableMetaReq {
-                        update_stream_metas,
-                        ..Default::default()
-                    };
-                    catalog
-                        .retryable_update_multi_table_meta(r)
-                        .await
-                        .map(|_| ())
+                    match update_stream_metas {
+                        Some(streams) => {
+                            let r = UpdateMultiTableMetaReq {
+                                update_table_metas: streams.update_table_metas,
+                                ..Default::default()
+                            };
+                            catalog.update_multi_table_meta(r).await.map(|_| ())
+                        }
+                        None => Ok(()),
+                    }
                 }),
                 Err(error_code) => Err(error_code.clone()),
             });
