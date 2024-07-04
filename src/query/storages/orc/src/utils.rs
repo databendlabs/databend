@@ -12,27 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(internal_features)]
-#![allow(clippy::uninlined_format_args)]
-#![allow(clippy::useless_asref)]
-#![allow(clippy::diverging_sub_expression)]
-#![feature(try_blocks)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(let_chains)]
-#![feature(core_intrinsics)]
-#![feature(int_roundings)]
-#![feature(box_patterns)]
-
-mod chunk_reader_impl;
-mod copy_into_table;
-mod hashable_schema;
-mod orc_file_partition;
-mod processors;
-mod read_partition;
-mod read_pipeline;
-mod strip;
-mod table;
-mod utils;
-
-pub use copy_into_table::OrcTableForCopy;
-pub use table::OrcTable;
+use databend_common_exception::ErrorCode;
+use orc_rust::error::OrcError;
+pub fn map_orc_error(e: OrcError, path: &str) -> ErrorCode {
+    ErrorCode::BadBytes(format!("fail to read {}: {:?}", path, e))
+}

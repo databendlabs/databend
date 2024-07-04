@@ -1,0 +1,16 @@
+
+statement ok
+drop table if exists nested
+
+statement ok
+create table nested (map map(string not null,int), nest tuple(float32, bool), value array(int32));
+
+query 
+copy into nested from @data/orc/nested file_format = (type = orc)  RETURN_FAILED_ONLY=TRUE
+----
+
+
+query ?
+select count(*) from nested
+----
+14
