@@ -12,32 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::share::ShareTableSpec;
+use log::error;
 use opendal::Operator;
 
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareSpecVec {
-    share_specs: BTreeMap<String, ext::ShareSpecExt>,
-}
-
-pub fn get_share_spec_location(tenant: &str) -> String {
-    format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
+pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
+    format!(
+        "{}/{}/{}_share_specs.json",
+        SHARE_CONFIG_PREFIX, tenant, share_name
+    )
 }
 
 pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
     format!(
         "{}/{}/{}_table_info.json",
         SHARE_CONFIG_PREFIX, tenant, share_name
+    )
+}
+
+pub fn new_share_table_info_location(tenant: &str, share_name: &str, table_name: &str) -> String {
+    format!(
+        "{}/{}/{}_{}_table_info.json",
+        SHARE_CONFIG_PREFIX, tenant, share_name, table_name
     )
 }
 
@@ -65,25 +70,78 @@ pub async fn save_share_table_info(
 }
 
 #[async_backtrace::framed]
+pub async fn update_share_spec(
+    tenant: &str,
+    operator: Operator,
+    share_spec: ShareSpec,
+) -> Result<()> {
+    let share_name = &share_spec.name;
+    let location = get_share_spec_location(tenant, &share_name);
+    let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec, &operator);
+    let data = serde_json::to_string(&share_spec_ext)?;
+    operator.write(&location, data).await?;
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn revoke_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_name: &String,
+    revoke_share_table: &[String],
+) -> Result<()> {
+    for share_table in revoke_share_table {
+        let location = new_share_table_info_location(tenant, share_name, share_table);
+
+        operator.delete(&location).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn update_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_name_vec: &[String],
+    share_table_info: &TableInfo,
+) -> Result<()> {
+    for share_name in share_name_vec {
+        let location = new_share_table_info_location(tenant, share_name, &share_table_info.name);
+
+        if let Err(e) = operator
+            .write(&location, serde_json::to_string(share_table_info)?)
+            .await
+        {
+            error!(
+                "update_share_table_info of share {} table {} error: {:?}",
+                share_name, share_table_info.name, e
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
 pub async fn save_share_spec(
     tenant: &str,
     operator: Operator,
     spec_vec: Option<Vec<ShareSpec>>,
     share_table_info: Option<Vec<ShareTableInfoMap>>,
 ) -> Result<()> {
+    println!("share spec_vec:{:?}\n", spec_vec);
+    println!("share_table_info:{:?}\n", share_table_info);
     if let Some(share_spec) = spec_vec {
-        let location = get_share_spec_location(tenant);
-        let mut share_spec_vec = ShareSpecVec::default();
         for spec in share_spec {
             let share_name = spec.name.clone();
+            let location = get_share_spec_location(tenant, &share_name);
             let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-            share_spec_vec
-                .share_specs
-                .insert(share_name, share_spec_ext);
+            let data = serde_json::to_string(&share_spec_ext)?;
+            println!("data: {:?}", data);
+            operator.write(&location, data).await?;
         }
-        operator
-            .write(&location, serde_json::to_vec(&share_spec_vec)?)
-            .await?;
     }
 
     // save share table info

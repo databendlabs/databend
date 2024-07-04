@@ -185,8 +185,10 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableInfoMap;
+use databend_common_meta_app::share::ShareVecTableInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -225,7 +227,8 @@ use crate::fetch_id;
 use crate::get_pb_value;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
-use crate::get_share_table_info;
+use crate::get_share_table_info_bak;
+use crate::get_table_info_by_share;
 use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
 use crate::kv_app_error::KVAppError;
@@ -2912,7 +2915,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if succ {
                 return Ok(UpsertTableOptionReply {
-                    share_table_info: get_share_table_info_map(self, &table_meta).await?,
+                    share_vec_table_info: get_share_vec_table_info(self, req.table_id, &table_meta)
+                        .await?,
                 });
             }
         }
@@ -2982,11 +2986,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(ident :% =(&tbid); "update_table_meta");
 
-            if tb_meta_seq == 0 || table_meta.is_none() {
+            let table_meta = if let Some(table_meta) = table_meta {
+                table_meta
+            } else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
                     UnknownTableId::new(req.table_id, "update_table_meta"),
                 )));
-            }
+            };
+
             if req_seq.match_seq(tb_meta_seq).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
@@ -3051,7 +3058,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if succ {
                 return Ok(UpdateTableMetaReply {
-                    share_table_info: get_share_table_info_map(self, &table_meta.unwrap()).await?,
+                    share_vec_table_info: get_share_vec_table_info(self, req.table_id, &table_meta)
+                        .await?,
                 });
             } else {
                 let resp = responses
@@ -3356,7 +3364,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if succ {
                 return Ok(SetTableColumnMaskPolicyReply {
-                    share_table_info: get_share_table_info_map(self, &new_table_meta).await?,
+                    share_vec_table_info: get_share_vec_table_info(
+                        self,
+                        req.table_id,
+                        &new_table_meta,
+                    )
+                    .await?,
                 });
             }
         }
@@ -4835,6 +4848,75 @@ fn table_has_to_not_exist(
     }
 }
 
+async fn get_share_vec_table_info(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    table_id: u64,
+    table_meta: &TableMeta,
+) -> Result<Option<ShareVecTableInfo>, KVAppError> {
+    if table_meta.shared_by.is_empty() {
+        return Ok(None);
+    }
+    let mut share_vec = vec![];
+    let mut share_table_info: Option<TableInfo> = None;
+    for share_id in &table_meta.shared_by {
+        let res = get_share_id_to_name_or_err(
+            kv_api,
+            *share_id,
+            format!("get_share_table_info_map: {}", share_id),
+        )
+        .await;
+
+        let (_seq, share_name) = match res {
+            Ok((seq, share_name)) => (seq, share_name),
+            Err(e) => match e {
+                // ignore UnknownShareId error
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    continue;
+                }
+                _ => return Err(e),
+            },
+        };
+        let res = get_share_meta_by_id_or_err(
+            kv_api,
+            *share_id,
+            format!("get_share_table_info_map: {}", share_id),
+        )
+        .await;
+
+        let (_share_meta_seq, share_meta) = match res {
+            Ok((seq, share_meta)) => (seq, share_meta),
+            Err(e) => match e {
+                // ignore UnknownShareId error
+                KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    continue;
+                }
+                _ => return Err(e),
+            },
+        };
+        if share_table_info.is_none() {
+            let share_name_key = ShareNameIdent::new(
+                Tenant {
+                    tenant: share_name.tenant_name().to_string(),
+                },
+                share_name.share_name(),
+            );
+            let share_table_info_vec =
+                get_table_info_by_share(kv_api, Some(table_id), &share_name_key, &share_meta)
+                    .await?;
+            share_table_info = Some(share_table_info_vec[0].clone());
+        }
+        share_vec.push(share_name.name().clone());
+    }
+
+    if let Some(share_table_info) = share_table_info {
+        Ok(Some((share_vec, share_table_info)))
+    } else {
+        Ok(None)
+    }
+}
+
 async fn get_share_table_info_map(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_meta: &TableMeta,
@@ -4881,7 +4963,7 @@ async fn get_share_table_info_map(
             },
         };
         share_table_info_map_vec
-            .push(get_share_table_info(kv_api, &share_name.to_tident(()), &share_meta).await?);
+            .push(get_share_table_info_bak(kv_api, &share_name.to_tident(()), &share_meta).await?);
     }
 
     Ok(Some(share_table_info_map_vec))

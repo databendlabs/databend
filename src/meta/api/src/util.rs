@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::ShareHasNoGrantedDatabase;
+use databend_common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use databend_common_meta_app::app_error::UnknownDatabase;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
 use databend_common_meta_app::app_error::UnknownShare;
@@ -1110,7 +1111,85 @@ pub async fn remove_table_from_share(
     Ok((share_name.name().to_string(), share_meta, share_table_info))
 }
 
-pub async fn get_share_table_info(
+// if `share_table_id` is Some(), get TableInfo by the table id;
+// else if `share_table_id` is Some(), get all the TableInfo of the share
+pub async fn get_table_info_by_share(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_table_id: Option<u64>,
+    share_name: &ShareNameIdent,
+    share_meta: &ShareMeta,
+) -> Result<Vec<TableInfo>, KVAppError> {
+    let mut db_ident_raw = None;
+    let mut shared_db_id = 0;
+    if let Some(ref entry) = share_meta.database {
+        if let ShareGrantObject::Database(db_id) = entry.object {
+            let db_id_key = DatabaseIdToName { db_id };
+            let (_db_name_seq, db_name_ident): (_, Option<DatabaseNameIdentRaw>) =
+                get_pb_value(kv_api, &db_id_key).await?;
+            db_ident_raw = db_name_ident;
+            shared_db_id = db_id;
+        } else {
+            unreachable!();
+        }
+    }
+
+    match db_ident_raw {
+        Some(db_name) => {
+            let mut table_ids = vec![];
+            for entry in share_meta.entries.values() {
+                if let ShareGrantObject::Table(table_id) = entry.object {
+                    if let Some(share_table_id) = share_table_id {
+                        if share_table_id == table_id {
+                            table_ids.push(table_id);
+                            break;
+                        }
+                    } else {
+                        table_ids.push(table_id);
+                    }
+                } else {
+                    unreachable!();
+                }
+            }
+            if table_ids.is_empty() {
+                return Err(KVAppError::AppError(AppError::ShareHasNoGrantedPrivilege(
+                    ShareHasNoGrantedPrivilege::new(share_name.tenant_name(), share_name.name()),
+                )));
+            }
+            let db_name = db_name.to_tident(());
+
+            // List tables by tenant, db_id, table_name.
+
+            let dbid_tbname = DBIdTableName {
+                db_id: shared_db_id,
+                // Use empty name to scan all tables
+                table_name: "".to_string(),
+            };
+
+            let (dbid_tbnames, _ids) = list_u64_value(kv_api, &dbid_tbname).await?;
+
+            let table_infos = get_tableinfos_by_ids(
+                kv_api,
+                &table_ids,
+                &db_name,
+                Some(dbid_tbnames),
+                DatabaseType::NormalDB,
+            )
+            .await?;
+
+            let table_infos = table_infos
+                .iter()
+                .map(|table_info| table_info.as_ref().clone())
+                .collect();
+
+            Ok(table_infos)
+        }
+        None => Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
+            ShareHasNoGrantedDatabase::new(share_name.tenant_name(), share_name.share_name()),
+        ))),
+    }
+}
+
+pub async fn get_share_table_info_bak(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_name: &ShareNameIdent,
     share_meta: &ShareMeta,

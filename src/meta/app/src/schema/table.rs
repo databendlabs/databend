@@ -38,6 +38,7 @@ use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
+use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -772,17 +773,17 @@ pub struct SetTableColumnMaskPolicyReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_info: Option<ShareVecTableInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_info: Option<ShareVecTableInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateTableMetaReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_info: Option<ShareVecTableInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -368,7 +368,7 @@ impl Catalog for SessionCatalog {
             TxnState::Active => {
                 self.txn_mgr.lock().update_table_meta(req, table_info);
                 Ok(UpdateTableMetaReply {
-                    share_table_info: None,
+                    share_vec_table_info: None,
                 })
             }
             TxnState::Fail => unreachable!(),

@@ -21,12 +21,9 @@ mod table;
 mod task;
 mod util;
 
-mod shared_table;
-
 pub use grant::validate_grant_object_exists;
 pub use notification::get_notification_client_config;
 pub use query_log::InterpreterQueryLog;
-pub use shared_table::save_share_table_info;
 pub use stream::dml_build_update_stream_req;
 pub use stream::query_build_update_stream_req;
 pub use stream::StreamTableUpdates;
