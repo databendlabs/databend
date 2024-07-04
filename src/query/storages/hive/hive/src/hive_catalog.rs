@@ -105,11 +105,13 @@ use faststr::FastStr;
 use hive_metastore::Partition;
 use hive_metastore::ThriftHiveMetastoreClient;
 use hive_metastore::ThriftHiveMetastoreClientBuilder;
-use hive_metastore::ThriftHiveMetastoreGetTableException;
 use volo_thrift::transport::pool;
+use volo_thrift::MaybeException;
 
 use super::hive_database::HiveDatabase;
 use crate::hive_table::HiveTable;
+use crate::utils::from_thrift_error;
+use crate::utils::from_thrift_exception;
 
 #[derive(Debug)]
 pub struct HiveCreator;
@@ -210,7 +212,8 @@ impl HiveCatalog {
                 partition_names.into_iter().map(FastStr::new).collect(),
             )
             .await
-            .map_err(from_thrift_error)
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)?
     }
 
     #[minitrace::trace]
@@ -225,7 +228,8 @@ impl HiveCatalog {
             .client
             .get_partition_names(FastStr::new(db), FastStr::new(table), max_parts)
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         Ok(partition_names.into_iter().map(|v| v.to_string()).collect())
     }
@@ -252,14 +256,6 @@ impl HiveCatalog {
     }
 }
 
-fn from_thrift_error<T>(error: volo_thrift::error::ResponseError<T>) -> ErrorCode
-where T: Debug {
-    ErrorCode::Internal(format!(
-        "thrift error: {:?}, please check your thrift client config",
-        error
-    ))
-}
-
 #[async_trait::async_trait]
 impl Catalog for HiveCatalog {
     fn as_any(&self) -> &dyn Any {
@@ -281,7 +277,8 @@ impl Catalog for HiveCatalog {
             .client
             .get_database(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let hive_database: HiveDatabase = db.into();
         let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -296,7 +293,8 @@ impl Catalog for HiveCatalog {
             .client
             .get_all_databases()
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut dbs = Vec::with_capacity(db_names.len());
 
@@ -305,7 +303,8 @@ impl Catalog for HiveCatalog {
                 .client
                 .get_database(name)
                 .await
-                .map_err(from_thrift_error)?;
+                .map(from_thrift_exception)
+                .map_err(from_thrift_error)??;
 
             let hive_database: HiveDatabase = db.into();
             let res: Arc<dyn Database> = Arc::new(hive_database);
@@ -403,13 +402,9 @@ impl Catalog for HiveCatalog {
             .get_table(FastStr::new(db_name), FastStr::new(table_name))
             .await
         {
-            Ok(meta) => meta,
-            Err(volo_thrift::ResponseError::UserException(
-                ThriftHiveMetastoreGetTableException::O2(e),
-            )) => {
-                return Err(ErrorCode::TableInfoError(
-                    e.message.clone().unwrap_or_default(),
-                ));
+            Ok(MaybeException::Ok(meta)) => meta,
+            Ok(MaybeException::Exception(exception)) => {
+                return Err(ErrorCode::TableInfoError(format!("{exception:?}")));
             }
             Err(e) => {
                 return Err(from_thrift_error(e));
@@ -422,7 +417,8 @@ impl Catalog for HiveCatalog {
             .client
             .get_schema(FastStr::new(db_name), FastStr::new(table_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
         let table_info: TableInfo = super::converters::try_into_table_info(
             self.info.clone(),
             self.sp.clone(),
@@ -441,7 +437,8 @@ impl Catalog for HiveCatalog {
             .client
             .get_all_tables(FastStr::new(db_name))
             .await
-            .map_err(from_thrift_error)?;
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
 
         let mut tables = Vec::with_capacity(table_names.len());
 

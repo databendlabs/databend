@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
@@ -19,6 +21,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
+use volo_thrift::MaybeException;
 
 use crate::hive_table::HIVE_DEFAULT_PARTITION;
 
@@ -77,6 +80,26 @@ pub(crate) fn str_field_to_scalar(value: &str, data_type: &DataType) -> Result<S
         _ => Err(ErrorCode::Unimplemented(format!(
             "generate scalar failed, {:?}",
             data_type
+        ))),
+    }
+}
+
+/// Format a thrift error into iceberg error.
+///
+/// Please only throw this error when you are sure that the error is caused by thrift.
+pub fn from_thrift_error(error: impl std::error::Error) -> ErrorCode {
+    ErrorCode::Internal(format!(
+        "thrift error: {:?}, please check your thrift client config",
+        error
+    ))
+}
+
+/// Format a thrift exception into iceberg error.
+pub fn from_thrift_exception<T, E: Debug>(value: MaybeException<T, E>) -> Result<T, ErrorCode> {
+    match value {
+        MaybeException::Ok(v) => Ok(v),
+        MaybeException::Exception(err) => Err(ErrorCode::Internal(format!(
+            "thrift error: {err:?}, please check your thrift client config"
         ))),
     }
 }
