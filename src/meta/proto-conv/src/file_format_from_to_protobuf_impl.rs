@@ -306,13 +306,20 @@ impl FromToProto for mt::principal::OrcFileFormatParams {
     fn from_pb(p: pb::OrcFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::principal::OrcFileFormatParams {})
+        Ok(
+            mt::principal::OrcFileFormatParams::try_create(p.missing_field_as.as_deref()).map_err(
+                |e| Incompatible {
+                    reason: format!("{e}"),
+                },
+            )?,
+        )
     }
 
     fn to_pb(&self) -> Result<pb::OrcFileFormatParams, Incompatible> {
         Ok(pb::OrcFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
         })
     }
 }
