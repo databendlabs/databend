@@ -23,4 +23,4 @@ runs:
     - name: Run Stateful Tests with Standalone mode
       shell: bash
       run: |
-        ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
+        ./scripts/ci/ci-run-stateful-iceberg-rest-tests-standalone.sh
