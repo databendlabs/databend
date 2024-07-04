@@ -1,0 +1,1896 @@
+statement ok
+drop database if exists db ;
+
+statement ok
+create database db ;
+
+statement ok
+use db ;
+
+## we need to test with enable_distributed_merge_into in cluster environment.
+statement ok
+set enable_distributed_merge_into = 1 ;
+
+## distributed test
+statement ok
+drop table if exists distributed_target_test ;
+
+statement ok
+drop table if exists distributed_source_test ;
+
+statement ok
+create table distributed_target_test(a int,b string) cluster by(a,b) ;
+
+## multi blocks
+statement ok
+insert into distributed_target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+insert into distributed_target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
+
+statement ok
+insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
+
+query TT
+select * from distributed_target_test order by a ;
+----
+1 a
+1 a
+2 b
+2 b
+3 c
+3 c
+6 z
+6 z
+7 y
+7 y
+8 x
+8 x
+
+statement ok
+create table distributed_source_test(a int,b string,is_databend_deleted bool) cluster by(a,b) ;
+
+statement ok
+insert into distributed_source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
+
+statement ok
+insert into distributed_source_test values(6,'h',true),(7,'i',true),(8,'j',false),(9,'k',true),(10,'l',false);
+
+statement ok
+drop stage if exists distributed_source_parquet ;
+
+statement ok
+create stage distributed_source_parquet file_format = (type = parquet) ;
+
+statement ok
+remove @distributed_source_parquet ;
+
+statement ok
+copy into @distributed_source_parquet from (select * from distributed_source_test) ;
+
+query TTT
+merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @distributed_source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
+when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert * ;
+----
+2 4 8
+
+query TT
+select * from distributed_target_test order by a ;
+----
+3 f
+3 f
+5 f
+8 j
+8 j
+10 l
+
+## corner case test
+## when a node matched all source, it will give a empty block,
+## so in this case, we should not insert anything.
+statement ok
+drop table if exists corner_target_table ;
+
+statement ok
+create table corner_target_table(a int,b string,c string) cluster by(a,b) ;
+
+statement ok
+drop table if exists corner_source_table ;
+
+statement ok
+create table corner_source_table(a int,b string,c string) cluster by(a,b) ;
+
+## add block1
+statement ok
+insert into corner_target_table values(1,'a1','b1'),(2,'a2','b2');
+
+## add block2
+statement ok
+insert into corner_target_table values(1,'a3','b3'),(2,'a4','b4'),(3,'a5','b5');
+
+## add two blocks for corner_source_table
+statement ok
+insert into corner_source_table values(1,'a6','b6'),(2,'a7','b7');
+
+statement ok
+insert into corner_source_table values(3,'a8','b8');
+
+query TTT
+select * from corner_target_table order by a,b ;
+----
+1 a1 b1
+1 a3 b3
+2 a2 b2
+2 a4 b4
+3 a5 b5
+
+query TTT
+select * from corner_source_table order by a,b ;
+----
+1 a6 b6
+2 a7 b7
+3 a8 b8
+
+query TTT
+merge into corner_target_table as t1 using (select * from corner_source_table) as t2 on t1.a = t2.a when matched then update * when not matched then insert * ;
+----
+0 5
+
+query TTT
+select * from corner_target_table order by a,b ;
+----
+1 a6 b6
+1 a6 b6
+2 a7 b7
+2 a7 b7
+3 a8 b8
+
+## test wide-table
+statement ok
+drop table if exists distributed_test_order ;
+
+statement ok
+drop table if exists distributed_random_source ;
+
+statement ok
+drop table if exists distributed_random_store ;
+
+statement ok
+create table distributed_test_order(id bigint, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint, s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar, d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) CLUSTER BY(to_yyyymmdd(insert_time), id) bloom_index_columns='insert_time,id';
+
+statement ok
+create table distributed_random_source(id bigint not null, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint,s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar,d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime not null, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) Engine = Random ;
+
+statement ok
+create table distributed_random_store(id bigint not null, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint,s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar,d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime not null, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) ;
+
+statement ok
+insert into distributed_random_store (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_source limit 10) ;
+
+statement ok
+insert into distributed_random_store (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_source limit 10) ;
+
+statement ok
+merge into distributed_test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_store) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert * ;
+
+statement ok
+merge into distributed_test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from distributed_random_store) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert * ;
+
+statement ok
+drop table if exists orders2 ;
+
+statement ok
+create table orders2(a int,b string,c string) cluster by(a,b) ;
+
+statement ok
+insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
+
+statement ok
+insert into orders2 values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
+
+statement error 4001
+MERGE INTO orders2 USING (
+SELECT o.a,o.b
+FROM orders2 o
+INNER JOIN (
+SELECT a, b, AVG(a) AS avg_quantity
+FROM orders2
+GROUP BY a, b
+) a ON o.a = a.a AND o.b = a.b
+) AS joined_data ON orders2.a = joined_data.a
+WHEN MATCHED THEN
+UPDATE SET orders2.b = joined_data.b ;
+
+statement ok
+truncate table orders2 ;
+
+statement ok
+insert into orders2 values(1,'a1','b1');
+
+statement ok
+insert into orders2 values(2,'a2','b2');
+
+statement ok
+insert into orders2 values(3,'a3','b3');
+
+query T
+MERGE INTO orders2 USING (
+SELECT o.a,o.b,a.avg_quantity
+FROM orders2 o
+INNER JOIN (
+SELECT a, b, AVG(a)+1 AS avg_quantity
+FROM orders2
+GROUP BY a, b
+) a ON o.a = a.a AND o.b = a.b
+) AS joined_data ON orders2.a = joined_data.a
+WHEN MATCHED THEN
+UPDATE SET orders2.b = joined_data.b,orders2.a = avg_quantity ;
+----
+3
+
+query TTT
+select * from orders2 order by a,b,c ;
+----
+2 a1 b1
+3 a2 b2
+4 a3 b3
+
+statement ok
+drop table if exists merge_target_0 ;
+
+statement ok
+drop table if exists merge_source_0 ;
+
+statement ok
+create table merge_target_0(a int,b string) cluster by(a,b) ;
+
+statement ok
+create table merge_source_0(a int,b string) cluster by(a,b) ;
+
+statement ok
+insert into merge_target_0 values(1,'a1'),(2,'b1');
+
+statement ok
+insert into merge_target_0 values(3,'a2'),(4,'b2');
+
+statement ok
+insert into merge_source_0 values(1,'a3'),(3,'b3');
+
+statement ok
+insert into merge_source_0 values(5,'a4'),(6,'b6');
+
+## test window,agg,join
+## 1. join test
+query TT
+merge into merge_target_0 as t1 using
+(select t2.a,t3.b from merge_source_0 as t2 inner join merge_source_0 as t3 on t2.a = t3.a) as t4
+on t4.a = t1.a when matched then update * when not matched then insert * ;
+----
+2 2
+
+query TT
+select * from merge_target_0 order by a,b ;
+----
+1 a3
+2 b1
+3 b3
+4 b2
+5 a4
+6 b6
+
+statement ok
+truncate table merge_source_0 ;
+
+statement ok
+insert into merge_source_0 values(1,'c7'),(3,'c7');
+
+query TT
+select * from merge_source_0 order by a,b ;
+----
+1 c7
+3 c7
+
+## 2. agg test
+query TT
+merge into merge_target_0 as t1 using (select avg(a) as a,b from merge_source_0 group by b) as t2 on t1.a = t2.a
+when matched then update * when not matched then insert * ;
+----
+0 1
+
+query TT
+select * from merge_target_0 order by a,b ;
+----
+1 a3
+2 c7
+3 b3
+4 b2
+5 a4
+6 b6
+
+## 2. window func test
+query TT
+merge into merge_target_0 as t1 using (select row_number() OVER (PARTITION BY b ORDER BY a) as a,'d1' as b from merge_source_0) as t2 on t1.a = t2.a
+when matched then update * when not matched then insert * ;
+----
+0 2
+
+query TT
+select * from merge_target_0 order by a,b ;
+----
+1 d1
+2 d1
+3 b3
+4 b2
+5 a4
+6 b6
+
+### test copy into table unsupport
+statement ok
+drop table if exists copy_table_test0 ;
+
+statement ok
+create table copy_table_test0(a int,b string) cluster by(a,b) ;
+
+statement ok
+drop stage if exists parquet_table0 ;
+
+statement ok
+create stage parquet_table0 FILE_FORMAT = (TYPE = PARQUET) ;
+
+statement ok
+copy into @parquet_table0 from (select a,b from merge_source_0 limit 2)
+
+## test agg
+statement error 1065
+copy into copy_table_test0 from (select avg($1) as a,'b' as b from @parquet_table0) ;
+
+## test window
+statement error 1065
+copy into copy_table_test0 from (select row_number() OVER (PARTITION BY b ORDER BY a) as a,'d1' as b from @parquet_table0) ;
+
+## test join, but it's not checked as `copy into table source can't contain window|aggregate|join functions`
+## it's `query as source of copy only allow projection on one stage table.`, because it always support only one table.
+statement error 1005
+copy into copy_table_test0 from (select t2.a,t3.b from @parquet_table0 as t ,@parquet_table0 as t3 where t2.a = t3.a) ;
+
+statement ok
+drop table if exists t1_separate;
+
+statement ok
+drop table if exists t2_separate;
+
+statement ok
+create table t1_separate(a int,b string, c string) cluster by(a,b);
+
+statement ok
+create table t2_separate(a int,b string, c string);
+
+statement ok
+insert into t1_separate values(1,'a1','b1'),(2,'a2','b2');
+
+statement ok
+insert into t1_separate values(3,'a3','b3'),(4,'a4','b4');
+
+statement ok
+insert into t2_separate values(1,'a5','b5'),(3,'a6','b6');
+
+statement ok
+insert into t2_separate values(8,'a8','b8'),(9,'a9','b9');
+
+query TTT
+select * from t1_separate order by a,b,c;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+4 a4 b4
+
+query TTT
+select * from t2_separate order by a,b,c;
+----
+1 a5 b5
+3 a6 b6
+8 a8 b8
+9 a9 b9
+
+## 1.test matched only
+query T
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched and t2.b = 'a5' then update * when matched then update *;
+----
+2
+
+query TTT
+select * from t1_separate order by a,b,c;
+----
+1 a5 b5
+2 a2 b2
+3 a6 b6
+4 a4 b4
+
+## 2.test insert only
+query T
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
+----
+2
+
+query TTT
+select * from t1_separate order by a,b,c;
+----
+1 a5 b5
+2 a2 b2
+3 a6 b6
+4 a4 b4
+8 a8 b8
+9 a9 b9
+
+## insert only semantic test
+statement error 1065
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert (b) values(t1.a);
+
+statement ok
+truncate table t1_separate;
+
+## test merge into empty table for insert-only
+query T
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched and t2.b = 'a5' then insert * when not matched then insert *;
+----
+4
+
+query TTT
+select * from t1_separate order by a,b,c;
+----
+1 a5 b5
+3 a6 b6
+8 a8 b8
+9 a9 b9
+
+## test insert-only cluster by
+statement ok
+truncate table t1_separate;
+
+statement ok
+truncate table t2_separate;
+
+statement ok
+insert into t2_separate values(8,'a8','b8'),(9,'a9','b9'),(1,'a5','b5'),(3,'a6','b6');
+
+query T
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when not matched then insert *;
+----
+4
+
+## without order by
+query TTT
+select * from t1_separate;
+----
+1 a5 b5
+3 a6 b6
+8 a8 b8
+9 a9 b9
+
+## test matched-only cluster by
+query T
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched then update *;
+----
+4
+
+query TTT
+select * from t1_separate;
+----
+1 a5 b5
+3 a6 b6
+8 a8 b8
+9 a9 b9
+
+## test full operation cluster by
+statement ok
+insert into t2_separate values(5,'a5','b5'),(7,'a7','b7');
+
+query TT
+merge into t1_separate as t1 using (select * from t2_separate) as t2 on t1.a = t2.a when matched then update * when not matched then insert *;
+----
+2 4
+
+query T
+select count(*) from fuse_block('db','t1_separate');
+----
+1
+
+## we will do compact
+query TTT
+select * from t1_separate;
+----
+1 a5 b5
+3 a6 b6
+5 a5 b5
+7 a7 b7
+8 a8 b8
+9 a9 b9
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int,b string, c string) cluster by(a,b);
+
+statement ok
+create table t2(a int,b string, c string) cluster by(a,b);
+
+statement ok
+insert into t1 values(1,'b1','c1'),(2,'b2','c2');
+
+statement ok
+insert into t1 values(2,'b3','c3'),(3,'b4','c4');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+2 b3 c3
+3 b4 c4
+
+statement ok
+insert into t2 values(1,'b_5','c_5'),(3,'b_6','c_6');
+
+statement ok
+insert into t2 values(2,'b_7','c_7');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b_5 c_5
+2 b_7 c_7
+3 b_6 c_6
+
+## test source alias
+statement error 1005
+merge into t1 using (select * from t2 ) on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
+
+# section I: basic test for match and unmatch
+
+statement error 1006
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
+
+query T
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c;
+----
+4
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+2 b2 c_7
+2 b3 c_7
+3 b4 c_6
+
+statement ok
+insert into t2 values(4,'b_8','c_8');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b_5 c_5
+2 b_7 c_7
+3 b_6 c_6
+4 b_8 c_8
+
+query TT
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
+----
+1 4
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+2 b2 c_7
+2 b3 c_7
+3 b4 c_6
+4 b_8 c_8
+
+statement ok
+insert into t2 values(1,'b_9','c_9');
+
+statement error 4001
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+2 b2 c_7
+2 b3 c_7
+3 b4 c_6
+4 b_8 c_8
+
+statement ok
+delete from t2 where a = 1;
+
+query TTT
+select * from t2 order by a,b,c;
+----
+2 b_7 c_7
+3 b_6 c_6
+4 b_8 c_8
+
+statement ok
+insert into t2 values(5,'b_9','c_9');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+2 b_7 c_7
+3 b_6 c_6
+4 b_8 c_8
+5 b_9 c_9
+
+query TT
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete;
+----
+4
+
+query ITT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+
+# section 2 multi clauses
+statement ok
+insert into t1 values(2,'b_1','c_1'),(3,'b_2','c_2');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+2 b_1 c_1
+3 b_2 c_2
+
+statement error 1005
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+
+query TTT
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched and t1.b = 'b_1' then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+----
+1 1 1
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+3 b_2 c_6
+4 b_8 c_8
+
+query TT
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+----
+1 2
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+5 b_9 c_9
+
+query T
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b) when not matched and t2.c = 'c_7' then insert (a,c) values(t2.a,t2.c);
+----
+2
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+2 NULL c_7
+4 b_8 NULL
+5 b_9 c_9
+
+statement ok
+insert into t2 values(5,'b_10','c_10');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+2 b_7 c_7
+3 b_6 c_6
+4 b_8 c_8
+5 b_10 c_10
+5 b_9 c_9
+
+statement error 4001
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched and t2.c = 'c_9' then update set t1.b = 'b_11' when matched and t2.c = 'c_10' then delete;
+
+## idempotent delete test
+query T
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched then delete;
+----
+3
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+
+## test star for merge into
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+statement ok
+insert into t1 values(1,'b1','c1'),(2,'b2','c2');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+
+statement ok
+insert into t2 values(1,'b3','c3'),(3,'b4','c4');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b3 c3
+3 b4 c4
+
+## test insert columns mismatch
+statement error 1065
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched then insert values(t2.a,t2.c);
+
+query TT
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update *  when not matched then insert *;
+----
+1 1
+
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b3 c3
+2 b2 c2
+3 b4 c4
+
+## test multi same name for star
+statement error 1065
+merge into t1 using (select a,b,c,a from t2 ) as t2 on t1.a = t2.a  when matched then update *;
+
+statement error 1065
+merge into t1 using (select a,b,c,a,b from t2 ) as t2 on t1.a = t2.a  when not matched then insert *;
+
+## stage file test
+statement ok
+drop table if exists test_stage;
+
+statement ok
+drop table if exists target_table;
+
+statement ok
+create table target_table(a int,b string,c string) cluster by(a,b);
+
+statement ok
+insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
+
+query TTT
+select * from target_table order by a,b,c;
+----
+1 a_1 b_1
+2 a_2 b_2
+
+statement ok
+create table test_stage(a int,b string,c string) cluster by(a,b);
+
+statement ok
+insert into test_stage values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
+
+query TTT
+select * from test_stage order by a,b,c;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+statement ok
+drop stage if exists s5_merge_into;
+
+statement ok
+drop stage if exists s4_merge_into;
+
+statement ok
+create stage s5_merge_into FILE_FORMAT = (TYPE = CSV);
+
+statement ok
+remove @s5_merge_into;
+
+statement ok
+copy into @s5_merge_into from (select a,b,c from test_stage order by a,b,c);
+
+query TTT
+select $1,$2,$3 from @s5_merge_into order by $1,$2,$3;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+## test CSV
+query TT
+merge into target_table using (select $1,$2,$3 from @s5_merge_into) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+----
+1 2
+
+query TTT
+select * from target_table order by a,b,c;
+----
+3 a3 b3
+
+## test parquet
+statement ok
+truncate table target_table;
+
+query I
+select count(*) from target_table;
+----
+0
+
+statement ok
+create stage s4_merge_into FILE_FORMAT = (TYPE = PARQUET);
+
+statement ok
+remove @s4_merge_into;
+
+statement ok
+copy into @s4_merge_into from (select a,b,c from test_stage order by a,b,c);
+
+query TTT
+select $1,$2,$3 from @s4_merge_into order by $1,$2,$3;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+statement ok
+insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
+
+query TTT
+select * from target_table order by a,b,c;
+----
+1 a_1 b_1
+2 a_2 b_2
+
+query TT
+merge into target_table using (select $1,$2,$3 from @s4_merge_into) as cdc on cdc.$1 = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+----
+1 2
+
+query TTT
+select * from target_table order by a,b,c;
+----
+3 a3 b3
+
+## NULL test, for join, if join_expr result is
+## NULL, it will be treated as not matched.
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+statement ok
+insert into t1 values(NULL,'b_1','c_1');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+NULL b_1 c_1
+
+statement ok
+insert into t2 values(1,'b_4','c_4'),(2,'b_2','c_2'),(NULL,'b_3','c_3');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b_4 c_4
+2 b_2 c_2
+NULL b_3 c_3
+
+query TT
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete when not matched then insert *;
+----
+3 0
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b_4 c_4
+2 b_2 c_2
+NULL b_1 c_1
+NULL b_3 c_3
+
+query T
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete;
+----
+2
+
+query TTT
+select * from t1 order by a,b,c;
+----
+NULL b_1 c_1
+NULL b_3 c_3
+
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+## test target table alias
+statement ok
+insert into t2 values(1,'a1','b1');
+
+query TT
+merge into t1 as t3 using (select * from t2 ) as t2 on t3.a = t2.a  when not matched  then insert (a,b,c) values(t2.a,t2.b,t2.c);
+----
+1
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 a1 b1
+
+statement ok
+drop table if exists employees;
+
+statement ok
+drop table if exists salaries;
+
+statement ok
+CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255))  cluster by(employee_id,employee_name);
+
+statement ok
+drop table if exists salaries;
+
+statement ok
+CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2)) cluster by(employee_id,salary);
+
+statement ok
+INSERT INTO employees VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', 'Finance'),(4, 'David', 'HR');
+
+statement ok
+INSERT INTO salaries VALUES(1, 50000.00),(2, 60000.00);
+
+query TT
+MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
+----
+2 2
+
+query TTT
+select * from salaries order by employee_id;
+----
+1 51000.00
+2 60500.00
+3 55000.00
+4 55000.00
+
+statement ok
+drop table if exists t1_target;
+
+## null cast bug fix
+statement ok
+drop table if exists t1_target;
+
+statement ok
+drop table if exists t2_source;
+
+statement ok
+create table t1_target(a int not null) cluster by(a);
+
+statement ok
+drop table if exists t2_source;
+
+statement ok
+create table t2_source(a int not null) cluster by(a);
+
+statement ok
+insert into t1_target values(1);
+
+statement ok
+insert into t2_source values(1),(2);
+
+query TT
+merge into t1_target using (select * from t2_source) as t2_source on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
+----
+1 1
+
+query T
+select * from t1_target order by a;
+----
+1
+2
+
+statement ok
+drop table if exists cluster_target;
+
+## cluster table test
+statement ok
+drop table if exists cluster_target;
+
+statement ok
+drop table if exists cluster_source;
+
+statement ok
+create table cluster_target(a int,b string,c int) cluster by(a,b);
+
+statement ok
+drop table if exists cluster_source;
+
+statement ok
+create table cluster_source(a int,b string,c int);
+
+statement ok
+insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
+
+## test update indetify error
+statement error 1006
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set cluster_target.a = t2.a;
+
+statement error 1006
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set t2.a = t2.a;
+
+query TT
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
+----
+5
+
+# By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
+# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted
+# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit
+# `order by` clause.
+query TTT
+select * from cluster_target;
+----
+1 a 2
+2 a 4
+2 b 3
+3 a 3
+12 b 1
+
+## add more tests
+statement ok
+drop table if exists target_test;
+
+statement ok
+drop table if exists source_test;
+
+statement ok
+create table target_test(a int,b string) cluster by(a,b);
+
+statement ok
+insert into target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
+
+statement ok
+insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
+
+statement ok
+drop stage if exists source_parquet;
+
+statement ok
+create stage source_parquet file_format = (type = parquet);
+
+statement ok
+remove @source_parquet;
+
+statement ok
+copy into @source_parquet from (select * from source_test);
+
+query TTT
+merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
+when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
+----
+1 1 2
+
+query TT
+select * from target_test order by a;
+----
+3 f
+5 f
+
+## test not match cast and predicate index
+statement ok
+drop table if exists test_order;
+
+statement ok
+drop table if exists random_source;
+
+statement ok
+create table test_order(id bigint, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint, s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar, d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) CLUSTER BY(to_yyyymmdd(insert_time), id) bloom_index_columns='insert_time,id';
+
+statement ok
+create table random_source(id bigint not null, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint,s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar,d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime not null, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) Engine = Random;
+
+statement ok
+merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from random_source limit 1) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert *;
+
+## test update list #13297
+statement ok
+drop table if exists t11
+
+statement ok
+drop table if exists t12
+
+statement ok
+create table t11(a int,b string, c string) cluster by(a,b);
+
+statement ok
+create table t12(a int,b string, c string) cluster by(a,b);
+
+statement ok
+insert into t11 values(1,'b1','c1'),(2,'b2','c2');
+
+statement ok
+insert into t12 values(1,'b_5','c_5'),(3,'b_6','c_6');
+
+statement error 1065
+merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched and max(t11.a) > 0 then update set c = t12.c;
+
+statement error 1065
+merge into t11 using (select a, c from t12) as t12 on t11.a = t12.a when matched then update set c = count(*);
+
+## test issue #13287
+statement ok
+drop table if exists tt1
+
+statement ok
+create table tt1 (a int, b int) cluster by(a,b);
+
+statement error 1065
+merge into tt1 using(select 10, 20) as tt2 on tt1.a = 1 when not matched and tt1.b = 2 then insert values (10, 20);
+
+query TT
+merge into tt1 using(select 10 as a, 20 as b) as tt2 on tt1.a = 1 when not matched and tt2.b = 2 then insert values (10, 20);
+----
+0
+
+query T
+select count(*) from tt1;
+----
+0
+
+## test issue #13367
+statement ok
+drop table if exists tt2
+
+statement ok
+create table tt2(a bool, b variant, c map(string, string)) cluster by(a);
+
+statement ok
+insert into tt2 values (true, '10', {'k1':'v1'}), (false, '20', {'k2':'v2'})
+
+query T
+merge into tt2 using(select true as x) as t on (x and tt2.a) when matched and tt2.a then update set tt2.b = parse_json('30');
+----
+1
+
+query TTT
+select a, b, c from tt2 order by b;
+----
+0 20 {'k2':'v2'}
+1 30 {'k1':'v1'}
+
+## add test: source is table
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int) cluster by(a);
+
+statement ok
+create table t2(a int) cluster by(a);
+
+statement ok
+insert into t1 values(1);
+
+statement ok
+insert into t2 values(1),(2);
+
+query TT
+merge into t1 using t2 on t1.a = t2.a when matched then delete when not matched then insert *;
+----
+1 1
+
+query T
+select * from t1;
+----
+2
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(b int) cluster by(b);
+
+statement ok
+create table t2(a int) cluster by(a);
+
+statement ok
+insert into t1 values(1);
+
+statement ok
+insert into t2 values(1),(2);
+
+statement error 1065
+merge into t1 using t2 on t1.a = t2.a when matched then delete when not matched then insert *;
+
+## add more multi matched statement test
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int,b string,c bool) cluster by(a,b);
+
+statement ok
+create table t2(a int,b string,c bool) cluster by(a,b);
+
+statement ok
+insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
+
+statement ok
+insert into t2 values(1,'b1',true),(2,'b2',false),(3,'b3',true);
+
+query TTT
+select * from t1;
+----
+1 a1 1
+2 a2 0
+3 a3 1
+
+query TTT
+select * from t2;
+----
+1 b1 1
+2 b2 0
+3 b3 1
+
+query TT
+merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 1 then delete when matched and t1.a = 2 then update * when matched and t1.a = 3 then delete;
+----
+1 2
+
+query TTT
+select * from t1;
+----
+2 b2 0
+
+query T
+merge into t1 using t2 on t1.a = t2.a when matched then delete;
+----
+1
+
+query T
+select count(*) from t1;
+----
+0
+
+statement ok
+insert into t1 values(1,'a1',true),(2,'a2',false),(3,'a3',true);
+
+query TT
+merge into t1 using t2 on t1.a = t2.a when matched and t1.a = 2 then update * when matched and t1.a = 1 then delete when matched and t1.a = 3 then update *;
+----
+2 1
+
+query TTT
+select * from t1;
+----
+2 b2 0
+3 b3 1
+
+## issue 13454
+statement ok
+drop table if exists tt1;
+
+statement ok
+create table tt1(a bool, b int) cluster by(a,b);
+
+statement ok
+insert into tt1 values (true, 1), (false, 2);
+
+query T
+merge into tt1 using (select 1 as x) as tt2 on (2 > 1) when matched and a then delete;
+----
+1
+
+query TT
+select * from tt1;
+----
+0 2
+
+## issue #13298
+statement ok
+drop table if exists t11;
+
+statement ok
+drop table if exists t12;
+
+statement ok
+create table t12 (a int, b int) cluster by(a,b);
+
+statement ok
+create table t11 (a int, b int) cluster by(a,b);
+
+statement ok
+insert into t11 values (1, 10),(2, 20),(3, 30),(4, 40);
+
+statement ok
+insert into t12 values (1, 10),(2, 20),(3, 30),(4, 40);
+
+query T
+MERGE INTO t11 USING(SELECT NULL AS c0 FROM t12) AS t12 ON (t11.a OR TRUE) WHEN MATCHED AND TRUE THEN DELETE;
+----
+4
+
+query T
+select count(*) from t11;
+----
+0
+
+## test issue #13732
+statement ok
+CREATE TABLE orders CLUSTER BY (to_yyyymmddhh(created_at), user_id) AS SELECT
+    number % 5000 AS order_id,
+    number % 10000 AS user_id,
+    CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+         ELSE 'sell'
+    END AS order_type,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+         ELSE 'XRP'
+    END AS asset_type,
+    (rand() * 100)::decimal(18, 8) AS quantity,
+    (rand() * 1000)::decimal(18, 8) AS price,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+         ELSE 'cancelled'
+    END AS status,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
+FROM numbers(5000);
+
+### for now, we disable target_table_optimization for native. Native will
+### spilt one block into multi pages. We should fix this one in the future.
+statement ok
+MERGE INTO orders USING
+(
+    SELECT
+        number % 5000 AS order_id,
+        number % 100000 AS user_id,
+        CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+             ELSE 'sell'
+        END AS order_type,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+             ELSE 'XRP'
+        END AS asset_type,
+        (rand() * 100)::decimal(18, 8) AS quantity,
+        (rand() * 1000)::decimal(18, 8) AS price,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+             ELSE 'cancelled'
+        END AS status,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at
+    FROM numbers(5000)
+) AS source
+ON orders.order_id = source.order_id
+WHEN MATCHED THEN
+    UPDATE SET
+        orders.user_id = source.user_id,
+        orders.order_type = source.order_type,
+        orders.asset_type = source.asset_type,
+        orders.quantity = source.quantity,
+        orders.price = source.price,
+        orders.status = source.status,
+        orders.created_at = source.created_at,
+        orders.updated_at = source.updated_at
+WHEN NOT MATCHED THEN
+    INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
+    VALUES (source.order_id, source.user_id, source.order_type, source.asset_type, source.quantity, source.price, source.status, source.created_at, source.updated_at);
+
+## test issue #13733
+statement ok
+CREATE TABLE transactions CLUSTER BY (to_yyyymmddhh(transaction_time), user_id) AS SELECT
+    number % 1000000 AS transaction_id,
+    number % 100000 AS user_id,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'deposit'
+    WHEN (rand() * 10)::int % 3 = 1 THEN 'withdrawal'
+    ELSE 'trade'
+END AS transaction_type,
+    CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+         WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+         ELSE 'XRP'
+END AS asset_type,
+    (rand() * 100)::decimal(18, 8) AS quantity,
+    date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS transaction_time
+FROM numbers(1000000);
+
+statement ok
+MERGE INTO orders AS tt USING
+(
+    SELECT
+        CASE
+            WHEN number % 2 = 0 THEN (number / 2) % 250000
+            ELSE (SELECT MAX(order_id) FROM orders) + number + 1
+        END AS order_id,
+        number % 100000 AS user_id,
+        CASE WHEN (rand() * 10)::int % 2 = 0 THEN 'buy'
+             ELSE 'sell'
+        END AS order_type,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'BTC'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'ETH'
+             ELSE 'XRP'
+        END AS asset_type,
+        (rand() * 100)::decimal(18, 8) AS quantity,
+        (rand() * 1000)::decimal(18, 8) AS price,
+        CASE WHEN (rand() * 10)::int % 3 = 0 THEN 'completed'
+             WHEN (rand() * 10)::int % 3 = 1 THEN 'pending'
+             ELSE 'cancelled'
+        END AS status,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS created_at,
+        date_add('day', floor(rand() * 10 % 365)::int, '2021-01-01') AS updated_at,
+        CASE WHEN number % 2 = 0 THEN false ELSE true END AS is_delete
+    FROM numbers(5000)
+) AS ss
+ON (tt.user_id = ss.user_id AND tt.asset_type = ss.asset_type)
+WHEN MATCHED AND ss.is_delete = true THEN
+    DELETE
+WHEN MATCHED AND ss.is_delete = false THEN
+    UPDATE  * WHEN NOT MATCHED THEN
+    INSERT *;
+
+## unsupport complex exprs for now.
+## #13798 we need to support non-correlated-subquery for unmatched values exprs
+statement error 1065
+MERGE INTO orders USING (
+    SELECT t.user_id, t.asset_type, 'buy' AS synthetic_order_type, SUM(t.quantity) AS total_quantity, today() AS synthetic_date
+    FROM transactions t
+    WHERE t.transaction_type = 'deposit'
+    GROUP BY t.user_id, t.asset_type
+    HAVING SUM(t.quantity) > 100
+) AS synthetic_orders ON orders.user_id = synthetic_orders.user_id AND orders.asset_type = synthetic_orders.asset_type
+WHEN NOT MATCHED THEN
+    INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
+    VALUES ((SELECT MAX(order_id) FROM orders) + 1, synthetic_orders.user_id, synthetic_orders.synthetic_order_type, synthetic_orders.asset_type, synthetic_orders.total_quantity, 0, 'pending', synthetic_orders.synthetic_date, synthetic_orders.synthetic_date);
+
+## issue #13810: rewrite rule test
+statement ok
+DROP TABLE IF EXISTS orders;
+
+statement ok
+CREATE TABLE orders (
+                        order_id      INT          NOT NULL,
+                        user_id       INT          NOT NULL,
+                        order_type    VARCHAR      NOT NULL,
+                        asset_type    VARCHAR      NOT NULL,
+                        quantity      DECIMAL(18,8) NOT NULL,
+                        price         DECIMAL(18,8) NOT NULL,
+                        status        VARCHAR      NOT NULL,
+                        created_at    DATE         NOT NULL,
+                        updated_at    DATE         NOT NULL
+) row_per_block=5113;
+
+statement ok
+insert into orders values(200007,7,'buy','BTC',4.81412194,48.14121943,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200015,15,'buy','BTC',3.78463552,37.84635523,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200019,19,'buy','BTC',1.61186913,16.11869132,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200031,31,'buy','BTC',3.99013730,39.90137297,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200047,47,'buy','BTC',0.98841829,9.88418289,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200077,77,'buy','BTC',2.07360391,20.73603908,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200087,87,'sell','ETH',9.64567442,96.45674419,'pending',to_date('2021-01-01'),to_date('2021-01-01')),
+(200095,95,'buy','BTC',2.26686563,22.66865634,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200098,98,'buy','BTC',1.37252960,13.72529599,'completed',to_date('2021-01-01'),to_date('2021-01-01')),
+(200102,102,'buy','BTC',1.53596481,15.35964815,'completed',to_date('2021-01-01'),to_date('2021-01-01'));
+
+query T
+MERGE INTO orders USING (
+    SELECT o.order_id, o.user_id, o.order_type, o.asset_type, o.quantity + a.avg_quantity AS new_quantity, o.price, o.status, o.created_at, o.updated_at
+    FROM orders o
+             INNER JOIN (
+        SELECT user_id, asset_type, sum(quantity) AS avg_quantity
+        FROM orders
+        GROUP BY user_id, asset_type
+    ) a ON o.user_id = a.user_id AND o.asset_type = a.asset_type
+) AS joined_data ON orders.order_id = joined_data.order_id
+    WHEN MATCHED THEN
+        UPDATE SET orders.quantity = joined_data.new_quantity;
+----
+10
+
+query TTTT
+SELECT SUM(quantity) AS total_quantity,
+       AVG(quantity) AS average_quantity,
+       MIN(quantity) AS min_quantity,
+       MAX(quantity) AS max_quantity
+FROM orders;
+----
+64.16764110 6.416764110000 1.97683658 19.29134884
+
+statement ok
+create table tb_01 (id int,c1 varchar,c2 datetime(0),c3 json) cluster by(c1,c2);
+
+statement ok
+create table tmp_01 like tb_01;
+
+statement ok
+insert into tmp_01 values(1,'abc',to_date('2023-11-29'),parse_json('{"a":1}'));
+
+query TT
+merge into  tb_01 as T using ( select * from tmp_01) as S on t.id = s.id when matched then update * when not matched then insert *;
+----
+1 0
+
+query TTT
+select id,c1,to_date(c2),c3 from tb_01;
+----
+1 abc 2023-11-29 {"a":1}
+
+## test #issue13932
+statement ok
+create table null_target(a int not null,b text) cluster by(a,b);
+
+statement ok
+create table null_source(a int not null,b text) cluster by(a,b);
+
+statement ok
+insert into null_target values(1,'a1');
+
+statement ok
+insert into null_target values(2,'a2');
+
+statement ok
+insert into null_source values(1,'a3');
+
+statement ok
+insert into null_source values(3,'a4');
+
+statement error 1006
+merge into null_target using null_source on null_target.a = null_source.a when matched then update *
+when not matched then insert (b) values(null_source.b);
+
+statement ok
+delete from null_source where a = 3;
+
+query TT
+merge into null_target using null_source on null_target.a = null_source.a when matched then update *
+when not matched then insert (b) values(null_source.b);
+----
+0 1
+
+query TT
+select * from null_target order by a,b;
+----
+1 a3
+2 a2
+
+## issue#13972
+statement ok
+create table tt1_(a bool not null, b int not null, c int not null);
+
+statement ok
+insert into tt1_ values(true, 10, 11),(false, 20, 21);
+
+query TT
+MERGE INTO tt1_ USING
+     (SELECT
+         657 AS cc0,
+         658 AS cc1
+     ) AS tRIA7K(cc0, cc1) ON (
+         cc0 < cc1)
+     WHEN MATCHED AND FALSE THEN UPDATE SET
+         a = FALSE,
+         b = 332366211
+     WHEN MATCHED AND a THEN DELETE
+     WHEN NOT MATCHED AND TRUE THEN INSERT (b, c) VALUES(10, 20);
+----
+0 0 1
+
+query TTT
+select * from tt1_;
+----
+0 20 21
+
+## issue#14474
+statement ok
+create table target_tt1 (a bool not null default true, b int not null default 1);
+
+query T
+merge into target_tt1 using(select false, 10) as tt2(a, b) on (target_tt1.b = 1) when not matched then insert (b) values (20);
+----
+1
+
+query TT
+select * from target_tt1;
+----
+1 20
+
+## test multi insert clauses with specified default values
+statement ok
+create table target_default_values(a int default 12,b string default 'yes');
+
+statement ok
+create table source_default_values(a int default 12,b string default 'yes');
+
+statement ok
+insert into target_default_values values(1,'a');
+
+statement ok
+insert into target_default_values values(2,'b');
+
+statement ok
+insert into source_default_values values(1,'c');
+
+statement ok
+insert into source_default_values values(3,'d');
+
+statement ok
+insert into source_default_values values(2,'e');
+
+statement ok
+insert into source_default_values values(4,'f');
+
+query TTT
+merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a'
+then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched
+then insert(b) values(t2.b);
+----
+2 1 1
+
+query TT
+select * from target_default_values order by a,b;
+----
+1 c
+3 yes
+12 f
+
+
+## test update column only optimization
+statement ok
+drop table if exists column_only_optimization_target;
+
+statement ok
+drop table if exists column_only_optimization_source;
+
+statement ok
+create table column_only_optimization_target(a int,b string);
+
+statement ok
+create table column_only_optimization_source(a int,b string);
+
+statement ok
+insert into column_only_optimization_target values(1,'a1'),(2,'a2');
+
+statement ok
+insert into column_only_optimization_target values(3,'a3'),(4,'a4');
+
+statement ok
+insert into column_only_optimization_target values(5,'a5'),(6,'a6');
+
+statement ok
+insert into column_only_optimization_target values(7,'a7'),(8,'a8');
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 a1
+2 a2
+3 a3
+4 a4
+5 a5
+6 a6
+7 a7
+8 a8
+
+statement ok
+insert into column_only_optimization_source values(1,'b1'),(2,'b2');
+
+statement ok
+insert into column_only_optimization_source values(3,'b3'),(4,'b4');
+
+query TT
+select * from column_only_optimization_source order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+
+query TT
+merge into column_only_optimization_target as t1 using column_only_optimization_source as t2 on
+t1.a = t2.a when matched then update set t1.b = t2.b when not matched then insert *;
+----
+0 4
+
+query TT
+select * from column_only_optimization_target order by a,b;
+----
+1 b1
+2 b2
+3 b3
+4 b4
+5 a5
+6 a6
+7 a7
+8 a8
+
+## add more tests cases for distributed modes.
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_200_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_target_origin_400_blocks1 (
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) CLUSTER BY(l_shipdate, l_orderkey);
+
+statement ok
+CREATE TABLE IF NOT EXISTS lineitem_random(
+    l_orderkey BIGINT not null,
+    l_partkey BIGINT not null,
+    l_suppkey BIGINT not null,
+    l_linenumber BIGINT not null,
+    l_quantity DECIMAL(15, 2) not null,
+    l_extendedprice DECIMAL(15, 2) not null,
+    l_discount DECIMAL(15, 2) not null,
+    l_tax DECIMAL(15, 2) not null,
+    l_returnflag STRING not null,
+    l_linestatus STRING not null,
+    l_shipdate DATE not null,
+    l_commitdate DATE not null,
+    l_receiptdate DATE not null,
+    l_shipinstruct STRING not null,
+    l_shipmode STRING not null,
+    l_comment STRING not null
+) engine = random;
+
+## add 4w rows
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_200_blocks1 select * from lineitem_target_origin_400_blocks1;
+
+query T
+select count(*) from lineitem_target_origin_200_blocks1;
+----
+40000
+
+statement ok
+insert into lineitem_target_origin_400_blocks1 select * from lineitem_random limit 5000;
+
+query T
+select count(*) from lineitem_target_origin_400_blocks1;
+----
+45000
+
+## it maybe flaky test, but in most times, it's normal.
+query TT
+MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on
+t1.l_orderkey = t2.l_orderkey and
+t1.l_partkey = t2.l_partkey
+and t1.l_suppkey = t2.l_suppkey and
+t1.l_linenumber = t2.l_linenumber and
+t1.l_quantity = t2.l_quantity and
+t1.l_extendedprice = t2.l_extendedprice and
+t1.l_discount = t2.l_discount
+when matched then update *
+when not matched then insert *;
+----
+0 40000
+
+statement ok
+set enable_distributed_merge_into = 0 ;

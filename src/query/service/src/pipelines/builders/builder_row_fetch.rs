@@ -28,7 +28,10 @@ impl PipelineBuilder {
     pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
         debug_assert!(matches!(
             &*row_fetch.input,
-            PhysicalPlan::Limit(_) | PhysicalPlan::HashJoin(_) | PhysicalPlan::MergeIntoSplit(_)
+            PhysicalPlan::Limit(_)
+                | PhysicalPlan::HashJoin(_)
+                | PhysicalPlan::MergeIntoSplit(_)
+                | PhysicalPlan::Exchange(_)
         ));
         self.build_pipeline(&row_fetch.input)?;
         let processor = row_fetch_processor(
