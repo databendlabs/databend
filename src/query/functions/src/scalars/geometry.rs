@@ -23,6 +23,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::geometry_format;
@@ -34,6 +35,7 @@ use databend_common_io::GeometryDataType;
 use geo::dimensions::Dimensions;
 use geo::BoundingRect;
 use geo::HasDimensions;
+use geo::HaversineDistance;
 use geo::Point;
 use geo_types::Polygon;
 use geohash::decode_bbox;
@@ -55,6 +57,7 @@ use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
 use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
@@ -77,6 +80,16 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
 
     // functions
+    registry.register_passthrough_nullable_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+        "haversine",
+        |_, _, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,>(|lat1, lon1, lat2, lon2, builder, _| {
+            let p1 = Point::new(lon1, lat1);
+            let p2 = Point::new(lon2, lat2);
+            builder.push(p1.haversine_distance(&p2) * 0.001);
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _, _>(
         "st_asgeojson",
         |_, _| FunctionDomain::MayThrow,

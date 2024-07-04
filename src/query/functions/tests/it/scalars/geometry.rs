@@ -26,6 +26,7 @@ use crate::scalars::run_ast;
 fn test_geometry() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("geometry.txt").unwrap();
+    test_haversine(file);
     test_st_asewkb(file);
     test_st_aswkb(file);
     test_st_asewkt(file);
@@ -54,6 +55,11 @@ fn test_geometry() {
     test_st_ymax(file);
     test_st_ymin(file);
     // test_st_transform(file);
+}
+
+fn test_haversine(file: &mut impl Write) {
+    run_ast(file, "haversine(40.7127, -74.0059, 34.0500, -118.2500)", &[
+    ]);
 }
 
 fn test_st_asewkb(file: &mut impl Write) {
