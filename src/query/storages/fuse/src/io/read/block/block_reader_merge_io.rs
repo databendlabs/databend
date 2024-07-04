@@ -20,6 +20,7 @@ use bytes::Bytes;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheKey;
@@ -53,12 +54,14 @@ impl OwnerMemory {
 
 type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
+type ScalarColumns = Vec<(ColumnId, Scalar)>;
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (ChunkIndex, Range<usize>)>,
     owner_memory: OwnerMemory,
     pub cached_column_data: CachedColumnData,
     pub cached_column_array: CachedColumnArray,
+    pub scalar_columns: ScalarColumns,
     table_data_cache: Option<TableDataCache>,
 }
 
@@ -66,6 +69,7 @@ pub struct MergeIOReadResult {
 pub enum DataItem<'a> {
     RawData(Bytes),
     ColumnArray(&'a Arc<SizedColumnArray>),
+    Scalar(&'a Scalar),
 }
 
 impl MergeIOReadResult {
@@ -81,6 +85,7 @@ impl MergeIOReadResult {
             owner_memory,
             cached_column_data: vec![],
             cached_column_array: vec![],
+            scalar_columns: vec![],
             table_data_cache,
         }
     }
@@ -103,6 +108,10 @@ impl MergeIOReadResult {
         // merge column array from cache
         for (column_id, data) in &self.cached_column_array {
             res.insert(*column_id, DataItem::ColumnArray(data));
+        }
+
+        for (column_id, data) in &self.scalar_columns {
+            res.insert(*column_id, DataItem::Scalar(data));
         }
 
         Ok(res)

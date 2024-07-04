@@ -23,10 +23,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
+use databend_common_sql::optimizer::ColumnStat;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
-use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::{ColumnMeta, ColumnStatistics};
 use futures::future::try_join_all;
 use opendal::Operator;
 
@@ -148,9 +149,20 @@ impl BlockReader {
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
+        let mut scalars = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
+
+            let cols_stats: &HashMap<ColumnId, ColumnStatistics>;
+
+            // do not bother reading it at all
+            if let Some(col) = cols_stats.get(column_id) {
+                if col.min == col.max {
+                    scalars.push((*column_id, col.min.clone()));
                     continue;
                 }
             }
@@ -194,6 +206,7 @@ impl BlockReader {
 
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
+        merge_io_read_res.scalar_columns = scalars;
 
         self.report_cache_metrics(&merge_io_read_res, ranges.iter().map(|(_, r)| r));
 
