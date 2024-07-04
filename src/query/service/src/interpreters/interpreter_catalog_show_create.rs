@@ -73,7 +73,7 @@ impl Interpreter for ShowCreateCatalogInterpreter {
             ),
             CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
                 IcebergCatalogOption::Rest(cfg) => {
-                    format!("URI\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
                 }
                 IcebergCatalogOption::Hms(cfg) => {
                     format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)

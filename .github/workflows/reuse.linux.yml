@@ -20,7 +20,7 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,7 +32,7 @@ jobs:
           github_token: ${{ github.token }}
 
   license:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
     outputs:
       license: ${{ steps.license.outputs.license }}
     steps:
@@ -128,7 +128,7 @@ jobs:
           artifacts: query
 
   build_musl:
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
@@ -148,7 +148,7 @@ jobs:
           artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -158,72 +158,72 @@ jobs:
         timeout-minutes: 60
 
   test_metactl:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
   test_compat_meta_query:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
   test_compat_fuse:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
   test_compat_meta_meta:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
   test_logs:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
   test_meta_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
   test_stateless_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 15
 
   test_stateless_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_linux
         timeout-minutes: 15
 
   test_stateful_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
@@ -235,8 +235,8 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_cluster:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_cluster_linux
@@ -249,12 +249,25 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
+
+  test_stateful_iceberg_rest:
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_stateful_standalone_iceberg_rest
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-iceberg-rest
 
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -266,8 +279,8 @@ jobs:
   #       continue-on-error: true
 
   test_ee_standalone:
-    needs: [build, check, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [ build, check, license ]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
@@ -286,8 +299,8 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_ee_standalone_background:
-    needs: [build, check, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [ build, check, license ]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
@@ -307,8 +320,8 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_ee_management_mode:
-    needs: [build, check, license]
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [ build, check, license ]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
@@ -328,9 +341,9 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic_ee:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
     if: needs.license.outputs.license
-    needs: [build, check, license]
+    needs: [ build, check, license ]
     strategy:
       fail-fast: false
       matrix:
@@ -358,7 +371,7 @@ jobs:
           name: test-ee-sqllogic-standalone-ee-${{ matrix.format }}
 
   sqllogic:
-    needs: [build, check]
+    needs: [ build, check ]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:
