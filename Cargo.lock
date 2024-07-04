@@ -631,18 +631,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-broadcast"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20cd0e2e25ea8e5f7e9df04578dc6cf5c83577fd09b1a46aaf5c85e1c33f2a7e"
-dependencies = [
- "event-listener 5.2.0",
- "event-listener-strategy 0.5.0",
- "futures-core",
- "pin-project-lite",
-]
-
-[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4355,7 +4343,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "faststr",
  "futures",
- "hive_metastore 0.0.2",
+ "hive_metastore",
  "log",
  "minitrace",
  "opendal",
@@ -4363,7 +4351,7 @@ dependencies = [
  "recursive",
  "serde",
  "typetag",
- "volo-thrift 0.9.2",
+ "volo-thrift",
 ]
 
 [[package]]
@@ -8790,21 +8778,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "35f502759a3b4517dc44d06d8cdaddb942b7930bb81ebf7d645e209cfc7b7e43"
 dependencies = [
  "anyhow",
- "pilota 0.10.0",
- "volo 0.9.0",
- "volo-thrift 0.9.2",
-]
-
-[[package]]
-name = "hive_metastore"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35f502759a3b4517dc44d06d8cdaddb942b7930bb81ebf7d645e209cfc7b7e43"
-dependencies = [
- "anyhow",
- "pilota 0.11.2",
- "volo 0.10.1",
- "volo-thrift 0.10.2",
+ "pilota",
+ "volo",
+ "volo-thrift",
 ]
 
 [[package]]
@@ -9163,15 +9139,15 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
- "hive_metastore 0.1.0",
+ "hive_metastore",
  "iceberg",
  "log",
- "pilota 0.11.2",
+ "pilota",
  "serde_json",
  "tokio",
  "typed-builder 0.18.1",
  "uuid",
- "volo-thrift 0.10.2",
+ "volo-thrift",
 ]
 
 [[package]]
@@ -11609,29 +11585,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90fcb95eef784c2ac79119d1dd819e162b5da872ce6f3c3abe1e8ca1c082f72b"
 dependencies = [
  "siphasher",
-]
-
-[[package]]
-name = "pilota"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e49b7a176ae4f1db0f2be42e15793404a395f9c65777f89c8752886b2358366"
-dependencies = [
- "ahash 0.8.10",
- "anyhow",
- "async-recursion",
- "bytes",
- "derivative",
- "faststr",
- "integer-encoding 4.0.0",
- "lazy_static",
- "linkedbytes",
- "ordered-float 4.2.0",
- "paste",
- "serde",
- "smallvec",
- "thiserror",
- "tokio",
 ]
 
 [[package]]
@@ -15887,34 +15840,7 @@ version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71bc0fbf23ebdfc8718d40ba5f31a520376767edd6ebb9fe06c27eb977379796"
 dependencies = [
- "async-broadcast 0.6.0",
- "dashmap",
- "faststr",
- "futures",
- "lazy_static",
- "libc",
- "metainfo",
- "motore",
- "mur3",
- "nix 0.28.0",
- "once_cell",
- "pin-project",
- "rand 0.8.5",
- "socket2 0.5.6",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tower",
- "tracing",
-]
-
-[[package]]
-name = "volo"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71bc0fbf23ebdfc8718d40ba5f31a520376767edd6ebb9fe06c27eb977379796"
-dependencies = [
- "async-broadcast 0.7.1",
+ "async-broadcast",
  "dashmap",
  "faststr",
  "futures",
@@ -15955,7 +15881,7 @@ dependencies = [
  "num_enum",
  "parking_lot 0.12.1",
  "paste",
- "pilota 0.10.0",
+ "pilota",
  "pin-project",
  "rustc-hash 2.0.0",
  "scopeguard",
@@ -15963,38 +15889,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "volo 0.9.0",
-]
-
-[[package]]
-name = "volo-thrift"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d8ce18c7f9857993cbe0a7c8674c39e86f61920586390c0dc384d6da32bc0b2"
-dependencies = [
- "ahash 0.8.10",
- "anyhow",
- "bytes",
- "chrono",
- "futures",
- "itoa",
- "lazy_static",
- "linked-hash-map",
- "linkedbytes",
- "metainfo",
- "motore",
- "num_enum",
- "parking_lot 0.12.1",
- "paste",
- "pilota 0.11.2",
- "pin-project",
- "rustc-hash 2.0.0",
- "scopeguard",
- "sonic-rs",
- "thiserror",
- "tokio",
- "tracing",
- "volo 0.10.1",
+ "volo",
 ]
 
 [[package]]
