@@ -50,7 +50,7 @@ select t:a, t:b, t:c, t:d, t:e, t:f from t2
 0 -10 -0.9 y 2022-10-01 2022-10-01 12:00:00.000000
 
 statement ok
-CREATE TABLE IF NOT EXISTS t3(id Int, t Tuple(a Tuple(m Int64, _n Int64), b Tuple("X" Int64, "y@#z" Int64))) Engine = Fuse
+CREATE TABLE IF NOT EXISTS t3(id Int, t Tuple(a Tuple(m Int64, _n Int64), b Tuple("X测试" Int64, "y@#z" Int64))) Engine = Fuse
 
 statement ok
 INSERT INTO t3 (id, t) VALUES(1, ((10, 11), (20, 21))), (2, (('30', '31'), (40, 41)))
@@ -62,7 +62,7 @@ select * from t3
 2 ((30,31),(40,41))
 
 query IITIIT
-select t:a:m, t:a:_n, t:a, t:b:"X", t:b:"y@#z", t:b from t3
+select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from t3
 ----
 10 11 (10,11) 20 21 (20,21)
 30 31 (30,31) 40 41 (40,41)
@@ -77,7 +77,7 @@ select * from v
 2 ((30,31),(40,41))
 
 query IITIIT
-select t:a:m, t:a:_n, t:a, t:b:"X", t:b:"y@#z", t:b from v
+select t:a:m, t:a:_n, t:a, t:b:"X测试", t:b:"y@#z", t:b from v
 ----
 10 11 (10,11) 20 21 (20,21)
 30 31 (30,31) 40 41 (40,41)
