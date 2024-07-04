@@ -178,7 +178,7 @@ impl BloomIndexBuilder {
             projection,
             false,
             false,
-            false,
+            self.storage_format.is_parquet(),
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;

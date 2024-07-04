@@ -28,6 +28,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::field_default_value;
 use databend_common_storage::ColumnNode;
@@ -45,6 +46,7 @@ pub struct BlockReader {
     pub(crate) projected_schema: TableSchemaRef,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
+    pub(crate) table_field_set: BTreeMap<ColumnId, TableField>,
     pub(crate) parquet_schema_descriptor: SchemaDescriptor,
     pub(crate) default_vals: Vec<Scalar>,
     pub query_internal_columns: bool,
@@ -136,7 +138,11 @@ impl BlockReader {
             .iter()
             .map(|c| (*c).clone())
             .collect();
+
         let project_indices = Self::build_projection_indices(&project_column_nodes);
+
+        let table_field_set =
+            BTreeMap::from_iter(schema.fields.iter().map(|f| (f.column_id, f.clone())));
 
         Ok(Arc::new(BlockReader {
             ctx,
@@ -145,6 +151,7 @@ impl BlockReader {
             projected_schema,
             project_indices,
             project_column_nodes,
+            table_field_set,
             parquet_schema_descriptor,
             default_vals,
             query_internal_columns,

@@ -20,6 +20,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_storages_common_cache_manager::SizedColumnArray;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -36,6 +37,7 @@ pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
     Deserialized((ColumnId, Box<dyn Array>, usize)),
     NoNeedToCache(Box<dyn Array>),
+    Scalar(&'a (Scalar, usize)),
 }
 
 pub struct FieldDeserializationContext<'a> {
@@ -96,7 +98,13 @@ impl BlockReader {
     ) -> Result<DataBlock> {
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
+            .read_columns_data_by_merge_io(
+                settings,
+                &meta.location.0,
+                &meta.col_metas,
+                &Some(&meta.col_stats),
+                &None,
+            )
             .await?;
 
         self.deserialize_chunks_with_meta(meta, storage_format, merge_io_read_result)

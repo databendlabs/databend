@@ -22,6 +22,7 @@ use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -117,6 +118,16 @@ impl BlockReader {
                         ));
                     }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
+                }
+                Some(DataItem::Scalar((scalar, _))) => {
+                    assert!(!column_node.is_nested);
+                    // unfortunately, we could not just return a Value::scalar, e.g.
+                    //   Value::Scalar((*scalar).clone())
+                    // some component assumes that Value::Column is passed down, for example,
+                    // while executing `select id from t where id not like '%_SIP'`, at
+                    // https://github.com/datafuselabs/datafuse/blob/034a37e3a9f9f8da6e31c8fd6e94e8cf4d63bf07/src/query/expression/src/filter/select.rs#L326
+                    let builder = ColumnBuilder::repeat(&scalar.as_ref(), num_rows, &data_type);
+                    Value::Column(builder.build())
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

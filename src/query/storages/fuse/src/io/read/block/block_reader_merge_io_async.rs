@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::ops::Range;
 use std::time::Instant;
 
@@ -22,11 +24,13 @@ use databend_common_base::runtime::UnlimitedFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::Scalar;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::future::try_join_all;
 use opendal::Operator;
 
@@ -130,11 +134,14 @@ impl BlockReader {
     }
 
     #[async_backtrace::framed]
-    pub async fn read_columns_data_by_merge_io(
+    pub async fn read_columns_data_by_merge_io<
+        T: Borrow<HashMap<ColumnId, ColumnStatistics>> + Debug,
+    >(
         &self,
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        cols_stats: &Option<T>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
         // Perf
@@ -148,10 +155,35 @@ impl BlockReader {
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
+        let mut scalars = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
                     continue;
+                }
+            }
+
+            if let Some(stats) = cols_stats {
+                // for non-nested field, apply the scalar inference optimization
+                if let Some(field) = self.table_field_set.get(column_id) {
+                    if !field.is_nested() {
+                        let stats = stats.borrow();
+                        if let Some(stats) = stats.get(column_id) {
+                            if stats.min == stats.max
+                                && !(stats.min != Scalar::Null && stats.null_count != 0)
+                            {
+                                // do not bother reading it at all
+
+                                let col_meta = columns_meta.get(column_id).expect(
+                                    "column with statistics has no column meta is not expected",
+                                );
+                                let num_row = col_meta.total_rows();
+                                scalars.push((*column_id, (stats.min.clone(), num_row)));
+                                metrics_inc_remote_io_columns_as_scalar(1);
+                                continue;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -194,6 +226,7 @@ impl BlockReader {
 
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
+        merge_io_read_res.scalar_columns = scalars;
 
         self.report_cache_metrics(&merge_io_read_res, ranges.iter().map(|(_, r)| r));
 

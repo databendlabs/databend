@@ -28,14 +28,14 @@ a"b	1	['a"b']	{"k":"v"}	2044-05-06 10:25:02.868894	10.01	('a',5)	['{"k":"v"}']	[
 NULL	2	['a'b']	[1]	2044-05-06 10:25:02.868894	-10.01	('b',10)	['[1]']	[('b',10)]
 <<<<
 >>>> copy into @s1/unload1/ from test_load_unload
-2	362	2986
+2	369	2986
 >>>> truncate table test_load_unload
 >>>> copy into test_load_unload from @s1/unload1.parquet force=true;
 unload1.parquet	2	0	NULL	NULL
 begin diff select
 end diff
 >>>> copy into @s1/unload2/ from test_load_unload
-2	362	2986
+2	369	2986
 begin diff parquet
 end diff
 >>>> truncate table test_load_unload

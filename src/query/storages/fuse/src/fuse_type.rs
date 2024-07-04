@@ -44,10 +44,20 @@ impl FuseTableType {
 
 /// Fuse engine table format.
 /// This is used to distinguish different table formats.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FuseStorageFormat {
     Parquet,
     Native,
+}
+
+impl FuseStorageFormat {
+    pub fn is_native(&self) -> bool {
+        self == &FuseStorageFormat::Native
+    }
+
+    pub fn is_parquet(&self) -> bool {
+        self == &FuseStorageFormat::Parquet
+    }
 }
 
 impl FromStr for FuseStorageFormat {

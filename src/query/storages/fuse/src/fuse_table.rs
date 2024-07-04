@@ -241,6 +241,10 @@ impl FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
+    pub fn get_storage_format(&self) -> FuseStorageFormat {
+        self.storage_format
+    }
+
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }

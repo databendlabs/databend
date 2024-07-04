@@ -210,6 +210,7 @@ impl Processor for CompactSource {
                                         &settings,
                                         &block.location.0,
                                         &block.col_metas,
+                                        &Some(&block.col_stats),
                                         &None,
                                     )
                                     .await

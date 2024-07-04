@@ -133,6 +133,10 @@ static REMOTE_IO_READ_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_remote_io_read_milliseconds"));
 static REMOTE_IO_DESERIALIZE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_remote_io_deserialize_milliseconds"));
+
+static REMOTE_IO_COLUMNS_AS_SCALAR: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_remote_io_col_as_scalar_count"));
+
 static BLOCK_WRITE_NUMS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_write_nums"));
 static BLOCK_WRITE_BYTES: LazyLock<Counter> =
@@ -467,6 +471,10 @@ pub fn metrics_inc_commit_aborts() {
 
 pub fn metrics_inc_remote_io_seeks(c: u64) {
     REMOTE_IO_SEEKS.inc_by(c);
+}
+
+pub fn metrics_inc_remote_io_columns_as_scalar(c: u64) {
+    REMOTE_IO_COLUMNS_AS_SCALAR.inc_by(c);
 }
 
 pub fn metrics_inc_remote_io_seeks_after_merged(c: u64) {

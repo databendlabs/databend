@@ -423,19 +423,31 @@ impl DataBlock {
         arrow_chunk: &ArrowChunk<A>,
         schema: &DataSchema,
     ) -> Result<Self> {
+        let row_num = arrow_chunk.len();
+        Self::from_column_builder(arrow_chunk, schema, row_num, |col, data_type, _num_rows| {
+            Ok(Value::Column(Column::from_arrow(col.as_ref(), data_type)?))
+        })
+    }
+
+    pub fn from_column_builder<T>(
+        builder_inputs: &[T],
+        schema: &DataSchema,
+        num_rows: usize,
+        builder: impl Fn(&T, &DataType, usize) -> Result<Value<AnyType>>,
+    ) -> Result<Self> {
         let cols = schema
             .fields
             .iter()
-            .zip(arrow_chunk.arrays())
+            .zip(builder_inputs.iter())
             .map(|(field, col)| {
                 Ok(BlockEntry::new(
                     field.data_type().clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())?),
+                    builder(col, field.data_type(), num_rows)?,
                 ))
             })
             .collect::<Result<_>>()?;
 
-        Ok(DataBlock::new(cols, arrow_chunk.len()))
+        Ok(DataBlock::new(cols, num_rows))
     }
 
     // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
@@ -448,9 +460,26 @@ impl DataBlock {
         default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
+        Self::create_with_default_value_and_builders(
+            schema,
+            chunk,
+            default_vals,
+            num_rows,
+            |item, data_type, _num_rows| {
+                Ok(Value::Column(Column::from_arrow(item.as_ref(), data_type)?))
+            },
+        )
+    }
+
+    pub fn create_with_default_value_and_builders<T>(
+        schema: &DataSchema,
+        builder_inputs: &[T],
+        default_vals: &[Option<Scalar>],
+        num_rows: usize,
+        builder: impl Fn(&T, &DataType, usize) -> Result<Value<AnyType>>,
+    ) -> Result<DataBlock> {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
-        let chunk_columns = chunk.arrays();
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
@@ -462,11 +491,12 @@ impl DataBlock {
                     BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
                 }
                 None => {
-                    let chunk_column = &chunk_columns[chunk_idx];
+                    let build_input = &builder_inputs[chunk_idx];
                     chunk_idx += 1;
+
                     BlockEntry::new(
-                        data_type.clone(),
-                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)?),
+                        field.data_type().clone(),
+                        builder(build_input, field.data_type(), num_rows)?,
                     )
                 }
             };

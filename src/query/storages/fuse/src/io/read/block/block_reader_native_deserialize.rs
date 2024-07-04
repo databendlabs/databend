@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::chunk::Chunk;
 use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
 use databend_common_arrow::arrow::datatypes::Field;
 use databend_common_arrow::arrow::datatypes::Field as ArrowField;
@@ -34,8 +33,13 @@ use databend_common_arrow::parquet::schema::types::PrimitiveType;
 use databend_common_arrow::parquet::schema::Repetition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
@@ -121,26 +125,68 @@ impl BlockReader {
             }
         }
 
+        enum DeserializedNativeDataItem<'a> {
+            Array(&'a dyn Array),
+            Scalar(&'a (Scalar, usize)),
+        }
+
+        impl DeserializedNativeDataItem<'_> {
+            fn num_rows(&self) -> usize {
+                match self {
+                    DeserializedNativeDataItem::Array(array) => array.len(),
+                    DeserializedNativeDataItem::Scalar(s) => s.1,
+                }
+            }
+        }
+
         // assembly the arrays
         let mut chunk_arrays = vec![];
         for array in &deserialized_column_arrays {
             match array {
                 DeserializedArray::Deserialized((_, array, ..)) => {
-                    chunk_arrays.push(array);
+                    chunk_arrays.push(DeserializedNativeDataItem::Array(array.as_ref()));
                 }
                 DeserializedArray::NoNeedToCache(array) => {
-                    chunk_arrays.push(array);
+                    chunk_arrays.push(DeserializedNativeDataItem::Array(array.as_ref()));
                 }
                 DeserializedArray::Cached(sized_column) => {
-                    chunk_arrays.push(&sized_column.0);
+                    chunk_arrays.push(DeserializedNativeDataItem::Array(sized_column.0.as_ref()));
+                }
+                DeserializedArray::Scalar(scalar) => {
+                    chunk_arrays.push(DeserializedNativeDataItem::Scalar(scalar));
                 }
             }
         }
 
         // build data block
-        let chunk = Chunk::try_new(chunk_arrays)?;
+        let column_builder =
+            |item: &DeserializedNativeDataItem, data_type: &DataType, num_rows: usize| match item {
+                DeserializedNativeDataItem::Array(array) => Ok(Value::Column(Column::from_arrow(
+                    array.as_ref(),
+                    data_type,
+                )?)),
+                DeserializedNativeDataItem::Scalar((val, _)) => {
+                    // unfortunately, we could not just return a Value::scalar, e.g.
+                    //   Value::Scalar((*val).clone())
+                    // some component assumes that Value::Column is passed down, for example,
+                    // while executing `select id from t where id not like '%_SIP'`, at
+                    // https://github.com/datafuselabs/datafuse/blob/034a37e3a9f9f8da6e31c8fd6e94e8cf4d63bf07/src/query/expression/src/filter/select.rs#L326
+                    let builder = ColumnBuilder::repeat(&val.as_ref(), num_rows, data_type);
+                    Ok(Value::Column(builder.build()))
+                }
+            };
+
         let data_block = if !need_to_fill_default_val {
-            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
+            let num_rows = chunk_arrays
+                .first()
+                .map(|x| x.num_rows())
+                .unwrap_or_default();
+            DataBlock::from_column_builder(
+                &chunk_arrays,
+                &self.data_schema(),
+                num_rows,
+                column_builder,
+            )
         } else {
             let data_schema = self.data_schema();
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
@@ -151,11 +197,12 @@ impl BlockReader {
                     default_vals.push(Some(self.default_vals[i].clone()));
                 }
             }
-            DataBlock::create_with_default_value_and_chunk(
+            DataBlock::create_with_default_value_and_builders(
                 &data_schema,
-                &chunk,
+                &chunk_arrays,
                 &default_vals,
                 num_rows,
+                column_builder,
             )
         };
 
@@ -237,6 +284,12 @@ impl BlockReader {
                             }
                             // since it is not nested, one column is enough
                             return Ok(Some(DeserializedArray::Cached(column_array)));
+                        }
+
+                        DataItem::Scalar(scalar) => {
+                            // we do not support reading scalar value of nested fields now
+                            assert!(!is_nested);
+                            return Ok(Some(DeserializedArray::Scalar(scalar)));
                         }
                     }
                 } else {

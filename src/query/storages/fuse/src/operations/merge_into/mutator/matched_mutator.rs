@@ -116,7 +116,7 @@ impl MatchedAggregator {
                 projection,
                 false,
                 update_stream_columns,
-                false,
+                table.storage_format.is_parquet(),
             )
         }?;
 
