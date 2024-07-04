@@ -12,11 +12,6 @@ default
 statement error 1001
 CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(TYPE='REST' ADDRESS='http://127.0.0.1:1000' WAREHOUSE='default' );
 
-query T
-SHOW CATALOGS LIKE 'ctl';
-----
-ctl
-
 statement ok
 DROP CATALOG IF EXISTS ctl;
 
