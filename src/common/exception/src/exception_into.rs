@@ -313,6 +313,12 @@ impl From<SerializedError> for ErrorCode {
     }
 }
 
+impl From<reqwest::Error> for ErrorCode {
+    fn from(error: reqwest::Error) -> Self {
+        ErrorCode::ReqwestError(format!("Reqwest Error, cause: {}", error))
+    }
+}
+
 impl From<tonic::Status> for ErrorCode {
     fn from(status: tonic::Status) -> Self {
         match status.code() {

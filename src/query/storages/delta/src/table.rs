@@ -45,14 +45,12 @@ use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
 use deltalake::kernel::Add;
 use deltalake::DeltaTableBuilder;
-use opendal::Metakey;
+use object_store_opendal::OpendalStore;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::OnceCell;
 use url::Url;
 
-// use object_store_opendal::OpendalStore;
-use crate::dal::OpendalStore;
 use crate::partition::DeltaPartInfo;
 use crate::partition_columns::get_partition_values;
 use crate::partition_columns::get_pushdown_without_partition_columns;
@@ -156,7 +154,7 @@ impl DeltaTable {
     #[async_backtrace::framed]
     pub async fn load(sp: &StorageParams) -> Result<deltalake::table::DeltaTable> {
         let op = init_operator(sp)?;
-        let opendal_store = Arc::new(OpendalStore::new(op).with_metakey(Metakey::Version));
+        let opendal_store = Arc::new(OpendalStore::new(op));
 
         let mut table = DeltaTableBuilder::from_uri(Url::from_directory_path("/").unwrap())
             .with_storage_backend(opendal_store, Url::from_directory_path("/").unwrap())

@@ -149,7 +149,7 @@ fn test_statement() {
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
-        r#"create database t FROM SHARE a.s;"#,
+        r#"create database t FROM SHARE a.s using b;"#,
         r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
@@ -543,8 +543,8 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
-        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
-        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -935,7 +935,6 @@ fn test_raw_insert_stmt() {
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
 

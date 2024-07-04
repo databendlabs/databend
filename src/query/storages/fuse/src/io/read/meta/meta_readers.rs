@@ -39,8 +39,8 @@ use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet_rs::format::FileMetaData;
-use parquet_rs::thrift::TSerializable;
+use parquet::format::FileMetaData;
+use parquet::thrift::TSerializable;
 
 use self::thrift_file_meta_read::read_thrift_file_metadata;
 

@@ -14,7 +14,7 @@ test = true
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 
 [build-dependencies]
 

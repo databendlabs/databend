@@ -88,17 +88,12 @@ WITH test1 AS (SELECT * FROM numbers(5)) SELECT * FROM test1
 3
 4
 
-query II
+query error
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM test1
-----
-2 3
-4 5
 
-query II
+query error
 WITH test1 AS (SELECT i + 1, j + 1 FROM test1) SELECT * FROM (SELECT * FROM test1)
-----
-2 3
-4 5
+
 
 query III
 SELECT * FROM (WITH t1 AS (SELECT i FROM test1) SELECT * FROM t1) l INNER JOIN test1 r on l.i = r.i order by l.i, r.j
@@ -450,3 +445,101 @@ b
 
 statement ok
 drop table test
+
+# non-recursive cte reference itself
+statement ok
+CREATE OR REPLACE TABLE customers (
+    customer_id INT UNSIGNED NOT NULL,
+    customer_name VARCHAR NOT NULL,
+    segment VARCHAR NOT NULL,
+    create_timestamp DATE NOT NULL,
+    active BOOLEAN NOT NULL
+) row_per_block=51113;
+
+statement ok
+CREATE OR REPLACE TABLE date_dim (
+    date_key DATE NOT NULL,
+    day_of_week TINYINT UNSIGNED NOT NULL,
+    month TINYINT UNSIGNED NOT NULL,
+    year SMALLINT UNSIGNED NOT NULL
+) row_per_block=53;
+
+statement ok
+CREATE OR REPLACE TABLE products
+(
+    product_id   INT UNSIGNED NOT NULL,
+    product_name VARCHAR        NOT NULL,
+    price        DECIMAL(10, 2) NOT NULL,
+    category     VARCHAR        NOT NULL
+) row_per_block=5113;
+
+statement ok
+CREATE OR REPLACE TABLE sales (
+    sale_id INT UNSIGNED NOT NULL,
+    product_id INT UNSIGNED NOT NULL,
+    customer_id INT UNSIGNED NOT NULL,
+    sale_date DATE NOT NULL,
+    quantity INT NOT NULL,
+    net_paid DECIMAL(10, 2) NOT NULL
+) row_per_block=51113;
+
+query error
+WITH InitialSales AS (
+    SELECT
+        c.customer_id,
+        c.customer_name,
+        s.sale_date,
+        YEAR(s.sale_date) AS sale_year,
+        s.net_paid,
+        s.net_paid AS cumulative_sales,
+        s.net_paid AS yearly_sales,
+        s.sale_id,
+        1 AS level
+    FROM sales s
+    JOIN customers c ON s.customer_id = c.customer_id
+    WHERE s.sale_date = (SELECT MIN(sale_date) FROM sales WHERE customer_id = c.customer_id)
+),
+CustomerSales AS (
+    SELECT * FROM InitialSales
+    UNION ALL
+    SELECT
+        s.customer_id,
+        c.customer_name,
+        s.sale_date,
+        YEAR(s.sale_date) AS sale_year,
+        s.net_paid,
+        cs.cumulative_sales + s.net_paid AS cumulative_sales,
+        CASE
+            WHEN YEAR(s.sale_date) = cs.sale_year THEN cs.yearly_sales + s.net_paid
+            ELSE s.net_paid
+        END AS yearly_sales,
+        s.sale_id,
+        cs.level + 1
+    FROM sales s
+    JOIN customers c ON s.customer_id = c.customer_id
+    JOIN CustomerSales cs ON s.customer_id = cs.customer_id AND s.sale_date > cs.sale_date
+    WHERE cs.level < 100
+)
+SELECT
+    customer_id,
+    customer_name,
+    sale_year,
+    sale_date,
+    net_paid,
+    cumulative_sales,
+    yearly_sales
+FROM CustomerSales
+ORDER BY customer_id, sale_date, net_paid, cumulative_sales, sale_id
+LIMIT 10;
+
+statement ok
+drop table customers
+
+statement ok
+drop table date_dim
+
+statement ok
+drop table products
+
+statement ok
+drop table sales
