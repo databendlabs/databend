@@ -92,8 +92,8 @@ impl Session {
                 let rows = conn.query_iter(PROMPT_SQL).await;
                 match rows {
                     Ok(mut rows) => {
-                        while let Some(row) = rows.next().await {
-                            let name: (String,) = row.unwrap().try_into().unwrap();
+                        while let Some(Ok(row)) = rows.next().await {
+                            let name: (String,) = row.try_into().unwrap();
                             keywords.push(name.0);
                         }
                     }
