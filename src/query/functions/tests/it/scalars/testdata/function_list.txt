@@ -2187,6 +2187,8 @@ Functions overloads:
 1 h3_to_string(UInt64 NULL) :: String NULL
 0 h3_unidirectional_edge_is_valid(UInt64) :: Boolean
 1 h3_unidirectional_edge_is_valid(UInt64 NULL) :: Boolean NULL
+0 haversine(Float64, Float64, Float64, Float64) :: Float64
+1 haversine(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float64 NULL
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
