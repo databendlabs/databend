@@ -27,7 +27,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
-
+use databend_common_sql::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -133,7 +133,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             // 0.01625 --> 12 buckets --> 4K size per column
             // 1.04 / math.sqrt(1<<12) --> 0.01625
             const DISTINCT_ERROR_RATE: f64 = 0.01625;
-            let select_expr = index_cols
+            let ndv_select_expr = index_cols
                 .iter()
                 .map(|c| {
                     format!(
@@ -143,8 +143,19 @@ impl Interpreter for AnalyzeTableInterpreter {
                 })
                 .join(", ");
 
+            let levels = generate_quantile_levels(DEFAULT_HISTOGRAM_BUCKETS);
+            let quantile_select_expr = index_cols
+                .iter()
+                .map(|c| {
+                    format!(
+                        "QUANTILE_DISC({})({}) as quantile_{}",
+                        levels, c.1, c.0
+                    )
+                })
+                .join(", ");
+
             let sql = format!(
-                "SELECT {select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
+                "SELECT {ndv_select_expr}, {is_full} as is_full, {quantile_select_expr} from {}.{} {temporal_str}",
                 plan.database, plan.table,
             );
 
@@ -186,4 +197,12 @@ impl Interpreter for AnalyzeTableInterpreter {
 
         return Ok(PipelineBuildResult::create());
     }
+}
+
+fn generate_quantile_levels(n: usize) -> String {
+    let mut levels = Vec::with_capacity(n as usize);
+    for i in 0..n+1 {
+        levels.push(format!("{:.3}", i as f64 / n as f64));
+    }
+    levels.join(", ")
 }

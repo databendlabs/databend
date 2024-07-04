@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
+use log::info;
 
 use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
