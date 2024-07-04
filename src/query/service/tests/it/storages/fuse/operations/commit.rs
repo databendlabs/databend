@@ -116,6 +116,8 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -284,7 +286,10 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 None,
             );
 
-            let faked_catalog = FakedCatalog { cat: catalog };
+            let faked_catalog = FakedCatalog {
+                cat: catalog,
+                error_injection: self.update_meta_error.clone(),
+            };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
             let r = FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
@@ -830,6 +835,7 @@ impl TableContext for CtxDelegation {
 #[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
+    error_injection: Option<ErrorCode>,
 }
 
 #[async_trait::async_trait]
@@ -1094,5 +1100,16 @@ impl Catalog for FakedCatalog {
 
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
+    }
+
+    async fn retryable_update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        if let Some(e) = &self.error_injection {
+            Err(e.clone())
+        } else {
+            self.cat.retryable_update_multi_table_meta(req).await
+        }
     }
 }
