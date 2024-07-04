@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufReader;
 use std::ops::Range;
@@ -34,6 +35,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use opendal::Operator;
 
 use crate::fuse_part::FuseBlockPartInfo;
@@ -65,12 +67,14 @@ impl BlockReader {
 
         let part = FuseBlockPartInfo::from_part(part)?;
         let settings = ReadSettings::from_ctx(ctx)?;
+        // scalar column inference is not enabled for native format yet
+        let column_stats: Option<HashMap<ColumnId, ColumnStatistics>> = None;
         let read_res = self
             .read_columns_data_by_merge_io(
                 &settings,
                 &part.location,
                 &part.columns_meta,
-                &part.columns_stat,
+                &column_stats,
                 ignore_column_ids,
             )
             .await?;

@@ -240,7 +240,8 @@ impl BlockReader {
                         }
 
                         DataItem::Scalar(_scalar) => {
-                            todo!()
+                            // scalar column inference is not enabled for native format yet
+                            unreachable!()
                         }
                     }
                 } else {
