@@ -57,7 +57,6 @@ use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
 use num_traits::AsPrimitive;
-use ordered_float::OrderedFloat;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
