@@ -16,10 +16,14 @@ use std::fmt::Debug;
 
 use databend_common_expression::BlockMetaInfo;
 use orc_rust::stripe::Stripe;
+
+use crate::hashable_schema::HashableSchema;
+
 #[derive(Debug)]
 pub struct StripeInMemory {
     pub path: String,
     pub stripe: Stripe,
+    pub schema: Option<HashableSchema>,
 }
 
 impl serde::Serialize for StripeInMemory {
