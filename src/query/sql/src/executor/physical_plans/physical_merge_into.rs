@@ -232,6 +232,10 @@ impl PhysicalPlanBuilder {
                 ],
                 &BUILTIN_FUNCTIONS,
             )?;
+            // For distributed merge into, shuffle by block_id(computed by row_id)
+            // to avoid many nodes update the same physical block simultaneously,
+            // update data that belong to one physical block will shuffle to one node,
+            // insert data just keep in local node.
             plan = PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: Box::new(plan),
