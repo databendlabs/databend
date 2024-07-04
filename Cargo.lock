@@ -9099,7 +9099,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.2.0"
-source = "git+https://github.com/Xuanwo/iceberg-rust?rev=e9529b6d9#e9529b6d90721f6479d86a72a0dcf74f862ed6d1"
+source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -9145,7 +9145,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.2.0"
-source = "git+https://github.com/Xuanwo/iceberg-rust?rev=e9529b6d9#e9529b6d90721f6479d86a72a0dcf74f862ed6d1"
+source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9164,7 +9164,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.2.0"
-source = "git+https://github.com/Xuanwo/iceberg-rust?rev=e9529b6d9#e9529b6d90721f6479d86a72a0dcf74f862ed6d1"
+source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
 dependencies = [
  "async-trait",
  "chrono",
