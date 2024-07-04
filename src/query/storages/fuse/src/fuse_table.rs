@@ -55,7 +55,6 @@ use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
-use databend_common_storage::ShareTableConfig;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
@@ -161,13 +160,8 @@ impl FuseTable {
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => {
-                let operator = create_share_table_operator(
-                    ShareTableConfig::share_endpoint_address(),
-                    ShareTableConfig::share_endpoint_token(),
-                    &share_ident,
-                    &table_info.name,
-                )?;
+            DatabaseType::ShareDB(share_params) => {
+                let operator = create_share_table_operator(&share_params, &table_info.name)?;
                 (operator, FuseTableType::SharedReadOnly)
             }
             DatabaseType::NormalDB => {

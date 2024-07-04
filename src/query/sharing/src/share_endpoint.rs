@@ -94,7 +94,6 @@ impl ShareEndpointManager {
         let req = GetShareEndpointReq {
             tenant: from_tenant.clone(),
             endpoint: None,
-            to_tenant: to_tenant.cloned(),
         };
 
         debug!("get_share_endpoint_config req: {:?}", req);

@@ -214,7 +214,9 @@ build_exceptions! {
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
-    TantivyQueryParserError(1903)
+    TantivyQueryParserError(1903),
+
+    ReqwestError(1910)
 }
 
 // Meta service errors [2001, 3000].

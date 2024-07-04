@@ -231,6 +231,7 @@ chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
 clap = { version = "4.4.2", features = ["derive"] }
 criterion = "0.5"
+ctor = "0.2"
 dashmap = "5.4.0"
 deepsize = { version = "0.2.0" }
 deltalake = "0.18"
@@ -397,7 +398,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "51733de" }
+orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

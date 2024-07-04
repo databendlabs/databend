@@ -56,6 +56,11 @@ message DatabaseMeta {
   // Now the owner is stored independently in the meta. Prefix with __fd_object_owners
   // optional Ownership owner = 26;
   reserved 26;
+
+  // share endpoint name
+  optional string using_share_endpoint = 27;
+
+  reserved 30;
 }
 
 // Save db name id list history.

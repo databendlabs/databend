@@ -41,7 +41,7 @@ pub async fn read_partitions_simple(
         snapshot: None,
         read_rows: max_rows,
         read_bytes: size,
-        partitions_scanned: files.len(),
+        partitions_scanned: 0,
         partitions_total: files.len(),
         is_exact: false,
         pruning_stats: Default::default(),

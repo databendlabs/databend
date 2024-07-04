@@ -1,0 +1,10 @@
+-- reset users
+-- prepare user and tables for tests
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Alter] is required on *.* for user 'testuser1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Alter] is required on *.* for user 'testuser1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Alter] is required on *.* for user 'testuser1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
+Error: APIError: RequestError: Query Page failed with status 401 Unauthorized: {"error":{"code":"401","message":"wrong password"}}
+Error: APIError: RequestError: Start Query failed with status 401 Unauthorized: {"error":{"code":"401","message":"wrong password"}}
+testuser1 password is 123
+testuser2 password not modify
+-- reset users

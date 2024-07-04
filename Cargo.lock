@@ -956,7 +956,7 @@ dependencies = [
  "hex",
  "http 0.2.11",
  "hyper 0.14.28",
- "ring",
+ "ring 0.17.8",
  "time",
  "tokio",
  "tracing",
@@ -1117,7 +1117,7 @@ dependencies = [
  "once_cell",
  "p256 0.11.1",
  "percent-encoding",
- "ring",
+ "ring 0.17.8",
  "sha2",
  "subtle",
  "time",
@@ -2381,6 +2381,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "color-backtrace"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "150fd80a270c0671379f388c8204deb6a746bb4eac8a6c03fe2460b2c0127ea0"
+dependencies = [
+ "backtrace",
+ "termcolor",
+]
+
+[[package]]
 name = "color-eyre"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2928,6 +2938,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+dependencies = [
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
 name = "ctrlc"
 version = "3.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3335,6 +3355,8 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
+ "color-backtrace",
+ "ctor 0.2.8",
  "databend-common-arrow",
  "databend-common-ast",
  "geos",
@@ -3344,6 +3366,7 @@ dependencies = [
  "parquet",
  "paste",
  "prost 0.12.3",
+ "reqwest 0.12.4",
  "serde",
  "serde_json",
  "tantivy",
@@ -3456,7 +3479,7 @@ dependencies = [
  "comfy-table 6.2.0",
  "crc32fast",
  "criterion",
- "ctor",
+ "ctor 0.2.8",
  "databend-common-arrow",
  "databend-common-ast",
  "databend-common-base",
@@ -4076,6 +4099,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-backtrace",
+ "base64 0.22.0",
  "bytes",
  "databend-common-auth",
  "databend-common-base",
@@ -4089,6 +4113,8 @@ dependencies = [
  "log",
  "moka",
  "opendal",
+ "reqwest 0.12.4",
+ "ring 0.16.20",
  "serde",
  "serde_json",
 ]
@@ -4106,7 +4132,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "cidr",
  "cron",
- "ctor",
+ "ctor 0.2.8",
  "dashmap",
  "databend-common-ast",
  "databend-common-async-functions",
@@ -4424,14 +4450,18 @@ name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
  "bytes",
  "chrono",
+ "dashmap",
+ "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-functions",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
@@ -4439,9 +4469,11 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-table-meta",
  "futures-util",
+ "log",
  "opendal",
  "orc-rust",
  "serde",
+ "serde_json",
  "typetag",
 ]
 
@@ -4573,6 +4605,7 @@ dependencies = [
  "databend-common-pipeline-transforms",
  "databend-common-settings",
  "databend-common-storage",
+ "databend-common-storages-orc",
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
@@ -5065,7 +5098,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "config",
  "criterion",
- "ctor",
+ "ctor 0.2.8",
  "dashmap",
  "databend-common-arrow",
  "databend-common-ast",
@@ -9577,7 +9610,7 @@ dependencies = [
  "base64 0.21.7",
  "js-sys",
  "pem",
- "ring",
+ "ring 0.17.8",
  "serde",
  "serde_json",
  "simple_asn1",
@@ -10381,7 +10414,7 @@ version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fb9b5c752f145ac5046bccc3c4f62892e3c950c1d1eab80c5949cd68a2078db"
 dependencies = [
- "ctor",
+ "ctor 0.1.26",
  "web-time",
 ]
 
@@ -10942,7 +10975,7 @@ dependencies = [
  "itertools 0.12.1",
  "parking_lot 0.12.1",
  "percent-encoding",
- "snafu",
+ "snafu 0.7.5",
  "tokio",
  "tracing",
  "url",
@@ -11175,14 +11208,14 @@ dependencies = [
 
 [[package]]
 name = "orc-rust"
-version = "0.3.0"
-source = "git+https://github.com/youngsofun/datafusion-orc?rev=51733de#51733de24819245eb195e5d01310c99ede815371"
+version = "0.3.1"
+source = "git+https://github.com/youngsofun/datafusion-orc?rev=1745375#174537521e65bdf195e5fd4eabb59a1c2e724314"
 dependencies = [
  "arrow",
  "async-trait",
  "bytes",
  "chrono",
- "chrono-tz 0.8.6",
+ "chrono-tz 0.9.0",
  "datafusion",
  "datafusion-expr",
  "datafusion-physical-expr",
@@ -11194,8 +11227,8 @@ dependencies = [
  "lzokay-native",
  "num",
  "object_store",
- "prost 0.11.9",
- "snafu",
+ "prost 0.12.3",
+ "snafu 0.8.3",
  "snap",
  "tokio",
  "zstd 0.12.4",
@@ -13022,6 +13055,21 @@ dependencies = [
 
 [[package]]
 name = "ring"
+version = "0.16.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3053cf52e236a3ed746dfc745aa9cacf1b791d846bdaf412f60a8d7d6e17c8fc"
+dependencies = [
+ "cc",
+ "libc",
+ "once_cell",
+ "spin 0.5.2",
+ "untrusted 0.7.1",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
+name = "ring"
 version = "0.17.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c17fa4cb658e3583423e915b9f3acc01cceaee1860e33d59ebae66adc3a2dc0d"
@@ -13031,7 +13079,7 @@ dependencies = [
  "getrandom 0.2.12",
  "libc",
  "spin 0.9.8",
- "untrusted",
+ "untrusted 0.9.0",
  "windows-sys 0.52.0",
 ]
 
@@ -13380,7 +13428,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
- "ring",
+ "ring 0.17.8",
  "rustls-webpki 0.101.7",
  "sct",
 ]
@@ -13392,7 +13440,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf4ef73721ac7bcd79b2b315da7779d8fc09718c6b3d2d1b2d94850eb8c18432"
 dependencies = [
  "log",
- "ring",
+ "ring 0.17.8",
  "rustls-pki-types",
  "rustls-webpki 0.102.2",
  "subtle",
@@ -13455,8 +13503,8 @@ version = "0.101.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
- "ring",
- "untrusted",
+ "ring 0.17.8",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -13465,9 +13513,9 @@ version = "0.102.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faaa0a62740bedb9b2ef5afa303da42764c012f743917351dc9a237ea1663610"
 dependencies = [
- "ring",
+ "ring 0.17.8",
  "rustls-pki-types",
- "untrusted",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -13572,8 +13620,8 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414"
 dependencies = [
- "ring",
- "untrusted",
+ "ring 0.17.8",
+ "untrusted 0.9.0",
 ]
 
 [[package]]
@@ -14080,7 +14128,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e4de37ad025c587a29e8f3f5605c00f70b98715ef90b9061a815b9e59e9042d6"
 dependencies = [
  "doc-comment",
- "snafu-derive",
+ "snafu-derive 0.7.5",
+]
+
+[[package]]
+name = "snafu"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "418b8136fec49956eba89be7da2847ec1909df92a9ae4178b5ff0ff092c8d95e"
+dependencies = [
+ "snafu-derive 0.8.3",
 ]
 
 [[package]]
@@ -14093,6 +14150,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "snafu-derive"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a4812a669da00d17d8266a0439eddcacbc88b17f732f927e52eeb9d196f7fb5"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
 ]
 
 [[package]]
@@ -15661,6 +15730,12 @@ checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
 
 [[package]]
 name = "untrusted"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ecb6da28b8a351d773b68d5825ac39017e680750f980f3a1a85cd8dd28a47c1"
@@ -16464,8 +16539,8 @@ version = "0.22.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed63aea5ce73d0ff405984102c42de94fc55a6b75765d621c65262469b3c9b53"
 dependencies = [
- "ring",
- "untrusted",
+ "ring 0.17.8",
+ "untrusted 0.9.0",
 ]
 
 [[package]]

@@ -59,6 +59,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
+        using_share_endpoint: Some("endpoint".to_string()),
     }
 }
 
@@ -73,6 +74,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
+        using_share_endpoint: None,
     }
 }
 
@@ -435,9 +437,19 @@ fn test_incompatible() -> anyhow::Result<()> {
 fn test_build_pb_buf() -> anyhow::Result<()> {
     // build serialized buf of protobuf data, for backward compatibility test with a new version binary.
 
-    // DatabaseMeta
+    // share DatabaseMeta
     {
         let db_meta = new_db_meta_share();
+        let p = db_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("db from share:{:?}", buf);
+    }
+
+    // DatabaseMeta
+    {
+        let db_meta = new_db_meta();
         let p = db_meta.to_pb()?;
 
         let mut buf = vec![];

@@ -53,6 +53,7 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(from_share) => Some(ShareNameIdentRaw::from_pb(from_share)?),
                 None => None,
             },
+            using_share_endpoint: p.using_share_endpoint,
         };
         Ok(v)
     }
@@ -76,6 +77,7 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(from_share) => Some(from_share.to_pb()?),
                 None => None,
             },
+            using_share_endpoint: self.using_share_endpoint.clone(),
         };
         Ok(p)
     }

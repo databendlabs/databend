@@ -99,3 +99,4 @@ mod v092_orc_format_params;
 mod v093_parquet_format_params;
 mod v094_table_meta;
 mod v95_share_endpoint_meta;
+mod v96_database_meta;
