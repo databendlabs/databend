@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
@@ -513,14 +514,38 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn retryable_update_multi_table_meta(
         &self,
-        reqs: UpdateMultiTableMetaReq,
+        req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
+        // deal with share table
+        {
+            if req.update_table_metas.len() == 1 {
+                match req.update_table_metas[0].1.db_type.clone() {
+                    DatabaseType::NormalDB => {}
+                    DatabaseType::ShareDB(share_params) => {
+                        let share_ident = share_params.share_ident;
+                        let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                        let db = self.get_database(&tenant, share_ident.share_name()).await?;
+                        return db.retryable_update_multi_table_meta(req).await;
+                    }
+                }
+            }
+            if req
+                .update_table_metas
+                .iter()
+                .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
+            {
+                return Err(ErrorCode::StorageOther(
+                    "update table meta from multi share db, or update table meta from share db and normal db in one request, is not supported",
+                ));
+            }
+        }
+
         info!(
             "updating multi table meta. number of tables: {}",
-            reqs.update_table_metas.len()
+            req.update_table_metas.len()
         );
         let begin = Instant::now();
-        let res = self.ctx.meta.update_multi_table_meta(reqs).await;
+        let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
             "update multi table meta done. time used {:?}",
             begin.elapsed()

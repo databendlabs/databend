@@ -37,6 +37,8 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 
@@ -215,6 +217,15 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn retryable_update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        let res = self.ctx.meta.update_multi_table_meta(req).await?;
         Ok(res)
     }
 }
