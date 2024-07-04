@@ -126,6 +126,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (94, "2024-06-21: Remove: catalog in table meta"),
     (95, "2024-07-01: Add: add credential into share endpoint meta"),
     (96, "2024-07-02: Add: add using_share_endpoint field into DatabaseMeta"),
+    (97, "2024-07-04: Add: missing_field_as in user.proto/OrcFileFormatParams"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
