@@ -646,4 +646,8 @@ impl Settings {
     pub fn get_max_set_operator_count(&self) -> Result<u64> {
         self.try_get_u64("max_set_operator_count")
     }
+
+    pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
+    }
 }

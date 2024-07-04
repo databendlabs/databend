@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS t1
 query T
 SELECT haversine(40.7127, -74.0059, 34.0500, -118.2500);
 ----
-3936.3905335559616
+3936.390533556
 
 statement ok
 SET geometry_output_format='EWKT'

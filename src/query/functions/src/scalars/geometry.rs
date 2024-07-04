@@ -85,7 +85,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,>(|lat1, lon1, lat2, lon2, builder, _| {
             let p1 = Point::new(lon1, lat1);
             let p2 = Point::new(lon2, lat2);
-            builder.push(p1.haversine_distance(&p2) * 0.001);
+            let distance = p1.haversine_distance(&p2) * 0.001;
+            builder.push(format!("{:.9}",distance.into_inner()).parse().unwrap());
         }),
     );
 
