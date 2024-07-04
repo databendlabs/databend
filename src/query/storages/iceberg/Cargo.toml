@@ -23,15 +23,15 @@ databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "c3b5364" }
+iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "c3b5364" }
+iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "c3b5364" }
 match-template = { workspace = true }
 minitrace = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
-iceberg = { git = "https://github.com/apache/iceberg-rust", package = "iceberg", rev = "c3b5364" }
-iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-rest", rev = "c3b5364" }
-iceberg-catalog-hms = { git = "https://github.com/apache/iceberg-rust", package = "iceberg-catalog-hms", rev = "c3b5364" }
 
 [lints]
 workspace = true
