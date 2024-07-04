@@ -2618,12 +2618,11 @@ impl SchemaApiTestSuite {
                         update_table_metas: vec![(req, table.as_ref().clone())],
                         ..Default::default()
                     })
-                    .await;
+                    .await?;
 
                 let err = res.unwrap_err();
-                let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
+                assert!(!err.is_empty());
             }
 
             info!("--- update table meta, with upsert file req");
@@ -2768,7 +2767,7 @@ impl SchemaApiTestSuite {
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
+                assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
             }
         }
         Ok(())
@@ -7282,7 +7281,7 @@ impl SchemaApiTestSuite {
             let result = mt.update_multi_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
+            assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
 
             let req = GetTableCopiedFileReq {
                 table_id,
