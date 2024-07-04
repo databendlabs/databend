@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -23,7 +22,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
-use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -37,11 +35,11 @@ use databend_common_meta_app::schema::TableMeta;
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
 
-pub struct ProcessorProfileTable {
+pub struct QueriesProfilingTable {
     table_info: TableInfo,
 }
 
-impl SyncSystemTable for ProcessorProfileTable {
+impl SyncSystemTable for QueriesProfilingTable {
     const NAME: &'static str = "system.processor_profile";
 
     const IS_LOCAL: bool = false;
@@ -58,29 +56,24 @@ impl SyncSystemTable for ProcessorProfileTable {
 
         let mut node: Vec<String> = Vec::with_capacity(total_size);
         let mut queries_id: Vec<String> = Vec::with_capacity(total_size);
-        let mut pid: Vec<u64> = Vec::with_capacity(total_size);
-        let mut p_name: Vec<String> = Vec::with_capacity(total_size);
         let mut plan_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut parent_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut plan_name: Vec<Option<String>> = Vec::with_capacity(total_size);
         let mut statistics = Vec::with_capacity(total_size);
 
         for (query_id, query_profiles) in queries_profiles {
-            for query_profile in query_profiles {
+            for query_plan_profile in query_profiles {
                 node.push(local_id.clone());
                 queries_id.push(query_id.clone());
-                pid.push(query_profile.pid as u64);
-                p_name.push(query_profile.p_name.clone());
-                plan_id.push(query_profile.plan_id);
-                parent_id.push(query_profile.plan_parent_id);
-                plan_name.push(query_profile.plan_name.clone());
+                plan_id.push(query_plan_profile.id);
+                parent_id.push(query_plan_profile.parent_id);
+                plan_name.push(query_plan_profile.name.clone());
 
-                let mut statistics_map = HashMap::with_capacity(query_profile.statistics.len());
-                for (idx, item_value) in query_profile.statistics.iter().enumerate() {
-                    statistics_map.insert(
-                        ProfileStatisticsName::from(idx).to_string(),
-                        item_value.load(Ordering::SeqCst),
-                    );
+                let mut statistics_map =
+                    HashMap::with_capacity(query_plan_profile.statistics.len());
+                for (idx, item_value) in query_plan_profile.statistics.iter().enumerate() {
+                    statistics_map
+                        .insert(ProfileStatisticsName::from(idx).to_string(), *item_value);
                 }
 
                 statistics.push(serde_json::to_vec(&statistics_map).unwrap());
@@ -90,8 +83,6 @@ impl SyncSystemTable for ProcessorProfileTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(node),
             StringType::from_data(queries_id),
-            UInt64Type::from_data(pid),
-            StringType::from_data(p_name),
             UInt32Type::from_opt_data(plan_id),
             UInt32Type::from_opt_data(parent_id),
             StringType::from_opt_data(plan_name),
@@ -100,13 +91,11 @@ impl SyncSystemTable for ProcessorProfileTable {
     }
 }
 
-impl ProcessorProfileTable {
+impl QueriesProfilingTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
             TableField::new("query_id", TableDataType::String),
-            TableField::new("pid", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("pname", TableDataType::String),
             TableField::new(
                 "plan_id",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt32))),
@@ -123,12 +112,12 @@ impl ProcessorProfileTable {
         ]);
 
         let table_info = TableInfo {
-            desc: "'system'.'processor_profile'".to_string(),
+            desc: "'system'.'queries_profiling'".to_string(),
             ident: TableIdent::new(table_id, 0),
-            name: "processor_profile".to_string(),
+            name: "queries_profiling".to_string(),
             meta: TableMeta {
                 schema,
-                engine: "ProcessorProfileTable".to_string(),
+                engine: "QueriesProfilingTable".to_string(),
                 ..Default::default()
             },
             ..Default::default()

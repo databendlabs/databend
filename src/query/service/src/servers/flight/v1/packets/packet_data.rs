@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::vec;
@@ -55,7 +56,7 @@ pub enum DataPacket {
     ErrorCode(ErrorCode),
     Dictionary(FlightData),
     FragmentData(FragmentData),
-    QueryProfiles(Vec<PlanProfile>),
+    QueryProfiles(HashMap<u32, PlanProfile>),
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
     MergeStatus(MergeStatus),
@@ -165,7 +166,8 @@ impl TryFrom<FlightData> for DataPacket {
             )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
             0x03 => {
-                let status = serde_json::from_slice::<Vec<PlanProfile>>(&flight_data.data_body)?;
+                let status =
+                    serde_json::from_slice::<HashMap<u32, PlanProfile>>(&flight_data.data_body)?;
                 Ok(DataPacket::QueryProfiles(status))
             }
             0x04 => {

@@ -738,7 +738,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
 
@@ -758,7 +758,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_query_profiles(&self, _: &[PlanProfile]) {
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
 

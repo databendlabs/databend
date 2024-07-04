@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -35,8 +37,10 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_core::PlanProfile;
 use log::debug;
 use log::trace;
+use log::warn;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -749,6 +753,47 @@ impl RunningGraph {
                 Arc::new(new_profile.unwrap())
             })
             .collect::<Vec<_>>()
+    }
+
+    pub fn fetch_profiling(&self, node_id: Option<String>) -> HashMap<u32, PlanProfile> {
+        let mut plans_profile: HashMap<u32, PlanProfile> = HashMap::<u32, PlanProfile>::new();
+
+        for x in self.0.graph.node_weights() {
+            let profile = x.tracking_payload.profile.as_deref().unwrap();
+
+            if let Some(plan_id) = &profile.plan_id {
+                match plans_profile.entry(*plan_id) {
+                    Entry::Occupied(mut v) => {
+                        let plan_profile = v.get_mut();
+                        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
+                            plan_profile.statistics[index] +=
+                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                        }
+                    }
+                    Entry::Vacant(v) => {
+                        let plan_profile = v.insert(PlanProfile::create(&profile));
+
+                        for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
+                            plan_profile.statistics[index] +=
+                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                        }
+
+                        let node_id = node_id.as_ref();
+                        let metrics_registry = profile.metrics_registry.as_ref();
+                        if let Some((id, metrics_registry)) = node_id.zip(metrics_registry) {
+                            let Ok(metrics) = metrics_registry.dump_sample() else {
+                                warn!("Dump {:?} plan metrics error", plan_profile.name);
+                                continue;
+                            };
+
+                            plan_profile.add_metrics(id.clone(), metrics);
+                        }
+                    }
+                };
+            }
+        }
+
+        plans_profile
     }
 
     pub fn interrupt_running_nodes(&self) {

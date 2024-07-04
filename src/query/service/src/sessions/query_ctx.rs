@@ -1013,47 +1013,16 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn add_query_profiles(&self, profiles: &[PlanProfile]) {
-        let mut merged_profiles = self.shared.query_profiles.write();
-
-        for query_profile in profiles {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
-        }
-    }
-
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        self.shared
-            .query_profiles
-            .read()
-            .values()
-            .cloned()
-            .collect::<Vec<_>>()
+        self.shared.get_query_profiles()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
-        let mut queries_profile = SessionManager::instance().get_queries_profile();
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles)
+    }
 
-        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
-
-        for (query_id, profiles) in exchange_profiles {
-            match queries_profile.entry(query_id) {
-                Entry::Vacant(v) => {
-                    v.insert(profiles);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().extend(profiles);
-                }
-            }
-        }
-
-        queries_profile
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        SessionManager::instance().get_queries_profile()
     }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin) {

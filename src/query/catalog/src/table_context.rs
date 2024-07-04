@@ -24,7 +24,6 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AbortChecker;
@@ -231,7 +230,7 @@ pub trait TableContext: Send + Sync {
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>>;
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> String;
     fn get_query_id_history(&self) -> HashSet<String>;
@@ -298,7 +297,7 @@ pub trait TableContext: Send + Sync {
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
-    fn add_query_profiles(&self, profiles: &[PlanProfile]);
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>);
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
