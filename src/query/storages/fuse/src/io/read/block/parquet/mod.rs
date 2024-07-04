@@ -78,6 +78,8 @@ impl BlockReader {
         {
             let data_type = field.data_type().into();
 
+            eprintln!("data_type {:?}", data_type);
+
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
             // - here we may processing a nested type field
@@ -118,7 +120,10 @@ impl BlockReader {
                     }
                     Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
                 }
-                Some(DataItem::Scalar(scalar)) => Value::Scalar((*scalar).clone()),
+                Some(DataItem::Scalar(scalar)) => {
+                    assert!(!column_node.is_nested);
+                    Value::Scalar((*scalar).clone())
+                }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
             columns.push(BlockEntry::new(data_type, value));
