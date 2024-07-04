@@ -116,6 +116,7 @@ impl VirtualColumnReader {
             Projection::Columns(vec![]),
             false,
             false,
+            false,
             put_cache,
         )?;
 

@@ -1156,7 +1156,7 @@ impl TableField {
 
     pub fn is_nested(&self) -> bool {
         matches!(
-            self.data_type,
+            self.data_type.remove_nullable(),
             TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
         )
     }

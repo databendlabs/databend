@@ -67,6 +67,7 @@ impl AggIndexReader {
             agg.projection.clone(),
             false,
             false,
+            false,
             put_cache,
         )?;
 

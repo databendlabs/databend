@@ -78,8 +78,6 @@ impl BlockReader {
         {
             let data_type = field.data_type().into();
 
-            eprintln!("data_type {:?}", data_type);
-
             // NOTE, there is something tricky here:
             // - `column_chunks` always contains data of leaf columns
             // - here we may processing a nested type field

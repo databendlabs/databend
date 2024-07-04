@@ -178,6 +178,7 @@ impl BloomIndexBuilder {
             projection,
             false,
             false,
+            self.storage_format.is_parquet(),
             false,
         )?;
 

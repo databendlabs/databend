@@ -164,18 +164,20 @@ impl BlockReader {
             }
 
             if let Some(stats) = cols_stats {
-                // for non-nested field, apply the scalar inference optimization
-                if let Some(field) = self.project_field_set.get(column_id) {
-                    if !field.is_nested() {
-                        let stats = stats.borrow();
-                        if let Some(stats) = stats.get(column_id) {
-                            if stats.min == stats.max
-                                && !(stats.min != Scalar::Null && stats.null_count != 0)
-                            {
-                                // do not bother reading it at all
-                                scalars.push((*column_id, stats.min.clone()));
-                                metrics_inc_remote_io_columns_as_scalar(1);
-                                continue;
+                if self.enable_scalar_column_reading_optimization {
+                    // for non-nested field, apply the scalar inference optimization
+                    if let Some(field) = self.table_field_set.get(column_id) {
+                        if !field.is_nested() {
+                            let stats = stats.borrow();
+                            if let Some(stats) = stats.get(column_id) {
+                                if stats.min == stats.max
+                                    && !(stats.min != Scalar::Null && stats.null_count != 0)
+                                {
+                                    // do not bother reading it at all
+                                    scalars.push((*column_id, stats.min.clone()));
+                                    metrics_inc_remote_io_columns_as_scalar(1);
+                                    continue;
+                                }
                             }
                         }
                     }

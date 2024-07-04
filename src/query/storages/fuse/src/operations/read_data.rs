@@ -56,6 +56,7 @@ impl FuseTable {
             projection,
             query_internal_columns,
             update_stream_columns,
+            self.storage_format.is_parquet(),
             put_cache,
         )
     }
