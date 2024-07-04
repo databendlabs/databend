@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 [dependencies]
 arrow = { workspace = true, features = ["pyarrow"] }
 arrow-schema = { workspace = true }
-ctor = "0.2.5"
+ctor = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
