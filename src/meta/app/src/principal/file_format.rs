@@ -155,7 +155,12 @@ impl FileFormatParams {
                     null_if,
                 )?)
             }
-            StageFileFormatType::Orc => FileFormatParams::Orc(OrcFileFormatParams::try_create()?),
+            StageFileFormatType::Orc => {
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                FileFormatParams::Orc(OrcFileFormatParams::try_create(
+                    missing_field_as.as_deref(),
+                )?)
+            }
             StageFileFormatType::Csv => {
                 let default = CsvFileFormatParams::default();
                 let compression = reader.take_compression()?;
@@ -680,11 +685,14 @@ impl ParquetFileFormatParams {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct OrcFileFormatParams {}
+pub struct OrcFileFormatParams {
+    pub missing_field_as: NullAs,
+}
 
 impl OrcFileFormatParams {
-    pub fn try_create() -> Result<Self> {
-        Ok(Self {})
+    pub fn try_create(missing_field_as: Option<&str>) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        Ok(Self { missing_field_as })
     }
 }
 
@@ -753,8 +761,12 @@ impl Display for FileFormatParams {
                     params.missing_field_as
                 )
             }
-            FileFormatParams::Orc(_) => {
-                write!(f, "TYPE = ORC",)
+            FileFormatParams::Orc(params) => {
+                write!(
+                    f,
+                    "TYPE = ORC MISSING_FIELD_AS = {}",
+                    params.missing_field_as
+                )
             }
         }
     }
