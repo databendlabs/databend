@@ -188,7 +188,7 @@ impl DataBlock {
             remain -= len;
 
             for (col_index, builder) in builders.iter_mut().enumerate() {
-                let BlockEntry { data_type, value } = &block_columns[col_index];
+                let BlockEntry { value, .. } = &block_columns[col_index];
                 match value {
                     Value::Scalar(scalar) => {
                         let scalar = scalar.as_ref();
