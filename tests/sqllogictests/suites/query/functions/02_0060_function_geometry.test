@@ -13,7 +13,7 @@ SELECT st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
 
 query T
 SELECT
-     st_length(g), st_as_aswkt(g)
+     st_length(g), st_aswkt(g)
 FROM
     (
     SELECT
