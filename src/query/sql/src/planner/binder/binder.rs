@@ -40,7 +40,6 @@ use databend_common_meta_app::principal::StageFileFormatType;
 use indexmap::IndexMap;
 use log::warn;
 
-use super::util::FullyTableIdentifier;
 use super::Finder;
 use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
@@ -750,33 +749,6 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = self.normalize_identifier(object).name;
         (catalog_name, database_name, object_name)
-    }
-
-    pub fn fully_table_identifier<'b>(
-        &'b self,
-        catalog: &Option<Identifier>,
-        database: &Option<Identifier>,
-        table: &'b Identifier,
-    ) -> FullyTableIdentifier<'_> {
-        let catalog = catalog.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: self.ctx.get_current_catalog(),
-            quote: Some(self.dialect.default_ident_quote()),
-            is_hole: false,
-        });
-        let database = database.to_owned().unwrap_or(Identifier {
-            span: None,
-            name: self.ctx.get_current_database(),
-            quote: Some(self.dialect.default_ident_quote()),
-            is_hole: false,
-        });
-        FullyTableIdentifier::new(
-            &self.name_resolution_ctx,
-            self.dialect,
-            catalog,
-            database,
-            table,
-        )
     }
 
     /// Normalize <identifier>

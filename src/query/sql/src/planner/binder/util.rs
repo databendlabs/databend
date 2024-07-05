@@ -91,6 +91,39 @@ impl Binder {
         }
         Ok(())
     }
+
+    pub fn fully_table_identifier<'b>(
+        &'b self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        table: &'b Identifier,
+    ) -> FullyTableIdentifier<'_> {
+        let Binder {
+            ctx,
+            name_resolution_ctx,
+            dialect,
+            ..
+        } = self;
+        let catalog = catalog.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_catalog(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+        });
+        let database = database.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_database(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+        });
+        FullyTableIdentifier {
+            name_resolution_ctx,
+            dialect: *dialect,
+            catalog,
+            database,
+            table,
+        }
+    }
 }
 
 pub struct FullyTableIdentifier<'a> {
@@ -139,28 +172,35 @@ impl FullyTableIdentifier<'_> {
         } = self;
         match err.code() {
             ErrorCode::UNKNOWN_DATABASE => {
-                ErrorCode::UnknownDatabase(format!("Unknown database {catalog}.{database}."))
-            }
-            ErrorCode::UNKNOWN_TABLE => {
-                let error_message = match self.name_resolution_ctx.not_found_suggest(self.table) {
+                let error_message = match self.name_resolution_ctx.not_found_suggest(database) {
                     Some(NameResolutionSuggest::Quoted) => {
-                        let ident = Identifier {
-                            name: table.name.clone(),
-                            quote: Some(self.dialect.default_ident_quote()),
-                            ..**table
-                        };
                         format!(
-                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean {ident} (quoted)?"
+                            "Unknown database {catalog}.{database} (unquoted). Did you mean {} (quoted)?",
+                            ident_with_quote(database, Some(self.dialect.default_ident_quote()))
                         )
                     }
                     Some(NameResolutionSuggest::Unqoted) => {
-                        let ident = Identifier {
-                            name: table.name.clone(),
-                            quote: None,
-                            ..**table
-                        };
                         format!(
-                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {ident} (unquoted)?"
+                            "Unknown database {catalog}.{database} (quoted). Did you mean {} (unquoted)?",
+                            ident_with_quote(database, None)
+                        )
+                    }
+                    None => format!("Unknown database {catalog}.{database}."),
+                };
+                ErrorCode::UnknownDatabase(error_message)
+            }
+            ErrorCode::UNKNOWN_TABLE => {
+                let error_message = match self.name_resolution_ctx.not_found_suggest(table) {
+                    Some(NameResolutionSuggest::Quoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean {} (quoted)?",
+                            ident_with_quote(table, Some(self.dialect.default_ident_quote()))
+                        )
+                    }
+                    Some(NameResolutionSuggest::Unqoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {} (unquoted)?",
+                            ident_with_quote(table, None)
                         )
                     }
                     None => format!("Unknown table {catalog}.{database}.{table}."),
@@ -169,5 +209,13 @@ impl FullyTableIdentifier<'_> {
             }
             _ => err,
         }
+    }
+}
+
+fn ident_with_quote(ident: &Identifier, quote: Option<char>) -> Identifier {
+    Identifier {
+        name: ident.name.clone(),
+        quote,
+        ..*ident
     }
 }

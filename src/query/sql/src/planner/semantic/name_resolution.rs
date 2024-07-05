@@ -45,7 +45,7 @@ impl NameResolutionContext {
                     return Some(NameResolutionSuggest::Unqoted);
                 }
             }
-            (_, _, _) => (),
+            _ => return None,
         };
         None
     }
