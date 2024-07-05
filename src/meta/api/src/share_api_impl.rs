@@ -49,7 +49,6 @@ use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
 use log::debug;
-use log::error;
 use minitrace::func_name;
 
 use crate::assert_table_exist;
@@ -1820,49 +1819,6 @@ async fn remove_share_id_from_share_objects(
     }
 
     Ok(())
-}
-
-async fn get_tenant_share_spec_vec(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant: &Tenant,
-) -> Result<Vec<ShareSpec>, KVAppError> {
-    let mut share_metas = vec![];
-    let share_name_list = ShareNameIdent::new(tenant, "dummy");
-
-    let dir_name = DirName::new(share_name_list);
-
-    let share_name_list_keys = list_keys(kv_api, &dir_name).await?;
-    for share_name in share_name_list_keys {
-        let res = get_share_or_err(
-            kv_api,
-            &share_name,
-            format!("get_tenant_share_spec_vec: {}", share_name.display()),
-        )
-        .await;
-
-        let (_share_id_seq, share_id, _share_meta_seq, share_meta) = match res {
-            Ok(x) => x,
-            Err(e) => match e {
-                KVAppError::AppError(AppError::UnknownShare(e)) => {
-                    error!("{:?} when get_tenant_share_spec_vec", e);
-                    continue;
-                }
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("{:?} when get_tenant_share_spec_vec", e);
-                    continue;
-                }
-                _ => {
-                    return Err(e);
-                }
-            },
-        };
-
-        share_metas.push(
-            convert_share_meta_to_spec(kv_api, share_name.name(), share_id, share_meta).await?,
-        );
-    }
-
-    Ok(share_metas)
 }
 
 #[allow(clippy::too_many_arguments)]

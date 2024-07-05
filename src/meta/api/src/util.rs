@@ -14,7 +14,6 @@
 
 use std::any::type_name;
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -1030,7 +1029,7 @@ async fn remove_entries_from_share(
     Ok(())
 }
 
-// return (share name, new share meta, new share table info)
+// return (share name, new share meta)
 pub async fn remove_table_from_share(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
@@ -1038,7 +1037,7 @@ pub async fn remove_table_from_share(
     tenant: &Tenant,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(String, ShareMeta, Option<TableInfoMap>), KVAppError> {
+) -> Result<(String, ShareMeta), KVAppError> {
     let (_seq, share_name) = get_share_id_to_name_or_err(
         kv_api,
         share_id,
@@ -1081,61 +1080,7 @@ pub async fn remove_table_from_share(
     condition.push(txn_cond_seq(&id_key, Eq, share_meta_seq));
     if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?));
 
-    let mut db_ident_raw = None;
-    let mut shared_db_id = 0;
-    if let Some(ref entry) = share_meta.database {
-        if let ShareGrantObject::Database(db_id) = entry.object {
-            let db_id_key = DatabaseIdToName { db_id };
-            let (_db_name_seq, db_name_ident_raw): (_, Option<DatabaseNameIdentRaw>) =
-                get_pb_value(kv_api, &db_id_key).await?;
-            db_ident_raw = db_name_ident_raw;
-            shared_db_id = db_id;
-        } else {
-            return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(tenant.tenant_name(), share_name.name()),
-            )));
-        }
-    }
-
-    let share_table_info = match db_ident_raw {
-        Some(db_ident_raw) => {
-            let mut table_ids = HashSet::new();
-            for entry in share_meta.entries.values() {
-                if let ShareGrantObject::Table(table_id) = entry.object {
-                    table_ids.insert(table_id);
-                } else {
-                    unreachable!();
-                }
-            }
-            let db_name = db_ident_raw.to_tident(());
-            let all_tables = list_tables_from_unshare_db(kv_api, shared_db_id, &db_name).await?;
-            let table_infos = BTreeMap::from_iter(
-                all_tables
-                    .iter()
-                    .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
-                    .map(|table_info| {
-                        let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type =
-                            DatabaseType::ShareDB(ShareDBParams::new(share_name.clone()));
-                        (table_info.name.clone(), table_info)
-                    })
-                    .collect::<Vec<_>>(),
-            );
-
-            if table_infos.is_empty() {
-                None
-            } else {
-                Some(table_infos)
-            }
-        }
-        None => {
-            return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(tenant.tenant_name(), share_name.name()),
-            )));
-        }
-    };
-
-    Ok((share_name.name().to_string(), share_meta, share_table_info))
+    Ok((share_name.name().to_string(), share_meta))
 }
 
 // if `share_table_id` is Some(), get TableInfo by the table id;
@@ -1205,7 +1150,13 @@ pub async fn get_table_info_by_share(
 
             let table_infos = table_infos
                 .iter()
-                .map(|table_info| table_info.as_ref().clone())
+                .map(|table_info| {
+                    let mut table_info = table_info.as_ref().clone();
+                    // change table db_type as ShareDB
+                    table_info.db_type =
+                        DatabaseType::ShareDB(ShareDBParams::new(share_name.clone().into()));
+                    table_info
+                })
                 .collect();
 
             Ok(table_infos)
@@ -1213,56 +1164,6 @@ pub async fn get_table_info_by_share(
         None => Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
             ShareHasNoGrantedDatabase::new(share_name.tenant_name(), share_name.share_name()),
         ))),
-    }
-}
-
-pub async fn get_share_table_info_bak(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share_name: &ShareNameIdent,
-    share_meta: &ShareMeta,
-) -> Result<ShareTableInfoMap, KVAppError> {
-    let mut db_ident_raw = None;
-    let mut shared_db_id = 0;
-    if let Some(ref entry) = share_meta.database {
-        if let ShareGrantObject::Database(db_id) = entry.object {
-            let db_id_key = DatabaseIdToName { db_id };
-            let (_db_name_seq, db_name_ident): (_, Option<DatabaseNameIdentRaw>) =
-                get_pb_value(kv_api, &db_id_key).await?;
-            db_ident_raw = db_name_ident;
-            shared_db_id = db_id;
-        } else {
-            unreachable!();
-        }
-    }
-
-    match db_ident_raw {
-        Some(db_name) => {
-            let mut table_ids = HashSet::new();
-            for entry in share_meta.entries.values() {
-                if let ShareGrantObject::Table(table_id) = entry.object {
-                    table_ids.insert(table_id);
-                } else {
-                    unreachable!();
-                }
-            }
-            let db_name = db_name.to_tident(());
-            let all_tables = list_tables_from_unshare_db(kv_api, shared_db_id, &db_name).await?;
-            let table_infos = BTreeMap::from_iter(
-                all_tables
-                    .iter()
-                    .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
-                    .map(|table_info| {
-                        let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type =
-                            DatabaseType::ShareDB(ShareDBParams::new(share_name.clone().into()));
-                        (table_info.name.clone(), table_info)
-                    })
-                    .collect::<Vec<_>>(),
-            );
-
-            Ok((share_name.name().to_string(), Some(table_infos)))
-        }
-        None => Ok((share_name.name().to_string(), None)),
     }
 }
 

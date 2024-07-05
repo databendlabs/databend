@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
 use databend_common_meta_app::share::ShareSpec;
-use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::share::ShareTableSpec;
 use log::error;
 use opendal::Operator;
@@ -36,41 +35,11 @@ pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
     )
 }
 
-pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
-    format!(
-        "{}/{}/{}_table_info.json",
-        SHARE_CONFIG_PREFIX, tenant, share_name
-    )
-}
-
-pub fn new_share_table_info_location(tenant: &str, share_name: &str, table_name: &str) -> String {
+pub fn share_table_info_location(tenant: &str, share_name: &str, table_name: &str) -> String {
     format!(
         "{}/{}/{}/{}_table_info.json",
         SHARE_CONFIG_PREFIX, tenant, share_name, table_name
     )
-}
-
-#[async_backtrace::framed]
-pub async fn save_share_table_info(
-    tenant: &str,
-    operator: Operator,
-    share_table_info: &[ShareTableInfoMap],
-) -> Result<()> {
-    for (share_name, share_table_info) in share_table_info {
-        let location = share_table_info_location(tenant, share_name);
-        match share_table_info {
-            Some(table_info_map) => {
-                operator
-                    .write(&location, serde_json::to_vec(table_info_map)?)
-                    .await?;
-            }
-            None => {
-                operator.delete(&location).await?;
-            }
-        }
-    }
-
-    Ok(())
 }
 
 #[async_backtrace::framed]
@@ -98,7 +67,7 @@ pub async fn remove_share_table_info(
     revoke_share_table: &[String],
 ) -> Result<()> {
     for share_table in revoke_share_table {
-        let location = new_share_table_info_location(tenant, share_name, share_table);
+        let location = share_table_info_location(tenant, share_name, share_table);
 
         operator.delete(&location).await?;
     }
@@ -114,7 +83,7 @@ pub async fn update_share_table_info(
     share_table_info: &TableInfo,
 ) -> Result<()> {
     for share_name in share_name_vec {
-        let location = new_share_table_info_location(tenant, share_name, &share_table_info.name);
+        let location = share_table_info_location(tenant, share_name, &share_table_info.name);
 
         if let Err(e) = operator
             .write(&location, serde_json::to_string(share_table_info)?)
@@ -139,34 +108,6 @@ pub async fn remove_share_dir(
     for share_spec in share_specs {
         let dir = get_share_dir(tenant, &share_spec.name);
         operator.remove_all(&dir).await?;
-    }
-
-    Ok(())
-}
-
-#[async_backtrace::framed]
-pub async fn save_share_spec_old(
-    tenant: &str,
-    operator: Operator,
-    spec_vec: Option<Vec<ShareSpec>>,
-    share_table_info: Option<Vec<ShareTableInfoMap>>,
-) -> Result<()> {
-    println!("share spec_vec:{:?}\n", spec_vec);
-    println!("share_table_info:{:?}\n", share_table_info);
-    if let Some(share_spec) = spec_vec {
-        for spec in share_spec {
-            let share_name = spec.name.clone();
-            let location = get_share_spec_location(tenant, &share_name);
-            let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-            let data = serde_json::to_string(&share_spec_ext)?;
-            println!("data: {:?}", data);
-            operator.write(&location, data).await?;
-        }
-    }
-
-    // save share table info
-    if let Some(share_table_info) = share_table_info {
-        save_share_table_info(tenant, operator, &share_table_info).await?
     }
 
     Ok(())

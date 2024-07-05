@@ -66,7 +66,6 @@ pub use share::ShareIdent;
 pub use share::ShareInfo;
 pub use share::ShareMeta;
 pub use share::ShareSpec;
-pub use share::ShareTableInfoMap;
 pub use share::ShareTableSpec;
 pub use share::ShareVecTableInfo;
 pub use share::ShowSharesReply;

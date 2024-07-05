@@ -165,7 +165,6 @@ pub enum ShareGrantObjectSeqAndId {
 
 // share name and shared (table name, table info) map
 pub type TableInfoMap = BTreeMap<String, TableInfo>;
-pub type ShareTableInfoMap = (String, Option<TableInfoMap>);
 
 // Vec<share name> and table info
 pub type ShareVecTableInfo = (Vec<String>, TableInfo);

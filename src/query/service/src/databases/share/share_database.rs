@@ -107,8 +107,8 @@ impl ShareDatabase {
     async fn add_share_endpoint_into_table_info(&self, table_info: TableInfo) -> Result<TableInfo> {
         let mut table_info = table_info;
         let db_type = table_info.db_type.clone();
+        let share_endpoint_meta = self.get_share_endpoint_meta().await?;
         if let DatabaseType::ShareDB(params) = db_type {
-            let share_endpoint_meta = self.get_share_endpoint_meta().await?;
             let mut params = params;
             params.share_endpoint_url = share_endpoint_meta.url.clone();
             params.share_endpoint_credential = share_endpoint_meta.credential.clone().unwrap();

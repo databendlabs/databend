@@ -37,7 +37,6 @@ use super::CreateOption;
 use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::ShareSpec;
-use crate::share::ShareTableInfoMap;
 use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;

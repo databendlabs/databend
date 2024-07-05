@@ -187,7 +187,6 @@ use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::ShareSpec;
-use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::share::ShareVecTableInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -227,7 +226,6 @@ use crate::fetch_id;
 use crate::get_pb_value;
 use crate::get_share_id_to_name_or_err;
 use crate::get_share_meta_by_id_or_err;
-use crate::get_share_table_info_bak;
 use crate::get_table_info_by_share;
 use crate::get_u64_value;
 use crate::is_db_need_to_be_remove;
@@ -4474,7 +4472,7 @@ async fn construct_drop_table_txn_operations(
             remove_table_from_share(kv_api, *share_id, table_id, tenant, condition, if_then).await;
 
         match res {
-            Ok((share_name, share_meta, _share_table_info)) => {
+            Ok((share_name, share_meta)) => {
                 spec_vec.push(
                     convert_share_meta_to_spec(kv_api, &share_name, *share_id, share_meta).await?,
                 );
@@ -4862,7 +4860,7 @@ async fn get_share_vec_table_info(
         let res = get_share_id_to_name_or_err(
             kv_api,
             *share_id,
-            format!("get_share_table_info_map: {}", share_id),
+            format!("get_share_vec_table_info: {}", share_id),
         )
         .await;
 
@@ -4871,7 +4869,7 @@ async fn get_share_vec_table_info(
             Err(e) => match e {
                 // ignore UnknownShareId error
                 KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    error!("UnknownShareId {} when get_share_vec_table_info", share_id);
                     continue;
                 }
                 _ => return Err(e),
@@ -4880,7 +4878,7 @@ async fn get_share_vec_table_info(
         let res = get_share_meta_by_id_or_err(
             kv_api,
             *share_id,
-            format!("get_share_table_info_map: {}", share_id),
+            format!("get_share_vec_table_info: {}", share_id),
         )
         .await;
 
@@ -4889,7 +4887,7 @@ async fn get_share_vec_table_info(
             Err(e) => match e {
                 // ignore UnknownShareId error
                 KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
+                    error!("UnknownShareId {} when get_share_vec_table_info", share_id);
                     continue;
                 }
                 _ => return Err(e),
@@ -4915,58 +4913,6 @@ async fn get_share_vec_table_info(
     } else {
         Ok(None)
     }
-}
-
-async fn get_share_table_info_map(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    table_meta: &TableMeta,
-) -> Result<Option<Vec<ShareTableInfoMap>>, KVAppError> {
-    if table_meta.shared_by.is_empty() {
-        return Ok(None);
-    }
-    let mut share_table_info_map_vec = vec![];
-    for share_id in &table_meta.shared_by {
-        let res = get_share_id_to_name_or_err(
-            kv_api,
-            *share_id,
-            format!("get_share_table_info_map: {}", share_id),
-        )
-        .await;
-
-        let (_seq, share_name) = match res {
-            Ok((seq, share_name)) => (seq, share_name),
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
-                    continue;
-                }
-                _ => return Err(e),
-            },
-        };
-        let res = get_share_meta_by_id_or_err(
-            kv_api,
-            *share_id,
-            format!("get_share_table_info_map: {}", share_id),
-        )
-        .await;
-
-        let (_share_meta_seq, share_meta) = match res {
-            Ok((seq, share_meta)) => (seq, share_meta),
-            Err(e) => match e {
-                // ignore UnknownShareId error
-                KVAppError::AppError(AppError::UnknownShareId(_)) => {
-                    error!("UnknownShareId {} when get_share_table_info_map", share_id);
-                    continue;
-                }
-                _ => return Err(e),
-            },
-        };
-        share_table_info_map_vec
-            .push(get_share_table_info_bak(kv_api, &share_name.to_tident(()), &share_meta).await?);
-    }
-
-    Ok(Some(share_table_info_map_vec))
 }
 
 fn build_upsert_table_copied_file_info_conditions(
