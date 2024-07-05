@@ -4167,7 +4167,16 @@ impl<'a> TypeChecker<'a> {
                             .collect::<Result<Vec<Expr>>>()?,
                         params: params.clone(),
                         window: window.clone(),
-                        lambda: lambda.clone(),
+                        lambda: if let Some(lambda) = lambda {
+                            Some(Lambda {
+                                params: lambda.params.clone(),
+                                expr: Box::new(
+                                    self.clone_expr_with_replacement(&lambda.expr, replacement_fn)?,
+                                ),
+                            })
+                        } else {
+                            None
+                        },
                     },
                 }),
                 Expr::Case {
