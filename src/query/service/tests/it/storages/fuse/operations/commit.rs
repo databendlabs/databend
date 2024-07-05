@@ -21,7 +21,6 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;

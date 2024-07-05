@@ -771,7 +771,7 @@ impl RunningGraph {
                         }
                     }
                     Entry::Vacant(v) => {
-                        let plan_profile = v.insert(PlanProfile::create(&profile));
+                        let plan_profile = v.insert(PlanProfile::create(profile));
 
                         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
                             plan_profile.statistics[index] +=

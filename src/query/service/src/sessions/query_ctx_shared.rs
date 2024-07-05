@@ -605,7 +605,7 @@ impl QueryContextShared {
     pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
         let mut merged_profiles = self.query_profiles.write();
 
-        for (_id, query_profile) in profiles {
+        for query_profile in profiles.values() {
             match merged_profiles.entry(query_profile.id) {
                 Entry::Vacant(v) => {
                     v.insert(query_profile.clone());
