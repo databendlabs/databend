@@ -1153,16 +1153,12 @@ impl TableContext for QueryContext {
         sp: &StorageParams,
     ) -> Result<(TableSchema, String)> {
         match kind {
-            "iceberg" => {
-                let dop = DataOperator::try_new(sp)?;
-                let table = IcebergTable::load_iceberg_table(dop).await?;
-                Ok((IcebergTable::get_schema(&table).await?, "".to_string()))
-            }
             "delta" => {
                 let table = DeltaTable::load(sp).await?;
                 DeltaTable::get_meta(&table).await
             }
-            _ => Err(ErrorCode::Internal("unknown datalake type {}")),
+            // TODO: iceberg doesn't support load from storage directly.
+            _ => Err(ErrorCode::Internal("unsupported datalake type {}")),
         }
     }
 

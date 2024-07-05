@@ -30,13 +30,13 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
 use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::ShareCredential;
 use databend_common_meta_app::share::ShareCredentialHmac;
-use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
@@ -340,18 +340,13 @@ fn new_table_statistics() -> databend_common_meta_app::schema::TableStatistics {
 
 fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
     databend_common_meta_app::schema::CatalogMeta {
-        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-            storage_params: Box::new(databend_common_meta_app::storage::StorageParams::S3(
-                StorageS3Config {
-                    endpoint_url: "http://127.0.0.1:9900".to_string(),
-                    region: "hello".to_string(),
-                    bucket: "world".to_string(),
-                    access_key_id: "databend_has_super_power".to_string(),
-                    secret_access_key: "databend_has_super_power".to_string(),
-                    ..Default::default()
-                },
-            )),
-        }),
+        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption::Rest(
+            IcebergRestCatalogOption {
+                uri: "http://127.0.0.1:9900".to_string(),
+                warehouse: "databend_has_super_power".to_string(),
+                props: Default::default(),
+            },
+        )),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
     }
 }
