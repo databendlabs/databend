@@ -20942,6 +20942,66 @@ CreateUDF(
 
 
 ---------- Input ----------
+CREATE file format my_orc type = orc
+---------- Output ---------
+CREATE FILE FORMAT my_orc type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE file format my_orc type = orc missing_field_as=field_default
+---------- Output ---------
+CREATE FILE FORMAT my_orc missing_field_as = field_default, type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "missing_field_as": Keyword(
+                "field_default",
+            ),
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE file format my_orc type = orc missing_field_as='field_default'
+---------- Output ---------
+CREATE FILE FORMAT my_orc missing_field_as = 'field_default', type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "missing_field_as": String(
+                "field_default",
+            ),
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
 CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');
 ---------- Output ---------
 CREATE STAGE s FILE_FORMAT = (escape = '\\', record_delimiter = '\n')

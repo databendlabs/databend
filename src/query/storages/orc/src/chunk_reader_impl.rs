@@ -38,17 +38,14 @@ impl AsyncChunkReader for OrcChunkReader {
     ) -> BoxFuture<'_, std::io::Result<Bytes>> {
         let range = offset_from_start..(offset_from_start + length);
         async move {
-            let mut reader = self
+            let buf = self
                 .operator
-                .reader_with(&self.path)
+                .read_with(&self.path)
+                .range(range)
                 .chunk(8 << 20)
                 .concurrent(4)
-                .await?
-                .into_futures_async_read(range)
                 .await?;
-            let mut buffer = vec![0u8; length as usize];
-            read_full(&mut reader, &mut buffer[..]).await?;
-            Ok(buffer.into())
+            Ok(buf.to_bytes())
         }
         .boxed()
     }
