@@ -12,24 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-pub mod exception;
-mod exception_backtrace;
-mod exception_code;
-mod exception_flight;
-mod exception_into;
-mod with_context;
+mod projection;
 
-pub use exception::ErrorCode;
-pub use exception::Result;
-pub use exception::ToErrorCode;
-pub use exception_backtrace::set_backtrace;
-pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
-pub use exception_into::SerializedError;
-pub use with_context::ErrorWithContext;
-pub use with_context::WithContext;
+mod meta;
+mod processors;
+mod table;
 
-#[ctor::ctor]
-fn init_color_backtrace() {
-    color_backtrace::install();
-}
+pub use table::OrcTableForCopy;

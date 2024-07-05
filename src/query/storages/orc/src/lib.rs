@@ -24,11 +24,15 @@
 #![feature(box_patterns)]
 
 mod chunk_reader_impl;
+mod copy_into_table;
+mod hashable_schema;
 mod orc_file_partition;
 mod processors;
 mod read_partition;
 mod read_pipeline;
 mod strip;
 mod table;
+mod utils;
 
+pub use copy_into_table::OrcTableForCopy;
 pub use table::OrcTable;

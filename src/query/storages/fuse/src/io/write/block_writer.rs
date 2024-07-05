@@ -443,7 +443,6 @@ impl BlockWriter {
         metrics_inc_block_write_nums(size as u64);
         metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
 
-        info!("wrote down block: {}", block_location);
         Ok(())
     }
 
@@ -461,7 +460,11 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(index_state.size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
 
-            info!("wrote down bloom index: {}", location);
+            info!(
+                "wrote down bloom index: {}, use {} secs",
+                location,
+                start.elapsed().as_secs_f32()
+            );
         }
         Ok(())
     }
