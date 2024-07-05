@@ -80,16 +80,18 @@ impl CacheManager {
                         .join(tenant_id.into())
                         .join("v1");
 
-                    let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
-                        config.table_data_cache_population_queue_size
-                    } else {
-                        std::cmp::max(
-                            1,
-                            std::thread::available_parallelism()
-                                .expect("Cannot get thread count")
-                                .get() as u32,
-                        )
-                    };
+                    //                    let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
+                    //                        config.table_data_cache_population_queue_size
+                    //                    } else {
+                    //                        std::cmp::max(
+                    //                            1,
+                    //                            std::thread::available_parallelism()
+                    //                                .expect("Cannot get thread count")
+                    //                                .get() as u32,
+                    //                        )
+                    //                    };
+
+                    let queue_size = 8;
 
                     info!(
                         "disk cache enabled, cache population queue size {}",

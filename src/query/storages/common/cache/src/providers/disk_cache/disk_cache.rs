@@ -304,6 +304,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
             bufs.push(IoSlice::new(slick));
         }
         f.write_all_vectored(&mut bufs)?;
+        f.flush()?;
         self.cache.put(cache_key.0, bytes_len);
         Ok(())
     }
