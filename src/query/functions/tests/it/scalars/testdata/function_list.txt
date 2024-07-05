@@ -3554,6 +3554,8 @@ Functions overloads:
 1 st_aswkt(Geometry NULL) :: String NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
+0 st_distance(Geometry, Geometry) :: Float64 NULL
+1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_endpoint(Geometry) :: Geometry
 1 st_endpoint(Geometry NULL) :: Geometry NULL
 0 st_geohash(Geometry) :: String
@@ -3576,6 +3578,8 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_length(Geometry) :: Float64 NULL
+1 st_length(Geometry NULL) :: Float64 NULL
 0 st_makegeompoint(Float64, Float64) :: Geometry
 1 st_makegeompoint(Float64 NULL, Float64 NULL) :: Geometry NULL
 0 st_makeline(Geometry, Geometry) :: Geometry
