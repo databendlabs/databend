@@ -15,14 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
-use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::CreateCatalogPlan;
 use databend_common_storages_fuse::TableContext;
@@ -58,14 +55,6 @@ impl Interpreter for CreateCatalogInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "create_catalog_execute");
-
-        if let CatalogOption::Iceberg(opt) = &self.plan.meta.catalog_option {
-            if !opt.storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-                return Err(ErrorCode::CatalogNotSupported(
-                    "Accessing insecure storage in not allowed by configuration",
-                ));
-            }
-        }
 
         let catalog_manager = CatalogManager::instance();
 
