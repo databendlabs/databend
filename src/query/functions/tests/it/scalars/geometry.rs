@@ -33,10 +33,12 @@ fn test_geometry() {
     test_st_aswkt(file);
     test_st_endpoint(file);
     test_st_dimension(file);
+    test_st_distance(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
     test_st_geompointfromgeohash(file);
+    test_st_length(file);
     test_st_makeline(file);
     test_st_makepoint(file);
     test_st_makepolygon(file);
@@ -149,6 +151,14 @@ fn test_st_dimension(file: &mut impl Write) {
     );
 }
 
+fn test_st_distance(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_distance(to_geometry('point(0 0)'), to_geometry('point(1 1)'))",
+        &[],
+    );
+}
+
 fn test_st_geohash(file: &mut impl Write) {
     run_ast(
         file,
@@ -189,6 +199,17 @@ fn test_st_geomfromgeohash(file: &mut impl Write) {
 fn test_st_geompointfromgeohash(file: &mut impl Write) {
     run_ast(file, "st_geompointfromgeohash('s02equ0')", &[]);
 }
+
+fn test_st_length(file: &mut impl Write) {
+    run_ast(file, "st_length(to_geometry('POINT(1 1)'))", &[]);
+    run_ast(file, "st_length(to_geometry('LINESTRING(0 0, 1 1)'))", &[]);
+    run_ast(
+        file,
+        "st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))",
+        &[],
+    );
+}
+
 fn test_st_makeline(file: &mut impl Write) {
     run_ast(
         file,
