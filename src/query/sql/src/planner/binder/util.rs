@@ -185,7 +185,7 @@ impl FullyTableIdentifier<'_> {
                             ident_with_quote(database, None)
                         )
                     }
-                    None => format!("Unknown database {catalog}.{database}."),
+                    None => format!("Unknown database {catalog}.{database} ."),
                 };
                 ErrorCode::UnknownDatabase(error_message).set_span(database.span)
             }
@@ -203,7 +203,7 @@ impl FullyTableIdentifier<'_> {
                             ident_with_quote(table, None)
                         )
                     }
-                    None => format!("Unknown table {catalog}.{database}.{table}."),
+                    None => format!("Unknown table {catalog}.{database}.{table} ."),
                 };
                 ErrorCode::UnknownTable(error_message).set_span(table.span)
             }
