@@ -248,6 +248,12 @@ impl<'a> From<&'a [Column]> for InputColumns<'a> {
     }
 }
 
+impl<'a, const N: usize> From<&'a [Column; N]> for InputColumns<'a> {
+    fn from(value: &'a [Column; N]) -> Self {
+        InputColumns::Slice(value.as_slice())
+    }
+}
+
 impl<'a> From<&'a Vec<Column>> for InputColumns<'a> {
     fn from(value: &'a Vec<Column>) -> Self {
         InputColumns::Slice(value)

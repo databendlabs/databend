@@ -115,15 +115,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     ) -> Result<()> {
         let col = &columns[0];
         let validity = column_merge_validity(col, validity.cloned());
-        let not_null_column = col.remove_nullable();
-
-        let input = [not_null_column];
-        self.nested.accumulate(
-            place,
-            input.as_slice().into(),
-            validity.as_ref(),
-            input_rows,
-        )?;
+        let not_null_column = &[col.remove_nullable()];
+        let not_null_column = not_null_column.into();
+        self.nested
+            .accumulate(place, not_null_column, validity.as_ref(), input_rows)?;
 
         if validity
             .as_ref()
@@ -145,7 +140,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     ) -> Result<()> {
         let col = &columns[0];
         let validity = column_merge_validity(col, None);
-        let not_null_columns = [col.remove_nullable()];
+        let not_null_columns = &[col.remove_nullable()];
+        let not_null_columns = not_null_columns.into();
 
         match validity {
             Some(v) if v.unset_bits() > 0 => {
@@ -157,21 +153,14 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
                 for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
                     if valid {
                         self.set_flag(place.next(offset), 1);
-                        self.nested.accumulate_row(
-                            place.next(offset),
-                            not_null_columns.as_slice().into(),
-                            row,
-                        )?;
+                        self.nested
+                            .accumulate_row(place.next(offset), not_null_columns, row)?;
                     }
                 }
             }
             _ => {
-                self.nested.accumulate_keys(
-                    places,
-                    offset,
-                    not_null_columns.as_slice().into(),
-                    input_rows,
-                )?;
+                self.nested
+                    .accumulate_keys(places, offset, not_null_columns, input_rows)?;
                 places
                     .iter()
                     .for_each(|place| self.set_flag(place.next(offset), 1));
@@ -184,7 +173,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let col = &columns[0];
         let validity = column_merge_validity(col, None);
-        let not_null_columns = [col.remove_nullable()];
+        let not_null_columns = &[col.remove_nullable()];
+        let not_null_columns = not_null_columns.into();
 
         match validity {
             Some(v) if v.unset_bits() > 0 => {
@@ -195,13 +185,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
 
                 if unsafe { v.get_bit_unchecked(row) } {
                     self.set_flag(place, 1);
-                    self.nested
-                        .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
+                    self.nested.accumulate_row(place, not_null_columns, row)?;
                 }
             }
             _ => {
-                self.nested
-                    .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
+                self.nested.accumulate_row(place, not_null_columns, row)?;
                 self.set_flag(place, 1);
             }
         }

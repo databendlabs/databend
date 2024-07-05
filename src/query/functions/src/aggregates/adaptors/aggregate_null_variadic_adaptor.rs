@@ -120,13 +120,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             validity = column_merge_validity(col, validity);
             not_null_columns.push(col.remove_nullable());
         }
+        let not_null_columns = (&not_null_columns).into();
 
-        self.nested.accumulate(
-            place,
-            not_null_columns.as_slice().into(),
-            validity.as_ref(),
-            input_rows,
-        )?;
+        self.nested
+            .accumulate(place, not_null_columns, validity.as_ref(), input_rows)?;
 
         if validity
             .as_ref()
@@ -151,6 +148,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             validity = column_merge_validity(col, validity);
             not_null_columns.push(col.remove_nullable());
         }
+        let not_null_columns = (&not_null_columns).into();
 
         match validity {
             Some(v) if v.unset_bits() > 0 => {
@@ -161,21 +159,14 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
                     if valid {
                         self.set_flag(place.next(offset), 1);
-                        self.nested.accumulate_row(
-                            place.next(offset),
-                            (&not_null_columns).into(),
-                            row,
-                        )?;
+                        self.nested
+                            .accumulate_row(place.next(offset), not_null_columns, row)?;
                     }
                 }
             }
             _ => {
-                self.nested.accumulate_keys(
-                    places,
-                    offset,
-                    (&not_null_columns).into(),
-                    input_rows,
-                )?;
+                self.nested
+                    .accumulate_keys(places, offset, not_null_columns, input_rows)?;
                 places
                     .iter()
                     .for_each(|place| self.set_flag(place.next(offset), 1));
@@ -191,6 +182,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             validity = column_merge_validity(col, validity);
             not_null_columns.push(col.remove_nullable());
         }
+        let not_null_columns = (&not_null_columns).into();
 
         match validity {
             Some(v) if v.unset_bits() > 0 => {
@@ -201,13 +193,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
                 if unsafe { v.get_bit_unchecked(row) } {
                     self.set_flag(place, 1);
-                    self.nested
-                        .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
+                    self.nested.accumulate_row(place, not_null_columns, row)?;
                 }
             }
             _ => {
-                self.nested
-                    .accumulate_row(place, not_null_columns.as_slice().into(), row)?;
+                self.nested.accumulate_row(place, not_null_columns, row)?;
                 self.set_flag(place, 1);
             }
         }
