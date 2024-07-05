@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -35,7 +36,6 @@ use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 
-use crate::interpreters::util::format_name;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -145,12 +145,12 @@ impl ShowCreateTableInterpreter {
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
-            format_name(name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(name, quoted_ident_case_sensitive, sql_dialect)
         );
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
-                format_name(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
             )
         }
 
@@ -194,7 +194,7 @@ impl ShowCreateTableInterpreter {
                 };
                 let column_str = format!(
                     "  {} {}{}{}{}{}",
-                    format_name(field.name(), quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
                     field.data_type().remove_recursive_nullable().sql_name(),
                     nullable,
                     default_expr,
@@ -225,7 +225,7 @@ impl ShowCreateTableInterpreter {
                 let mut index_str = format!(
                     "  {} INVERTED INDEX {} ({})",
                     sync,
-                    format_name(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
                     column_names_str
                 );
                 if !options.is_empty() {
