@@ -154,7 +154,7 @@ fn test_st_dimension(file: &mut impl Write) {
 fn test_st_distance(file: &mut impl Write) {
     run_ast(
         file,
-        "st_distance(to_geometry('point(0 0)'), to_geometry('point(1 1)'))",
+        "st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))",
         &[],
     );
 }
