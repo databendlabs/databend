@@ -57,3 +57,30 @@ impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef
         }
     }
 }
+
+impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+    type TargetType = SegmentInfo;
+    fn read<R>(&self, reader: R) -> Result<SegmentInfo>
+    where R: Read + Unpin + Send {
+        let schema = &self.1;
+        match &self.0 {
+            SegmentInfoVersion::V4(_) => SegmentInfo::from_reader(reader),
+            SegmentInfoVersion::V3(_) => Ok(SegmentInfoV3::from_reader(reader)?.into()),
+            SegmentInfoVersion::V2(v) => Ok(load_json(reader, v)?.into()),
+            SegmentInfoVersion::V1(v) => {
+                let v1 = load_json(reader, v)?;
+                // need leaf fields info to migrate from v1
+                let fields = schema.leaf_fields();
+                let current: SegmentInfo = (v1, &fields[..]).into();
+                Ok(current)
+            }
+            SegmentInfoVersion::V0(v) => {
+                let v0 = load_json(reader, v)?;
+                // need leaf fields info to migrate from v0
+                let fields = schema.leaf_fields();
+                let current: SegmentInfo = (v0, &fields[..]).into();
+                Ok(current)
+            }
+        }
+    }
+}

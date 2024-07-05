@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::{CompactSegmentInfo, SegmentInfo};
 
 use crate::io::SegmentsIO;
 use crate::pruning::PruningContext;
@@ -43,7 +43,7 @@ impl SegmentPruner {
     pub async fn pruning(
         &self,
         segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    ) -> Result<Vec<(SegmentLocation, Arc<SegmentInfo>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         }
@@ -54,7 +54,7 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = SegmentsIO::read_compact_segment(
+            let info = SegmentsIO::read_normal_segment(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
                 self.table_schema.clone(),

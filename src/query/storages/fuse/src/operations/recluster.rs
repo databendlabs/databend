@@ -26,6 +26,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseco
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use log::warn;
 use opendal::Operator;
 
@@ -229,6 +230,15 @@ impl FuseTable {
 
                 async move {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
+                    // TODO just poc, pls do not do this
+                    let pruned_segments: Vec<_> = pruned_segments
+                        .into_iter()
+                        .map(|(loc, seg)| {
+                            let seg = CompactSegmentInfo::try_from(seg.as_ref())?;
+                            Ok((loc, Arc::new(seg)))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+
                     Result::<_, ErrorCode>::Ok(pruned_segments)
                 }
             }));

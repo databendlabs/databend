@@ -28,6 +28,7 @@ use databend_storages_common_cache_manager::CompactSegmentInfoMeter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
@@ -57,12 +58,22 @@ pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
 pub type InvertedIndexMetaReader =
     InMemoryItemCacheReader<InvertedIndexMeta, LoaderWrapper<Operator>>;
 
+pub type SegmentInfoReader =
+    InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+
 pub struct MetaReaders;
 
 impl MetaReaders {
     pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
         CompactSegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
+            LoaderWrapper((dal, schema)),
+        )
+    }
+
+    pub fn deser_segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
+        SegmentInfoReader::new(
+            CacheManager::instance().get_deserialized_segment_info_cache(),
             LoaderWrapper((dal, schema)),
         )
     }
@@ -138,7 +149,22 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader.reader())
+        <(SegmentInfoVersion, TableSchemaRef) as VersionedReader<CompactSegmentInfo>>::read::<
+            bytes::buf::Reader<opendal::Buffer>,
+        >(&(version, schema.clone()), reader.reader())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+        let version = SegmentInfoVersion::try_from(params.ver)?;
+        let LoaderWrapper((operator, schema)) = &self;
+        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
+        <(SegmentInfoVersion, TableSchemaRef) as VersionedReader<SegmentInfo>>::read::<
+            bytes::buf::Reader<opendal::Buffer>,
+        >(&(version, schema.clone()), reader.reader())
     }
 }
 

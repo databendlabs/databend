@@ -177,19 +177,23 @@ impl SegmentInfo {
     }
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
-        let mut cursor = Cursor::new(bytes);
+        let cursor = Cursor::new(bytes);
+        Self::from_reader(cursor)
+    }
+
+    pub fn from_reader(mut r: impl Read) -> Result<Self> {
         let SegmentHeader {
             version,
             encoding,
             compression,
             blocks_size,
             summary_size,
-        } = decode_segment_header(&mut cursor)?;
+        } = decode_segment_header(&mut r)?;
 
         let blocks: Vec<Arc<BlockMeta>> =
-            read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+            read_and_deserialize(&mut r, blocks_size, &encoding, &compression)?;
         let summary: Statistics =
-            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+            read_and_deserialize(&mut r, summary_size, &encoding, &compression)?;
 
         let mut segment = Self::new(blocks, summary);
 

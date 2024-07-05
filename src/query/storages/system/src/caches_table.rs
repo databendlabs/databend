@@ -60,6 +60,7 @@ impl SyncSystemTable for CachesTable {
         let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
         let table_snapshot_statistic_cache = cache_manager.get_table_snapshot_statistics_cache();
         let segment_info_cache = cache_manager.get_table_segment_cache();
+        let deserialized_segment_info_cache = cache_manager.get_deserialized_segment_info_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
@@ -85,6 +86,13 @@ impl SyncSystemTable for CachesTable {
         if let Some(segment_info_cache) = segment_info_cache {
             nodes.push(local_node.clone());
             names.push("segment_info_cache".to_string());
+            num_items.push(segment_info_cache.len() as u64);
+            size.push(segment_info_cache.size());
+        }
+
+        if let Some(segment_info_cache) = deserialized_segment_info_cache {
+            nodes.push(local_node.clone());
+            names.push("segment_info_deserialized_cache".to_string());
             num_items.push(segment_info_cache.len() as u64);
             size.push(segment_info_cache.size());
         }

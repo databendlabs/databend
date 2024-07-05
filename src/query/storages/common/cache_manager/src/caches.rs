@@ -42,6 +42,8 @@ pub type CompactSegmentInfoCache = NamedCache<
     InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>,
 >;
 
+pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
+
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
 /// In memory object cache of TableSnapshotStatistics
@@ -95,12 +97,12 @@ impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMete
     }
 }
 
-impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter> for SegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_segment_cache()
-    }
-}
+// impl CachedObject<SegmentInfo> for SegmentInfo {
+//    type Cache = SegmentInfoCache;
+//    fn cache() -> Option<Self::Cache> {
+//        CacheManager::instance().get_deserialized_segment_info_cache()
+//    }
+//}
 
 impl CachedObject<TableSnapshot> for TableSnapshot {
     type Cache = TableSnapshotCache;
@@ -141,6 +143,13 @@ impl CachedObject<FileMetaData> for FileMetaData {
     type Cache = FileMetaDataCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_file_meta_data_cache()
+    }
+}
+
+impl CachedObject<SegmentInfo> for SegmentInfo {
+    type Cache = SegmentInfoCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_deserialized_segment_info_cache()
     }
 }
 

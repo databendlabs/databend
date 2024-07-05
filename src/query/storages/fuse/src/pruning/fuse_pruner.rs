@@ -337,7 +337,7 @@ impl FusePruner {
                                             block_pruner
                                                 .pruning(
                                                     segment_location.clone(),
-                                                    compact_segment_info.block_metas()?,
+                                                    compact_segment_info.blocks.clone(),
                                                 )
                                                 .await?,
                                         );
@@ -348,7 +348,7 @@ impl FusePruner {
                                         block_pruner
                                             .pruning(
                                                 segment_location.clone(),
-                                                compact_segment_info.block_metas()?,
+                                                compact_segment_info.blocks.clone(),
                                             )
                                             .await?,
                                     );
@@ -357,7 +357,7 @@ impl FusePruner {
                         }
                     } else {
                         for (location, info) in pruned_segments {
-                            let block_metas = info.block_metas()?;
+                            let block_metas = info.blocks.clone();
                             res.extend(block_pruner.pruning(location, block_metas).await?);
                         }
                     }

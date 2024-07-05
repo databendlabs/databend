@@ -76,6 +76,48 @@ impl SegmentsIO {
         reader.read(&load_params).await
     }
 
+    #[async_backtrace::framed]
+    pub async fn read_normal_segment(
+        dal: Operator,
+        segment_location: Location,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<SegmentInfo>> {
+        let (path, ver) = segment_location;
+        let reader = MetaReaders::deser_segment_info_reader(dal, table_schema);
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            put_cache,
+        };
+
+        reader.read(&load_params).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn read_segment(
+        dal: Operator,
+        segment_location: Location,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<SegmentInfo>> {
+        let (path, ver) = segment_location;
+        let reader = MetaReaders::deser_segment_info_reader(dal, table_schema);
+
+        // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            put_cache,
+        };
+
+        reader.read(&load_params).await
+    }
+
     // Read all segments information from s3 in concurrently.
     #[async_backtrace::framed]
     #[minitrace::trace]
@@ -130,5 +172,38 @@ impl SegmentsIO {
             segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
         }
         Ok(())
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
+    pub async fn read_seg(
+        &self,
+        segment_locations: &[Location],
+        put_cache: bool,
+    ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
+        // combine all the tasks.
+        let mut iter = segment_locations.iter();
+        let tasks = std::iter::from_fn(|| {
+            iter.next().map(|location| {
+                let dal = self.operator.clone();
+                let table_schema = self.schema.clone();
+                let segment_location = location.clone();
+                async move {
+                        Self::read_segment(dal, segment_location, table_schema, put_cache).await
+
+                }
+                .in_span(Span::enter_with_local_parent(full_name!()))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = threads_nums * 2;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
     }
 }

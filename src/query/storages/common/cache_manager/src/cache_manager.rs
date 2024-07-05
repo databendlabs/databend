@@ -44,6 +44,7 @@ use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
 use crate::InvertedIndexFileMeter;
 use crate::PrunePartitionsCache;
+use crate::SegmentInfoCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -58,6 +59,7 @@ pub struct CacheManager {
     inverted_index_file_cache: Option<InvertedIndexFileCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
+    deserialized_segment_info_cache: Option<SegmentInfoCache>,
     table_data_cache: Option<TableDataCache>,
     table_column_array_cache: Option<ColumnArrayCache>,
 }
@@ -128,6 +130,7 @@ impl CacheManager {
                 prune_partitions_cache: None,
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
+                deserialized_segment_info_cache: None,
                 table_data_cache,
                 table_column_array_cache,
             }));
@@ -141,6 +144,9 @@ impl CacheManager {
                 CompactSegmentInfoMeter {},
                 "segment_info",
             );
+
+            let deserialized_segment_info_cache =
+                Self::new_item_cache(1000, "deserialized_segment_cache");
             let bloom_index_filter_cache = Self::new_in_memory_cache(
                 config.table_bloom_index_filter_size,
                 BloomIndexFilterMeter {},
@@ -183,6 +189,7 @@ impl CacheManager {
                 table_statistic_cache,
                 table_data_cache,
                 table_column_array_cache,
+                deserialized_segment_info_cache,
             }));
         }
 
@@ -227,6 +234,10 @@ impl CacheManager {
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
         self.file_meta_data_cache.clone()
+    }
+
+    pub fn get_deserialized_segment_info_cache(&self) -> Option<SegmentInfoCache> {
+        self.deserialized_segment_info_cache.clone()
     }
 
     pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
