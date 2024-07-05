@@ -187,7 +187,7 @@ impl FullyTableIdentifier<'_> {
                     }
                     None => format!("Unknown database {catalog}.{database}."),
                 };
-                ErrorCode::UnknownDatabase(error_message)
+                ErrorCode::UnknownDatabase(error_message).set_span(database.span)
             }
             ErrorCode::UNKNOWN_TABLE => {
                 let error_message = match self.name_resolution_ctx.not_found_suggest(table) {
@@ -205,7 +205,7 @@ impl FullyTableIdentifier<'_> {
                     }
                     None => format!("Unknown table {catalog}.{database}.{table}."),
                 };
-                ErrorCode::UnknownTable(error_message)
+                ErrorCode::UnknownTable(error_message).set_span(table.span)
             }
             _ => err,
         }

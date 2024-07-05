@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
@@ -30,24 +31,24 @@ pub enum NameResolutionSuggest {
 
 impl NameResolutionContext {
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
+        if !ident.name.chars().any(|c| c.is_ascii_uppercase()) {
+            return None;
+        }
         match (
             self.unquoted_ident_case_sensitive,
             self.quoted_ident_case_sensitive,
             ident.is_quoted(),
         ) {
-            (false, true, false) => {
-                if ident.name.to_lowercase() != ident.name {
-                    return Some(NameResolutionSuggest::Quoted);
-                }
-            }
+            (false, true, false) => Some(NameResolutionSuggest::Quoted),
             (true, false, true) => {
-                if ident.name.to_lowercase() != ident.name {
-                    return Some(NameResolutionSuggest::Unqoted);
+                if !ident_needs_quote(&ident.name) {
+                    Some(NameResolutionSuggest::Unqoted)
+                } else {
+                    None
                 }
             }
-            _ => return None,
-        };
-        None
+            _ => None,
+        }
     }
 }
 

@@ -28,7 +28,6 @@ use databend_storages_common_table_meta::table::get_change_type;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::BindContext;
-use crate::NameResolutionSuggest;
 
 impl Binder {
     /// Bind a base table.
@@ -45,8 +44,12 @@ impl Binder {
         temporal: &Option<TemporalClause>,
         consume: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (catalog, database, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let fully_table = self.fully_table_identifier(catalog, database, table);
+        let (catalog, database, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
         let table_alias_name = alias
             .as_ref()
             .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
@@ -109,28 +112,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    return Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database `{database}` in catalog '{catalog}'",
-                    ))
-                    .set_span(*span));
-                }
-                if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    let name = &table.name;
-                    let err_message = match self.name_resolution_ctx.not_found_suggest(table) {
-                        Some(NameResolutionSuggest::Quoted) => format!(
-                            "Unknown table `{database}`.{table} (unquoted) in catalog '{catalog}'. Did you mean `{name}` (quoted)?",
-                        ),
-                        Some(NameResolutionSuggest::Unqoted) => format!(
-                            "Unknown table `{database}`.{table} (quoted) in catalog '{catalog}'. Did you mean {name} (unquoted)?",
-                        ),
-                        None => {
-                            format!("Unknown table `{database}`.`{name}` in catalog '{catalog}'")
-                        }
-                    };
-                    return Err(ErrorCode::UnknownTable(err_message).set_span(*span));
-                }
-                return Err(e);
+                return Err(fully_table.not_found_suggest_error(e));
             }
         };
 
