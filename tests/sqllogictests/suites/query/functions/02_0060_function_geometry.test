@@ -6,6 +6,26 @@ SELECT haversine(40.7127, -74.0059, 34.0500, -118.2500);
 ----
 3936.390533556
 
+query T
+SELECT st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
+----
+1.414213562
+
+query T
+SELECT st_length(to_geometry('POINT(1 1)'));
+----
+0.0
+
+query T
+SELECT st_length(to_geometry('LINESTRING(0 0, 1 1)'));
+----
+1.414213562
+
+query T
+SELECT st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'));
+----
+0.0
+
 statement ok
 SET geometry_output_format='EWKT'
 
