@@ -166,8 +166,8 @@ pub enum ShareGrantObjectSeqAndId {
 // share name and shared (table name, table info) map
 pub type TableInfoMap = BTreeMap<String, TableInfo>;
 
-// Vec<share name> and table info
-pub type ShareVecTableInfo = (Vec<String>, TableInfo);
+// Vec<share name>, db id, table info
+pub type ShareVecTableInfo = (Vec<String>, u64, TableInfo);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
@@ -181,7 +181,7 @@ pub struct GrantShareObjectReq {
 pub struct GrantShareObjectReply {
     pub share_id: u64,
     pub share_spec: Option<ShareSpec>,
-    pub grant_share_table: Option<TableInfo>,
+    pub grant_share_table: Option<(u64, TableInfo)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -193,10 +193,18 @@ pub struct RevokeShareObjectReq {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ShareObject {
+    // db id
+    Db(u64),
+    // db id, table name
+    Table((u64, String)),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
     pub share_spec: Option<ShareSpec>,
-    pub revoke_share_table: Vec<String>,
+    pub revoke_object: Option<ShareObject>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

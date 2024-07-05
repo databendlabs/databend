@@ -23,7 +23,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
-use databend_common_storages_share::update_share_table_info;
+use databend_common_storages_share::update_share_table_info_new;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
@@ -143,11 +143,12 @@ impl Interpreter for DropTableColumnInterpreter {
 
         let resp = catalog.update_table_meta(table_info, req).await?;
 
-        if let Some((share_name_vec, share_table_info)) = resp.share_vec_table_info {
-            update_share_table_info(
+        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
+            update_share_table_info_new(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
                 &share_name_vec,
+                &db_id,
                 &share_table_info,
             )
             .await?;

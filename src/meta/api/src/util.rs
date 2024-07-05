@@ -1090,7 +1090,7 @@ pub async fn get_table_info_by_share(
     share_table_id: Option<u64>,
     share_name: &ShareNameIdent,
     share_meta: &ShareMeta,
-) -> Result<Vec<TableInfo>, KVAppError> {
+) -> Result<(u64, Vec<TableInfo>), KVAppError> {
     let mut db_ident_raw = None;
     let mut shared_db_id = 0;
     if let Some(ref entry) = share_meta.database {
@@ -1159,7 +1159,7 @@ pub async fn get_table_info_by_share(
                 })
                 .collect();
 
-            Ok(table_infos)
+            Ok((shared_db_id, table_infos))
         }
         None => Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
             ShareHasNoGrantedDatabase::new(share_name.tenant_name(), share_name.share_name()),

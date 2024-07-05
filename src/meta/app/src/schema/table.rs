@@ -539,8 +539,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // share spec vector
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    // (db id, share spec vector)
+    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -581,8 +581,8 @@ impl Display for DropTableByIdReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableReply {
-    // share spec vector
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    // db id, share spec vector
+    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

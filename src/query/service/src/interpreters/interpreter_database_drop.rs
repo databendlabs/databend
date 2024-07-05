@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
-use databend_common_storages_share::remove_share_dir;
+use databend_common_storages_share::remove_share_db_dir;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -72,10 +72,11 @@ impl Interpreter for DropDatabaseInterpreter {
 
         // handle share cleanups with the DropDatabaseReply
         if let Some(share_specs) = reply.share_specs {
-            // since db is dropped, first we need to clean share dir
-            remove_share_dir(
+            // since db is dropped, first we need to clean share db dir
+            remove_share_db_dir(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
+                &reply.db_id,
                 &share_specs,
             )
             .await?;

@@ -17,6 +17,7 @@ use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
+use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableSpec;
 use log::error;
@@ -26,6 +27,13 @@ const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
 pub fn get_share_dir(tenant: &str, share_name: &str) -> String {
     format!("{}/{}/{}", SHARE_CONFIG_PREFIX, tenant, share_name)
+}
+
+pub fn get_share_database_dir(tenant: &str, share_name: &str, db_id: &u64) -> String {
+    format!(
+        "{}/{}/{}/{}",
+        SHARE_CONFIG_PREFIX, tenant, share_name, db_id
+    )
 }
 
 pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
@@ -39,6 +47,18 @@ pub fn share_table_info_location(tenant: &str, share_name: &str, table_name: &st
     format!(
         "{}/{}/{}/{}_table_info.json",
         SHARE_CONFIG_PREFIX, tenant, share_name, table_name
+    )
+}
+
+pub fn new_share_table_info_location(
+    tenant: &str,
+    share_name: &str,
+    db_id: &u64,
+    table_name: &str,
+) -> String {
+    format!(
+        "{}/{}/{}/{}/{}_table_info.json",
+        SHARE_CONFIG_PREFIX, tenant, share_name, db_id, table_name
     )
 }
 
@@ -76,6 +96,74 @@ pub async fn remove_share_table_info(
 }
 
 #[async_backtrace::framed]
+pub async fn remove_share_table_info_new(
+    tenant: &str,
+    operator: Operator,
+    share_name: &String,
+    db_id: &u64,
+    revoke_share_table: &[String],
+) -> Result<()> {
+    for share_table in revoke_share_table {
+        let location = new_share_table_info_location(tenant, share_name, db_id, share_table);
+
+        operator.delete(&location).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_table_object(
+    tenant: &str,
+    operator: Operator,
+    share_name: &String,
+    revoke_share_object: &[ShareObject],
+) -> Result<()> {
+    for share_object in revoke_share_object {
+        match share_object {
+            ShareObject::Table((db_id, share_table)) => {
+                let location =
+                    new_share_table_info_location(tenant, share_name, db_id, share_table);
+
+                operator.delete(&location).await?;
+            }
+            ShareObject::Db(db_id) => {
+                let dir = get_share_database_dir(tenant, share_name, db_id);
+                operator.remove_all(&dir).await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn update_share_table_info_new(
+    tenant: &str,
+    operator: Operator,
+    share_name_vec: &[String],
+    db_id: &u64,
+    share_table_info: &TableInfo,
+) -> Result<()> {
+    for share_name in share_name_vec {
+        let location =
+            new_share_table_info_location(tenant, share_name, db_id, &share_table_info.name);
+
+        if let Err(e) = operator
+            .write(&location, serde_json::to_string(share_table_info)?)
+            .await
+        {
+            error!(
+                "update_share_table_info of share {} table {} error: {:?}",
+                share_name, share_table_info.name, e
+            );
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
 pub async fn update_share_table_info(
     tenant: &str,
     operator: Operator,
@@ -107,6 +195,21 @@ pub async fn remove_share_dir(
 ) -> Result<()> {
     for share_spec in share_specs {
         let dir = get_share_dir(tenant, &share_spec.name);
+        operator.remove_all(&dir).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_db_dir(
+    tenant: &str,
+    operator: Operator,
+    db_id: &u64,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_database_dir(tenant, &share_spec.name, db_id);
         operator.remove_all(&dir).await?;
     }
 

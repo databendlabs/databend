@@ -265,6 +265,7 @@ impl Display for DropDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReply {
+    pub db_id: u64,
     // if `share_specs` is not empty, it means that create database with replace option,
     // and `share_specs` vector save the share spec of original database
     pub share_specs: Option<Vec<ShareSpec>>,

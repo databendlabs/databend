@@ -23,7 +23,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::remove_share_table_info;
+use databend_common_storages_share::remove_share_table_info_new;
 use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
@@ -151,7 +151,7 @@ impl Interpreter for DropTableInterpreter {
         }
 
         // update share spec if needed
-        if let Some(spec_vec) = resp.spec_vec {
+        if let Some((db_id, spec_vec)) = resp.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
@@ -162,10 +162,11 @@ impl Interpreter for DropTableInterpreter {
             // remove table spec
             let share_names = vec![tbl_name.to_string()];
             for share_spec in spec_vec {
-                remove_share_table_info(
+                remove_share_table_info_new(
                     self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_application_level_data_operator()?.operator(),
                     &share_spec.name,
+                    &db_id,
                     &share_names,
                 )
                 .await?;

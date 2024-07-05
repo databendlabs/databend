@@ -307,7 +307,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         });
                     }
                     CreateOption::CreateOrReplace => {
-                        drop_database_meta(
+                        let (_, share_specs) = drop_database_meta(
                             self,
                             name_key,
                             false,
@@ -315,7 +315,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             &mut condition,
                             &mut if_then,
                         )
-                        .await?
+                        .await?;
+                        share_specs
                     }
                 }
             } else {
@@ -401,7 +402,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let share_specs = drop_database_meta(
+            let (db_id, share_specs) = drop_database_meta(
                 self,
                 tenant_dbname,
                 req.if_exists,
@@ -425,7 +426,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(DropDatabaseReply { share_specs });
+                return Ok(DropDatabaseReply { db_id, share_specs });
             }
         }
     }
@@ -1542,6 +1543,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // fixed
         let key_dbid = DatabaseId { db_id: db_id.data };
+        let save_db_id = db_id.data;
 
         // fixed
         let key_dbid_tbname = DBIdTableName {
@@ -1812,7 +1814,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         db_id: db_id.data,
                         new_table: dbid_tbname_seq == 0,
                         spec_vec: if let Some(spec_vec) = opt.0 {
-                            Some(spec_vec)
+                            Some((save_db_id, spec_vec))
                         } else {
                             None
                         },
@@ -2498,7 +2500,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if succ {
                 return Ok(DropTableReply {
                     spec_vec: if let Some(spec_vec) = opt.0 {
-                        Some(spec_vec)
+                        Some((req.db_id, spec_vec))
                     } else {
                         None
                     },
@@ -4531,7 +4533,7 @@ async fn drop_database_meta(
     drop_name_key: bool,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<Option<Vec<ShareSpec>>, KVAppError> {
+) -> Result<(u64, Option<Vec<ShareSpec>>), KVAppError> {
     let res = get_db_or_err(
         kv_api,
         tenant_dbname,
@@ -4544,7 +4546,7 @@ async fn drop_database_meta(
         Err(e) => {
             if let KVAppError::AppError(AppError::UnknownDatabase(_)) = e {
                 if if_exists {
-                    return Ok(None);
+                    return Ok((0, None));
                 }
             }
 
@@ -4671,9 +4673,9 @@ async fn drop_database_meta(
     }
 
     if share_specs.is_empty() {
-        Ok(None)
+        Ok((db_id, None))
     } else {
-        Ok(Some(share_specs))
+        Ok((db_id, Some(share_specs)))
     }
 }
 
@@ -4856,6 +4858,7 @@ async fn get_share_vec_table_info(
     }
     let mut share_vec = vec![];
     let mut share_table_info: Option<TableInfo> = None;
+    let mut db_id: Option<u64> = None;
     for share_id in &table_meta.shared_by {
         let res = get_share_id_to_name_or_err(
             kv_api,
@@ -4900,16 +4903,17 @@ async fn get_share_vec_table_info(
                 },
                 share_name.share_name(),
             );
-            let share_table_info_vec =
+            let (share_db_id, share_table_info_vec) =
                 get_table_info_by_share(kv_api, Some(table_id), &share_name_key, &share_meta)
                     .await?;
             share_table_info = Some(share_table_info_vec[0].clone());
+            db_id = Some(share_db_id);
         }
         share_vec.push(share_name.name().clone());
     }
 
     if let Some(share_table_info) = share_table_info {
-        Ok(Some((share_vec, share_table_info)))
+        Ok(Some((share_vec, db_id.unwrap(), share_table_info)))
     } else {
         Ok(None)
     }
