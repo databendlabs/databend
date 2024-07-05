@@ -1,3 +1,12 @@
+ast            : haversine(40.7127, -74.0059, 34.0500, -118.2500)
+raw expr       : haversine(40.7127, minus(74.0059), 34.0500, minus(118.2500))
+checked expr   : haversine<Float64, Float64, Float64, Float64>(to_float64<Decimal(6, 4)>(40.7127_d128(6,4)), to_float64<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d128(6,4))), to_float64<Decimal(6, 4)>(34.0500_d128(6,4)), to_float64<Decimal(7, 4)>(minus<Decimal(7, 4)>(118.2500_d128(7,4))))
+optimized expr : 3936.390533556_f64
+output type    : Float64
+output domain  : {3936.390533556..=3936.390533556}
+output         : 3936.390533556
+
+
 ast            : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
 checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
