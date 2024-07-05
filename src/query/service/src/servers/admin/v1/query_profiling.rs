@@ -47,7 +47,7 @@ pub async fn query_profiling_handler(
     let res = match session_manager.get_session_by_id(&query_id) {
         Some(session) => {
             // can get profile from current node
-            session.get_profile().unwrap_or_default()
+            session.get_query_profiles()
         }
         None => {
             // need get profile from clusters

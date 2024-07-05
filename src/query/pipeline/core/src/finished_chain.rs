@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Write;
 use std::panic::Location;
@@ -26,11 +27,11 @@ use crate::PlanProfile;
 
 pub struct ExecutionInfo {
     pub res: Result<()>,
-    pub profiling: Vec<PlanProfile>,
+    pub profiling: HashMap<u32, PlanProfile>,
 }
 
 impl ExecutionInfo {
-    pub fn create(res: Result<()>, profiling: Vec<PlanProfile>) -> ExecutionInfo {
+    pub fn create(res: Result<()>, profiling: HashMap<u32, PlanProfile>) -> ExecutionInfo {
         ExecutionInfo { res, profiling }
     }
 }
@@ -228,6 +229,7 @@ pub fn always_callback<T: Callback>(inner: T) -> AlwaysCallback<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::panic::Location;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
@@ -260,7 +262,7 @@ mod tests {
             );
         }
 
-        chain.apply(ExecutionInfo::create(Ok(()), vec![]))?;
+        chain.apply(ExecutionInfo::create(Ok(()), HashMap::new()))?;
 
         assert_eq!(seq.load(Ordering::SeqCst), 10);
 
@@ -325,7 +327,7 @@ mod tests {
             }),
         );
 
-        chain.apply(ExecutionInfo::create(Ok(()), vec![]))?;
+        chain.apply(ExecutionInfo::create(Ok(()), HashMap::new()))?;
 
         assert_eq!(seq.load(Ordering::SeqCst), 13);
 
@@ -402,7 +404,11 @@ mod tests {
             }),
         );
 
-        assert!(chain.apply(ExecutionInfo::create(Ok(()), vec![])).is_err());
+        assert!(
+            chain
+                .apply(ExecutionInfo::create(Ok(()), HashMap::new()))
+                .is_err()
+        );
 
         assert_eq!(seq.load(Ordering::SeqCst), 13);
 

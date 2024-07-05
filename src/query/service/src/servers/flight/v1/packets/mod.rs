@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod packet;
 mod packet_data;
 mod packet_data_progressinfo;
 mod packet_executor;
 mod packet_fragment;
 mod packet_publisher;
 
-pub use packet::Packet;
 pub use packet_data::DataPacket;
 pub use packet_data::FragmentData;
 pub use packet_data_progressinfo::ProgressInfo;

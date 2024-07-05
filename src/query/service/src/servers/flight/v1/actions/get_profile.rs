@@ -23,7 +23,7 @@ pub async fn get_profile(query_id: String) -> Result<Vec<PlanProfile>> {
     let session = create_session()?;
     let query_context = session.create_query_context().await?;
     match query_context.get_session_by_id(&query_id) {
-        Some(session) => Ok(session.get_profile().unwrap_or_default()),
+        Some(session) => Ok(session.get_query_profiles()),
         None => Ok(vec![]),
     }
 }

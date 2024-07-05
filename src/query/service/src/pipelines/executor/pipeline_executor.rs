@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +20,6 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -34,7 +32,6 @@ use databend_common_pipeline_core::PlanProfile;
 use futures_util::future::select;
 use futures_util::future::Either;
 use log::info;
-use log::warn;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -202,12 +199,12 @@ impl PipelineExecutor {
                 return match may_error {
                     None => {
                         let mut finished_chain = query_wrapper.on_finished_chain.lock();
-                        let info = ExecutionInfo::create(Ok(()), self.get_plans_profile());
+                        let info = ExecutionInfo::create(Ok(()), self.fetch_profiling(true));
                         finished_chain.apply(info)
                     }
                     Some(cause) => {
                         let mut finished_chain = query_wrapper.on_finished_chain.lock();
-                        let profiling = self.get_plans_profile();
+                        let profiling = self.fetch_profiling(true);
                         let info = ExecutionInfo::create(Err(cause.clone()), profiling);
                         finished_chain.apply(info).and_then(|_| Err(cause))
                     }
@@ -271,60 +268,21 @@ impl PipelineExecutor {
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),
-            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-                query_wrapper.graph.format_graph_nodes()
-            }
+            PipelineExecutor::QueriesPipelineExecutor(v) => v.graph.format_graph_nodes(),
         }
     }
 
-    pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
+    pub fn fetch_profiling(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile> {
         match self {
-            PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_profiles(),
-            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-                query_wrapper.graph.get_proc_profiles()
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.fetch_plans_profile(collect_metrics)
             }
-        }
-    }
-
-    pub fn get_plans_profile(&self) -> Vec<PlanProfile> {
-        match self {
-            PipelineExecutor::QueryPipelineExecutor(executor) => executor.get_plans_profile(),
-            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
-                let mut plans_profile: HashMap<u32, PlanProfile> =
-                    HashMap::<u32, PlanProfile>::new();
-
-                for profile in query_wrapper.graph.get_proc_profiles() {
-                    if let Some(plan_id) = &profile.plan_id {
-                        match plans_profile.entry(*plan_id) {
-                            Entry::Occupied(mut v) => {
-                                v.get_mut().accumulate(&profile);
-                            }
-                            Entry::Vacant(v) => {
-                                let plan_profile = v.insert(PlanProfile::create(&profile));
-
-                                if let Some(metrics_registry) = &profile.metrics_registry {
-                                    match metrics_registry.dump_sample() {
-                                        Ok(metrics) => {
-                                            plan_profile.add_metrics(
-                                                query_wrapper.settings.executor_node_id.clone(),
-                                                metrics,
-                                            );
-                                        }
-                                        Err(error) => {
-                                            warn!(
-                                                "Dump {:?} plan metrics error, cause {:?}",
-                                                plan_profile.name, error
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        };
-                    };
-                }
-
-                plans_profile.into_values().collect::<Vec<_>>()
-            }
+            PipelineExecutor::QueriesPipelineExecutor(v) => match collect_metrics {
+                true => v
+                    .graph
+                    .fetch_profiling(Some(v.settings.executor_node_id.clone())),
+                false => v.graph.fetch_profiling(None),
+            },
         }
     }
 

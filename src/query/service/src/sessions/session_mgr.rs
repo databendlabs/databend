@@ -25,13 +25,13 @@ use std::time::SystemTime;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::session::*;
+use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -357,7 +357,7 @@ impl SessionManager {
         status_t
     }
 
-    pub fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+    pub fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         let active_sessions = {
             // Here the situation is the same of method `graceful_shutdown`:
             //
@@ -377,19 +377,17 @@ impl SessionManager {
 
         let mut queries_profiles = HashMap::new();
         for weak_ptr in active_sessions {
-            let Some(arc_sesssion) = weak_ptr.upgrade() else {
+            let Some(arc_session) = weak_ptr.upgrade() else {
                 continue;
             };
 
-            let session_ctx = arc_sesssion.session_ctx.as_ref();
+            let session_ctx = arc_session.session_ctx.as_ref();
 
             if let Some(context_shared) = session_ctx.get_query_context_shared() {
-                if let Some(executor) = context_shared.executor.read().upgrade() {
-                    queries_profiles.insert(
-                        context_shared.init_query_id.as_ref().read().clone(),
-                        executor.get_profiles(),
-                    );
-                }
+                queries_profiles.insert(
+                    context_shared.init_query_id.as_ref().read().clone(),
+                    context_shared.get_query_profiles(),
+                );
             }
         }
 
