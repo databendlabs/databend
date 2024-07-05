@@ -218,7 +218,9 @@ impl Display for CreateDatabaseReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDatabaseReply {
     pub db_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    // if `share_specs` is not empty, it means that create database with replace option,
+    // and `share_specs` vector save the share spec of original database
+    pub share_specs: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -263,7 +265,9 @@ impl Display for DropDatabaseReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReply {
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    // if `share_specs` is not empty, it means that create database with replace option,
+    // and `share_specs` vector save the share spec of original database
+    pub share_specs: Option<Vec<ShareSpec>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

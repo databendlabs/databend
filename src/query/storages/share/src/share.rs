@@ -25,9 +25,13 @@ use opendal::Operator;
 
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
+pub fn get_share_dir(tenant: &str, share_name: &str) -> String {
+    format!("{}/{}/{}", SHARE_CONFIG_PREFIX, tenant, share_name)
+}
+
 pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
     format!(
-        "{}/{}/{}_share_specs.json",
+        "{}/{}/{}/share_specs.json",
         SHARE_CONFIG_PREFIX, tenant, share_name
     )
 }
@@ -41,7 +45,7 @@ pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
 
 pub fn new_share_table_info_location(tenant: &str, share_name: &str, table_name: &str) -> String {
     format!(
-        "{}/{}/{}_{}_table_info.json",
+        "{}/{}/{}/{}_table_info.json",
         SHARE_CONFIG_PREFIX, tenant, share_name, table_name
     )
 }
@@ -70,22 +74,24 @@ pub async fn save_share_table_info(
 }
 
 #[async_backtrace::framed]
-pub async fn update_share_spec(
+pub async fn save_share_spec(
     tenant: &str,
     operator: Operator,
-    share_spec: ShareSpec,
+    share_specs: &[ShareSpec],
 ) -> Result<()> {
-    let share_name = &share_spec.name;
-    let location = get_share_spec_location(tenant, &share_name);
-    let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec, &operator);
-    let data = serde_json::to_string(&share_spec_ext)?;
-    operator.write(&location, data).await?;
+    for share_spec in share_specs {
+        let share_name = &share_spec.name;
+        let location = get_share_spec_location(tenant, &share_name);
+        let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec.clone(), &operator);
+        let data = serde_json::to_string(&share_spec_ext)?;
+        operator.write(&location, data).await?;
+    }
 
     Ok(())
 }
 
 #[async_backtrace::framed]
-pub async fn revoke_share_table_info(
+pub async fn remove_share_table_info(
     tenant: &str,
     operator: Operator,
     share_name: &String,
@@ -125,7 +131,21 @@ pub async fn update_share_table_info(
 }
 
 #[async_backtrace::framed]
-pub async fn save_share_spec(
+pub async fn remove_share_dir(
+    tenant: &str,
+    operator: Operator,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_dir(tenant, &share_spec.name);
+        operator.remove_all(&dir).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn save_share_spec_old(
     tenant: &str,
     operator: Operator,
     spec_vec: Option<Vec<ShareSpec>>,

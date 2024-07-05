@@ -269,7 +269,7 @@ impl Catalog for MutableCatalog {
         database.init_database(req.name_ident.tenant_name()).await?;
         Ok(CreateDatabaseReply {
             db_id: res.db_id,
-            spec_vec: None,
+            share_specs: None,
         })
     }
 

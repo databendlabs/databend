@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
-use databend_common_storages_share::save_share_spec;
+use databend_common_storages_share::remove_share_dir;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -51,13 +51,15 @@ impl Interpreter for DropShareInterpreter {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let resp = meta_api.drop_share(self.plan.clone().into()).await?;
 
-        save_share_spec(
-            self.ctx.get_tenant().tenant_name(),
-            self.ctx.get_application_level_data_operator()?.operator(),
-            resp.spec_vec,
-            Some(vec![(self.plan.share.clone(), None)]),
-        )
-        .await?;
+        if let Some(share_spec) = resp.share_spec {
+            // since db is dropped, first we need to clean share dir
+            remove_share_dir(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &vec![share_spec],
+            )
+            .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

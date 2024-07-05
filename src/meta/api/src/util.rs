@@ -994,13 +994,40 @@ pub async fn remove_db_from_share(
         }
     }
     share_meta.database = None;
-    share_meta.entries = BTreeMap::new();
+    remove_entries_from_share(
+        kv_api,
+        share_id,
+        db_name.tenant(),
+        &mut share_meta,
+        condition,
+        if_then,
+    )
+    .await?;
 
     let id_key = ShareId { share_id };
     condition.push(txn_cond_seq(&id_key, Eq, share_meta_seq));
     if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?));
 
     Ok((share_name.name().to_string(), share_meta))
+}
+
+async fn remove_entries_from_share(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_id: u64,
+    tenant: &Tenant,
+    share_meta: &mut ShareMeta,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    // remove table from entries
+    for entry in share_meta.entries.values() {
+        if let ShareGrantObject::Table(table_id) = entry.object {
+            remove_table_from_share(kv_api, share_id, table_id, tenant, condition, if_then).await?;
+        }
+    }
+    share_meta.entries = BTreeMap::new();
+
+    Ok(())
 }
 
 // return (share name, new share meta, new share table info)

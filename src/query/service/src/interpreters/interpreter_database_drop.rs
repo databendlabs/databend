@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatabasePlan;
+use databend_common_storages_share::remove_share_dir;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -67,20 +68,23 @@ impl Interpreter for DropDatabaseInterpreter {
         }
 
         // actual drop database
-        let resp = catalog.drop_database(self.plan.clone().into()).await?;
+        let reply = catalog.drop_database(self.plan.clone().into()).await?;
 
         // handle share cleanups with the DropDatabaseReply
-        if let Some(spec_vec) = resp.spec_vec {
-            let mut share_table_into = Vec::with_capacity(spec_vec.len());
-            for share_spec in &spec_vec {
-                share_table_into.push((share_spec.name.clone(), None));
-            }
+        if let Some(share_specs) = reply.share_specs {
+            // since db is dropped, first we need to clean share dir
+            remove_share_dir(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &share_specs,
+            )
+            .await?;
 
+            // then write the new share spec
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_into),
+                &share_specs,
             )
             .await?;
         }

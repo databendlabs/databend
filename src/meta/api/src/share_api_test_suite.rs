@@ -174,7 +174,7 @@ impl ShareApiTestSuite {
             info!("create share res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
-            assert_eq!(1, res.spec_vec.unwrap().len());
+            assert!(res.share_spec.is_some());
             share_id = res.share_id;
 
             let (share_name_seq, share_name_ret) =
@@ -527,7 +527,7 @@ impl ShareApiTestSuite {
             info!("add share account res: {:?}", res);
             assert!(res.is_ok());
             let res = res.unwrap();
-            assert_eq!(2, res.spec_vec.unwrap().len());
+            assert!(res.share_spec.is_some());
 
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -540,7 +540,7 @@ impl ShareApiTestSuite {
             info!("add share account res: {:?}", res);
             assert!(res.is_ok());
             let res = res.unwrap();
-            assert_eq!(1, res.spec_vec.unwrap().len());
+            assert!(res.share_spec.is_some());
         }
 
         info!("--- add account account1");
