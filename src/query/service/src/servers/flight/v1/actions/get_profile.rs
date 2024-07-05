@@ -12,18 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::PlanProfile;
 
-use crate::servers::flight::v1::actions::create_session;
+use crate::sessions::SessionManager;
 
 pub static GET_PROFILE: &str = "/actions/get_profile";
 
-pub async fn get_profile(query_id: String) -> Result<Vec<PlanProfile>> {
-    let session = create_session()?;
-    let query_context = session.create_query_context().await?;
-    match query_context.get_session_by_id(&query_id) {
-        Some(session) => Ok(session.get_query_profiles()),
-        None => Ok(vec![]),
+pub async fn get_profile(query_id: String) -> Result<Option<Vec<PlanProfile>>> {
+    match SessionManager::instance().get_query_profiles(&query_id) {
+        Ok(profiles) => Ok(Some(profiles)),
+        Err(cause) => match cause.code() == ErrorCode::UNKNOWN_QUERY {
+            true => Ok(None),
+            false => Err(cause),
+        },
     }
 }
