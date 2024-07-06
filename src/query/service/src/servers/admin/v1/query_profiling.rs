@@ -21,7 +21,11 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_storages_system::SystemLogElement;
+use databend_common_storages_system::SystemLogQueue;
 use http::StatusCode;
 use poem::web::Json;
 use poem::web::Path;
@@ -43,7 +47,23 @@ pub async fn query_profiling_handler(
         profiles: Vec<PlanProfile>,
         statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
     }
-
+    match get_profile_from_cache(&query_id) {
+        Ok(profiles) => {
+            return Ok(Json(QueryProfiles {
+                query_id: query_id.clone(),
+                profiles,
+                statistics_desc: get_statistics_desc(),
+            }));
+        }
+        Err(cause) => {
+            if cause.code() != ErrorCode::UNKNOWN_QUERY {
+                return Err(poem::Error::from_string(
+                    format!("Failed to fetch profile from cache queue. cause: {cause}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+        }
+    }
     let res = match SessionManager::instance().get_query_profiles(&query_id) {
         Ok(profiles) => profiles,
         Err(cause) => match cause.code() == ErrorCode::UNKNOWN_QUERY {
@@ -99,3 +119,36 @@ async fn get_cluster_profile(query_id: &str) -> Result<Vec<PlanProfile>, ErrorCo
         Some(profiles) => Ok(profiles.unwrap()),
     }
 }
+
+pub fn get_profile_from_cache(target: &str) -> Result<Vec<PlanProfile>, ErrorCode> {
+    let profiles_queue = ProfilesCacheQueue::instance()?;
+    for element in profiles_queue.data.read().event_queue.iter().flatten() {
+        if element.query_id == target {
+            return Ok(element.profiles.clone());
+        }
+    }
+    Err(ErrorCode::UnknownQuery(format!(
+        "Not found query {}",
+        target
+    )))
+}
+#[derive(Clone)]
+pub struct ProfilesCacheElement {
+    pub query_id: String,
+    pub profiles: Vec<PlanProfile>,
+}
+
+impl SystemLogElement for ProfilesCacheElement {
+    const TABLE_NAME: &'static str = "profiles_cache_not_table";
+    fn schema() -> TableSchemaRef {
+        unreachable!()
+    }
+    fn fill_to_data_block(
+        &self,
+        _: &mut Vec<ColumnBuilder>,
+    ) -> databend_common_exception::Result<()> {
+        unreachable!()
+    }
+}
+
+pub type ProfilesCacheQueue = SystemLogQueue<ProfilesCacheElement>;

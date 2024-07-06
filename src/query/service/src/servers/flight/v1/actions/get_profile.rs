@@ -16,6 +16,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::PlanProfile;
 
+use crate::servers::admin::v1::query_profiling::get_profile_from_cache;
 use crate::sessions::SessionManager;
 
 pub static GET_PROFILE: &str = "/actions/get_profile";
@@ -24,7 +25,13 @@ pub async fn get_profile(query_id: String) -> Result<Option<Vec<PlanProfile>>> {
     match SessionManager::instance().get_query_profiles(&query_id) {
         Ok(profiles) => Ok(Some(profiles)),
         Err(cause) => match cause.code() == ErrorCode::UNKNOWN_QUERY {
-            true => Ok(None),
+            true => match get_profile_from_cache(&query_id) {
+                Ok(profiles) => Ok(Some(profiles)),
+                Err(cause) => match cause.code() == ErrorCode::UNKNOWN_QUERY {
+                    true => Ok(None),
+                    false => Err(cause),
+                },
+            },
             false => Err(cause),
         },
     }
