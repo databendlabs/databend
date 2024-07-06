@@ -40,6 +40,7 @@ use crate::DiskCacheKey;
 pub struct DiskCache<C> {
     cache: C,
     root: PathBuf,
+    sync_data: bool,
 }
 
 impl<C> DiskCache<C>
@@ -58,6 +59,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         path: T,
         size: u64,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> self::io_result::Result<Self>
     where
         PathBuf: From<T>,
@@ -65,6 +67,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         DiskCache {
             cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
             root: PathBuf::from(path),
+            sync_data,
         }
         .init(disk_cache_key_reload_policy)
     }
@@ -305,6 +308,9 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         }
         f.write_all_vectored(&mut bufs)?;
         self.cache.put(cache_key.0, bytes_len);
+        if self.sync_data {
+            f.sync_data()?;
+        }
         Ok(())
     }
 
