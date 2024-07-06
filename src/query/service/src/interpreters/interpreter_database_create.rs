@@ -47,7 +47,7 @@ impl CreateDatabaseInterpreter {
         Ok(CreateDatabaseInterpreter { ctx, plan })
     }
 
-    async fn check_create_database_from_share(&self) -> Result<()> {
+    async fn check_create_database_from_share(&self) -> Result<Option<u64>> {
         // safe to unwrap
         let share_name = self.plan.meta.from_share.clone().unwrap();
         let share_endpoint = self.plan.meta.using_share_endpoint.clone().unwrap();
@@ -88,7 +88,14 @@ impl CreateDatabaseInterpreter {
                     tenant.tenant_name()
                 )))
             } else {
-                Ok(())
+                if let Some(database) = share_spec.database {
+                    Ok(Some(database.id))
+                } else {
+                    Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                        "share {:?} has no grant database",
+                        share_name
+                    )))
+                }
             }
         } else {
             Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
@@ -129,11 +136,14 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
 
         // if create from other tenant, check from share endpoint
-        if self.plan.meta.from_share.is_some() {
-            self.check_create_database_from_share().await?;
-        }
+        let share_db_id = if self.plan.meta.from_share.is_some() {
+            self.check_create_database_from_share().await?
+        } else {
+            None
+        };
 
-        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
+        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
+        create_db_req.meta.from_share_db_id = share_db_id;
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
@@ -158,7 +168,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             remove_share_db_dir(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                &reply.db_id,
+                reply.db_id,
                 &share_specs,
             )
             .await?;

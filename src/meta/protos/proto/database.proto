@@ -60,6 +60,9 @@ message DatabaseMeta {
   // share endpoint name
   optional string using_share_endpoint = 27;
 
+  // share db id
+  optional uint64 from_share_db_id = 28;
+
   reserved 30;
 }
 

@@ -539,8 +539,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    // (db id, share spec vector)
-    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
+    // (db id, removed table id, share spec vector)
+    pub spec_vec: Option<(u64, u64, Vec<ShareSpec>)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }

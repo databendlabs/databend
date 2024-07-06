@@ -1672,7 +1672,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                 // need to combine with drop_table_txn operations, just return
                                 // the sequence number associated with the value part of
                                 // the key-value pair (key_dbid_tbname, table_id).
-                                (None, id.seq)
+                                (None, id.seq, *id.data)
                             } else {
                                 construct_drop_table_txn_operations(
                                     self,
@@ -1690,7 +1690,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         }
                     }
                 } else {
-                    (None, 0)
+                    (None, 0, 0)
                 }
             };
 
@@ -1814,7 +1814,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         db_id: db_id.data,
                         new_table: dbid_tbname_seq == 0,
                         spec_vec: if let Some(spec_vec) = opt.0 {
-                            Some((save_db_id, spec_vec))
+                            Some((save_db_id, opt.2, spec_vec))
                         } else {
                             None
                         },
@@ -4376,7 +4376,7 @@ async fn construct_drop_table_txn_operations(
     if_delete: bool,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(Option<Vec<ShareSpec>>, u64), KVAppError> {
+) -> Result<(Option<Vec<ShareSpec>>, u64, u64), KVAppError> {
     let tbid = TableId { table_id };
 
     // Check if table exists.
@@ -4412,7 +4412,7 @@ async fn construct_drop_table_txn_operations(
     let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
-            Ok((None, 0))
+            Ok((None, 0, 0))
         } else {
             return Err(KVAppError::AppError(AppError::UnknownTable(
                 UnknownTable::new(tbname, "drop_table_by_id"),
@@ -4520,9 +4520,9 @@ async fn construct_drop_table_txn_operations(
         }
     }
     if spec_vec.is_empty() {
-        Ok((None, tb_id_seq))
+        Ok((None, tb_id_seq, table_id))
     } else {
-        Ok((Some(spec_vec), tb_id_seq))
+        Ok((Some(spec_vec), tb_id_seq, table_id))
     }
 }
 

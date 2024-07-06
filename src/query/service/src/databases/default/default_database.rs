@@ -41,6 +41,8 @@ use databend_common_meta_app::schema::UpdateTableMetaReply;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
+use databend_common_storage::DataOperator;
+use databend_common_storages_share::update_share_table_info;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -199,8 +201,22 @@ impl Database for DefaultDatabase {
 
     #[async_backtrace::framed]
     async fn update_table_meta(&self, req: UpdateTableMetaReq) -> Result<UpdateTableMetaReply> {
-        let res = self.ctx.meta.update_table_meta(req).await?;
-        Ok(res)
+        let resp = self.ctx.meta.update_table_meta(req).await?;
+        // should we return error when save share table info error?
+        if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
+            if let Err(e) = update_share_table_info(
+                self.ctx.tenant.tenant_name(),
+                DataOperator::instance().operator(),
+                share_name_vec,
+                *db_id,
+                share_table_info,
+            )
+            .await
+            {
+                log::error!("save share table {} error: {}", share_table_info.ident, e);
+            }
+        }
+        Ok(resp)
     }
 
     async fn set_table_column_mask_policy(

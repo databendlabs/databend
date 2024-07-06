@@ -102,6 +102,8 @@ pub struct DatabaseMeta {
     pub from_share: Option<ShareNameIdentRaw>,
     // share endpoint name, create with `create share endpoint` ddl
     pub using_share_endpoint: Option<String>,
+    // from share db id
+    pub from_share_db_id: Option<u64>,
 }
 
 impl Default for DatabaseMeta {
@@ -117,6 +119,7 @@ impl Default for DatabaseMeta {
             shared_by: BTreeSet::new(),
             from_share: None,
             using_share_endpoint: None,
+            from_share_db_id: None,
         }
     }
 }

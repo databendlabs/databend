@@ -54,6 +54,7 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             using_share_endpoint: p.using_share_endpoint,
+            from_share_db_id: p.from_share_db_id,
         };
         Ok(v)
     }
@@ -78,6 +79,7 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             using_share_endpoint: self.using_share_endpoint.clone(),
+            from_share_db_id: self.from_share_db_id,
         };
         Ok(p)
     }

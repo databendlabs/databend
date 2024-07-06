@@ -43,7 +43,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::update_share_table_info_new;
+use databend_common_storages_share::update_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
@@ -123,18 +123,7 @@ impl ModifyTableColumnInterpreter {
             action: SetTableColumnMaskPolicyAction::Set(mask_name, prev_column_mask_name),
         };
 
-        let resp = catalog.set_table_column_mask_policy(req).await?;
-
-        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-            update_share_table_info_new(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &share_name_vec,
-                &db_id,
-                &share_table_info,
-            )
-            .await?;
-        }
+        let _resp = catalog.set_table_column_mask_policy(req).await?;
 
         Ok(PipelineBuildResult::create())
     }
@@ -258,20 +247,9 @@ impl ModifyTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let resp = catalog
+            let _resp = catalog
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
-
-            if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-                update_share_table_info_new(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_name_vec,
-                    &db_id,
-                    &share_table_info,
-                )
-                .await?;
-            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -352,20 +330,9 @@ impl ModifyTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let resp = catalog
+            let _resp = catalog
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
-
-            if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-                update_share_table_info_new(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_name_vec,
-                    &db_id,
-                    &share_table_info,
-                )
-                .await?;
-            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -478,11 +445,11 @@ impl ModifyTableColumnInterpreter {
 
             let resp = catalog.set_table_column_mask_policy(req).await?;
             if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-                update_share_table_info_new(
+                update_share_table_info(
                     self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_application_level_data_operator()?.operator(),
                     &share_name_vec,
-                    &db_id,
+                    db_id,
                     &share_table_info,
                 )
                 .await?;
@@ -543,18 +510,7 @@ impl ModifyTableColumnInterpreter {
             update_stream_meta: vec![],
         };
 
-        let resp = catalog.update_table_meta(table_info, req).await?;
-
-        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-            update_share_table_info_new(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &share_name_vec,
-                &db_id,
-                &share_table_info,
-            )
-            .await?;
-        }
+        let _resp = catalog.update_table_meta(table_info, req).await?;
 
         Ok(PipelineBuildResult::create())
     }

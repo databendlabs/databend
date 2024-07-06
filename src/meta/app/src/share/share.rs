@@ -196,8 +196,8 @@ pub struct RevokeShareObjectReq {
 pub enum ShareObject {
     // db id
     Db(u64),
-    // db id, table name
-    Table((u64, String)),
+    // db id, table id, table name
+    Table((u64, u64, String)),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

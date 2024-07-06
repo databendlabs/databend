@@ -831,6 +831,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
 
                         Some(ShareObject::Table((
                             db_id,
+                            table_id,
                             share_table_info[0].name.clone(),
                         )))
                     }

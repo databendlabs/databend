@@ -76,7 +76,7 @@ impl Interpreter for DropDatabaseInterpreter {
             remove_share_db_dir(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                &reply.db_id,
+                reply.db_id,
                 &share_specs,
             )
             .await?;
