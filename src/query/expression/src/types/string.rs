@@ -596,6 +596,15 @@ impl StringColumnBuilder {
         std::str::from_utf8_unchecked(bytes)
     }
 
+    pub fn push_repeat(&mut self, item: &str, n: usize) {
+        self.data.reserve(item.len() * n);
+        self.offsets.reserve(n);
+        for _ in 0..n {
+            self.data.extend_from_slice(item.as_bytes());
+            self.commit_row();
+        }
+    }
+
     pub fn pop(&mut self) -> Option<String> {
         if self.len() > 0 {
             let index = self.len() - 1;

@@ -1846,6 +1846,75 @@ impl ColumnBuilder {
         }
     }
 
+    pub fn push_repeat(&mut self, item: ScalarRef, n: usize) {
+        match (self, item) {
+            (ColumnBuilder::Null { len }, ScalarRef::Null) => *len += n,
+            (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray) => *len += n,
+            (ColumnBuilder::EmptyMap { len }, ScalarRef::EmptyMap) => *len += n,
+            (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => {
+                builder.push_repeat(value, n)
+            }
+            (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => {
+                builder.push_repeat(value, n)
+            }
+            (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => {
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.extend_constant(n, value)
+                }
+            }
+            (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
+                builder.resize(builder.len() + n, value);
+            }
+            (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => {
+                builder.resize(builder.len() + n, value);
+            }
+            (ColumnBuilder::Binary(builder), ScalarRef::Binary(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (this @ ColumnBuilder::Array(_), value @ ScalarRef::Array(_)) => {
+                // todo
+                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
+                this.append_column(&other.build());
+            }
+            (this @ ColumnBuilder::Map(_), value @ ScalarRef::Map(_)) => {
+                // todo
+                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
+                this.append_column(&other.build());
+            }
+            (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
+                for _ in 0..n {
+                    builder.push_null();
+                }
+            }
+            (this @ ColumnBuilder::Nullable(_), value) => {
+                // todo
+                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
+                this.append_column(&other.build());
+            }
+            (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
+                assert_eq!(fields.len(), value.len());
+                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                    field.push_repeat(scalar, n)
+                }
+            }
+            (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
+        };
+    }
+
     pub fn push_default(&mut self) {
         match self {
             ColumnBuilder::Null { len } => *len += 1,

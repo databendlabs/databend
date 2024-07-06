@@ -191,10 +191,7 @@ impl DataBlock {
                 let BlockEntry { value, .. } = &block_columns[col_index];
                 match value {
                     Value::Scalar(scalar) => {
-                        let scalar = scalar.as_ref();
-                        for _ in 0..len {
-                            builder.push(scalar.clone())
-                        }
+                        builder.push_repeat(scalar.as_ref(), len);
                     }
                     Value::Column(c) => {
                         let c = c.slice(*start..(*start + len));
@@ -235,10 +232,7 @@ impl DataBlock {
             let col = &columns[*index];
             match &col.value {
                 Value::Scalar(scalar) => {
-                    let scalar = scalar.as_ref();
-                    for _ in 0..len {
-                        builder.push(scalar.clone())
-                    }
+                    builder.push_repeat(scalar.as_ref(), len);
                 }
                 Value::Column(c) => {
                     let c = c.slice(*start..(*start + len));

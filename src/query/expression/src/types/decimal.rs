@@ -1068,13 +1068,21 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push(&mut self, item: DecimalScalar) {
+        self.push_repeat(item, 1)
+    }
+
+    pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
         crate::with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
             (
                 DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
                 DecimalScalar::DECIMAL_TYPE(value, value_size),
             ) => {
                 debug_assert_eq!(*builder_size, value_size);
-                builder.push(value)
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })

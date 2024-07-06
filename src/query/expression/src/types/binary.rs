@@ -456,6 +456,15 @@ impl BinaryColumnBuilder {
         self.data.get_unchecked(start..end)
     }
 
+    pub fn push_repeat(&mut self, item: &[u8], n: usize) {
+        self.data.reserve(item.len() * n);
+        self.offsets.reserve(n);
+        for _ in 0..n {
+            self.data.extend_from_slice(item);
+            self.commit_row();
+        }
+    }
+
     pub fn pop(&mut self) -> Option<Vec<u8>> {
         if self.len() > 0 {
             let index = self.len() - 1;

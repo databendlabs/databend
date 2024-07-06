@@ -656,9 +656,17 @@ impl NumberColumnBuilder {
     }
 
     pub fn push(&mut self, item: NumberScalar) {
+        self.push_repeat(item, 1)
+    }
+
+    pub fn push_repeat(&mut self, item: NumberScalar, n: usize) {
         crate::with_number_type!(|NUM_TYPE| match (self, item) {
             (NumberColumnBuilder::NUM_TYPE(builder), NumberScalar::NUM_TYPE(value)) => {
-                builder.push(value)
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })
