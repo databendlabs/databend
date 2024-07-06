@@ -17,7 +17,7 @@ flight-sql = ["dep:arrow-array", "dep:arrow-schema", "dep:tonic"]
 databend-client = { workspace = true }
 
 chrono = { version = "0.4.35", default-features = false }
-geozero = { version = "0.12", features = ["default", "with-wkb"] }
+geozero = { version = "0.13", features = ["default", "with-wkb"] }
 glob = "0.3"
 itertools = "0.12"
 jsonb = "0.4"
