@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::parser::Dialect;
+use databend_common_ast::span::merge_span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -92,11 +94,11 @@ impl Binder {
         Ok(())
     }
 
-    pub fn fully_table_identifier<'b>(
-        &'b self,
+    pub fn fully_table_identifier(
+        &self,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
-        table: &'b Identifier,
+        table: &Identifier,
     ) -> FullyTableIdentifier<'_> {
         let Binder {
             ctx,
@@ -116,6 +118,15 @@ impl Binder {
             quote: Some(dialect.default_ident_quote()),
             is_hole: false,
         });
+        let database = Identifier {
+            span: merge_span(catalog.span, database.span),
+            ..database
+        };
+        let table = Identifier {
+            span: merge_span(database.span, table.span),
+            name: table.name.clone(),
+            ..*table
+        };
         FullyTableIdentifier {
             name_resolution_ctx,
             dialect: *dialect,
@@ -131,17 +142,17 @@ pub struct FullyTableIdentifier<'a> {
     dialect: Dialect,
     pub catalog: Identifier,
     pub database: Identifier,
-    pub table: &'a Identifier,
+    pub table: Identifier,
 }
 
 impl FullyTableIdentifier<'_> {
-    pub fn new<'a>(
-        name_resolution_ctx: &'a NameResolutionContext,
+    pub fn new(
+        name_resolution_ctx: &NameResolutionContext,
         dialect: Dialect,
         catalog: Identifier,
         database: Identifier,
-        table: &'a Identifier,
-    ) -> FullyTableIdentifier<'a> {
+        table: Identifier,
+    ) -> FullyTableIdentifier<'_> {
         FullyTableIdentifier {
             name_resolution_ctx,
             dialect,
@@ -160,7 +171,7 @@ impl FullyTableIdentifier<'_> {
     }
 
     pub fn table_name(&self) -> String {
-        normalize_identifier(self.table, self.name_resolution_ctx).name
+        normalize_identifier(&self.table, self.name_resolution_ctx).name
     }
 
     pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {
@@ -176,13 +187,13 @@ impl FullyTableIdentifier<'_> {
                     Some(NameResolutionSuggest::Quoted) => {
                         format!(
                             "Unknown database {catalog}.{database} (unquoted). Did you mean {} (quoted)?",
-                            ident_with_quote(database, Some(self.dialect.default_ident_quote()))
+                            QuotedIdent(&database.name, self.dialect.default_ident_quote())
                         )
                     }
                     Some(NameResolutionSuggest::Unqoted) => {
                         format!(
                             "Unknown database {catalog}.{database} (quoted). Did you mean {} (unquoted)?",
-                            ident_with_quote(database, None)
+                            &database.name
                         )
                     }
                     None => format!("Unknown database {catalog}.{database} ."),
@@ -194,13 +205,13 @@ impl FullyTableIdentifier<'_> {
                     Some(NameResolutionSuggest::Quoted) => {
                         format!(
                             "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean {} (quoted)?",
-                            ident_with_quote(table, Some(self.dialect.default_ident_quote()))
+                            QuotedIdent(&table.name, self.dialect.default_ident_quote())
                         )
                     }
                     Some(NameResolutionSuggest::Unqoted) => {
                         format!(
                             "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {} (unquoted)?",
-                            ident_with_quote(table, None)
+                            &table.name
                         )
                     }
                     None => format!("Unknown table {catalog}.{database}.{table} ."),
@@ -209,13 +220,5 @@ impl FullyTableIdentifier<'_> {
             }
             _ => err,
         }
-    }
-}
-
-fn ident_with_quote(ident: &Identifier, quote: Option<char>) -> Identifier {
-    Identifier {
-        name: ident.name.clone(),
-        quote,
-        ..*ident
     }
 }
