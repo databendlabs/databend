@@ -60,6 +60,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
         using_share_endpoint: Some("endpoint".to_string()),
+        from_share_db_id: Some(1024),
     }
 }
 
@@ -75,6 +76,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
         using_share_endpoint: None,
+        from_share_db_id: None,
     }
 }
 
