@@ -149,16 +149,19 @@ impl DataBlock {
         slice: (usize, usize),
         limit: Option<usize>,
     ) -> Self {
-        let columns = block
-            .columns()
-            .iter()
-            .map(|entry| {
-                Self::take_column_by_slices_limit(&[entry.clone()], &[(0, slice.0, slice.1)], limit)
-            })
-            .collect::<Vec<_>>();
+        let (start, len) = slice;
+        let num_rows = limit.unwrap_or(usize::MAX).min(len);
+        let result_size = num_rows.min(block.num_rows());
 
-        let num_rows = block.num_rows().min(slice.1.min(limit.unwrap_or(slice.1)));
-        DataBlock::new(columns, num_rows)
+        let mut builders = Self::builders(block, num_rows);
+
+        let len = len.min(num_rows);
+        let block_columns = block.columns();
+        for (col_index, builder) in builders.iter_mut().enumerate() {
+            Self::push_to_builder(builder, start, len, &block_columns[col_index].value);
+        }
+
+        Self::build_block(builders, result_size)
     }
 
     pub fn take_by_slices_limit_from_blocks(
@@ -167,19 +170,12 @@ impl DataBlock {
         limit: Option<usize>,
     ) -> Self {
         debug_assert!(!blocks.is_empty());
-        let total_num_rows: usize = blocks.iter().map(|c| c.num_rows()).sum();
-        let result_size: usize = slices.iter().map(|(_, _, c)| *c).sum();
-        let result_size = total_num_rows.min(result_size.min(limit.unwrap_or(result_size)));
-
         let num_rows = limit
             .unwrap_or(usize::MAX)
             .min(slices.iter().map(|(_, _, c)| *c).sum());
+        let result_size = num_rows.min(blocks.iter().map(|c| c.num_rows()).sum());
 
-        let mut builders = blocks[0]
-            .columns()
-            .iter()
-            .map(|col| ColumnBuilder::with_capacity(&col.data_type, num_rows))
-            .collect::<Vec<_>>();
+        let mut builders = Self::builders(&blocks[0], num_rows);
 
         let mut remain = num_rows;
         for (block_index, start, len) in slices {
@@ -188,27 +184,30 @@ impl DataBlock {
             remain -= len;
 
             for (col_index, builder) in builders.iter_mut().enumerate() {
-                let BlockEntry { value, .. } = &block_columns[col_index];
-                match value {
-                    Value::Scalar(scalar) => {
-                        builder.push_repeat(scalar.as_ref(), len);
-                    }
-                    Value::Column(c) => {
-                        let c = c.slice(*start..(*start + len));
-                        builder.append_column(&c);
-                    }
-                }
+                Self::push_to_builder(builder, *start, len, &block_columns[col_index].value);
             }
             if remain == 0 {
                 break;
             }
         }
 
+        Self::build_block(builders, result_size)
+    }
+
+    fn builders(block: &DataBlock, num_rows: usize) -> Vec<ColumnBuilder> {
+        block
+            .columns()
+            .iter()
+            .map(|col| ColumnBuilder::with_capacity(&col.data_type, num_rows))
+            .collect::<Vec<_>>()
+    }
+
+    fn build_block(builders: Vec<ColumnBuilder>, num_rows: usize) -> DataBlock {
         let result_columns = builders
             .into_iter()
             .map(|b| BlockEntry::new(b.data_type(), Value::Column(b.build())))
             .collect::<Vec<_>>();
-        DataBlock::new(result_columns, result_size)
+        DataBlock::new(result_columns, num_rows)
     }
 
     pub fn take_column_by_slices_limit(
@@ -229,16 +228,7 @@ impl DataBlock {
             let len = (*len).min(remain);
             remain -= len;
 
-            let col = &columns[*index];
-            match &col.value {
-                Value::Scalar(scalar) => {
-                    builder.push_repeat(scalar.as_ref(), len);
-                }
-                Value::Column(c) => {
-                    let c = c.slice(*start..(*start + len));
-                    builder.append_column(&c);
-                }
-            }
+            Self::push_to_builder(&mut builder, *start, len, &columns[*index].value);
             if remain == 0 {
                 break;
             }
@@ -247,6 +237,23 @@ impl DataBlock {
         let col = builder.build();
 
         BlockEntry::new(ty.clone(), Value::Column(col))
+    }
+
+    fn push_to_builder(
+        builder: &mut ColumnBuilder,
+        start: usize,
+        len: usize,
+        value: &Value<AnyType>,
+    ) {
+        match value {
+            Value::Scalar(scalar) => {
+                builder.push_repeat(scalar.as_ref(), len);
+            }
+            Value::Column(c) => {
+                let c = c.slice(start..(start + len));
+                builder.append_column(&c);
+            }
+        }
     }
 }
 
