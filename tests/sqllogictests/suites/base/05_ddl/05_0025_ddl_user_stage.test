@@ -26,7 +26,5 @@ select * from '@s1/a b/'
 
 # for compatibility with old versions only, should fail in future
 onlyif http
-query ??
+statement error 1006.*no file found
 select * from @s1/a\ b/
-----
-2
