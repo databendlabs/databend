@@ -2888,6 +2888,18 @@ pub struct DiskCacheConfig {
         default_value = "./.databend/_cache"
     )]
     pub path: String,
+
+    /// Whether sync data after write.
+    /// If the query node's memory is managed by cgroup (at least cgroup v1),
+    /// it's recommended to set this to true to prevent the container from
+    /// being killed due to high dirty page memory usage.
+    #[clap(
+        long = "cache-disk-sync-data",
+        value_name = "VALUE",
+        default_value = "true"
+    )]
+    #[serde(default = "bool_true")]
+    pub sync_data: bool,
 }
 
 mod cache_config_converters {
@@ -3011,6 +3023,7 @@ mod cache_config_converters {
             Ok(Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             })
         }
     }
@@ -3020,6 +3033,7 @@ mod cache_config_converters {
             Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             }
         }
     }

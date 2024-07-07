@@ -15,6 +15,10 @@
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_base::base::Progress;
+use databend_common_base::base::ProgressValues;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,11 +34,13 @@ use orc_rust::ArrowReaderBuilder;
 use crate::chunk_reader_impl::OrcChunkReader;
 use crate::orc_file_partition::OrcFilePartition;
 use crate::strip::StripeInMemory;
+use crate::utils::map_orc_error;
 
 pub struct ORCSource {
     table_ctx: Arc<dyn TableContext>,
     op: Operator,
-    reader: Option<(String, Box<StripeFactory<OrcChunkReader>>)>,
+    pub(crate) reader: Option<(String, Box<StripeFactory<OrcChunkReader>>, usize)>,
+    scan_progress: Arc<Progress>,
 
     arrow_schema: arrow_schema::SchemaRef,
     schema_from: String,
@@ -48,9 +54,12 @@ impl ORCSource {
         arrow_schema: arrow_schema::SchemaRef,
         schema_from: String,
     ) -> Result<ProcessorPtr> {
+        let scan_progress = table_ctx.get_scan_progress();
+
         AsyncSourcer::create(table_ctx.clone(), output, ORCSource {
             table_ctx,
             op,
+            scan_progress,
             reader: None,
             arrow_schema,
             schema_from,
@@ -58,13 +67,39 @@ impl ORCSource {
     }
 
     fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
-        if self.arrow_schema != arrow_schema {
+        if self.arrow_schema.fields != arrow_schema.fields {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
                 self.schema_from, path, self.arrow_schema, arrow_schema
             )));
         }
         Ok(())
+    }
+
+    async fn next_part(&mut self) -> Result<bool> {
+        let part = match self.table_ctx.get_partition() {
+            Some(part) => part,
+            None => return Ok(false),
+        };
+        let file = OrcFilePartition::from_part(&part)?.clone();
+        let path = file.path.clone();
+        let size = file.size;
+
+        let file = OrcChunkReader {
+            operator: self.op.clone(),
+            size: file.size as u64,
+            path: file.path,
+        };
+        let builder = ArrowReaderBuilder::try_new_async(file)
+            .await
+            .map_err(|e| map_orc_error(e, &path))?;
+        let mut reader = builder.build_async();
+        let factory = mem::take(&mut reader.factory).unwrap();
+        let schema = reader.schema();
+        self.check_file_schema(schema, &path)?;
+
+        self.reader = Some((path, factory, size));
+        Ok(true)
     }
 }
 
@@ -76,46 +111,47 @@ impl AsyncSource for ORCSource {
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        if self.reader.is_none() {
-            let part = match self.table_ctx.get_partition() {
-                Some(part) => part,
-                None => return Ok(None),
-            };
-            let file = OrcFilePartition::from_part(&part)?.clone();
-            let path = file.path.clone();
-
-            let file = OrcChunkReader {
-                operator: self.op.clone(),
-                size: file.size as u64,
-                path: file.path,
-            };
-            let builder = ArrowReaderBuilder::try_new_async(file)
-                .await
-                .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-            let mut reader = builder.build_async();
-            let factory = mem::take(&mut reader.factory).unwrap();
-            let schema = reader.schema();
-            self.check_file_schema(schema, &path)?;
-
-            self.reader = Some((path, factory))
-        }
-        if let Some((path, factory)) = mem::take(&mut self.reader) {
-            let (factory, stripe) = factory
-                .read_next_stripe()
-                .await
-                .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
-            match stripe {
-                None => Ok(None),
-                Some(stripe) => {
-                    self.reader = Some((path.clone(), Box::new(factory)));
-                    let meta = Box::new(StripeInMemory { path, stripe });
-                    Ok(Some(DataBlock::empty_with_meta(meta)))
-                }
+        loop {
+            if self.reader.is_none() && !self.next_part().await? {
+                return Ok(None);
             }
-        } else {
-            Err(ErrorCode::Internal(
-                "Bug: ORCSource: should not be called with reader != None.",
-            ))
+            if let Some((path, factory, size)) = mem::take(&mut self.reader) {
+                let (factory, stripe) = factory
+                    .read_next_stripe()
+                    .await
+                    .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+                match stripe {
+                    None => {
+                        self.reader = None;
+                        let progress_values = ProgressValues {
+                            rows: 0,
+                            bytes: size,
+                        };
+                        self.scan_progress.incr(&progress_values);
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+                        continue;
+                    }
+                    Some(stripe) => {
+                        let progress_values = ProgressValues {
+                            rows: stripe.number_of_rows(),
+                            bytes: 0,
+                        };
+                        self.scan_progress.incr(&progress_values);
+                        self.reader = Some((path.clone(), Box::new(factory), size));
+                        let meta = Box::new(StripeInMemory {
+                            path,
+                            stripe,
+                            schema: None,
+                        });
+                        return Ok(Some(DataBlock::empty_with_meta(meta)));
+                    }
+                }
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Bug: ORCSource: should not be called with reader != None.",
+                ));
+            }
         }
     }
 }

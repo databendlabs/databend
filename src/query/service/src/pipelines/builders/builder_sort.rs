@@ -129,6 +129,7 @@ impl PipelineBuilder {
                         limit,
                         sort_desc,
                         true,
+                        self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
@@ -188,6 +189,7 @@ impl PipelineBuilder {
                         limit,
                         sort_desc,
                         true,
+                        self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
@@ -318,6 +320,7 @@ impl SortPipelineBuilder {
             self.schema.clone()
         };
 
+        let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
         pipeline.add_transform(|input, output| {
             let builder = TransformSortMergeBuilder::create(
                 input,
@@ -330,7 +333,8 @@ impl SortPipelineBuilder {
             .with_order_col_generated(order_col_generated)
             .with_output_order_col(output_order_col || may_spill)
             .with_max_memory_usage(max_memory_usage)
-            .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc);
+            .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc)
+            .with_enable_loser_tree(enable_loser_tree);
 
             Ok(ProcessorPtr::create(builder.build()?))
         })?;
@@ -366,6 +370,7 @@ impl SortPipelineBuilder {
                 self.limit,
                 self.sort_desc,
                 self.remove_order_col_at_last,
+                self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
             )?;
         }
 

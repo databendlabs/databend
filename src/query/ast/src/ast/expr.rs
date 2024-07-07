@@ -911,7 +911,7 @@ pub enum TypeName {
     },
     Bitmap,
     Tuple {
-        fields_name: Option<Vec<String>>,
+        fields_name: Option<Vec<Identifier>>,
         fields_type: Vec<TypeName>,
     },
     Variant,

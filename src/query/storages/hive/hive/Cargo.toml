@@ -33,7 +33,7 @@ databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 faststr = "0.2"
 futures = { workspace = true }
-hive_metastore = "0.0.2"
+hive_metastore = "0.1.0"
 log = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
@@ -41,7 +41,7 @@ ordered-float = { workspace = true }
 recursive = "0.1.1"
 serde = { workspace = true }
 typetag = { workspace = true }
-volo-thrift = "0.9"
+volo-thrift = "0.10"
 
 [lints]
 workspace = true

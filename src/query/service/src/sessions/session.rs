@@ -350,10 +350,11 @@ impl Session {
         }
     }
 
-    pub fn get_profile(&self) -> Option<Vec<PlanProfile>> {
-        self.session_ctx
-            .get_query_context_shared()
-            .and_then(|x| x.get_profile())
+    pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        match self.session_ctx.get_query_context_shared() {
+            None => vec![],
+            Some(x) => x.get_query_profiles(),
+        }
     }
 }
 

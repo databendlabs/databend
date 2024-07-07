@@ -154,6 +154,7 @@ impl ConnectionFactory {
         inner_connector.set_nodelay(true);
         inner_connector.set_keepalive(None);
         inner_connector.enforce_http(false);
+        inner_connector.set_connect_timeout(timeout);
 
         // check connection immediately
         match endpoint.connect_with_connector(inner_connector).await {
