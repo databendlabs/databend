@@ -46,12 +46,16 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let strategy = self.t.retry_strategy();
         for i in 0..strategy.retry_times {
-            if i > 0 {
-                info!("Retry {} times for transform {}", i, Self::NAME);
-            }
             match self.t.transform(data.clone()).await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
+                    // Add log to know which error is retrying
+                    info!(
+                        "Retry {} times for transform {} error: {:?}",
+                        i,
+                        Self::NAME,
+                        e
+                    );
                     if !self.t.retry_on(&e) {
                         return Err(e);
                     }
