@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::str::FromStr;
 use std::time::Duration;
 
 use arrow_array::RecordBatch;
@@ -25,6 +26,9 @@ use databend_common_exception::Result;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
+use tonic::metadata::KeyAndValueRef;
+use tonic::metadata::MetadataMap;
+use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
 use tonic::transport::Endpoint;
 use tonic::Request;
@@ -43,6 +47,7 @@ const MAX_DECODING_MESSAGE_SIZE: usize = 16 * 1024 * 1024 * 1024;
 pub struct UDFFlightClient {
     inner: FlightServiceClient<Channel>,
     batch_rows: u64,
+    headers: MetadataMap,
 }
 
 impl UDFFlightClient {
@@ -74,11 +79,47 @@ impl UDFFlightClient {
             })?
             .max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
 
-        Ok(UDFFlightClient { inner, batch_rows })
+        Ok(UDFFlightClient {
+            inner,
+            batch_rows,
+            headers: MetadataMap::new(),
+        })
+    }
+
+    /// Set tenant for the UDF client.
+    pub fn with_tenant(mut self, tenant: &str) -> Result<Self> {
+        self.headers.insert(
+            "tenant",
+            MetadataValue::from_str(tenant)
+                .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
+        );
+        Ok(self)
+    }
+
+    /// Set query id for the UDF client.
+    pub fn with_query_id(mut self, query_id: &str) -> Result<Self> {
+        self.headers.insert(
+            "queryid",
+            MetadataValue::from_str(query_id)
+                .map_err(|err| ErrorCode::UDFDataError(format!("Set query id error: {err}")))?,
+        );
+        Ok(self)
     }
 
     fn make_request<T>(&self, t: T) -> Request<T> {
-        Request::new(t)
+        let mut request = Request::new(t);
+        for k_v in self.headers.iter() {
+            match k_v {
+                KeyAndValueRef::Ascii(key, value) => {
+                    request.metadata_mut().insert(key, value.clone());
+                }
+                KeyAndValueRef::Binary(key, value) => {
+                    request.metadata_mut().insert_bin(key, value.clone());
+                }
+            }
+        }
+
+        request
     }
 
     #[async_backtrace::framed]
