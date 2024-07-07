@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_sql::plans::RenameTablePlan;
+use databend_common_storages_share::remove_share_table_object;
+use databend_common_storages_share::save_share_spec;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,7 +53,7 @@ impl Interpreter for RenameTableInterpreter {
         // You must have ALTER and DROP privileges for the original table,
         // and CREATE and INSERT privileges for the new table.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        catalog
+        let resp = catalog
             .rename_table(RenameTableReq {
                 if_exists: self.plan.if_exists,
                 name_ident: TableNameIdent {
@@ -64,6 +66,24 @@ impl Interpreter for RenameTableInterpreter {
             })
             .await?;
 
+        if let Some((spec_vec, share_object)) = resp.share_table_info {
+            save_share_spec(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &spec_vec,
+            )
+            .await?;
+
+            for share_spec in spec_vec {
+                remove_share_table_object(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    &vec![share_object.clone()],
+                )
+                .await?;
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }

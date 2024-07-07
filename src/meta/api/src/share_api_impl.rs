@@ -781,21 +781,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     txn_op_put(&object, serialize_struct(&share_ids)?), // (object) -> share_ids
                 ];
 
-                let _ = revoke_object_privileges(
-                    self,
-                    &mut share_meta,
-                    object.clone(),
-                    share_id,
-                    req.privilege,
-                    req.update_on,
-                    &mut condition,
-                    &mut if_then,
-                )
-                .await?;
-
-                // update share meta
-                if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
-
+                // construct the revoke_object before modify share meta
                 let revoke_object = match seq_and_id {
                     ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, mut db_meta) => {
                         db_meta.shared_by.remove(&share_id);
@@ -836,6 +822,21 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         )))
                     }
                 };
+
+                let _ = revoke_object_privileges(
+                    self,
+                    &mut share_meta,
+                    object.clone(),
+                    share_id,
+                    req.privilege,
+                    req.update_on,
+                    &mut condition,
+                    &mut if_then,
+                )
+                .await?;
+
+                // update share meta
+                if_then.push(txn_op_put(&id_key, serialize_struct(&share_meta)?)); /* (share_id) -> share_meta */
 
                 let txn_req = TxnRequest {
                     condition,

@@ -36,6 +36,7 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::share::ShareObject;
 use crate::share::ShareSpec;
 use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
@@ -688,6 +689,8 @@ impl Display for RenameTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
+    // vec<share spec>, table id
+    pub share_table_info: Option<(Vec<ShareSpec>, ShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

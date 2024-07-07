@@ -186,6 +186,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareVecTableInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -1886,7 +1887,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             if req.if_exists {
                 if tb_id_seq == 0 {
                     // TODO: table does not exist, can not return table id.
-                    return Ok(RenameTableReply { table_id: 0 });
+                    return Ok(RenameTableReply {
+                        table_id: 0,
+                        share_table_info: None,
+                    });
                 }
             } else {
                 assert_table_exist(
@@ -1985,7 +1989,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 tb_id_list.pop();
                 new_tb_id_list.append(table_id);
 
-                let condition = vec![
+                let mut condition = vec![
                     // db has not to change, i.e., no new table is created.
                     // Renaming db is OK and does not affect the seq of db_meta.
                     txn_cond_seq(&DatabaseId { db_id }, Eq, db_meta_seq),
@@ -2020,6 +2024,73 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     );
                 }
 
+                // if the table if shared, remove from share
+                let share_table_info = if !db_meta.shared_by.is_empty() {
+                    let tbid = TableId { table_id };
+
+                    let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
+                        get_pb_value(self, &tbid).await?;
+                    if let Some(mut table_meta) = table_meta {
+                        if !table_meta.shared_by.is_empty() {
+                            let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
+                            for share_id in &table_meta.shared_by {
+                                let res = remove_table_from_share(
+                                    self,
+                                    *share_id,
+                                    table_id,
+                                    tenant_dbname_tbname.tenant(),
+                                    &mut condition,
+                                    &mut then_ops,
+                                )
+                                .await;
+
+                                match res {
+                                    Ok((share_name, share_meta)) => {
+                                        spec_vec.push(
+                                            convert_share_meta_to_spec(
+                                                self,
+                                                &share_name,
+                                                *share_id,
+                                                share_meta,
+                                            )
+                                            .await?,
+                                        );
+                                    }
+                                    Err(e) => match e {
+                                        // ignore UnknownShareId error
+                                        KVAppError::AppError(AppError::UnknownShareId(_)) => {
+                                            error!(
+                                                "UnknownShareId {} when drop_table_by_id tenant:{} table_id:{} shared by",
+                                                share_id,
+                                                tenant_dbname_tbname.tenant().tenant_name(),
+                                                table_id
+                                            );
+                                        }
+                                        _ => return Err(e),
+                                    },
+                                }
+                            }
+                            // clear table meta shared_by
+                            table_meta.shared_by.clear();
+                            condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
+                            then_ops.push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
+
+                            let share_object = ShareObject::Table((
+                                db_id,
+                                table_id,
+                                tenant_dbname_tbname.table_name.clone(),
+                            ));
+                            Some((spec_vec, share_object))
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 let txn_req = TxnRequest {
                     condition,
                     if_then: then_ops,
@@ -2037,7 +2108,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(RenameTableReply { table_id });
+                    return Ok(RenameTableReply {
+                        table_id,
+                        share_table_info,
+                    });
                 }
             }
         }
@@ -3011,13 +3085,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 })),
             };
 
+            // `update_table_meta` MUST NOT modify shared_by
+            let mut new_table_meta = req.new_table_meta.clone();
+            new_table_meta.shared_by = table_meta.shared_by.clone();
+
             let mut txn_req = TxnRequest {
                 condition: vec![
                     // table is not changed
                     txn_cond_seq(&tbid, Eq, tb_meta_seq),
                 ],
                 if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
+                    txn_op_put(&tbid, serialize_struct(&new_table_meta)?), // tb_id -> tb_meta
                 ],
                 else_then: vec![get_table_meta],
             };
@@ -3058,8 +3136,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if succ {
                 return Ok(UpdateTableMetaReply {
-                    share_vec_table_info: get_share_vec_table_info(self, req.table_id, &table_meta)
-                        .await?,
+                    share_vec_table_info: get_share_vec_table_info(
+                        self,
+                        req.table_id,
+                        &new_table_meta,
+                    )
+                    .await?,
                 });
             } else {
                 let resp = responses
