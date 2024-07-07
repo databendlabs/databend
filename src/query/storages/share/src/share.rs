@@ -63,7 +63,7 @@ pub async fn save_share_spec(
 ) -> Result<()> {
     for share_spec in share_specs {
         let share_name = &share_spec.name;
-        let location = get_share_spec_location(tenant, &share_name);
+        let location = get_share_spec_location(tenant, share_name);
         let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec.clone(), &operator);
         let data = serde_json::to_string(&share_spec_ext)?;
         operator.write(&location, data).await?;
@@ -76,7 +76,7 @@ pub async fn save_share_spec(
 pub async fn remove_share_table_info(
     tenant: &str,
     operator: Operator,
-    share_name: &String,
+    share_name: &str,
     db_id: u64,
     share_table_id: u64,
 ) -> Result<()> {
@@ -91,7 +91,7 @@ pub async fn remove_share_table_info(
 pub async fn remove_share_table_object(
     tenant: &str,
     operator: Operator,
-    share_name: &String,
+    share_name: &str,
     revoke_share_object: &[ShareObject],
 ) -> Result<()> {
     for share_object in revoke_share_object {

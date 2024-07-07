@@ -247,9 +247,19 @@ impl ModifyTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let _resp = catalog
+            let resp = catalog
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
+            if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -330,9 +340,19 @@ impl ModifyTableColumnInterpreter {
                 update_stream_meta: vec![],
             };
 
-            let _resp = catalog
+            let resp = catalog
                 .update_table_meta(table.get_table_info(), req)
                 .await?;
+            if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -510,7 +530,17 @@ impl ModifyTableColumnInterpreter {
             update_stream_meta: vec![],
         };
 
-        let _resp = catalog.update_table_meta(table_info, req).await?;
+        let resp = catalog.update_table_meta(table_info, req).await?;
+        if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
+            update_share_table_info(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                share_name_vec,
+                *db_id,
+                share_table_info,
+            )
+            .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }

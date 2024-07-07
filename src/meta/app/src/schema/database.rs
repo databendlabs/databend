@@ -85,6 +85,13 @@ impl DatabaseIdToName {
     }
 }
 
+// see `ShareGrantObjectPrivilege`
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ShareDbId {
+    Usage(u64),
+    Reference(u64),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DatabaseMeta {
     pub engine: String,
@@ -103,7 +110,7 @@ pub struct DatabaseMeta {
     // share endpoint name, create with `create share endpoint` ddl
     pub using_share_endpoint: Option<String>,
     // from share db id
-    pub from_share_db_id: Option<u64>,
+    pub from_share_db_id: Option<ShareDbId>,
 }
 
 impl Default for DatabaseMeta {

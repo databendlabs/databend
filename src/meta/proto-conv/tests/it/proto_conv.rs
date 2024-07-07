@@ -32,6 +32,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use databend_common_meta_app::share::ShareCredential;
@@ -60,7 +61,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
         using_share_endpoint: Some("endpoint".to_string()),
-        from_share_db_id: Some(1024),
+        from_share_db_id: Some(ShareDbId::Usage(1024)),
     }
 }
 

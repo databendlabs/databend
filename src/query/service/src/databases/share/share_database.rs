@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -69,7 +70,11 @@ impl ShareDatabase {
                 && db_info.meta.using_share_endpoint.is_some()
                 && db_info.meta.from_share_db_id.is_some()
         );
-        let from_share_db_id = db_info.meta.from_share_db_id.unwrap();
+        let from_share_db_id = db_info.meta.from_share_db_id.as_ref().unwrap();
+        let from_share_db_id = match from_share_db_id {
+            ShareDbId::Usage(id) => *id,
+            ShareDbId::Reference(id) => *id,
+        };
         Ok(Box::new(Self {
             ctx,
             db_info,

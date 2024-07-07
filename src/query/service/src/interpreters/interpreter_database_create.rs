@@ -20,6 +20,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_types::MatchSeq;
@@ -87,15 +88,13 @@ impl CreateDatabaseInterpreter {
                     share_name.display(),
                     tenant.tenant_name()
                 )))
+            } else if let Some(database) = share_spec.database {
+                Ok(Some(database.id))
             } else {
-                if let Some(database) = share_spec.database {
-                    Ok(Some(database.id))
-                } else {
-                    Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                        "share {:?} has no grant database",
-                        share_name
-                    )))
-                }
+                Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                    "share {:?} has no grant database",
+                    share_name
+                )))
             }
         } else {
             Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
@@ -143,7 +142,9 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
 
         let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
-        create_db_req.meta.from_share_db_id = share_db_id;
+        if let Some(share_db_id) = share_db_id {
+            create_db_req.meta.from_share_db_id = Some(ShareDbId::Usage(share_db_id));
+        }
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in

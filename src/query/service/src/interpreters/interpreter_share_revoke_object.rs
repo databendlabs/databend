@@ -66,7 +66,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                &vec![share_spec.clone()],
+                &[share_spec.clone()],
             )
             .await?;
 
@@ -75,7 +75,7 @@ impl Interpreter for RevokeShareObjectInterpreter {
                     self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_application_level_data_operator()?.operator(),
                     &share_spec.name,
-                    &vec![revoke_object],
+                    &[revoke_object],
                 )
                 .await?;
             }

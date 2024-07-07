@@ -66,7 +66,7 @@ impl Interpreter for GrantShareObjectInterpreter {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                &vec![share_spec.clone()],
+                &[share_spec.clone()],
             )
             .await?;
 
@@ -75,7 +75,7 @@ impl Interpreter for GrantShareObjectInterpreter {
                 update_share_table_info(
                     self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_application_level_data_operator()?.operator(),
-                    &vec![share_spec.name.clone()],
+                    &[share_spec.name.clone()],
                     *db_id,
                     share_table_info,
                 )

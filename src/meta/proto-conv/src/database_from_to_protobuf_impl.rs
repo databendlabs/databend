@@ -54,7 +54,10 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             using_share_endpoint: p.using_share_endpoint,
-            from_share_db_id: p.from_share_db_id,
+            from_share_db_id: match p.from_share_db_id {
+                Some(from_share_db_id) => Some(mt::ShareDbId::from_pb(from_share_db_id)?),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -79,9 +82,51 @@ impl FromToProto for mt::DatabaseMeta {
                 None => None,
             },
             using_share_endpoint: self.using_share_endpoint.clone(),
-            from_share_db_id: self.from_share_db_id,
+            from_share_db_id: match &self.from_share_db_id {
+                Some(from_share_db_id) => Some(from_share_db_id.to_pb()?),
+                None => None,
+            },
         };
         Ok(p)
+    }
+}
+
+impl FromToProto for mt::ShareDbId {
+    type PB = pb::ShareDbId;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
+
+    fn from_pb(p: pb::ShareDbId) -> Result<Self, Incompatible>
+    where Self: Sized {
+        match p.db_id {
+            Some(pb::share_db_id::DbId::Usage(usage)) => Ok(mt::ShareDbId::Usage(usage.id)),
+            Some(pb::share_db_id::DbId::Reference(reference)) => {
+                Ok(mt::ShareDbId::Reference(reference.id))
+            }
+            None => Err(Incompatible {
+                reason: "ShareDbId cannot be None".to_string(),
+            }),
+        }
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareDbId, Incompatible> {
+        match self {
+            Self::Usage(id) => Ok(Self::PB {
+                db_id: Some(pb::share_db_id::DbId::Usage(pb::ShareUsageDbId {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    id: *id,
+                })),
+            }),
+            Self::Reference(id) => Ok(Self::PB {
+                db_id: Some(pb::share_db_id::DbId::Reference(pb::ShareReferenceDbId {
+                    ver: VER,
+                    min_reader_ver: MIN_READER_VER,
+                    id: *id,
+                })),
+            }),
+        }
     }
 }
 

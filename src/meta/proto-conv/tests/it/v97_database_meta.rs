@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use maplit::btreemap;
 use minitrace::func_name;
@@ -31,8 +32,8 @@ fn test_decode_v97_database_meta() -> anyhow::Result<()> {
         58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57,
         32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 178, 1, 7, 102, 111, 111, 32, 98, 97,
         114, 202, 1, 21, 10, 6, 116, 101, 110, 97, 110, 116, 18, 5, 115, 104, 97, 114, 101, 160, 6,
-        97, 168, 6, 24, 218, 1, 8, 101, 110, 100, 112, 111, 105, 110, 116, 224, 1, 128, 8, 160, 6,
-        97, 168, 6, 24,
+        97, 168, 6, 24, 218, 1, 8, 101, 110, 100, 112, 111, 105, 110, 116, 226, 1, 11, 10, 9, 8,
+        128, 8, 160, 6, 97, 168, 6, 24, 160, 6, 97, 168, 6, 24,
     ];
 
     let want = || mt::DatabaseMeta {
@@ -46,7 +47,7 @@ fn test_decode_v97_database_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
         using_share_endpoint: Some("endpoint".to_string()),
-        from_share_db_id: Some(1024),
+        from_share_db_id: Some(ShareDbId::Usage(1024)),
     };
 
     common::test_pb_from_to(func_name!(), want())?;

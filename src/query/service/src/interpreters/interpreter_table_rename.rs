@@ -79,7 +79,7 @@ impl Interpreter for RenameTableInterpreter {
                     self.ctx.get_tenant().tenant_name(),
                     self.ctx.get_application_level_data_operator()?.operator(),
                     &share_spec.name,
-                    &vec![share_object.clone()],
+                    &[share_object.clone()],
                 )
                 .await?;
             }

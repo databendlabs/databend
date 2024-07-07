@@ -56,7 +56,7 @@ impl Interpreter for DropShareInterpreter {
             remove_share_dir(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                &vec![share_spec],
+                &[share_spec],
             )
             .await?;
         }
