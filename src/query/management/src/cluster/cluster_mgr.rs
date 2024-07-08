@@ -122,7 +122,7 @@ impl ClusterApi for ClusterMgr {
             let key_parts = node_key.split('/').collect::<Vec<_>>();
 
             assert_eq!(key_parts.len(), 5);
-            assert_eq!(key_parts[0], "__fd_clusters");
+            assert_eq!(key_parts[0], "__fd_clusters_v2");
             assert_eq!(key_parts[3], "databend_query");
 
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;

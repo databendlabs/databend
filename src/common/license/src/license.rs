@@ -185,9 +185,9 @@ impl Feature {
                     ));
                 }
 
-                if matches!(cluster_quote.max_nodes_per_cluster, Some(x) if x > 3) {
+                if matches!(cluster_quote.max_nodes_per_cluster, Some(x) if x > 1) {
                     return Err(ErrorCode::LicenseKeyInvalid(
-                        "No license found. The default configuration of Databend Community Edition only supports up to 3 nodes per cluster. To use more nodes per cluster, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                        "No license found. The default configuration of Databend Community Edition only supports up to 1 nodes per cluster. To use more nodes per cluster, please consider upgrading to Databend Enterprise Edition. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
                     ));
                 }
 
