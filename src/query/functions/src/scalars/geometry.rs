@@ -40,6 +40,7 @@ use geo::EuclideanLength;
 use geo::HasDimensions;
 use geo::HaversineDistance;
 use geo::Point;
+use geo_types::coord;
 use geo_types::Polygon;
 use geohash::decode_bbox;
 use geohash::encode;
@@ -1438,12 +1439,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                #[allow(unused_assignments)]
-                let mut from_srid = 0;
-
                 // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
                 // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-                from_srid = match Ewkb(original).to_geos().unwrap().srid() {
+                let from_srid = match Ewkb(original).to_geos().unwrap().srid() {
                     Some(srid) => srid,
                     _ => {
                         ctx.set_error(
@@ -1465,7 +1463,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     geom.transform(&proj)
                                         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
                                         .and_then(|_| {
-                                            geom.to_ewkb(geom.dims(), Some(srid))
+                                            let round_geom = round_geometry_coordinates(geom);
+                                            round_geom
+                                                .to_ewkb(round_geom.dims(), Some(srid))
                                                 .map_err(ErrorCode::from)
                                         })
                                 })
@@ -1506,7 +1506,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                         let old = Ewkb(original.to_vec());
                         Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap()).to_geo().map_err(ErrorCode::from).and_then(|mut geom| {
                             geom.transform(&proj).map_err(|e|ErrorCode::GeometryError(e.to_string())).and_then(|_| {
-                                geom.to_ewkb(old.dims(), Some(to_srid)).map_err(ErrorCode::from)
+                                let round_geom = round_geometry_coordinates(geom);
+                                round_geom.to_ewkb(round_geom.dims(), Some(to_srid)).map_err(ErrorCode::from)
                             })
                         })
                     })
@@ -1783,5 +1784,122 @@ fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremu
             };
             Some(coord)
         }
+    }
+}
+/// The last three decimal places of the f64 type are inconsistent between aarch64 and x86 platforms,
+/// causing unit test results to fail. We will only retain six decimal places.
+fn round_geometry_coordinates(geom: geo::Geometry<f64>) -> geo::Geometry<f64> {
+    fn round_coordinate(coord: f64) -> f64 {
+        (coord * 1_000_000.0).round() / 1_000_000.0
+    }
+
+    match geom {
+        geo::Geometry::Point(point) => geo::Geometry::Point(Point::new(
+            round_coordinate(point.x()),
+            round_coordinate(point.y()),
+        )),
+        geo::Geometry::LineString(linestring) => geo::Geometry::LineString(
+            linestring
+                .into_iter()
+                .map(|coord| coord!(x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                .collect(),
+        ),
+        geo::Geometry::Polygon(polygon) => {
+            let outer_ring = polygon.exterior();
+            let mut rounded_inner_rings = Vec::new();
+
+            for inner_ring in polygon.interiors() {
+                let rounded_coords: Vec<Coord<f64>> = inner_ring
+                    .into_iter()
+                    .map(
+                        |coord| coord!( x: round_coordinate(coord.x), y: round_coordinate(coord.y)),
+                    )
+                    .collect();
+                rounded_inner_rings.push(LineString(rounded_coords));
+            }
+
+            let rounded_polygon = Polygon::new(
+                LineString(
+                    outer_ring
+                        .into_iter()
+                        .map(|coord| coord!( x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                        .collect(),
+                ),
+                rounded_inner_rings.try_into().unwrap(),
+            );
+
+            geo::Geometry::Polygon(rounded_polygon)
+        }
+        geo::Geometry::MultiPoint(multipoint) => geo::Geometry::MultiPoint(
+            multipoint
+                .into_iter()
+                .map(|point| Point::new(round_coordinate(point.x()), round_coordinate(point.y())))
+                .collect(),
+        ),
+        geo::Geometry::MultiLineString(multilinestring) => {
+            let rounded_lines: Vec<LineString<f64>> = multilinestring
+                .into_iter()
+                .map(|linestring| {
+                    LineString(
+                        linestring
+                            .into_iter()
+                            .map(|coord| coord!(x: round_coordinate(coord.x), y: round_coordinate(coord.y)))
+                            .collect(),
+                    )
+                })
+                .collect();
+
+            geo::Geometry::MultiLineString(geo::MultiLineString::new(rounded_lines))
+        }
+        geo::Geometry::MultiPolygon(multipolygon) => {
+            let rounded_polygons: Vec<Polygon<f64>> = multipolygon
+                .into_iter()
+                .map(|polygon| {
+                    let outer_ring = polygon.exterior().into_iter()
+                        .map(|coord| coord!( x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
+                        .collect::<Vec<Coord<f64>>>();
+
+                    let mut rounded_inner_rings = Vec::new();
+                    for inner_ring in polygon.interiors() {
+                        let rounded_coords: Vec<Coord<f64>> = inner_ring
+                            .into_iter()
+                            .map(|coord| coord!( x:round_coordinate(coord.x), y: coord.y))
+                            .collect();
+                        rounded_inner_rings.push(LineString(rounded_coords));
+                    }
+
+                    Polygon::new(LineString(outer_ring), rounded_inner_rings.try_into().unwrap())
+                })
+                .collect();
+            geo::Geometry::MultiPolygon(geo::MultiPolygon::new(rounded_polygons))
+        }
+        geo::Geometry::GeometryCollection(geometrycollection) => geo::Geometry::GeometryCollection(
+            geometrycollection
+                .into_iter()
+                .map(round_geometry_coordinates)
+                .collect(),
+        ),
+        geo::Geometry::Line(line) => geo::Geometry::Line(geo::Line::new(
+            Point::new(
+                round_coordinate(line.start.x),
+                round_coordinate(line.start.y),
+            ),
+            Point::new(round_coordinate(line.end.x), round_coordinate(line.end.y)),
+        )),
+        geo::Geometry::Rect(rect) => geo::Geometry::Rect(geo::Rect::new(
+            Point::new(
+                round_coordinate(rect.min().x),
+                round_coordinate(rect.min().y),
+            ),
+            Point::new(
+                round_coordinate(rect.max().x),
+                round_coordinate(rect.max().y),
+            ),
+        )),
+        geo::Geometry::Triangle(triangle) => geo::Geometry::Triangle(geo::Triangle::new(
+            coord!(x: round_coordinate(triangle.0.x), y: round_coordinate(triangle.0.y)),
+            coord!(x: round_coordinate(triangle.1.x), y: round_coordinate(triangle.1.y)),
+            coord!(x: round_coordinate(triangle.2.x), y: round_coordinate(triangle.2.y)),
+        )),
     }
 }
