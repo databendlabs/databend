@@ -25,6 +25,7 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
@@ -122,9 +123,7 @@ impl ShareApiTestSuite {
         let suite = ShareApiTestSuite {};
 
         suite.test_share_table(&b.build().await).await?;
-        suite
-            .replace_and_drop_share_database(&b.build().await)
-            .await?;
+        suite.test_share_database(&b.build().await).await?;
         suite.share_create_show_drop(&b.build().await).await?;
         suite
             .share_endpoint_create_show_drop(&b.build().await)
@@ -486,9 +485,7 @@ impl ShareApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn replace_and_drop_share_database<
-        MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
-    >(
+    async fn test_share_database<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
     ) -> anyhow::Result<()> {
@@ -499,12 +496,17 @@ impl ShareApiTestSuite {
         let share1 = "share1";
         let share2 = "share2";
         let db_name = "db1";
+        let table_name = "table";
 
         let share_name1 = ShareNameIdent::new(&tenant, share1);
         let share_name2 = ShareNameIdent::new(&tenant, share2);
-        let share_id: u64;
+        let share_id1: u64;
+        let share_id2: u64;
+        let table_id: u64;
+        let mut db_id: u64;
 
         let create_on = Utc::now();
+        info!("test replace shared database");
         {
             let req = CreateShareReq {
                 if_not_exists: false,
@@ -513,14 +515,13 @@ impl ShareApiTestSuite {
                 create_on,
             };
 
-            let res = mt.create_share(req).await;
+            let res = mt.create_share(req).await?;
             info!("create share res: {:?}", res);
-            let res = res.unwrap();
             assert_eq!(1, res.share_id, "first database id is 1");
-            share_id = res.share_id;
+            share_id1 = res.share_id;
 
             let (share_name_seq, share_name_ret) =
-                get_share_id_to_name_or_err(mt.as_kv_api(), share_id, "").await?;
+                get_share_id_to_name_or_err(mt.as_kv_api(), share_id1, "").await?;
             assert!(share_name_seq > 0);
             assert_eq!(ShareNameIdentRaw::from(share_name1.clone()), share_name_ret);
 
@@ -531,7 +532,8 @@ impl ShareApiTestSuite {
                 create_on,
             };
 
-            let _res = mt.create_share(req).await;
+            let res = mt.create_share(req).await?;
+            share_id2 = res.share_id;
 
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
@@ -578,7 +580,7 @@ impl ShareApiTestSuite {
             };
 
             let res = mt.create_database(plan).await?;
-            let db_id = res.db_id;
+            db_id = res.db_id;
             info!("create database res: {:?}", res);
 
             let share_specs = res.share_specs.unwrap();
@@ -591,7 +593,10 @@ impl ShareApiTestSuite {
             assert!(share_names.contains(&share2.to_string()));
             assert!(share_specs[0].database.is_none());
             assert!(share_specs[1].database.is_none());
+        }
 
+        info!("test drop shared database");
+        {
             // grant the database again
             let req = GrantShareObjectReq {
                 share_name: share_name1.clone(),
@@ -635,6 +640,227 @@ impl ShareApiTestSuite {
             assert!(share_specs[1].database.is_none());
         }
 
+        info!("test revoke shared database");
+        {
+            // first check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name1.clone(),
+            };
+
+            let res = mt.get_share_grant_objects(req).await?;
+            assert!(res.objects.is_empty());
+
+            let req = GetShareGrantObjectReq {
+                share_name: share_name2.clone(),
+            };
+
+            let res = mt.get_share_grant_objects(req).await?;
+            assert!(res.objects.is_empty());
+
+            let plan = CreateDatabaseReq {
+                create_option: CreateOption::Create,
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
+                meta: DatabaseMeta::default(),
+            };
+
+            let res = mt.create_database(plan).await?;
+            db_id = res.db_id;
+            info!("create database res: {:?}", res);
+            assert!(res.share_specs.is_none());
+
+            let req = GrantShareObjectReq {
+                share_name: share_name1.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.grant_share_object(req).await?;
+            info!("grant object res: {:?}", res);
+            let share_spec = res.share_spec.unwrap();
+            assert_eq!(share_spec.name, *share_name1.name());
+            assert_eq!(share_spec.database.unwrap().name, db_name.to_string());
+            assert_eq!(
+                share_spec.db_privileges,
+                Some(BitFlags::from(ShareGrantObjectPrivilege::Usage))
+            );
+            assert!(res.grant_share_table.is_none());
+
+            let req = GrantShareObjectReq {
+                share_name: share_name2.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let _res = mt.grant_share_object(req).await?;
+
+            // check database meta
+            let dbid_key = DatabaseId { db_id };
+            let database_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &dbid_key).await?;
+            assert!(database_meta.shared_by.contains(&share_id1));
+            assert!(database_meta.shared_by.contains(&share_id2));
+
+            // after grant database check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name1.clone(),
+            };
+
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 1);
+
+            let req = GetShareGrantObjectReq {
+                share_name: share_name2.clone(),
+            };
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 1);
+
+            // create a table and grant share to it
+            let req = CreateTableReq {
+                create_option: CreateOption::Create,
+                name_ident: TableNameIdent {
+                    tenant: tenant.clone(),
+                    db_name: db_name.to_string(),
+                    table_name: table_name.to_string(),
+                },
+                table_meta: TableMeta::default(),
+                as_dropped: false,
+            };
+
+            let res = mt.create_table(req.clone()).await?;
+            info!("create table res: {:?}", res);
+            assert!(res.spec_vec.is_none());
+            table_id = res.table_id;
+
+            let req = GrantShareObjectReq {
+                share_name: share_name1.clone(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let _res = mt.grant_share_object(req).await?;
+
+            let req = GrantShareObjectReq {
+                share_name: share_name2.clone(),
+                object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
+                grant_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let _res = mt.grant_share_object(req).await?;
+
+            // after grant table check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name1.clone(),
+            };
+
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 2);
+
+            let req = GetShareGrantObjectReq {
+                share_name: share_name2.clone(),
+            };
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 2);
+
+            // check database meta
+            let dbid_key = DatabaseId { db_id };
+            let database_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &dbid_key).await?;
+            assert_eq!(database_meta.shared_by.len(), 2);
+            assert!(database_meta.shared_by.contains(&share_id1));
+            assert!(database_meta.shared_by.contains(&share_id2));
+
+            // check table meta
+            let tbid = TableId { table_id };
+            let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &tbid).await?;
+            assert_eq!(table_meta.shared_by.len(), 2);
+            assert!(table_meta.shared_by.contains(&share_id1));
+            assert!(table_meta.shared_by.contains(&share_id2));
+
+            // when revoke database priviledge, table priviledge MUST be revoked too.
+            let req = RevokeShareObjectReq {
+                share_name: share_name1.clone(),
+                object: ShareGrantObjectName::Database(db_name.to_string()),
+                update_on: create_on,
+                privilege: ShareGrantObjectPrivilege::Usage,
+            };
+
+            let res = mt.revoke_share_object(req).await?;
+            let share_spec = res.clone().share_spec.unwrap();
+            assert_eq!(res.share_id, share_id1);
+            assert!(share_spec.database.is_none());
+            assert!(share_spec.tables.is_empty());
+
+            // after grant table check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name1.clone(),
+            };
+
+            // check share_grant_objects
+            let res = mt.get_share_grant_objects(req).await?;
+            assert!(res.objects.is_empty());
+
+            // check database meta
+            let dbid_key = DatabaseId { db_id };
+            let database_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &dbid_key).await?;
+            assert_eq!(database_meta.shared_by.len(), 1);
+            assert!(database_meta.shared_by.contains(&share_id2));
+
+            // check table meta
+            let tbid = TableId { table_id };
+            let table_meta: TableMeta = get_kv_data(mt.as_kv_api(), &tbid).await?;
+            assert_eq!(table_meta.shared_by.len(), 1);
+            assert!(table_meta.shared_by.contains(&share_id2));
+        }
+
+        info!("test rename shared database");
+        {
+            // check database meta
+            let dbid_key = DatabaseId { db_id };
+            let database_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &dbid_key).await?;
+            assert!(database_meta.shared_by.contains(&share_id2));
+
+            // check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name2.clone(),
+            };
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 2);
+
+            let db2_name = "db2_name";
+            // rename database
+            let req = RenameDatabaseReq {
+                if_exists: false,
+                name_ident: DatabaseNameIdent::new(&tenant, db_name),
+                new_db_name: db2_name.to_string(),
+            };
+            let res = mt.rename_database(req).await?;
+            info!("rename database res: {:?}", res);
+            let (share_specs, object) = res.share_spec.unwrap();
+            if let ShareObject::Db(old_db_id) = object {
+                assert_eq!(old_db_id, db_id);
+            } else {
+                unreachable!()
+            }
+            assert_eq!(share_specs.len(), 1);
+            let share_spec = &share_specs[0];
+            assert_eq!(share_spec.name, share2.to_string());
+            assert!(share_spec.database.is_none());
+            assert!(share_spec.tables.is_empty());
+
+            // after rename database check database meta
+            let dbid_key = DatabaseId { db_id };
+            let database_meta: DatabaseMeta = get_kv_data(mt.as_kv_api(), &dbid_key).await?;
+            assert!(database_meta.shared_by.is_empty());
+
+            // after rename database check share objects
+            let req = GetShareGrantObjectReq {
+                share_name: share_name2.clone(),
+            };
+            let res = mt.get_share_grant_objects(req).await?;
+            assert_eq!(res.objects.len(), 0);
+        }
         Ok(())
     }
 

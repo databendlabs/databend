@@ -48,6 +48,7 @@ pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use sequence_api::SequenceApi;
 pub use share_api::ShareApi;
+pub(crate) use share_api_impl::revoke_object_privileges;
 pub use share_api_test_suite::ShareApiTestSuite;
 pub use util::assert_table_exist;
 pub use util::convert_share_meta_to_spec;

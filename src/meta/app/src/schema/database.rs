@@ -27,6 +27,7 @@ use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::share::share_name_ident::ShareNameIdentRaw;
 use crate::share::ShareCredential;
 use crate::share::ShareCredentialHmac;
+use crate::share::ShareObject;
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -253,7 +254,9 @@ impl Display for RenameDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct RenameDatabaseReply {}
+pub struct RenameDatabaseReply {
+    pub share_spec: Option<(Vec<ShareSpec>, ShareObject)>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabaseReq {

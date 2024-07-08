@@ -186,6 +186,11 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
+use databend_common_meta_app::share::ShareGrantObject;
+use databend_common_meta_app::share::ShareGrantObjectPrivilege;
+use databend_common_meta_app::share::ShareGrantObjectSeqAndId;
+use databend_common_meta_app::share::ShareId;
+use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareVecTableInfo;
@@ -235,6 +240,7 @@ use crate::kv_pb_api::KVPbApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::remove_db_from_share;
+use crate::revoke_object_privileges;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
@@ -552,10 +558,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?.await;
 
             // get old db, not exists return err
-            let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
+            let (old_db_id_seq, old_db_id, db_meta_seq, mut db_meta) = get_db_or_err(
+                self,
+                tenant_dbname,
+                format!("rename_database: {}", tenant_dbname.display()),
+            )
+            .await?;
+
             if req.if_exists {
                 if old_db_id_seq == 0 {
-                    return Ok(RenameDatabaseReply {});
+                    return Ok(RenameDatabaseReply { share_spec: None });
                 }
             } else {
                 db_has_to_exist(old_db_id_seq, tenant_dbname, "rename_database: src (db)")?;
@@ -633,47 +645,108 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // rename database
-            {
-                // move db id from old db id list to new db id list
-                db_id_list.pop();
-                new_db_id_list.append(old_db_id);
+            // move db id from old db id list to new db id list
+            db_id_list.pop();
+            new_db_id_list.append(old_db_id);
 
-                let txn_req = TxnRequest {
-                    condition: vec![
-                        // Prevent renaming or deleting in other threads.
-                        txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
-                        txn_cond_seq(&db_id_key, Eq, db_name_seq),
-                        txn_cond_seq(&tenant_newdbname, Eq, 0),
-                        txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
-                        txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
-                    ],
-                    if_then: vec![
-                        txn_op_del(tenant_dbname), // del old_db_name
-                        // Renaming db should not affect the seq of db_meta. Just modify db name.
-                        txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
-                        txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
-                        txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), /* _fd_db_id_list/tenant/db_name -> db_id_list */
-                        txn_op_put(
-                            &db_id_key,
-                            serialize_struct(&DatabaseNameIdentRaw::from(&tenant_newdbname))?,
-                        ), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
-                    ],
-                    else_then: vec![],
-                };
+            let mut condition = vec![
+                // Prevent renaming or deleting in other threads.
+                txn_cond_seq(tenant_dbname, Eq, old_db_id_seq),
+                txn_cond_seq(&db_id_key, Eq, db_name_seq),
+                txn_cond_seq(&tenant_newdbname, Eq, 0),
+                txn_cond_seq(&dbid_idlist, Eq, db_id_list_seq),
+                txn_cond_seq(&new_dbid_idlist, Eq, new_db_id_list_seq),
+            ];
+            let mut if_then = vec![
+                txn_op_del(tenant_dbname), // del old_db_name
+                // Renaming db should not affect the seq of db_meta. Just modify db name.
+                txn_op_put(&tenant_newdbname, serialize_u64(old_db_id)?), /* (tenant, new_db_name) -> old_db_id */
+                txn_op_put(&new_dbid_idlist, serialize_struct(&new_db_id_list)?), /* _fd_db_id_list/tenant/new_db_name -> new_db_id_list */
+                txn_op_put(&dbid_idlist, serialize_struct(&db_id_list)?), /* _fd_db_id_list/tenant/db_name -> db_id_list */
+                txn_op_put(
+                    &db_id_key,
+                    serialize_struct(&DatabaseNameIdentRaw::from(&tenant_newdbname))?,
+                ), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+            ];
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+            // check if database if shared
+            let share_spec = if !db_meta.shared_by.is_empty() {
+                let seq_and_id =
+                    ShareGrantObjectSeqAndId::Database(db_meta_seq, old_db_id, db_meta.clone());
+                let object = ShareGrantObject::new(&seq_and_id);
+                let update_on = Utc::now();
+                let mut share_spec_vec = vec![];
+                for share_id in &db_meta.shared_by {
+                    let (share_meta_seq, mut share_meta) = get_share_meta_by_id_or_err(
+                        self,
+                        *share_id,
+                        format!("rename database: {}", tenant_dbname.display()),
+                    )
+                    .await?;
 
-                debug!(
-                    name :? =(tenant_dbname),
-                    to :? =(&tenant_newdbname),
-                    database_id :? =(&old_db_id),
-                    succ = succ;
-                    "rename_database"
-                );
+                    let _ = revoke_object_privileges(
+                        self,
+                        &mut share_meta,
+                        object.clone(),
+                        *share_id,
+                        ShareGrantObjectPrivilege::Usage,
+                        update_on,
+                        &mut condition,
+                        &mut if_then,
+                    )
+                    .await?;
 
-                if succ {
-                    return Ok(RenameDatabaseReply {});
+                    // save share meta
+                    let share_id_key = ShareId {
+                        share_id: *share_id,
+                    };
+                    condition.push(txn_cond_seq(&share_id_key, Eq, share_meta_seq));
+                    if_then.push(txn_op_put(&share_id_key, serialize_struct(&share_meta)?));
+
+                    let id_key = ShareIdToName {
+                        share_id: *share_id,
+                    };
+
+                    let (_share_name_seq, share_name) = get_pb_value(self, &id_key).await?;
+
+                    share_spec_vec.push(
+                        convert_share_meta_to_spec(
+                            self,
+                            share_name.unwrap().name(),
+                            *share_id,
+                            share_meta,
+                        )
+                        .await?,
+                    );
                 }
+
+                // clean db meta shared_by
+                db_meta.shared_by.clear();
+                let db_id_key = DatabaseId { db_id: old_db_id };
+                if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
+                Some((share_spec_vec, ShareObject::Db(old_db_id)))
+            } else {
+                None
+            };
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name :? =(tenant_dbname),
+                to :? =(&tenant_newdbname),
+                database_id :? =(&old_db_id),
+                succ = succ;
+                "rename_database"
+            );
+
+            if succ {
+                return Ok(RenameDatabaseReply { share_spec });
             }
         }
     }

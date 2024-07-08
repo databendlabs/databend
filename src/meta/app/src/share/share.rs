@@ -192,7 +192,7 @@ pub struct RevokeShareObjectReq {
     pub update_on: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareObject {
     // db id
     Db(u64),

@@ -1834,7 +1834,7 @@ async fn remove_share_id_from_share_objects(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn revoke_object_privileges(
+pub async fn revoke_object_privileges(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_meta: &mut ShareMeta,
     object: ShareGrantObject,
