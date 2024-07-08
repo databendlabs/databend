@@ -141,15 +141,11 @@ impl SelectInterpreter {
         let update_stream_metas = query_build_update_stream_req(&self.ctx, &self.metadata).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
-        let query_id = self.ctx.get_id();
         build_res
             .main_pipeline
             .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                 Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                    info!(
-                        "Updating the stream meta to consume data, query_id: {}",
-                        query_id
-                    );
+                    info!("Updating the stream meta to consume data");
 
                     match update_stream_metas {
                         Some(streams) => {
