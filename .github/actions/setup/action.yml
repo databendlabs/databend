@@ -1,6 +1,10 @@
 name: Setup Rust Builder
 description: 'Prepare Rust Build Environment'
 inputs:
+  runner:
+    description: 'runner provider'
+    required: true
+    default: 'github'
   cache-key:
     description: 'the rust cache key suffix'
     required: false
@@ -22,9 +26,27 @@ runs:
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@v0.0.4
 
-    - name: Cache Cargo
+    - name: Cache Cargo for Github Runner
+      if: inputs.runner == 'github'
       uses: actions/cache@v4
       with:
+        path: |
+          ~/.cargo/registry/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ steps.toolchain.outputs.cachekey }}-${{ inputs.cache-key }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ steps.toolchain.outputs.cachekey }}
+          ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          ${{ runner.os }}-cargo
+
+    - name: Cache Cargo for AWS Self-Hosted Runner
+      if: inputs.runner == 'aws'
+      uses: everpcpc/actions-cache@v2
+      env:
+        AWS_REGION: us-east-2
+      with:
+        provider: s3
+        bucket: "databend-ci"
+        root: "bendsql/cache"
         path: |
           ~/.cargo/registry/
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}-${{ steps.toolchain.outputs.cachekey }}-${{ inputs.cache-key }}
@@ -48,6 +70,20 @@ runs:
         echo "RUST_LOG=info" >> $GITHUB_ENV
         # Enable sparse index
         echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse" >> $GITHUB_ENV
-        # Enable sccache
+
+    - name: Enable sccache for Github Actions
+      shell: bash
+      if: inputs.runner == 'github'
+      run: |
         echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+    - name: Enable sccache for AWS Self-Hosted Actions
+      shell: bash
+      if: inputs.runner == 'aws'
+      run: |
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        echo "SCCACHE_BUCKET=databend-ci" >> $GITHUB_ENV
+        echo "SCCACHE_REGION=us-east-2" >> $GITHUB_ENV
+        echo "SCCACHE_S3_KEY_PREFIX=bendsql/sccache/" >> $GITHUB_ENV
+        echo "SCCACHE_S3_USE_SSL=true" >> $GITHUB_ENV
