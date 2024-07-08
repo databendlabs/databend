@@ -242,13 +242,10 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
             catalog
-                .update_table_meta(table.get_table_info(), req)
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
 
             return Ok(PipelineBuildResult::create());
@@ -325,13 +322,10 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
             let res = catalog
-                .update_table_meta(table.get_table_info(), req)
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
 
             save_share_table_info(&self.ctx, &res.share_table_info).await?;
@@ -495,12 +489,9 @@ impl ModifyTableColumnInterpreter {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
-        let res = catalog.update_table_meta(table_info, req).await?;
+        let res = catalog.update_single_table_meta(req, table_info).await?;
 
         save_share_table_info(&self.ctx, &res.share_table_info).await?;
 

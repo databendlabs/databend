@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -21,7 +20,6 @@ use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
@@ -90,7 +88,8 @@ impl QueryPipelineExecutor {
 
         match RunningGraph::create(pipeline, 1, settings.query_id.clone(), None) {
             Err(cause) => {
-                let _ = on_finished_chain.apply(ExecutionInfo::create(Err(cause.clone()), vec![]));
+                let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+                let _ = on_finished_chain.apply(info);
 
                 Err(cause)
             }
@@ -152,7 +151,7 @@ impl QueryPipelineExecutor {
 
         match RunningGraph::from_pipelines(pipelines, 1, settings.query_id.clone(), None) {
             Err(cause) => {
-                let info = ExecutionInfo::create(Err(cause.clone()), vec![]);
+                let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
                 let _ignore_res = finished_chain.apply(info);
                 Err(cause)
             }
@@ -245,7 +244,7 @@ impl QueryPipelineExecutor {
                     let may_error = error.clone();
                     drop(finished_error_guard);
 
-                    let profiling = self.get_plans_profile();
+                    let profiling = self.fetch_plans_profile(true);
                     self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
                     return Err(may_error);
                 }
@@ -254,19 +253,19 @@ impl QueryPipelineExecutor {
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = thread_res.unwrap_err();
-                let profiling = self.get_plans_profile();
+                let profiling = self.fetch_plans_profile(true);
                 self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
                 return Err(may_error);
             }
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
-            let profiling = self.get_plans_profile();
+            let profiling = self.fetch_plans_profile(true);
             self.on_finished(ExecutionInfo::create(Err(error.clone()), profiling))?;
             return Err(error);
         }
 
-        let profiling = self.get_plans_profile();
+        let profiling = self.fetch_plans_profile(true);
         self.on_finished(ExecutionInfo::create(Ok(()), profiling))?;
         Ok(())
     }
@@ -463,43 +462,13 @@ impl QueryPipelineExecutor {
         self.graph.format_graph_nodes()
     }
 
-    pub fn get_profiles(&self) -> Vec<Arc<Profile>> {
-        self.graph.get_proc_profiles()
-    }
-
-    pub fn get_plans_profile(&self) -> Vec<PlanProfile> {
-        let mut plans_profile: HashMap<u32, PlanProfile> = HashMap::<u32, PlanProfile>::new();
-
-        for profile in self.get_profiles() {
-            if let Some(plan_id) = &profile.plan_id {
-                match plans_profile.entry(*plan_id) {
-                    Entry::Occupied(mut v) => {
-                        v.get_mut().accumulate(&profile);
-                    }
-                    Entry::Vacant(v) => {
-                        let plan_profile = v.insert(PlanProfile::create(&profile));
-                        if let Some(metrics_registry) = &profile.metrics_registry {
-                            match metrics_registry.dump_sample() {
-                                Ok(metrics) => {
-                                    plan_profile.add_metrics(
-                                        self.settings.executor_node_id.clone(),
-                                        metrics,
-                                    );
-                                }
-                                Err(error) => {
-                                    warn!(
-                                        "Dump {:?} plan metrics error, cause {:?}",
-                                        plan_profile.name, error
-                                    );
-                                }
-                            }
-                        }
-                    }
-                };
-            };
+    pub fn fetch_plans_profile(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile> {
+        match collect_metrics {
+            true => self
+                .graph
+                .fetch_profiling(Some(self.settings.executor_node_id.clone())),
+            false => self.graph.fetch_profiling(None),
         }
-
-        plans_profile.into_values().collect::<Vec<_>>()
     }
 }
 
@@ -525,7 +494,7 @@ impl Drop for QueryPipelineExecutor {
             }
 
             let _guard = ThreadTracker::tracking(tracking_payload);
-            let profiling = self.get_plans_profile();
+            let profiling = self.fetch_plans_profile(true);
             let info = ExecutionInfo::create(Err(cause), profiling);
             if let Err(cause) = on_finished_chain.apply(info) {
                 warn!("Pipeline executor shutdown failure, {:?}", cause);

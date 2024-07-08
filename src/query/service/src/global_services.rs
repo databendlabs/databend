@@ -44,6 +44,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
+use crate::servers::admin::v1::query_profiling::ProfilesCacheQueue;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
@@ -149,6 +150,8 @@ impl GlobalServices {
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
+
+        ProfilesCacheQueue::init(config.query.max_cached_queries_profiles);
 
         #[cfg(feature = "enable_queries_executor")]
         {

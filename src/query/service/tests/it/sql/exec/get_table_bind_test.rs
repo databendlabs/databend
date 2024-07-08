@@ -22,7 +22,6 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -117,8 +116,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -153,7 +150,6 @@ type MetaType = (String, String, String);
 #[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
-    error_injection: Option<ErrorCode>,
 }
 
 #[async_trait::async_trait]
@@ -266,18 +262,6 @@ impl Catalog for FakedCatalog {
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
         todo!()
-    }
-
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        if let Some(e) = &self.error_injection {
-            Err(e.clone())
-        } else {
-            self.cat.update_table_meta(table_info, req).await
-        }
     }
 
     async fn set_table_column_mask_policy(
@@ -830,7 +814,7 @@ impl TableContext for CtxDelegation {
         self.ctx.get_license_key()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
     fn add_merge_status(&self, _merge_status: MergeStatus) {
@@ -849,7 +833,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_query_profiles(&self, _: &[PlanProfile]) {
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
 
@@ -940,10 +924,7 @@ async fn test_get_same_table_once() -> Result<()> {
     fixture.create_default_table().await?;
     let ctx = fixture.new_query_ctx().await?;
     let catalog = ctx.get_catalog("default").await?;
-    let faked_catalog = FakedCatalog {
-        cat: catalog,
-        error_injection: None,
-    };
+    let faked_catalog = FakedCatalog { cat: catalog };
 
     let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
 

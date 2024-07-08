@@ -235,6 +235,7 @@ pub struct QueryConfig {
 
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
+    pub max_cached_queries_profiles: usize,
     pub settings: HashMap<String, UserSettingValue>,
 }
 
@@ -307,6 +308,7 @@ impl Default for QueryConfig {
             cloud_control_grpc_server_address: None,
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
+            max_cached_queries_profiles: 50,
             settings: HashMap::new(),
         }
     }
@@ -646,6 +648,12 @@ pub struct DiskCacheConfig {
 
     /// Table disk cache root path
     pub path: String,
+
+    /// Whether sync data after write.
+    /// If the query node's memory is managed by cgroup (at least cgroup v1),
+    /// it's recommended to set this to true to prevent the container from
+    /// being killed due to high dirty page memory usage.
+    pub sync_data: bool,
 }
 
 impl Default for DiskCacheConfig {
@@ -653,6 +661,7 @@ impl Default for DiskCacheConfig {
         Self {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
+            sync_data: true,
         }
     }
 }

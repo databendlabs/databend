@@ -90,10 +90,13 @@ impl UserApiProvider {
     pub async fn list_udf(&self, tenant: &Tenant) -> Result<Vec<UserDefinedFunction>> {
         let udf_api = self.udf_api(tenant);
 
-        let udfs = udf_api
+        let mut udfs = udf_api
             .list_udf()
             .await
             .map_err(|e| e.add_message_back("while list UDFs"))?;
+
+        // Extend the existing `udfs` vector with built-in UDFs.
+        udfs.extend(self.get_configured_udfs().into_values());
 
         Ok(udfs)
     }

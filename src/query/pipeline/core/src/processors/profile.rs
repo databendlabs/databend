@@ -120,10 +120,8 @@ impl PlanProfile {
             parent_id: profile.plan_parent_id,
             title: profile.title.clone(),
             labels: profile.labels.clone(),
-            statistics: std::array::from_fn(|index| {
-                profile.statistics[index].load(Ordering::SeqCst)
-            }),
             metrics: BTreeMap::new(),
+            statistics: std::array::from_fn(|_| 0),
             errors: Self::get_profile_error(profile),
         }
     }

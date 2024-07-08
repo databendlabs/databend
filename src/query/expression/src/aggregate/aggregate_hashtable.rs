@@ -205,7 +205,7 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(self.payload.state_addr_offsets.iter())
                 {
-                    aggr.accumulate_keys(state_places, *addr_offset, params, row_count)?;
+                    aggr.accumulate_keys(state_places, *addr_offset, params.into(), row_count)?;
                 }
             } else {
                 for ((aggr, agg_state), addr_offset) in self

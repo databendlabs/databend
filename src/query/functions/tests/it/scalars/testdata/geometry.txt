@@ -1,3 +1,12 @@
+ast            : haversine(40.7127, -74.0059, 34.0500, -118.2500)
+raw expr       : haversine(40.7127, minus(74.0059), 34.0500, minus(118.2500))
+checked expr   : haversine<Float64, Float64, Float64, Float64>(to_float64<Decimal(6, 4)>(40.7127_d128(6,4)), to_float64<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d128(6,4))), to_float64<Decimal(6, 4)>(34.0500_d128(6,4)), to_float64<Decimal(7, 4)>(minus<Decimal(7, 4)>(118.2500_d128(7,4))))
+optimized expr : 3936.390533556_f64
+output type    : Float64
+output domain  : {3936.390533556..=3936.390533556}
+output         : 3936.390533556
+
+
 ast            : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
 raw expr       : st_asewkb(to_geometry('SRID=4326;POINT(-122.35 37.55)'))
 checked expr   : st_asewkb<Geometry>(to_geometry<String>("SRID=4326;POINT(-122.35 37.55)"))
@@ -151,6 +160,15 @@ output domain  : {2..=2}
 output         : 2
 
 
+ast            : st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))
+raw expr       : st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))
+checked expr   : st_distance<Geometry, Geometry>(to_geometry<String>("POINT(0 0)"), to_geometry<String>("POINT(1 1)"))
+optimized expr : 1.414213562_f64
+output type    : Float64 NULL
+output domain  : {1.414213562..=1.414213562}
+output         : 1.414213562
+
+
 ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", to_int32<UInt16>(4326_u16)))
@@ -215,6 +233,33 @@ optimized expr : "POINT(1.0004425048828125 2.0001983642578125)"
 output type    : Geometry
 output domain  : Undefined
 output         : 'POINT(1.0004425048828125 2.0001983642578125)'
+
+
+ast            : st_length(to_geometry('POINT(1 1)'))
+raw expr       : st_length(to_geometry('POINT(1 1)'))
+checked expr   : st_length<Geometry>(to_geometry<String>("POINT(1 1)"))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : st_length(to_geometry('LINESTRING(0 0, 1 1)'))
+raw expr       : st_length(to_geometry('LINESTRING(0 0, 1 1)'))
+checked expr   : st_length<Geometry>(to_geometry<String>("LINESTRING(0 0, 1 1)"))
+optimized expr : 1.414213562_f64
+output type    : Float64 NULL
+output domain  : {1.414213562..=1.414213562}
+output         : 1.414213562
+
+
+ast            : st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
+raw expr       : st_length(to_geometry('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))
+checked expr   : st_length<Geometry>(to_geometry<String>("POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))"))
+optimized expr : 0_f64
+output type    : Float64 NULL
+output domain  : {0..=0}
+output         : 0
 
 
 ast            : st_makeline(

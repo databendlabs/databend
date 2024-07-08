@@ -21,7 +21,6 @@ use dashmap::DashMap;
 use databend_common_base::base::tokio;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::runtime::profile::Profile;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::database::Database;
@@ -116,8 +115,8 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -738,7 +737,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
 
@@ -758,7 +757,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_query_profiles(&self, _: &[PlanProfile]) {
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
 
@@ -956,18 +955,6 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        if let Some(e) = &self.error_injection {
-            Err(e.clone())
-        } else {
-            self.cat.update_table_meta(table_info, req).await
-        }
-    }
-
     async fn set_table_column_mask_policy(
         &self,
         _req: SetTableColumnMaskPolicyReq,
@@ -1112,5 +1099,16 @@ impl Catalog for FakedCatalog {
 
     async fn drop_sequence(&self, _req: DropSequenceReq) -> Result<DropSequenceReply> {
         unimplemented!()
+    }
+
+    async fn retryable_update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        if let Some(e) = &self.error_injection {
+            Err(e.clone())
+        } else {
+            self.cat.retryable_update_multi_table_meta(req).await
+        }
     }
 }

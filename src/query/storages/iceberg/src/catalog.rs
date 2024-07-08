@@ -65,6 +65,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
+use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -89,8 +90,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -99,10 +98,11 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use databend_common_storage::DataOperator;
-use futures::TryStreamExt;
-use minitrace::func_name;
-use opendal::Metakey;
+use iceberg_catalog_hms::HmsCatalog;
+use iceberg_catalog_hms::HmsCatalogConfig;
+use iceberg_catalog_hms::HmsThriftTransport;
+use iceberg_catalog_rest::RestCatalog;
+use iceberg_catalog_rest::RestCatalogConfig;
 
 use crate::database::IcebergDatabase;
 use crate::IcebergTable;
@@ -114,15 +114,7 @@ pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
     fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
-        let opt = match &info.meta.catalog_option {
-            CatalogOption::Iceberg(opt) => opt,
-            _ => unreachable!(
-                "trying to create iceberg catalog from other catalog, must be an internal bug"
-            ),
-        };
-
-        let data_operator = DataOperator::try_new(&opt.storage_params)?;
-        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info, data_operator)?);
+        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
 
         Ok(catalog)
     }
@@ -139,40 +131,51 @@ pub struct IcebergCatalog {
     /// info of this iceberg table.
     info: Arc<CatalogInfo>,
 
-    /// underlying storage access operator
-    operator: DataOperator,
+    /// iceberg catalogs
+    ctl: Arc<dyn iceberg::Catalog>,
 }
 
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
     #[minitrace::trace]
-    pub fn try_create(info: Arc<CatalogInfo>, operator: DataOperator) -> Result<Self> {
-        Ok(Self { info, operator })
+    pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Iceberg(opt) => opt,
+            _ => unreachable!(
+                "trying to create iceberg catalog from other catalog, must be an internal bug"
+            ),
+        };
+
+        let ctl: Arc<dyn iceberg::Catalog> = match opt {
+            IcebergCatalogOption::Hms(hms) => {
+                let cfg = HmsCatalogConfig::builder()
+                    .address(hms.address.clone())
+                    .thrift_transport(HmsThriftTransport::Buffered)
+                    .warehouse(hms.warehouse.clone())
+                    .props(hms.props.clone())
+                    .build();
+                let ctl = HmsCatalog::new(cfg).map_err(|err| {
+                    ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
+                })?;
+                Arc::new(ctl)
+            }
+            IcebergCatalogOption::Rest(rest) => {
+                let cfg = RestCatalogConfig::builder()
+                    .uri(rest.uri.clone())
+                    .warehouse(rest.warehouse.clone())
+                    .props(rest.props.clone())
+                    .build();
+                let ctl = RestCatalog::new(cfg);
+                Arc::new(ctl)
+            }
+        };
+
+        Ok(Self { info, ctl })
     }
 
-    /// list read databases
-    #[minitrace::trace]
-    #[async_backtrace::framed]
-    pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
-        let op = self.operator.operator();
-        let mut dbs = vec![];
-        let mut ls = op.lister_with("/").metakey(Metakey::Mode).await?;
-        while let Some(dir) = ls.try_next().await? {
-            let meta = dir.metadata();
-            if !meta.is_dir() {
-                continue;
-            }
-            let db_name = dir.name().strip_suffix('/').unwrap_or_default();
-            if db_name.is_empty() {
-                // skip empty named directory
-                // but I can hardly imagine an empty named folder.
-                continue;
-            }
-            let dummy = Tenant::new_or_err("dummy", func_name!()).unwrap();
-            let db: Arc<dyn Database> = self.get_database(&dummy, db_name).await?;
-            dbs.push(db);
-        }
-        Ok(dbs)
+    /// Get the iceberg catalog.
+    pub fn iceberg_catalog(&self) -> Arc<dyn iceberg::Catalog> {
+        self.ctl.clone()
     }
 }
 
@@ -188,32 +191,27 @@ impl Catalog for IcebergCatalog {
     #[minitrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
-        let rel_path = format!("{db_name}/");
-
-        let operator = self.operator.operator();
-        if !operator.is_exist(&rel_path).await? {
-            return Err(ErrorCode::UnknownDatabase(format!(
-                "Database {db_name} does not exist"
-            )));
-        }
-
-        // storage params for database
-        let db_sp = self
-            .operator
-            .params()
-            .map_root(|root| format!("{root}{rel_path}"));
-        let db_root = DataOperator::try_create(&db_sp).await?;
-
-        Ok(Arc::new(IcebergDatabase::create(
-            self.info.clone(),
-            db_name,
-            db_root,
-        )))
+        Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
     }
 
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
-        self.list_database_from_read().await
+        let db_names = self
+            .iceberg_catalog()
+            .list_namespaces(None)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+            })?;
+
+        let mut dbs = Vec::new();
+        for db_name in db_names {
+            let db = self
+                .get_database(&Tenant::new_literal("dummy"), &db_name.encode_in_url())
+                .await?;
+            dbs.push(db);
+        }
+        Ok(dbs)
     }
 
     #[async_backtrace::framed]
@@ -358,15 +356,6 @@ impl Catalog for IcebergCatalog {
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        _req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
         unimplemented!()
     }
 

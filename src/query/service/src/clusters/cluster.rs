@@ -81,7 +81,7 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient>;
+
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
     async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
@@ -115,37 +115,6 @@ impl ClusterHelper for Cluster {
 
     fn local_id(&self) -> String {
         self.local_id.clone()
-    }
-
-    #[async_backtrace::framed]
-    async fn create_node_conn(&self, name: &str, config: &InnerConfig) -> Result<FlightClient> {
-        for node in &self.nodes {
-            if node.id == name {
-                return match config.tls_query_cli_enabled() {
-                    true => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            Some(config.query.to_rpc_client_tls_config()),
-                        )
-                        .await?,
-                    ))),
-                    false => Ok(FlightClient::new(FlightServiceClient::new(
-                        ConnectionFactory::create_rpc_channel(
-                            node.flight_address.clone(),
-                            None,
-                            None,
-                        )
-                        .await?,
-                    ))),
-                };
-            }
-        }
-
-        Err(ErrorCode::NotFoundClusterNode(format!(
-            "The node \"{}\" not found in the cluster",
-            name
-        )))
     }
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
