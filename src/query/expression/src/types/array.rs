@@ -373,7 +373,8 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
             T::append_column(&mut self.builder, &item);
         }
         self.offsets.reserve(n);
-        self.offsets.extend((0..n).map(|i| (len * (i + 1)) as u64));
+        self.offsets
+            .extend((1..=n).map(|i| (before + len * i) as u64));
     }
 
     pub fn push_default(&mut self) {
