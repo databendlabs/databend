@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
@@ -34,6 +35,7 @@ use databend_common_io::Extremum;
 use databend_common_io::GeometryDataType;
 use geo::dimensions::Dimensions;
 use geo::BoundingRect;
+use geo::Contains;
 use geo::EuclideanDistance;
 use geo::EuclideanLength;
 use geo::HasDimensions;
@@ -212,6 +214,40 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             builder.commit_row();
         }),
+    );
+
+    registry.register_combine_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        "st_contains",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, NullableType<BooleanType>>(
+            |l_geometry, r_geometry, builder, ctx| {
+                let l_ewkb = Ewkb(l_geometry);
+                let r_ewkb = Ewkb(r_geometry);
+                let l_geos: Geometry = l_ewkb.to_geos().unwrap();
+                let r_geos: Geometry = r_ewkb.to_geos().unwrap();
+                let l_srid = l_geos.srid();
+                let r_srid = r_geos.srid();
+                if l_srid != r_srid {
+                    builder.push_null();
+                    ctx.set_error(
+                        builder.len(),
+                        ErrorCode::GeometryError("Srid does not match!").to_string(),
+                    );
+                } else {
+                    let l_geo: geo::Geometry = l_geos.to_geo().unwrap();
+                    let r_geo: geo::Geometry = r_geos.to_geo().unwrap();
+                    if let Some(err) = check_geometry_collection(&l_geo) {
+                        builder.push_null();
+                        ctx.set_error(builder.len(), err);
+                    } else if let Some(err) = check_geometry_collection(&r_geo) {
+                        builder.push_null();
+                        ctx.set_error(builder.len(), err);
+                    } else {
+                        builder.push(l_geo.contains(&r_geo));
+                    }
+                }
+            },
+        ),
     );
 
     registry.register_combine_nullable_2_arg::<GeometryType, GeometryType, NumberType<F64>, _, _>(
@@ -1780,5 +1816,13 @@ fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremu
             };
             Some(coord)
         }
+    }
+}
+
+fn check_geometry_collection(geometry: &geo::Geometry) -> Option<String> {
+    if let geo::Geometry::GeometryCollection(_) = geometry {
+        Some(ErrorCode::GeometryError("A GEOMETRY object that is a GeometryCollection").to_string())
+    } else {
+        None
     }
 }
