@@ -425,15 +425,10 @@ mod tests {
         assert!(
             Feature::ClusterQuota(ClusterQuota::limit_nodes(2))
                 .verify_default("")
-                .is_ok()
-        );
-        assert!(
-            Feature::ClusterQuota(ClusterQuota::limit_nodes(3))
-                .verify_default("")
-                .is_ok()
+                .is_err()
         );
 
-        for nodes in 0..4 {
+        for nodes in 0..2 {
             assert!(
                 Feature::ClusterQuota(ClusterQuota::limit_full(1, nodes))
                     .verify_default("")
