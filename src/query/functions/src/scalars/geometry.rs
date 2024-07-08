@@ -23,6 +23,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -59,6 +60,8 @@ use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
 use num_traits::AsPrimitive;
+use proj::Proj;
+use proj::Transform;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
@@ -1423,109 +1426,109 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    // registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
-    //     "st_transform",
-    //     |_, _, _| FunctionDomain::MayThrow,
-    //     vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
-    //         |original, srid, builder, ctx| {
-    //             if let Some(validity) = &ctx.validity {
-    //                 if !validity.get_bit(builder.len()) {
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             #[allow(unused_assignments)]
-    //             let mut from_srid = 0;
-    //
-    //             // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
-    //             // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
-    //             match read_ewkb_srid(&mut std::io::Cursor::new(original)) {
-    //                 Ok(srid) if srid.is_some() => from_srid = srid.unwrap(),
-    //                 _ => {
-    //                     ctx.set_error(
-    //                         builder.len(),
-    //                         ErrorCode::GeometryError(" input geometry must has the correct SRID")
-    //                             .to_string(),
-    //                     );
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             let result = {
-    //                 Ewkb(original).to_geo().map_err(ErrorCode::from).and_then(
-    //                     |mut geom: Geometry| {
-    //                         Proj::new_known_crs(&make_crs(from_srid), &make_crs(srid), None)
-    //                             .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                             .and_then(|proj| {
-    //                                 geom.transform(&proj)
-    //                                     .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                                     .and_then(|_| {
-    //                                         geom.to_ewkb(geom.dims(), Some(srid))
-    //                                             .map_err(ErrorCode::from)
-    //                                     })
-    //                             })
-    //                     },
-    //                 )
-    //             };
-    //
-    //             match result {
-    //                 Ok(data) => {
-    //                     builder.put_slice(data.as_slice());
-    //                 }
-    //                 Err(e) => {
-    //                     ctx.set_error(builder.len(), e.to_string());
-    //                 }
-    //             }
-    //
-    //             builder.commit_row();
-    //         },
-    //     ),
-    // );
-    //
-    // registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
-    //     "st_transform",
-    //     |_, _, _,_| FunctionDomain::MayThrow,
-    //     vectorize_with_builder_3_arg::<GeometryType, Int32Type,Int32Type, GeometryType>(
-    //         |original, from_srid, to_srid, builder, ctx| {
-    //             if let Some(validity) = &ctx.validity {
-    //                 if !validity.get_bit(builder.len()) {
-    //                     builder.commit_row();
-    //                     return;
-    //                 }
-    //             }
-    //
-    //             let result = {
-    //                 Proj::new_known_crs(&make_crs(from_srid), &make_crs(to_srid), None)
-    //                     .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-    //                     .and_then(|proj| {
-    //                     let old = Ewkb(original.to_vec());
-    //                     Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap()).to_geo().map_err(ErrorCode::from).and_then(|mut geom| {
-    //                         geom.transform(&proj).map_err(|e|ErrorCode::GeometryError(e.to_string())).and_then(|_| {
-    //                             geom.to_ewkb(old.dims(), Some(to_srid)).map_err(ErrorCode::from)
-    //                         })
-    //                     })
-    //                 })
-    //             };
-    //             match result {
-    //                 Ok(data) => {
-    //                     builder.put_slice(data.as_slice());
-    //                 }
-    //                 Err(e) => {
-    //                     ctx.set_error(builder.len(), e.to_string());
-    //                 }
-    //             }
-    //
-    //             builder.commit_row();
-    //         },
-    //     ),
-    // );
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
+        "st_transform",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
+            |original, srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                #[allow(unused_assignments)]
+                let mut from_srid = 0;
+
+                // All representations of the geo types supported by crates under the GeoRust organization, have not implemented srid().
+                // Currently, the srid() of all types returns the default value `None`, so we need to parse it manually here.
+                from_srid = match Ewkb(original).to_geos().unwrap().srid() {
+                    Some(srid)=> srid,
+                    _ => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(" input geometry must has the correct SRID")
+                                .to_string(),
+                        );
+                        builder.commit_row();
+                        return;
+                    }
+                };
+
+                let result = {
+                    Ewkb(original).to_geo().map_err(ErrorCode::from).and_then(
+                        |mut geom: geo::Geometry| {
+                            Proj::new_known_crs(&make_crs(from_srid), &make_crs(srid), None)
+                                .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                                .and_then(|proj| {
+                                    geom.transform(&proj)
+                                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                                        .and_then(|_| {
+                                            geom.to_ewkb(geom.dims(), Some(srid))
+                                                .map_err(ErrorCode::from)
+                                        })
+                                })
+                        },
+                    )
+                };
+
+                match result {
+                    Ok(data) => {
+                        builder.put_slice(data.as_slice());
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                    }
+                }
+
+                builder.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
+        "st_transform",
+        |_, _, _,_| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<GeometryType, Int32Type,Int32Type, GeometryType>(
+            |original, from_srid, to_srid, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                let result = {
+                    Proj::new_known_crs(&make_crs(from_srid), &make_crs(to_srid), None)
+                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                        .and_then(|proj| {
+                        let old = Ewkb(original.to_vec());
+                        Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap()).to_geo().map_err(ErrorCode::from).and_then(|mut geom| {
+                            geom.transform(&proj).map_err(|e|ErrorCode::GeometryError(e.to_string())).and_then(|_| {
+                                geom.to_ewkb(old.dims(), Some(to_srid)).map_err(ErrorCode::from)
+                            })
+                        })
+                    })
+                };
+                match result {
+                    Ok(data) => {
+                        builder.put_slice(data.as_slice());
+                    }
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                    }
+                }
+
+                builder.commit_row();
+            },
+        ),
+    );
 }
 
-// fn make_crs(srid: i32) -> String {
-//     format!("EPSG:{}", srid)
-// }
+fn make_crs(srid: i32) -> String {
+    format!("EPSG:{}", srid)
+}
 
 #[inline]
 fn get_shared_srid(geometries: &Vec<Geometry>) -> Result<Option<i32>, String> {
