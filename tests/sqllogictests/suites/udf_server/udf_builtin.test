@@ -7,6 +7,11 @@ select ping('test');
 ----
 test
 
+query T
+select name from system.user_functions;
+----
+ping
+
 statement error 2603
 CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815';
 

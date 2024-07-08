@@ -76,24 +76,25 @@ impl TxnBuffer {
         self.stream_tables.clear();
     }
 
-    fn update_table_meta(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
-        let table_id = req.table_id;
-        self.table_desc_to_id
-            .insert(table_info.desc.clone(), table_id);
+    fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
+        for (req, table_info) in req.update_table_metas {
+            let table_id = req.table_id;
+            self.table_desc_to_id
+                .insert(table_info.desc.clone(), table_id);
 
-        self.mutated_tables.insert(table_id, TableInfo {
-            meta: req.new_table_meta.clone(),
-            ..table_info.clone()
-        });
+            self.mutated_tables.insert(table_id, TableInfo {
+                meta: req.new_table_meta.clone(),
+                ..table_info.clone()
+            });
+        }
 
-        self.copied_files
-            .entry(table_id)
-            .or_default()
-            .extend(req.copied_files);
+        for (table_id, file) in std::mem::take(&mut req.copied_files) {
+            self.copied_files.entry(table_id).or_default().push(file);
+        }
 
-        self.update_stream_metas(&req.update_stream_meta);
+        self.update_stream_metas(&req.update_stream_metas);
 
-        self.deduplicated_labels.extend(req.deduplicated_label);
+        self.deduplicated_labels.extend(req.deduplicated_labels);
     }
 
     fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -137,6 +138,10 @@ impl TxnManager {
         }
     }
 
+    pub fn set_auto_commit(&mut self) {
+        self.state = TxnState::AutoCommit;
+    }
+
     pub fn force_set_fail(&mut self) {
         self.state = TxnState::Fail;
     }
@@ -153,8 +158,8 @@ impl TxnManager {
         self.state.clone()
     }
 
-    pub fn update_table_meta(&mut self, req: UpdateTableMetaReq, table_info: &TableInfo) {
-        self.txn_buffer.update_table_meta(req, table_info);
+    pub fn update_multi_table_meta(&mut self, req: UpdateMultiTableMetaReq) {
+        self.txn_buffer.update_multi_table_meta(req);
     }
 
     pub fn update_stream_metas(&mut self, reqs: &[UpdateStreamMetaReq]) {
@@ -221,13 +226,15 @@ impl TxnManager {
                 .txn_buffer
                 .mutated_tables
                 .iter()
-                .map(|(id, info)| UpdateTableMetaReq {
-                    table_id: *id,
-                    seq: MatchSeq::Exact(info.ident.seq),
-                    new_table_meta: info.meta.clone(),
-                    copied_files: None,
-                    update_stream_meta: vec![],
-                    deduplicated_label: None,
+                .map(|(id, info)| {
+                    (
+                        UpdateTableMetaReq {
+                            table_id: *id,
+                            seq: MatchSeq::Exact(info.ident.seq),
+                            new_table_meta: info.meta.clone(),
+                        },
+                        info.clone(),
+                    )
                 })
                 .collect(),
             copied_files,

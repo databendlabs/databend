@@ -23,6 +23,7 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_io::geometry_format;
@@ -33,7 +34,10 @@ use databend_common_io::Extremum;
 use databend_common_io::GeometryDataType;
 use geo::dimensions::Dimensions;
 use geo::BoundingRect;
+use geo::EuclideanDistance;
+use geo::EuclideanLength;
 use geo::HasDimensions;
+use geo::HaversineDistance;
 use geo::Point;
 use geo_types::Polygon;
 use geohash::decode_bbox;
@@ -77,6 +81,17 @@ pub fn register(registry: &mut FunctionRegistry) {
     ]);
 
     // functions
+    registry.register_passthrough_nullable_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+        "haversine",
+        |_, _, _, _, _| FunctionDomain::Full,
+        vectorize_with_builder_4_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>, NumberType<F64>,>(|lat1, lon1, lat2, lon2, builder, _| {
+            let p1 = Point::new(lon1, lat1);
+            let p2 = Point::new(lon2, lat2);
+            let distance = p1.haversine_distance(&p2) * 0.001;
+            builder.push(format!("{:.9}",distance.into_inner()).parse().unwrap());
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<GeometryType, VariantType, _, _>(
         "st_asgeojson",
         |_, _| FunctionDomain::MayThrow,
@@ -197,6 +212,60 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             builder.commit_row();
         }),
+    );
+
+    registry.register_combine_nullable_2_arg::<GeometryType, GeometryType, NumberType<F64>, _, _>(
+        "st_distance",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, NullableType<NumberType<F64>>>(
+            |l_geometry, r_geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let left_geo = Ewkb(l_geometry);
+                let right_geo = Ewkb(r_geometry);
+                let geos = &vec![left_geo.to_geos().unwrap(), right_geo.to_geos().unwrap()];
+                match get_shared_srid(geos).map_err(|e| ErrorCode::GeometryError(e).to_string()) {
+                    Ok(_) => {}
+                    Err(err_msg) => {
+                        ctx.set_error(builder.len(), err_msg);
+                        return;
+                    }
+                }
+
+                let l_point = match <geo_types::Geometry as TryInto<Point>>::try_into(
+                    Ewkb(l_geometry).to_geo().unwrap(),
+                ) {
+                    Ok(point) => point,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        return;
+                    }
+                };
+
+                let r_point = match <geo_types::Geometry as TryInto<Point>>::try_into(
+                    Ewkb(r_geometry).to_geo().unwrap(),
+                ) {
+                    Ok(point) => point,
+                    Err(e) => {
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(e.to_string()).to_string(),
+                        );
+                        return;
+                    }
+                };
+                let distance = l_point.euclidean_distance(&r_point);
+                builder.push(format!("{:.9}", distance).parse().unwrap());
+            },
+        ),
     );
 
     registry.register_passthrough_nullable_1_arg::<GeometryType, GeometryType, _, _>(
@@ -825,6 +894,50 @@ pub fn register(registry: &mut FunctionRegistry) {
             };
             builder.commit_row();
         }),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(
+        "st_length",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<NumberType<F64>>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                let g: geo_types::Geometry = Ewkb(geometry).to_geos().unwrap().try_into().unwrap();
+                let mut distance = 0f64;
+                match g {
+                    geo_types::Geometry::LineString(lines) => {
+                        for line in lines.lines() {
+                            distance += line.euclidean_length();
+                        }
+                    }
+                    geo_types::Geometry::MultiLineString(multi_lines) => {
+                        for line_string in multi_lines.0 {
+                            for line in line_string.lines() {
+                                distance += line.euclidean_length();
+                            }
+                        }
+                    }
+                    geo_types::Geometry::GeometryCollection(geom_c) => {
+                        for geometry in geom_c.0 {
+                            if let geo::Geometry::LineString(line_string) = geometry {
+                                for line in line_string.lines() {
+                                    distance += line.euclidean_length();
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
+                builder.push(format!("{:.9}", distance).parse().unwrap());
+            },
+        ),
     );
 
     registry.register_combine_nullable_1_arg::<GeometryType, NumberType<F64>, _, _>(

@@ -1669,6 +1669,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub cloud_control_grpc_timeout: u64,
 
+    #[clap(long, value_name = "VALUE", default_value = "50")]
+    pub max_cached_queries_profiles: usize,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1754,6 +1757,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: self.max_cached_queries_profiles,
             settings: self
                 .settings
                 .into_iter()
@@ -1852,6 +1856,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: inner.max_cached_queries_profiles,
             settings: HashMap::new(),
         }
     }
@@ -2888,6 +2893,18 @@ pub struct DiskCacheConfig {
         default_value = "./.databend/_cache"
     )]
     pub path: String,
+
+    /// Whether sync data after write.
+    /// If the query node's memory is managed by cgroup (at least cgroup v1),
+    /// it's recommended to set this to true to prevent the container from
+    /// being killed due to high dirty page memory usage.
+    #[clap(
+        long = "cache-disk-sync-data",
+        value_name = "VALUE",
+        default_value = "true"
+    )]
+    #[serde(default = "bool_true")]
+    pub sync_data: bool,
 }
 
 mod cache_config_converters {
@@ -3011,6 +3028,7 @@ mod cache_config_converters {
             Ok(Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             })
         }
     }
@@ -3020,6 +3038,7 @@ mod cache_config_converters {
             Self {
                 max_bytes: value.max_bytes,
                 path: value.path,
+                sync_data: value.sync_data,
             }
         }
     }

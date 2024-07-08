@@ -99,6 +99,7 @@ impl CacheManager {
                         queue_size,
                         config.disk_cache_config.max_bytes,
                         config.data_cache_key_reload_policy.clone(),
+                        config.disk_cache_config.sync_data,
                     )?
                 }
             }
@@ -273,6 +274,7 @@ impl CacheManager {
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> Result<Option<TableDataCache>> {
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
@@ -280,6 +282,7 @@ impl CacheManager {
                 population_queue_size,
                 disk_cache_bytes_size,
                 disk_cache_key_reload_policy,
+                sync_data,
             )?;
             Ok(Some(cache_holder))
         } else {

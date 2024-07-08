@@ -21,8 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 
 use super::aggregate_function::AggregateFunction;
 use super::StateAddr;
@@ -56,7 +56,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     fn accumulate(
         &self,
         __place: StateAddr,
-        _columns: &[Column],
+        _columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -67,13 +67,13 @@ impl AggregateFunction for AggregateNullResultFunction {
         &self,
         _places: &[StateAddr],
         _offset: usize,
-        _columns: &[Column],
+        _columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
+    fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()> {
         Ok(())
     }
 

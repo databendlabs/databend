@@ -58,13 +58,10 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
         // 4. let's roll
-        let reply = catalog.update_table_meta(&self.table_info, req).await;
+        let reply = catalog.update_single_table_meta(req, table_info).await;
         if reply.is_ok() {
             // try keep the snapshot hit
             let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {

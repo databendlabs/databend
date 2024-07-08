@@ -21,7 +21,6 @@ use databend_common_io::GeometryDataType;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::EmptyFieldAs;
-use databend_common_meta_app::principal::NullAs;
 use databend_common_protos::pb;
 use num::FromPrimitive;
 
@@ -331,16 +330,17 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     fn from_pb(p: pb::ParquetFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(mt::principal::ParquetFileFormatParams {
-            missing_field_as: NullAs::Error,
-            null_if: p.null_if,
-        })
+        mt::principal::ParquetFileFormatParams::try_create(p.missing_field_as.as_deref(), p.null_if)
+            .map_err(|e| Incompatible {
+                reason: format!("{e}"),
+            })
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
         Ok(pb::ParquetFileFormatParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
         })
     }
