@@ -113,7 +113,7 @@ struct Args {
     flight: bool,
 
     #[clap(long, help = "Enable TLS, ignored when --dsn is set")]
-    tls: bool,
+    tls: Option<bool>,
 
     #[clap(
         short = 'h',
@@ -254,9 +254,16 @@ pub async fn main() -> Result<()> {
             if !args.set.is_empty() {
                 eprintln!("warning: --set is ignored when --dsn is set");
             }
-            if args.tls {
-                eprintln!("warning: --tls is ignored when --dsn is set");
+            if let Some(tls) = args.tls {
+                if tls {
+                    eprintln!("warning: --tls is ignored when --dsn is set");
+                }
+            } else if let Some(tls) = config.connection.tls {
+                if tls {
+                    eprintln!("warning: --tls is ignored when --dsn is set")
+                }
             }
+
             if args.flight {
                 eprintln!("warning: --flight is ignored when --dsn is set");
             }
@@ -292,7 +299,20 @@ pub async fn main() -> Result<()> {
 
         // override only if args.dsn is none
         if args.dsn.is_none() {
-            if !args.tls {
+            if let Some(tls) = args.tls {
+                if !tls {
+                    conn_args
+                        .args
+                        .insert("sslmode".to_string(), "disable".to_string());
+                }
+            } else if let Some(tls) = config.connection.tls {
+                if !tls {
+                    conn_args
+                        .args
+                        .insert("sslmode".to_string(), "disable".to_string());
+                }
+            } else if config.connection.tls.is_none() {
+                // means arg.tls is none and not config in config.toml
                 conn_args
                     .args
                     .insert("sslmode".to_string(), "disable".to_string());

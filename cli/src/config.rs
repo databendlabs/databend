@@ -199,6 +199,7 @@ pub struct ConnectionConfig {
     pub port: Option<u16>,
     pub user: String,
     pub database: Option<String>,
+    pub tls: Option<bool>,
     pub args: BTreeMap<String, String>,
 }
 
@@ -261,6 +262,7 @@ impl Default for ConnectionConfig {
             port: Some(8000),
             user: "root".to_string(),
             database: None,
+            tls: None,
             args: BTreeMap::new(),
         }
     }
