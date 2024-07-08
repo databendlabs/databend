@@ -1022,7 +1022,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        SessionManager::instance().get_queries_profile()
+        SessionManager::instance().get_queries_profiles()
     }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin) {

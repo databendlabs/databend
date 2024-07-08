@@ -357,7 +357,7 @@ impl SessionManager {
         status_t
     }
 
-    pub fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+    pub fn get_queries_profiles(&self) -> HashMap<String, Vec<PlanProfile>> {
         let active_sessions = {
             // Here the situation is the same of method `graceful_shutdown`:
             //
@@ -392,5 +392,43 @@ impl SessionManager {
         }
 
         queries_profiles
+    }
+
+    pub fn get_query_profiles(&self, query_id: &str) -> Result<Vec<PlanProfile>> {
+        let active_sessions = {
+            // Here the situation is the same of method `graceful_shutdown`:
+            //
+            // We should drop the read lock before
+            // - acquiring upgraded session reference: the Arc<Session>,
+            // - extracting the ProcessInfo from it
+            // - and then drop the Arc<Session>
+            // Since there are chances that we are the last one that holding the reference, and the
+            // destruction of session need to acquire the write lock of `active_sessions`, which leads
+            // to dead lock.
+            //
+            // Although online expression can also do this, to make this clearer, we wrap it in a block
+
+            let active_sessions_guard = self.active_sessions.read();
+            active_sessions_guard.values().cloned().collect::<Vec<_>>()
+        };
+
+        for weak_ptr in active_sessions {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                if query_id == *context_shared.init_query_id.as_ref().read() {
+                    return Ok(context_shared.get_query_profiles());
+                }
+            }
+        }
+
+        Err(ErrorCode::UnknownQuery(format!(
+            "Unknown query {}",
+            query_id
+        )))
     }
 }

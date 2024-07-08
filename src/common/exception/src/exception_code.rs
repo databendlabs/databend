@@ -157,6 +157,7 @@ build_exceptions! {
     OutofSequenceRange(1124),
     WrongSequenceCount(1125),
     UnknownSequence(1126),
+    UnknownQuery(1127),
 
     // Data Related Errors
 

@@ -19,47 +19,73 @@ use std::sync::Arc;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_storages_system::SystemLogElement;
+use databend_common_storages_system::SystemLogQueue;
 use http::StatusCode;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 
+use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::actions::GET_PROFILE;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn query_profiling_handler(
     Path(query_id): Path<String>,
 ) -> poem::Result<impl IntoResponse> {
-    let session_manager = SessionManager::instance();
     #[derive(serde::Serialize)]
     struct QueryProfiles {
         query_id: String,
         profiles: Vec<PlanProfile>,
         statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
     }
-    let res = match session_manager.get_session_by_id(&query_id) {
-        Some(session) => {
-            // can get profile from current node
-            session.get_query_profiles()
+    match get_profile_from_cache(&query_id) {
+        Ok(profiles) => {
+            return Ok(Json(QueryProfiles {
+                query_id: query_id.clone(),
+                profiles,
+                statistics_desc: get_statistics_desc(),
+            }));
         }
-        None => {
-            // need get profile from clusters
-            get_cluster_profile(&session_manager, &query_id)
-                .await
-                .map_err(|cause| {
-                    poem::Error::from_string(
-                        format!("Failed to fetch cluster node profile. cause: {cause}"),
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                    )
-                })?
+        Err(cause) => {
+            if cause.code() != ErrorCode::UNKNOWN_QUERY {
+                return Err(poem::Error::from_string(
+                    format!("Failed to fetch profile from cache queue. cause: {cause}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
         }
+    }
+    let res = match SessionManager::instance().get_query_profiles(&query_id) {
+        Ok(profiles) => profiles,
+        Err(cause) => match cause.code() == ErrorCode::UNKNOWN_QUERY {
+            true => match get_cluster_profile(&query_id).await {
+                Ok(profiles) => profiles,
+                Err(cause) => {
+                    return Err(match cause.code() == ErrorCode::UNKNOWN_QUERY {
+                        true => poem::Error::from_string(cause.message(), StatusCode::NOT_FOUND),
+                        false => poem::Error::from_string(
+                            format!("Failed to fetch cluster node profile. cause: {cause}"),
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                        ),
+                    });
+                }
+            },
+            false => {
+                return Err(poem::Error::from_string(
+                    format!("Failed to fetch cluster node profile. cause: {cause}"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                ));
+            }
+        },
     };
 
     Ok(Json(QueryProfiles {
@@ -69,16 +95,10 @@ pub async fn query_profiling_handler(
     }))
 }
 
-async fn get_cluster_profile(
-    session_manager: &SessionManager,
-    query_id: &str,
-) -> Result<Vec<PlanProfile>, ErrorCode> {
-    let session = session_manager
-        .create_session(SessionType::HTTPAPI("QueryProfiling".to_string()))
-        .await?;
+async fn get_cluster_profile(query_id: &str) -> Result<Vec<PlanProfile>, ErrorCode> {
+    let config = GlobalConfig::instance();
+    let cluster = ClusterDiscovery::instance().discover(&config).await?;
 
-    let ctx = Arc::new(session).create_query_context().await?;
-    let cluster = ctx.get_cluster();
     let mut message = HashMap::with_capacity(cluster.nodes.len());
 
     for node_info in &cluster.nodes {
@@ -87,10 +107,48 @@ async fn get_cluster_profile(
         }
     }
 
-    let settings = ctx.get_settings();
-    let timeout = settings.get_flight_client_timeout()?;
     let res = cluster
-        .do_action::<String, Vec<PlanProfile>>(GET_PROFILE, message, timeout)
+        .do_action::<_, Option<Vec<PlanProfile>>>(GET_PROFILE, message, 60)
         .await?;
-    Ok(res.into_iter().flat_map(|(_key, value)| value).collect())
+
+    match res.into_values().find(Option::is_some) {
+        None => Err(ErrorCode::UnknownQuery(format!(
+            "Not found query {}",
+            query_id
+        ))),
+        Some(profiles) => Ok(profiles.unwrap()),
+    }
 }
+
+pub fn get_profile_from_cache(target: &str) -> Result<Vec<PlanProfile>, ErrorCode> {
+    let profiles_queue = ProfilesCacheQueue::instance()?;
+    for element in profiles_queue.data.read().event_queue.iter().flatten() {
+        if element.query_id == target {
+            return Ok(element.profiles.clone());
+        }
+    }
+    Err(ErrorCode::UnknownQuery(format!(
+        "Not found query {}",
+        target
+    )))
+}
+#[derive(Clone)]
+pub struct ProfilesCacheElement {
+    pub query_id: String,
+    pub profiles: Vec<PlanProfile>,
+}
+
+impl SystemLogElement for ProfilesCacheElement {
+    const TABLE_NAME: &'static str = "profiles_cache_not_table";
+    fn schema() -> TableSchemaRef {
+        unreachable!()
+    }
+    fn fill_to_data_block(
+        &self,
+        _: &mut Vec<ColumnBuilder>,
+    ) -> databend_common_exception::Result<()> {
+        unreachable!()
+    }
+}
+
+pub type ProfilesCacheQueue = SystemLogQueue<ProfilesCacheElement>;
