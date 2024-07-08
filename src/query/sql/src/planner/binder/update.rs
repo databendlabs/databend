@@ -130,7 +130,7 @@ impl Binder {
             let (scalar, _) = scalar_binder.bind(&update_expr.expr)?;
             if !self.check_allowed_scalar_expr(&scalar)? {
                 return Err(ErrorCode::SemanticError(
-                    "update_list in update statement can't contain subquery|window|aggregate|udf functions|async functions".to_string(),
+                    "update_list in update statement can't contain subquery|window|aggregate|async functions".to_string(),
                 )
                 .set_span(scalar.span()));
             }
@@ -145,7 +145,7 @@ impl Binder {
         if let Some(selection) = &selection {
             if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
-                    "selection in update statement can't contain window|aggregate|udf functions"
+                    "selection in update statement can't contain window|aggregate functions"
                         .to_string(),
                 )
                 .set_span(selection.span()));

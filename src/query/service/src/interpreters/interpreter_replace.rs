@@ -20,7 +20,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
@@ -243,13 +242,6 @@ impl ReplaceInterpreter {
             )?;
 
             let filter = filter.as_remote_expr();
-
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                return Err(ErrorCode::Unimplemented(
-                    "Delete must have deterministic predicate",
-                ));
-            }
             Some((filter, delete_column_name))
         } else {
             None

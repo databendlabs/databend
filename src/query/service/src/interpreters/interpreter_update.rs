@@ -28,7 +28,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::ROW_ID_COL_NAME;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::TableInfo;
@@ -171,14 +170,6 @@ impl UpdateInterpreter {
         let (mut filters, col_indices) = if let Some(scalar) = selection {
             // prepare the filter expression
             let filters = create_push_down_filters(&scalar)?;
-
-            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
-            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                return Err(ErrorCode::Unimplemented(
-                    "Update must have deterministic predicate",
-                ));
-            }
-
             let mut used_columns = scalar.used_columns().clone();
             let col_indices: Vec<usize> = if let Some(subquery_desc) = &self.plan.subquery_desc {
                 // add scalar.used_columns() but ignore _row_id index

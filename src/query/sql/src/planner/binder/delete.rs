@@ -124,7 +124,7 @@ impl<'a> Binder {
         if let Some(selection) = &selection {
             if !self.check_allowed_scalar_expr_with_subquery(selection)? {
                 return Err(ErrorCode::SemanticError(
-                    "selection in delete statement can't contain window|aggregate|udf functions"
+                    "selection in delete statement can't contain window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(selection.span()));

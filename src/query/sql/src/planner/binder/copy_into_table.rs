@@ -380,7 +380,7 @@ impl<'a> Binder {
         let select_list = self.normalize_select_list(&mut from_context, select_list)?;
 
         for item in select_list.items.iter() {
-            if !self.check_allowed_scalar_expr_with_subquery_for_copy_table(&item.scalar)? {
+            if !self.check_allowed_scalar_expr_with_subquery(&item.scalar)? {
                 // in fact, if there is a join, we will stop in `check_transform_query()`
                 return Err(ErrorCode::SemanticError(
                     "copy into table source can't contain window|aggregate|join functions"
