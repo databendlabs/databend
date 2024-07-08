@@ -28,6 +28,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -219,13 +220,17 @@ impl FuseTable {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: copied_files.clone(),
-            deduplicated_label,
-            update_stream_meta: update_stream_meta.to_vec(),
         };
 
         // 3. let's roll
-        catalog.update_table_meta(table_info, req).await?;
+        catalog
+            .update_multi_table_meta(UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table_info.clone())],
+                update_stream_metas: update_stream_meta.to_vec(),
+                copied_files: copied_files.iter().map(|c| (table_id, c.clone())).collect(),
+                deduplicated_labels: deduplicated_label.into_iter().collect(),
+            })
+            .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));

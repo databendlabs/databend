@@ -87,9 +87,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -357,41 +354,19 @@ impl Catalog for SessionCatalog {
         self.inner.upsert_table_option(tenant, db_name, req).await
     }
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::AutoCommit => self.inner.update_table_meta(table_info, req).await,
-            TxnState::Active => {
-                self.txn_mgr.lock().update_table_meta(req, table_info);
-                Ok(UpdateTableMetaReply {
-                    share_table_info: None,
-                })
-            }
-            TxnState::Fail => unreachable!(),
-        }
-    }
-
-    async fn update_stream_metas(&self, update_stream_metas: &[UpdateStreamMetaReq]) -> Result<()> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::AutoCommit => self.inner.update_stream_metas(update_stream_metas).await,
-            TxnState::Active => {
-                self.txn_mgr.lock().update_stream_metas(update_stream_metas);
-                Ok(())
-            }
-            TxnState::Fail => unreachable!(),
-        }
-    }
-
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.inner.update_multi_table_meta(req).await
+        let state = self.txn_mgr.lock().state();
+        match state {
+            TxnState::AutoCommit => self.inner.retryable_update_multi_table_meta(req).await,
+            TxnState::Active => {
+                self.txn_mgr.lock().update_multi_table_meta(req);
+                Ok(Ok(Default::default()))
+            }
+            TxnState::Fail => unreachable!(),
+        }
     }
 
     async fn set_table_column_mask_policy(
