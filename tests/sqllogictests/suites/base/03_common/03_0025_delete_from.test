@@ -323,5 +323,31 @@ select count(*) from t where c >= 0 and c < 1500000;
 statement ok
 drop table t all
 
+###############
+# issue 15376 #
+###############
+
+statement ok
+create table t_15376 (a Int, b Date)
+
+statement ok
+insert into t_15376 values(1, yesterday()),(2, today()),(3, tomorrow())
+
+statement ok
+delete from t_15376 where b = today()
+
+query I
+select a from t_15376 order by a
+----
+1
+3
+
+statement ok
+drop table t_15376 all
+
+######################
+# end of issue 15376 #
+######################
+
 statement ok
 DROP DATABASE db1
