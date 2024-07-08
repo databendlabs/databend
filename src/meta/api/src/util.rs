@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
@@ -1086,7 +1087,8 @@ pub async fn remove_table_from_share(
                     .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
                     .map(|table_info| {
                         let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type = DatabaseType::ShareDB(share_name.clone());
+                        table_info.db_type =
+                            DatabaseType::ShareDB(ShareDBParams::new(share_name.clone()));
                         (table_info.name.clone(), table_info)
                     })
                     .collect::<Vec<_>>(),
@@ -1145,7 +1147,8 @@ pub async fn get_share_table_info(
                     .filter(|table_info| table_ids.contains(&table_info.ident.table_id))
                     .map(|table_info| {
                         let mut table_info = table_info.as_ref().clone();
-                        table_info.db_type = DatabaseType::ShareDB(share_name.clone().into());
+                        table_info.db_type =
+                            DatabaseType::ShareDB(ShareDBParams::new(share_name.clone().into()));
                         (table_info.name.clone(), table_info)
                     })
                     .collect::<Vec<_>>(),

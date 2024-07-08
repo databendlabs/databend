@@ -31,11 +31,11 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
-use databend_common_users::idm_config::IDMConfig;
 
 use super::config::Commands;
 use super::config::Config;
 use crate::background_config::InnerBackgroundConfig;
+use crate::BuiltInConfig;
 
 /// Inner config for query.
 ///
@@ -210,7 +210,7 @@ pub struct QueryConfig {
     pub jwt_key_files: Vec<String>,
     pub default_storage_format: String,
     pub default_compression: String,
-    pub idm: IDMConfig,
+    pub builtin: BuiltInConfig,
     pub share_endpoint_address: String,
     pub share_endpoint_auth_token_file: String,
     pub tenant_quota: Option<TenantQuota>,
@@ -235,6 +235,7 @@ pub struct QueryConfig {
 
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
+    pub max_cached_queries_profiles: usize,
     pub settings: HashMap<String, UserSettingValue>,
 }
 
@@ -288,7 +289,7 @@ impl Default for QueryConfig {
             jwt_key_files: Vec::new(),
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
-            idm: IDMConfig::default(),
+            builtin: BuiltInConfig::default(),
             share_endpoint_address: "".to_string(),
             share_endpoint_auth_token_file: "".to_string(),
             tenant_quota: None,
@@ -307,6 +308,7 @@ impl Default for QueryConfig {
             cloud_control_grpc_server_address: None,
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
+            max_cached_queries_profiles: 50,
             settings: HashMap::new(),
         }
     }
@@ -614,6 +616,7 @@ pub enum DiskCacheKeyReloadPolicy {
     // but cache capacity will not be checked
     Fuzzy,
 }
+
 impl Default for DiskCacheKeyReloadPolicy {
     fn default() -> Self {
         Self::Reset
@@ -645,6 +648,12 @@ pub struct DiskCacheConfig {
 
     /// Table disk cache root path
     pub path: String,
+
+    /// Whether sync data after write.
+    /// If the query node's memory is managed by cgroup (at least cgroup v1),
+    /// it's recommended to set this to true to prevent the container from
+    /// being killed due to high dirty page memory usage.
+    pub sync_data: bool,
 }
 
 impl Default for DiskCacheConfig {
@@ -652,6 +661,7 @@ impl Default for DiskCacheConfig {
         Self {
             max_bytes: 21474836480,
             path: "./.databend/_cache".to_owned(),
+            sync_data: true,
         }
     }
 }

@@ -95,9 +95,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -574,31 +571,13 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        self.mutable_catalog
-            .update_table_meta(table_info, req)
-            .await
-    }
-
-    async fn update_stream_metas(
-        &self,
-        update_stream_meta_reqs: &[UpdateStreamMetaReq],
-    ) -> Result<()> {
-        self.mutable_catalog
-            .update_stream_metas(update_stream_meta_reqs)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         reqs: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
-        self.mutable_catalog.update_multi_table_meta(reqs).await
+        self.mutable_catalog
+            .retryable_update_multi_table_meta(reqs)
+            .await
     }
 
     #[async_backtrace::framed]

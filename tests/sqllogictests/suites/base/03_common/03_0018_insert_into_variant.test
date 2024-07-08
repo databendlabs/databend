@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Fuse
 
 statement ok
-INSERT INTO t1 (id, var) VALUES(1, null), (2, true),(3, false),(4, 1),(5, -1),(6, 1000),(7, -1000),(8, 9223372036854775807),(9, -9223372036854775808),(10, 18446744073709551615),(11, 0.12345679),(12, 0.12345678912121212),(13, '"abcd"'),(14, '[1,2,3]'),(15, '{"k":"v"}'),(16, '"a\"b\\"c"'),(17, '"http:\/\/databend.rs"')
+INSERT INTO t1 (id, var) VALUES(1, null), (2, true),(3, false),(4, 1),(5, -1),(6, 1000),(7, -1000),(8, 9223372036854775807),(9, -9223372036854775808),(10, 18446744073709551615),(11, 0.12345679),(12, 0.12345678912121212),(13, '"abcd"'),(14, '[1,2,3]'),(15, '{"k":"v"}'),(16, '"a\"b\\"c"'),(17, '"http:\/\/databend.com"')
 
 statement error (?s)1006.*expected value, pos 1 while evaluating function `parse_json\('abc'\)`
 INSERT INTO t1 (id, var) VALUES(1, 'abc')
@@ -42,7 +42,7 @@ select * from t1 order by id asc
 14 [1,2,3]
 15 {"k":"v"}
 16 "a\"b\"c"
-17 "http://databend.rs"
+17 "http://databend.com"
 18 [1,2,3]
 
 statement ok

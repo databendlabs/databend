@@ -2070,8 +2070,22 @@ CreateTable(
                         data_type: Tuple {
                             fields_name: Some(
                                 [
-                                    "m",
-                                    "n",
+                                    Identifier {
+                                        span: Some(
+                                            40..41,
+                                        ),
+                                        name: "m",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    Identifier {
+                                        span: Some(
+                                            51..52,
+                                        ),
+                                        name: "n",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
                                 ],
                             ),
                             fields_type: [
@@ -2096,6 +2110,83 @@ CreateTable(
                             fields_type: [
                                 Int32,
                                 String,
+                            ],
+                        },
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table a (b tuple("c-1" int, "c-2" uint64));
+---------- Output ---------
+CREATE TABLE a (b TUPLE("c-1" Int32, "c-2" UInt64))
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            is_hole: false,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                16..17,
+                            ),
+                            name: "b",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        data_type: Tuple {
+                            fields_name: Some(
+                                [
+                                    Identifier {
+                                        span: Some(
+                                            24..29,
+                                        ),
+                                        name: "c-1",
+                                        quote: Some(
+                                            '"',
+                                        ),
+                                        is_hole: false,
+                                    },
+                                    Identifier {
+                                        span: Some(
+                                            35..40,
+                                        ),
+                                        name: "c-2",
+                                        quote: Some(
+                                            '"',
+                                        ),
+                                        is_hole: false,
+                                    },
+                                ],
+                            ),
+                            fields_type: [
+                                Int32,
+                                UInt64,
                             ],
                         },
                         expr: None,
@@ -2921,7 +3012,7 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
@@ -2958,7 +3049,7 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
@@ -2986,15 +3077,15 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
 
 ---------- Input ----------
-create database t FROM SHARE a.s;
+create database t FROM SHARE a.s using b;
 ---------- Output ---------
-CREATE DATABASE t FROM SHARE a.s
+CREATE DATABASE t FROM SHARE a.s USING b
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -3012,25 +3103,35 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: Some(
-            ShareNameIdent {
-                tenant: Identifier {
+        share_params: Some(
+            (
+                ShareNameIdent {
+                    tenant: Identifier {
+                        span: Some(
+                            29..30,
+                        ),
+                        name: "a",
+                        quote: None,
+                        is_hole: false,
+                    },
+                    share: Identifier {
+                        span: Some(
+                            31..32,
+                        ),
+                        name: "s",
+                        quote: None,
+                        is_hole: false,
+                    },
+                },
+                Identifier {
                     span: Some(
-                        29..30,
+                        39..40,
                     ),
-                    name: "a",
+                    name: "b",
                     quote: None,
                     is_hole: false,
                 },
-                share: Identifier {
-                    span: Some(
-                        31..32,
-                    ),
-                    name: "s",
-                    quote: None,
-                    is_hole: false,
-                },
-            },
+            ),
         ),
     },
 )
@@ -3143,7 +3244,7 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        from_share: None,
+        share_params: None,
     },
 )
 
@@ -14696,9 +14797,9 @@ Presign(
 
 
 ---------- Input ----------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -14721,13 +14822,9 @@ CreateShareEndpoint(
                 conns: {},
             },
         },
-        tenant: Identifier {
-            span: Some(
-                68..69,
-            ),
-            name: "x",
-            quote: None,
-            is_hole: false,
+        credential_options: {
+            "KEY": "hello",
+            "TYPE": "HMAC",
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",
@@ -14741,9 +14838,9 @@ CreateShareEndpoint(
 
 
 ---------- Input ----------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
+CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1/' CREDENTIAL=(KEY = 'hello', TYPE = 'HMAC') ARGS=(jwks_key_file = 'https://eks.public/keys', ssl_cert = 'cert.pem') COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -14766,13 +14863,9 @@ CreateShareEndpoint(
                 conns: {},
             },
         },
-        tenant: Identifier {
-            span: Some(
-                65..66,
-            ),
-            name: "x",
-            quote: None,
-            is_hole: false,
+        credential_options: {
+            "KEY": "hello",
+            "TYPE": "HMAC",
         },
         args: {
             "jwks_key_file": "https://eks.public/keys",
@@ -20937,6 +21030,66 @@ CreateUDF(
         },
     },
 )
+
+
+---------- Input ----------
+CREATE file format my_orc type = orc
+---------- Output ---------
+CREATE FILE FORMAT my_orc type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE file format my_orc type = orc missing_field_as=field_default
+---------- Output ---------
+CREATE FILE FORMAT my_orc missing_field_as = field_default, type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "missing_field_as": Keyword(
+                "field_default",
+            ),
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
+CREATE file format my_orc type = orc missing_field_as='field_default'
+---------- Output ---------
+CREATE FILE FORMAT my_orc missing_field_as = 'field_default', type = orc
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_orc",
+    file_format_options: FileFormatOptions {
+        options: {
+            "missing_field_as": String(
+                "field_default",
+            ),
+            "type": Keyword(
+                "orc",
+            ),
+        },
+    },
+}
 
 
 ---------- Input ----------

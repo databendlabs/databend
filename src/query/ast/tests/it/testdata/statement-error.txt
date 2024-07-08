@@ -79,22 +79,6 @@ error:
 
 
 ---------- Input ----------
-create table a (b tuple("c-1" int, "c-2" uint64));
----------- Output ---------
-error: 
-  --> SQL:1:19
-  |
-1 | create table a (b tuple("c-1" int, "c-2" uint64));
-  | ------          - ^^^^^
-  | |               | |
-  | |               | Invalid tuple field name, only support alphanumeric characters
-  | |               | while parsing type name
-  | |               | while parsing TUPLE(<name> <type>, ...)
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
-  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
-
-
----------- Input ----------
 CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
 ---------- Output ---------
 error: 

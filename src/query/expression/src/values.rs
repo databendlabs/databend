@@ -1522,14 +1522,10 @@ impl ColumnBuilder {
         match scalar {
             ScalarRef::Null => match data_type {
                 DataType::Null => ColumnBuilder::Null { len: n },
-                DataType::Nullable(ty) => {
-                    let mut builder = ColumnBuilder::with_capacity(ty, 1);
-                    for _ in 0..n {
-                        builder.push_default();
-                    }
+                DataType::Nullable(inner) => {
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                        builder,
-                        validity: Bitmap::new_constant(false, n).make_mut(),
+                        builder: Self::repeat_default(inner, n),
+                        validity: MutableBitmap::from_len_zeroed(n),
                     }))
                 }
                 _ => unreachable!(),
@@ -1736,6 +1732,60 @@ impl ColumnBuilder {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Geometry(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
+            DataType::Generic(_) => {
+                unreachable!("unable to initialize column builder for generic type")
+            }
+        }
+    }
+
+    pub fn repeat_default(ty: &DataType, len: usize) -> ColumnBuilder {
+        match ty {
+            DataType::Null => ColumnBuilder::Null { len },
+            DataType::EmptyArray => ColumnBuilder::EmptyArray { len },
+            DataType::EmptyMap => ColumnBuilder::EmptyMap { len },
+
+            // bitmap
+            DataType::Nullable(inner) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                builder: Self::repeat_default(inner, len),
+                validity: MutableBitmap::from_len_zeroed(len),
+            })),
+            DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::from_len_zeroed(len)),
+
+            // number based
+            DataType::Number(num_ty) => {
+                ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
+            }
+            DataType::Decimal(decimal_ty) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(decimal_ty, len))
+            }
+            DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
+            DataType::Date => ColumnBuilder::Date(vec![0; len]),
+
+            // binary based
+            DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
+            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
+            DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
+
+            DataType::Array(ty) => ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                builder: Self::with_capacity(ty, 0),
+                offsets: vec![0; len + 1],
+            })),
+            DataType::Map(ty) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
+                builder: Self::with_capacity(ty, 0),
+                offsets: vec![0; len + 1],
+            })),
+            DataType::Tuple(fields) => {
+                assert!(!fields.is_empty());
+                ColumnBuilder::Tuple(
+                    fields
+                        .iter()
+                        .map(|field| Self::repeat_default(field, len))
+                        .collect(),
+                )
+            }
+
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }

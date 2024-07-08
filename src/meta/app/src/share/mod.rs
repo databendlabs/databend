@@ -48,6 +48,8 @@ pub use share::RevokeShareObjectReply;
 pub use share::RevokeShareObjectReq;
 pub use share::ShareAccountMeta;
 pub use share::ShareAccountReply;
+pub use share::ShareCredential;
+pub use share::ShareCredentialHmac;
 pub use share::ShareDatabaseSpec;
 pub use share::ShareEndpointId;
 pub use share::ShareEndpointIdToName;

@@ -31,7 +31,9 @@ use crate::common;
 #[test]
 fn test_decode_v92_orc_file_format_params() -> anyhow::Result<()> {
     let orc_file_format_params_v92 = vec![160, 6, 92, 168, 6, 24];
-    let want = || OrcFileFormatParams {};
+    let want = || OrcFileFormatParams {
+        missing_field_as: Default::default(),
+    };
     common::test_load_old(
         func_name!(),
         orc_file_format_params_v92.as_slice(),
@@ -45,7 +47,11 @@ fn test_decode_v92_orc_file_format_params() -> anyhow::Result<()> {
 #[test]
 fn test_decode_v92_file_format_params() -> anyhow::Result<()> {
     let file_format_params_v92 = vec![58, 6, 160, 6, 92, 168, 6, 24];
-    let want = || FileFormatParams::Orc(OrcFileFormatParams {});
+    let want = || {
+        FileFormatParams::Orc(OrcFileFormatParams {
+            missing_field_as: Default::default(),
+        })
+    };
     common::test_load_old(func_name!(), file_format_params_v92.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())

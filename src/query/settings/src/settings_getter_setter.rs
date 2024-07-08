@@ -132,10 +132,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
     }
 
-    pub fn get_enable_streaming_load(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_streaming_load")? != 0)
-    }
-
     pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
@@ -649,5 +645,9 @@ impl Settings {
 
     pub fn get_max_set_operator_count(&self) -> Result<u64> {
         self.try_get_u64("max_set_operator_count")
+    }
+
+    pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
     }
 }

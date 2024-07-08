@@ -35,8 +35,8 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
-use parquet_rs::arrow::arrow_to_parquet_schema;
-use parquet_rs::schema::types::SchemaDescPtr;
+use parquet::arrow::arrow_to_parquet_schema;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;

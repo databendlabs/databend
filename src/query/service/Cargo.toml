@@ -49,7 +49,7 @@ byteorder = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 config = { version = "0.13.4", features = [] }
-ctor = "0.1.26"
+ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
@@ -57,7 +57,6 @@ databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-cloud-control = { workspace = true }
-databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -125,6 +124,7 @@ flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 headers = "0.4.0"
+hex = "0.4.3"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
@@ -146,7 +146,7 @@ opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 petgraph = { version = "0.6.2", features = ["serde-1"] }
 pin-project-lite = "0.2.9"
 poem = { workspace = true }

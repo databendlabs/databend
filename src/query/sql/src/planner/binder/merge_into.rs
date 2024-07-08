@@ -122,8 +122,9 @@ impl Binder {
         }
 
         Ok(Plan::MergeInto {
-            schema: merge_into_plan.schema(),
             s_expr: Box::new(s_expr),
+            schema: merge_into_plan.schema(),
+            metadata: self.metadata.clone(),
         })
     }
 
@@ -432,58 +433,51 @@ impl Binder {
         }
 
         // Collect lazy columns.
-        let lazy_columns = if matches!(
-            merge_type,
-            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
-        ) && settings.get_enable_merge_into_row_fetch()?
-        {
-            let mut required_columns = HashSet::new();
-            let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
-
-            for condition in join.equi_conditions.iter() {
-                let left_condition = &condition.left;
-                let right_condition = &condition.right;
-                let left_used_columns = left_condition.used_columns();
-                let right_used_columns = right_condition.used_columns();
-                if left_used_columns.is_subset(&target_prop.output_columns) {
-                    required_columns.extend(left_used_columns);
-                } else if right_used_columns.is_subset(&target_prop.output_columns) {
-                    required_columns.extend(right_used_columns);
+        let join: crate::plans::Join = join_sexpr.plan().clone().try_into()?;
+        let mut required_columns = HashSet::new();
+        for condition in join.equi_conditions.iter() {
+            let left_condition = &condition.left;
+            let right_condition = &condition.right;
+            let left_used_columns = left_condition.used_columns();
+            let right_used_columns = right_condition.used_columns();
+            if left_used_columns.is_subset(&target_prop.output_columns) {
+                required_columns.extend(left_used_columns);
+            } else if right_used_columns.is_subset(&target_prop.output_columns) {
+                required_columns.extend(right_used_columns);
+            }
+        }
+        for condition in join.non_equi_conditions.iter() {
+            for column_index in condition.used_columns() {
+                if target_prop.output_columns.contains(&column_index) {
+                    required_columns.insert(column_index);
                 }
             }
-            for condition in join.non_equi_conditions.iter() {
-                for column_index in condition.used_columns() {
+        }
+
+        let target_table_position = target_table_position(&join_sexpr, target_table_index)?;
+        let target_side_child = join_sexpr.child(target_table_position)?;
+        assert!(matches!(
+            target_side_child.plan(),
+            RelOperator::Scan(_) | RelOperator::Filter(_)
+        ));
+        if let RelOperator::Filter(filter) = target_side_child.plan() {
+            for predicate in filter.predicates.iter() {
+                for column_index in predicate.used_columns() {
                     if target_prop.output_columns.contains(&column_index) {
                         required_columns.insert(column_index);
                     }
                 }
             }
-            for child in join_sexpr.children() {
-                if let RelOperator::Filter(filter) = child.plan() {
-                    for predicate in filter.predicates.iter() {
-                        for column_index in predicate.used_columns() {
-                            if target_prop.output_columns.contains(&column_index) {
-                                required_columns.insert(column_index);
-                            }
-                        }
-                    }
-                }
-            }
-            required_columns.insert(row_id_index);
+        }
 
-            let mut lazy_columns = HashSet::new();
-            for column in &target_context.columns {
-                if !required_columns.contains(&column.index)
-                    && column.visibility != Visibility::InVisible
-                {
-                    lazy_columns.insert(column.index);
-                }
+        let mut lazy_columns = HashSet::new();
+        for column in &target_context.columns {
+            if !required_columns.contains(&column.index)
+                && column.visibility != Visibility::InVisible
+            {
+                lazy_columns.insert(column.index);
             }
-            self.metadata.write().add_lazy_columns(lazy_columns.clone());
-            Some(lazy_columns)
-        } else {
-            None
-        };
+        }
 
         // If the table alias is not None, after the binding phase, the bound columns will have
         // a database of 'None' and the table named as the alias.
@@ -879,4 +873,23 @@ fn insert_only(merge_plan: &MergeInto) -> bool {
         }
     }
     true
+}
+
+pub fn target_table_position(join_s_expr: &SExpr, target_table_index: usize) -> Result<usize> {
+    fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
+        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+            scan.table_index == target_table_index
+        } else {
+            s_expr
+                .children()
+                .any(|child| contains_target_table(child, target_table_index))
+        }
+    }
+
+    debug_assert!(matches!(join_s_expr.plan(), RelOperator::Join(_)));
+    if contains_target_table(join_s_expr.child(0)?, target_table_index) {
+        Ok(0)
+    } else {
+        Ok(1)
+    }
 }

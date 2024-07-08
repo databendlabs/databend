@@ -20,6 +20,7 @@ use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_config::InnerConfig;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::SchemaApi;
 use databend_common_meta_api::SequenceApi;
@@ -101,9 +102,6 @@ use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -514,51 +512,40 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn update_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => {
-                info!(
-                    "updating table meta. table desc: [{}], has copied files: [{}]?",
-                    table_info.desc,
-                    req.copied_files.is_some()
-                );
-                let begin = Instant::now();
-                let res = self.ctx.meta.update_table_meta(req).await;
-                info!(
-                    "update table meta done. table id: {:?}, time used {:?}",
-                    table_info.ident,
-                    begin.elapsed()
-                );
-                Ok(res?)
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateMultiTableMetaResult> {
+        // deal with share table
+        {
+            if req.update_table_metas.len() == 1 {
+                match req.update_table_metas[0].1.db_type.clone() {
+                    DatabaseType::NormalDB => {}
+                    DatabaseType::ShareDB(share_params) => {
+                        let share_ident = share_params.share_ident;
+                        let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
+                        let db = self.get_database(&tenant, share_ident.share_name()).await?;
+                        return db.retryable_update_multi_table_meta(req).await;
+                    }
+                }
             }
-            DatabaseType::ShareDB(share_ident) => {
-                let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
-                let db = self.get_database(&tenant, share_ident.share_name()).await?;
-                db.update_table_meta(req).await
+            if req
+                .update_table_metas
+                .iter()
+                .any(|(_, info)| matches!(info.db_type, DatabaseType::ShareDB(_)))
+            {
+                return Err(ErrorCode::StorageOther(
+                    "update table meta from multi share db, or update table meta from share db and normal db in one request, is not supported",
+                ));
             }
         }
-    }
 
-    async fn update_stream_metas(&self, reqs: &[UpdateStreamMetaReq]) -> Result<()> {
-        self.ctx.meta.update_stream_metas(reqs).await?;
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn update_multi_table_meta(
-        &self,
-        reqs: UpdateMultiTableMetaReq,
-    ) -> Result<UpdateMultiTableMetaResult> {
         info!(
             "updating multi table meta. number of tables: {}",
-            reqs.update_table_metas.len()
+            req.update_table_metas.len()
         );
         let begin = Instant::now();
-        let res = self.ctx.meta.update_multi_table_meta(reqs).await;
+        let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
             "update multi table meta done. time used {:?}",
             begin.elapsed()
@@ -592,7 +579,8 @@ impl Catalog for MutableCatalog {
     ) -> Result<TruncateTableReply> {
         match table_info.db_type.clone() {
             DatabaseType::NormalDB => Ok(self.ctx.meta.truncate_table(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
+            DatabaseType::ShareDB(share_params) => {
+                let share_ident = share_params.share_ident;
                 let tenant = Tenant::new_or_err(share_ident.tenant_name(), func_name!())?;
                 let db = self.get_database(&tenant, share_ident.share_name()).await?;
                 db.truncate_table(req).await

@@ -64,9 +64,9 @@ SELECT REGEXP_REPLACE('a b c', 'b', 'X', NULL)
 NULL
 
 query T
-select REGEXP_REPLACE('http://databend.rs/reg', '^https?://(?:www\.)?([^/]+)/.*$', '$1');
+select REGEXP_REPLACE('http://databend.com/reg', '^https?://(?:www\.)?([^/]+)/.*$', '$1');
 ----
-databend.rs
+databend.com
 
 query T
 select REGEXP_REPLACE('abc-123-abc',  '^([a-z]+)\-([1-9]+)\-[a-z]+', '$2+$1');

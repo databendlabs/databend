@@ -24,6 +24,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
@@ -86,7 +87,7 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -110,7 +111,7 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let validity = columns
@@ -142,7 +143,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())

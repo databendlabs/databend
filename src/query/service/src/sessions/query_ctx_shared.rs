@@ -593,6 +593,29 @@ impl QueryContextShared {
             executor.change_priority(priority)
         }
     }
+
+    pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        if let Some(executor) = self.executor.read().upgrade() {
+            self.add_query_profiles(&executor.fetch_profiling(false));
+        }
+
+        self.query_profiles.read().values().cloned().collect()
+    }
+
+    pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        let mut merged_profiles = self.query_profiles.write();
+
+        for query_profile in profiles.values() {
+            match merged_profiles.entry(query_profile.id) {
+                Entry::Vacant(v) => {
+                    v.insert(query_profile.clone());
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().merge(query_profile);
+                }
+            };
+        }
+    }
 }
 
 impl Drop for QueryContextShared {

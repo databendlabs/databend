@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::ops::Deref;
 
@@ -71,10 +72,41 @@ pub struct HiveCatalogOption {
     pub storage_params: Option<Box<StorageParams>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub enum IcebergCatalogType {
+    Rest = 1,
+    Hms = 2,
+}
+
 /// Option for creating a iceberg catalog
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct IcebergCatalogOption {
-    pub storage_params: Box<StorageParams>,
+pub enum IcebergCatalogOption {
+    Rest(IcebergRestCatalogOption),
+    Hms(IcebergHmsCatalogOption),
+}
+
+impl IcebergCatalogOption {
+    /// Fetch the iceberg catalog type.
+    pub fn catalog_type(&self) -> IcebergCatalogType {
+        match self {
+            IcebergCatalogOption::Rest(_) => IcebergCatalogType::Rest,
+            IcebergCatalogOption::Hms(_) => IcebergCatalogType::Hms,
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergRestCatalogOption {
+    pub uri: String,
+    pub warehouse: String,
+    pub props: HashMap<String, String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergHmsCatalogOption {
+    pub address: String,
+    pub warehouse: String,
+    pub props: HashMap<String, String>,
 }
 
 /// Same as `CatalogNameIdent`, but with `serde` support,
@@ -105,7 +137,7 @@ impl Display for CatalogName {
 // serde is required by `CommitSink.catalog_info`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CatalogInfo {
-    pub id: catalog_info::CatalogId,
+    pub id: CatalogId,
     pub name_ident: CatalogName,
     pub meta: CatalogMeta,
 }

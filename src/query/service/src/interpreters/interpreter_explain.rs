@@ -132,14 +132,19 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::MergeInto { s_expr, .. } => {
-                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
-                    let mut res = self.explain_plan(&self.plan)?;
-                    let input = self
-                        .explain_query(s_expr.child(0)?, &plan.meta_data, &plan.bind_context, &None)
-                        .await?;
-                    res.extend(input);
-                    vec![DataBlock::concat(&res)?]
+                Plan::MergeInto {
+                    s_expr,
+                    schema,
+                    metadata,
+                } => {
+                    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
+                    let interpreter = MergeIntoInterpreter::try_create(
+                        self.ctx.clone(),
+                        *s_expr.clone(),
+                        schema.clone(),
+                    )?;
+                    let plan = interpreter.build_physical_plan(&merge_into).await?;
+                    self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 Plan::Delete(plan) => self.explain_delete(plan).await?,
                 _ => self.explain_plan(&self.plan)?,
@@ -222,7 +227,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto { s_expr, schema } => {
+                Plan::MergeInto { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }
@@ -429,14 +434,14 @@ impl ExplainInterpreter {
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
                 executor.execute()?;
                 self.ctx
-                    .add_query_profiles(&executor.get_inner().get_plans_profile());
+                    .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
                 while (executor.pull_data()?).is_some() {}
                 self.ctx
-                    .add_query_profiles(&executor.get_inner().get_plans_profile());
+                    .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
         }
 

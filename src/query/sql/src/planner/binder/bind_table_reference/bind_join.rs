@@ -86,9 +86,11 @@ impl Binder {
             )?;
             return Ok((result_expr, bind_context));
         }
-
-        let (right_child, right_context) =
-            self.bind_table_reference(&mut left_context, &join.right)?;
+        let (right_child, right_context) = if join.right.is_lateral_subquery() {
+            self.bind_table_reference(&mut left_context, &join.right)?
+        } else {
+            self.bind_table_reference(bind_context, &join.right)?
+        };
 
         let right_column_bindings = right_context.columns.clone();
 

@@ -28,11 +28,11 @@ use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use opendal::Operator;
-use parquet_rs::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet_rs::arrow::parquet_to_arrow_field_levels;
-use parquet_rs::arrow::ProjectionMask;
-use parquet_rs::basic::Compression as ParquetCompression;
-use parquet_rs::schema::types::SchemaDescPtr;
+use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::ProjectionMask;
+use parquet::basic::Compression as ParquetCompression;
+use parquet::schema::types::SchemaDescPtr;
 
 use crate::io::read::block::parquet::RowGroupImplBuilder;
 

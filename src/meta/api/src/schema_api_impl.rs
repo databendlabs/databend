@@ -36,7 +36,6 @@ use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropIndexWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
-use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::GetIndexWithDropTime;
 use databend_common_meta_app::app_error::IndexAlreadyExists;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
@@ -58,7 +57,6 @@ use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
-use databend_common_meta_app::app_error::UpdateStreamMetasFailed;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
@@ -177,7 +175,6 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -2108,11 +2105,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             "get_table"
         );
 
-        let db_type = db_meta
-            .from_share
-            .map_or(DatabaseType::NormalDB, |share_ident| {
-                DatabaseType::ShareDB(share_ident)
-            });
+        let db_type = DatabaseType::NormalDB;
 
         let tb_info = TableInfo {
             ident: TableIdent {
@@ -2153,7 +2146,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )
         .await;
 
-        let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
+        let (_db_id_seq, db_id, _db_meta_seq, _db_meta) = match res {
             Ok(x) => x,
             Err(e) => {
                 return Err(e);
@@ -2238,12 +2231,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             table_name: table_id_list_key.table_name.clone(),
                         };
 
-                        let db_type = db_meta
-                            .from_share
-                            .clone()
-                            .map_or(DatabaseType::NormalDB, |share_ident| {
-                                DatabaseType::ShareDB(share_ident)
-                            });
+                        let db_type = DatabaseType::NormalDB;
 
                         let tb_info = TableInfo {
                             ident: TableIdent {
@@ -2927,188 +2915,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
-    #[logcall::logcall]
-    #[minitrace::trace]
-    async fn update_stream_metas(
-        &self,
-        update_stream_meta_reqs: &[UpdateStreamMetaReq],
-    ) -> Result<(), KVAppError> {
-        if update_stream_meta_reqs.is_empty() {
-            return Ok(());
-        }
-
-        let mut txn_req = TxnRequest {
-            condition: vec![],
-            if_then: vec![],
-            else_then: vec![],
-        };
-
-        append_update_stream_meta_requests(
-            self,
-            &mut txn_req,
-            update_stream_meta_reqs,
-            "update_stream_metas",
-        )
-        .await?;
-
-        let (success, _) = send_txn(self, txn_req).await?;
-
-        if !success {
-            let msg = update_stream_meta_reqs
-                .iter()
-                .map(|req| format!("stream [id {}, seq {} ]", req.stream_id, req.seq))
-                .collect::<Vec<_>>()
-                .join(",");
-            return Err(KVAppError::AppError(AppError::from(
-                UpdateStreamMetasFailed::new(msg),
-            )));
-        } else {
-            Ok(())
-        }
-    }
-
-    #[logcall::logcall]
-    #[minitrace::trace]
-    async fn update_table_meta(
-        &self,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let tbid = TableId {
-            table_id: req.table_id,
-        };
-        let req_seq = req.seq;
-
-        let fail_if_duplicated = req
-            .copied_files
-            .as_ref()
-            .map(|v| v.fail_if_duplicated)
-            .unwrap_or(false);
-
-        loop {
-            let (tb_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(self, &tbid).await?;
-
-            debug!(ident :% =(&tbid); "update_table_meta");
-
-            if tb_meta_seq == 0 || table_meta.is_none() {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_table_meta"),
-                )));
-            }
-            if req_seq.match_seq(tb_meta_seq).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.table_id,
-                        req.seq,
-                        tb_meta_seq,
-                        "update_table_meta",
-                    ),
-                )));
-            }
-
-            let get_table_meta = TxnOp {
-                request: Some(Request::Get(TxnGetRequest {
-                    key: tbid.to_string_key(),
-                })),
-            };
-
-            let mut txn_req = TxnRequest {
-                condition: vec![
-                    // table is not changed
-                    txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                ],
-                if_then: vec![
-                    txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?), // tb_id -> tb_meta
-                ],
-                else_then: vec![get_table_meta],
-            };
-
-            if let Some(req) = &req.copied_files {
-                let (conditions, match_operations) =
-                    build_upsert_table_copied_file_info_conditions(
-                        &tbid,
-                        req,
-                        tb_meta_seq,
-                        req.fail_if_duplicated,
-                    )?;
-                txn_req.condition.extend(conditions);
-                txn_req.if_then.extend(match_operations)
-            }
-
-            append_update_stream_meta_requests(
-                self,
-                &mut txn_req,
-                &req.update_stream_meta,
-                "update_table_meta",
-            )
-            .await?;
-
-            if let Some(deduplicated_label) = req.deduplicated_label.clone() {
-                txn_req
-                    .if_then
-                    .push(build_upsert_table_deduplicated_label(deduplicated_label))
-            }
-
-            let (succ, responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                id :? =(&tbid),
-                succ = succ;
-                "update_table_meta"
-            );
-
-            if succ {
-                return Ok(UpdateTableMetaReply {
-                    share_table_info: get_share_table_info_map(self, &table_meta.unwrap()).await?,
-                });
-            } else {
-                let resp = responses
-                    .first()
-                    // fail fast if response is None (which should not happen)
-                    .expect("internal error: expect one response if update_table_meta txn failed.");
-
-                if let Some(Response::Get(get_resp)) = &resp.response {
-                    // deserialize table version info
-                    let (tb_meta_seq, _): (_, Option<TableMeta>) =
-                        if let Some(seq_v) = &get_resp.value {
-                            (seq_v.seq, Some(deserialize_struct(&seq_v.data)?))
-                        } else {
-                            (0, None)
-                        };
-
-                    // check table version
-                    if req_seq.match_seq(tb_meta_seq).is_ok() {
-                        // if table version does match, but tx failed,
-                        if fail_if_duplicated {
-                            // report file duplication error
-                            return Err(KVAppError::AppError(AppError::from(
-                                DuplicatedUpsertFiles::new(req.table_id, "update_table_meta"),
-                            )));
-                        } else {
-                            // continue and try update the "table copied files"
-                            continue;
-                        };
-                    } else {
-                        return Err(KVAppError::AppError(AppError::from(
-                            TableVersionMismatched::new(
-                                req.table_id,
-                                req.seq,
-                                tb_meta_seq,
-                                "update_table_meta",
-                            ),
-                        )));
-                    }
-                } else {
-                    unreachable!(
-                        "internal error: expect some TxnGetResponseGet, but got {:?}",
-                        resp.response
-                    );
-                }
-            }
-        }
-    }
-
     async fn update_multi_table_meta(
         &self,
         req: UpdateMultiTableMetaReq,
@@ -3131,7 +2937,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             .iter()
             .map(|req| {
                 TableId {
-                    table_id: req.table_id,
+                    table_id: req.0.table_id,
                 }
                 .to_string_key()
             })
@@ -3140,16 +2946,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for (req, (tb_meta_seq, table_meta)) in
             update_table_metas.iter().zip(tb_meta_vec.iter_mut())
         {
-            let req_seq = req.seq;
+            let req_seq = req.0.seq;
 
             if *tb_meta_seq == 0 || table_meta.is_none() {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
                 )));
             }
             if req_seq.match_seq(*tb_meta_seq).is_err() {
                 mismatched_tbs.push((
-                    req.table_id,
+                    req.0.table_id,
                     *tb_meta_seq,
                     std::mem::take(table_meta).unwrap(),
                 ));
@@ -3162,15 +2968,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         for (req, (tb_meta_seq, _)) in update_table_metas.iter().zip(tb_meta_vec.iter()) {
             let tbid = TableId {
-                table_id: req.table_id,
+                table_id: req.0.table_id,
             };
-            tbl_seqs.insert(req.table_id, *tb_meta_seq);
+            tbl_seqs.insert(req.0.table_id, *tb_meta_seq);
             txn_req
                 .condition
                 .push(txn_cond_seq(&tbid, Eq, *tb_meta_seq));
             txn_req
                 .if_then
-                .push(txn_op_put(&tbid, serialize_struct(&req.new_table_meta)?));
+                .push(txn_op_put(&tbid, serialize_struct(&req.0.new_table_meta)?));
             txn_req.else_then.push(TxnOp {
                 request: Some(Request::Get(TxnGetRequest {
                     key: tbid.to_string_key(),
@@ -3242,7 +3048,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
         let (succ, responses) = send_txn(self, txn_req).await?;
         if succ {
-            return Ok(std::result::Result::Ok(()));
+            let mut share_table_info = vec![];
+            for (_, tb_meta) in tb_meta_vec {
+                if let Some(info) =
+                    get_share_table_info_map(self, tb_meta.as_ref().unwrap()).await?
+                {
+                    share_table_info.extend(info);
+                }
+            }
+            return Ok(std::result::Result::Ok(UpdateTableMetaReply {
+                share_table_info: Some(share_table_info),
+            }));
         }
         let mut mismatched_tbs = vec![];
         for (resp, req) in responses.iter().zip(update_table_metas.iter()) {
@@ -3257,13 +3073,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 (seq_v.seq, deserialize_struct(&seq_v.data)?)
             } else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.table_id, "update_multi_table_meta"),
+                    UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
                 )));
             };
 
             // check table version
-            if req.seq.match_seq(tb_meta_seq).is_err() {
-                mismatched_tbs.push((req.table_id, tb_meta_seq, table_meta));
+            if req.0.seq.match_seq(tb_meta_seq).is_err() {
+                mismatched_tbs.push((req.0.table_id, tb_meta_seq, table_meta));
             }
         }
 
