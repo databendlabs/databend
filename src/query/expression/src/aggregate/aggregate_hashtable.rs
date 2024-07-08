@@ -132,6 +132,10 @@ impl AggregateHashTable {
         agg_states: &[Column],
         row_count: usize,
     ) -> Result<usize> {
+
+        // TODO
+
+
         if row_count <= BATCH_ADD_SIZE {
             self.add_groups_inner(state, group_columns, params, agg_states, row_count)
         } else {
