@@ -33,7 +33,7 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CountableMeter;
 use databend_storages_common_cache::NamedCache;
-use databend_storages_common_cache::TABLE_DATA_CACHE_NAME;
+use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
 use databend_storages_common_cache_manager::CacheManager;
 
 use crate::SyncOneBlockSystemTable;
@@ -117,7 +117,7 @@ impl SyncSystemTable for CachesTable {
         if let Some(table_data_cache) = table_data_cache {
             // table data cache is not a named cache yet
             columns.nodes.push(local_node.clone());
-            columns.names.push(TABLE_DATA_CACHE_NAME.to_string());
+            columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
             columns.num_items.push(table_data_cache.len() as u64);
             columns.size.push(table_data_cache.size());
         }

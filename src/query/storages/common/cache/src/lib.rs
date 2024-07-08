@@ -35,7 +35,7 @@ pub use providers::LruDiskCacheHolder;
 pub use providers::TableDataCache;
 pub use providers::TableDataCacheBuilder;
 pub use providers::TableDataCacheKey;
-pub use providers::TABLE_DATA_CACHE_NAME;
+pub use providers::DISK_TABLE_DATA_CACHE_NAME;
 pub use read::CacheKey;
 pub use read::CachedReader;
 pub use read::InMemoryBytesCacheReader;
