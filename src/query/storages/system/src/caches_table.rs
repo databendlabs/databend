@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::BuildHasher;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
@@ -29,6 +31,9 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CountableMeter;
+use databend_storages_common_cache::NamedCache;
+use databend_storages_common_cache::DISK_TABLE_DATA_CACHE_NAME;
 use databend_storages_common_cache_manager::CacheManager;
 
 use crate::SyncOneBlockSystemTable;
@@ -36,6 +41,14 @@ use crate::SyncSystemTable;
 
 pub struct CachesTable {
     table_info: TableInfo,
+}
+
+#[derive(Default)]
+struct CachesTableColumns {
+    nodes: Vec<String>,
+    names: Vec<String>,
+    num_items: Vec<u64>,
+    size: Vec<u64>,
 }
 
 impl SyncSystemTable for CachesTable {
@@ -50,11 +63,6 @@ impl SyncSystemTable for CachesTable {
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_node = ctx.get_cluster().local_id.clone();
-        let mut nodes = Vec::new();
-        let mut names = Vec::new();
-        let mut num_items = Vec::new();
-        let mut size = Vec::new();
-
         let cache_manager = CacheManager::instance();
 
         let table_snapshot_cache = cache_manager.get_table_snapshot_cache();
@@ -69,87 +77,60 @@ impl SyncSystemTable for CachesTable {
         let table_data_cache = cache_manager.get_table_data_cache();
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
 
+        let mut columns = CachesTableColumns::default();
+
         if let Some(table_snapshot_cache) = table_snapshot_cache {
-            nodes.push(local_node.clone());
-            names.push("table_snapshot_cache".to_string());
-            num_items.push(table_snapshot_cache.len() as u64);
-            size.push(table_snapshot_cache.size());
+            Self::append_row(&table_snapshot_cache, &local_node, &mut columns);
         }
         if let Some(table_snapshot_statistic_cache) = table_snapshot_statistic_cache {
-            nodes.push(local_node.clone());
-            names.push("table_snapshot_statistic_cache".to_string());
-            num_items.push(table_snapshot_statistic_cache.len() as u64);
-            size.push(table_snapshot_statistic_cache.size());
+            Self::append_row(&table_snapshot_statistic_cache, &local_node, &mut columns);
         }
 
         if let Some(segment_info_cache) = segment_info_cache {
-            nodes.push(local_node.clone());
-            names.push("segment_info_cache".to_string());
-            num_items.push(segment_info_cache.len() as u64);
-            size.push(segment_info_cache.size());
+            Self::append_row(&segment_info_cache, &local_node, &mut columns);
         }
 
         if let Some(bloom_index_filter_cache) = bloom_index_filter_cache {
-            nodes.push(local_node.clone());
-            names.push("bloom_index_filter_cache".to_string());
-            num_items.push(bloom_index_filter_cache.len() as u64);
-            size.push(bloom_index_filter_cache.size());
+            Self::append_row(&bloom_index_filter_cache, &local_node, &mut columns);
         }
 
         if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
-            nodes.push(local_node.clone());
-            names.push("bloom_index_meta_cache".to_string());
-            num_items.push(bloom_index_meta_cache.len() as u64);
-            size.push(bloom_index_meta_cache.size());
+            Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(inverted_index_meta_cache) = inverted_index_meta_cache {
-            nodes.push(local_node.clone());
-            names.push("inverted_index_meta_cache".to_string());
-            num_items.push(inverted_index_meta_cache.len() as u64);
-            size.push(inverted_index_meta_cache.size());
+            Self::append_row(&inverted_index_meta_cache, &local_node, &mut columns);
         }
 
         if let Some(inverted_index_file_cache) = inverted_index_file_cache {
-            nodes.push(local_node.clone());
-            names.push("inverted_index_file_cache".to_string());
-            num_items.push(inverted_index_file_cache.len() as u64);
-            size.push(inverted_index_file_cache.size());
+            Self::append_row(&inverted_index_file_cache, &local_node, &mut columns);
         }
 
         if let Some(prune_partitions_cache) = prune_partitions_cache {
-            nodes.push(local_node.clone());
-            names.push("prune_partitions_cache".to_string());
-            num_items.push(prune_partitions_cache.len() as u64);
-            size.push(prune_partitions_cache.size());
+            Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
         }
 
         if let Some(file_meta_data_cache) = file_meta_data_cache {
-            nodes.push(local_node.clone());
-            names.push("file_meta_data_cache".to_string());
-            num_items.push(file_meta_data_cache.len() as u64);
-            size.push(file_meta_data_cache.size());
+            Self::append_row(&file_meta_data_cache, &local_node, &mut columns);
         }
 
         if let Some(table_data_cache) = table_data_cache {
-            nodes.push(local_node.clone());
-            names.push("table_data_cache".to_string());
-            num_items.push(table_data_cache.len() as u64);
-            size.push(table_data_cache.size());
+            // table data cache is not a named cache yet
+            columns.nodes.push(local_node.clone());
+            columns.names.push(DISK_TABLE_DATA_CACHE_NAME.to_string());
+            columns.num_items.push(table_data_cache.len() as u64);
+            columns.size.push(table_data_cache.size());
         }
 
         if let Some(table_column_array_cache) = table_column_array_cache {
-            nodes.push(local_node.clone());
-            names.push("table_column_array_cache".to_string());
-            num_items.push(table_column_array_cache.len() as u64);
-            size.push(table_column_array_cache.size());
+            Self::append_row(&table_column_array_cache, &local_node, &mut columns);
         }
 
         Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(nodes),
-            StringType::from_data(names),
-            UInt64Type::from_data(num_items),
-            UInt64Type::from_data(size),
+            StringType::from_data(columns.nodes),
+            StringType::from_data(columns.names),
+            UInt64Type::from_data(columns.num_items),
+            UInt64Type::from_data(columns.size),
         ]))
     }
 }
@@ -176,5 +157,21 @@ impl CachesTable {
             ..Default::default()
         };
         SyncOneBlockSystemTable::create(Self { table_info })
+    }
+
+    fn append_row<K, V, S, M, C>(
+        cache: &NamedCache<C>,
+        local_node: &str,
+        row: &mut CachesTableColumns,
+    ) where
+        C: CacheAccessor<K, V, S, M>,
+        K: Eq + Hash,
+        S: BuildHasher,
+        M: CountableMeter<K, Arc<V>>,
+    {
+        row.nodes.push(local_node.to_string());
+        row.names.push(cache.name().to_string());
+        row.num_items.push(cache.len() as u64);
+        row.size.push(cache.size());
     }
 }
