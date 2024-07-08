@@ -19,8 +19,8 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
-use databend_common_ast::ast::quote::ident_needs_quote;
-use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::parser::Dialect;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use geozero::wkb::Ewkb;
@@ -1073,9 +1073,5 @@ fn display_f64(num: f64) -> String {
 
 /// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
 pub fn display_tuple_field_name(field_name: &str) -> String {
-    if field_name.chars().any(|c| c.is_ascii_uppercase()) || ident_needs_quote(field_name) {
-        QuotedIdent(field_name, '"').to_string()
-    } else {
-        field_name.to_string()
-    }
+    display_ident(field_name, true, Dialect::PostgreSQL)
 }
