@@ -4456,6 +4456,7 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
@@ -4596,6 +4597,8 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-storages-common-io",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
  "futures",
@@ -5399,6 +5402,26 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "databend-storages-common-stage"
+version = "0.1.0"
+dependencies = [
+ "arrow-cast",
+ "arrow-schema",
+ "async-backtrace",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
+ "log",
+ "minitrace",
+ "opendal",
  "serde",
  "typetag",
 ]

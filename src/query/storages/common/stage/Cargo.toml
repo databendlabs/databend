@@ -1,0 +1,26 @@
+[package]
+name = "databend-storages-common-stage"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+arrow-cast = { workspace = true }
+arrow-schema = { workspace = true, features = ["serde"] }
+async-backtrace = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-functions = { workspace = true }
+databend-common-meta-app = { workspace = true }
+log = { workspace = true }
+minitrace = { workspace = true }
+opendal = { workspace = true }
+serde = { workspace = true }
+typetag = { workspace = true }
+
+[lints]
+workspace = true
