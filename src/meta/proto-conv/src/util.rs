@@ -128,6 +128,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (96, "2024-07-02: Add: add using_share_endpoint field into DatabaseMeta"),
     (97, "2024-07-04: Add: missing_field_as in user.proto/OrcFileFormatParams"),
     (98, "2024-07-04: Add: add iceberg catalog option in catalog option"),
+    (99, "2024-07-08: Add: missing_field_as in user.proto/ParquetFileFormatParams"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
