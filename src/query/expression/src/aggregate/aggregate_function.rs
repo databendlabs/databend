@@ -14,6 +14,8 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::ops::Index;
+use std::ops::Range;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -24,6 +26,7 @@ use crate::types::binary::BinaryColumnBuilder;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
+use crate::DataBlock;
 use crate::Scalar;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
@@ -47,7 +50,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate(
         &self,
         _place: StateAddr,
-        _columns: &[Column],
+        _columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()>;
@@ -57,7 +60,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
@@ -67,7 +70,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()>;
+    fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
     fn batch_serialize(
@@ -157,7 +160,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
-    fn get_if_condition(&self, _columns: &[Column]) -> Option<Bitmap> {
+    fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {
         None
     }
 
@@ -165,4 +168,100 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn convert_const_to_full(&self) -> bool {
         true
     }
+}
+
+#[derive(Copy, Clone)]
+pub enum InputColumns<'a> {
+    Slice(&'a [Column]),
+    Block(BlockProxy<'a>),
+}
+
+impl Index<usize> for InputColumns<'_> {
+    type Output = Column;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Self::Slice(slice) => slice.index(index),
+            Self::Block(BlockProxy { args, data }) => {
+                data.get_by_offset(args[index]).value.as_column().unwrap()
+            }
+        }
+    }
+}
+
+impl<'a> InputColumns<'a> {
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Slice(s) => s.len(),
+            Self::Block(BlockProxy { args, .. }) => args.len(),
+        }
+    }
+
+    pub fn slice(&self, index: Range<usize>) -> InputColumns<'_> {
+        match self {
+            Self::Slice(s) => Self::Slice(&s[index]),
+            Self::Block(BlockProxy { args, data }) => Self::Block(BlockProxy {
+                args: &args[index],
+                data,
+            }),
+        }
+    }
+
+    pub fn iter(&self) -> InputColumnsIter {
+        match self {
+            Self::Slice(s) => InputColumnsIter {
+                iter: 0..s.len(),
+                this: self,
+            },
+            Self::Block(BlockProxy { args, .. }) => InputColumnsIter {
+                iter: 0..args.len(),
+                this: self,
+            },
+        }
+    }
+
+    pub fn new_block_proxy(args: &'a [usize], data: &'a DataBlock) -> InputColumns<'a> {
+        Self::Block(BlockProxy { args, data })
+    }
+}
+
+pub struct InputColumnsIter<'a> {
+    iter: Range<usize>,
+    this: &'a InputColumns<'a>,
+}
+
+impl<'a> Iterator for InputColumnsIter<'a> {
+    type Item = &'a Column;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next().map(|index| self.this.index(index))
+    }
+}
+
+impl<'a> From<&'a [Column]> for InputColumns<'a> {
+    fn from(value: &'a [Column]) -> Self {
+        InputColumns::Slice(value)
+    }
+}
+
+impl<'a, const N: usize> From<&'a [Column; N]> for InputColumns<'a> {
+    fn from(value: &'a [Column; N]) -> Self {
+        InputColumns::Slice(value.as_slice())
+    }
+}
+
+impl<'a> From<&'a Vec<Column>> for InputColumns<'a> {
+    fn from(value: &'a Vec<Column>) -> Self {
+        InputColumns::Slice(value)
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct BlockProxy<'a> {
+    args: &'a [usize],
+    data: &'a DataBlock,
 }
