@@ -50,11 +50,13 @@ impl FromToProto for mt::principal::AuthInfo {
             Some(pb::auth_info::Info::Password(pb::auth_info::Password {
                 hash_value,
                 hash_method,
+                need_change,
             })) => Ok(mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| Incompatible {
                     reason: format!("invalid PasswordHashMethod: {}", hash_method),
                 })?,
+                need_change: need_change.unwrap_or(true),
             }),
             None => Err(Incompatible {
                 reason: "AuthInfo cannot be None".to_string(),
@@ -71,9 +73,11 @@ impl FromToProto for mt::principal::AuthInfo {
             mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method,
+                need_change,
             } => Some(pb::auth_info::Info::Password(pb::auth_info::Password {
                 hash_value: hash_value.clone(),
                 hash_method: *hash_method as i32,
+                need_change: Some(*need_change),
             })),
         };
         Ok(pb::AuthInfo {
@@ -101,7 +105,8 @@ impl FromToProto for mt::principal::UserOption {
             .with_default_role(p.default_role)
             .with_network_policy(p.network_policy)
             .with_password_policy(p.password_policy)
-            .with_disabled(p.disabled))
+            .with_disabled(p.disabled)
+            .with_must_change_password(p.must_change_password))
     }
 
     fn to_pb(&self) -> Result<pb::UserOption, Incompatible> {
@@ -113,6 +118,7 @@ impl FromToProto for mt::principal::UserOption {
             network_policy: self.network_policy().cloned(),
             password_policy: self.password_policy().cloned(),
             disabled: self.disabled().cloned(),
+            must_change_password: self.must_change_password().cloned(),
         })
     }
 }

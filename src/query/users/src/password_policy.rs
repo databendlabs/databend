@@ -370,7 +370,7 @@ impl UserApiProvider {
         tenant: &Tenant,
         identity: UserIdentity,
         user_info: &UserInfo,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let now = Utc::now();
         // Locked users cannot login for the duration of the lockout
         if let Some(lockout_time) = user_info.lockout_time {
@@ -431,22 +431,21 @@ impl UserApiProvider {
                             .checked_add_signed(Duration::days(password_policy.max_age_days as i64))
                             .unwrap();
 
-                        info!(
-                            "user {} can not login because password must be changed before {}",
-                            identity.display(),
-                            max_change_time
-                        );
-                        // Password has not been changed for more than max age days, cannot login
+                        // Password has not been changed for more than max age days,
+                        // allow login, but must change password first.
                         if let Ordering::Less = max_change_time.cmp(&now) {
-                            return Err(ErrorCode::InvalidPassword(
-                                "Password has not been changed more than max age days".to_string(),
-                            ));
+                            info!(
+                                "user {} must change password first because password has expired in {}",
+                                identity.display(),
+                                max_change_time
+                            );
+                            return Ok(true);
                         }
                     }
                 }
             }
         }
-        Ok(())
+        Ok(false)
     }
 }
 

@@ -566,6 +566,18 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
+        // if user need change password, only current user change password is allowed.
+        let need_change = user.auth_info.get_need_change();
+        if need_change {
+            if let Plan::AlterUser(plan) = plan {
+                if plan.user.username == user.name && plan.user_option.is_none() {
+                    return Ok(());
+                }
+            }
+            return Err(ErrorCode::PermissionDenied(
+                "Must change the password before performing other operations".to_string(),
+            ));
+        }
         let (identity, grant_set) = (user.identity().display().to_string(), user.grants);
 
         let enable_experimental_rbac_check = self
