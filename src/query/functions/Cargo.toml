@@ -50,7 +50,7 @@ ordered-float = { workspace = true, features = [
     "serde",
     "rand",
 ] }
-proj = { git = "https://github.com/georust/proj", branch="main", features = ["bundled_proj"]}
+proj = { git = "https://github.com/georust/proj", branch = "main" }
 rand = { workspace = true }
 regex = { workspace = true }
 roaring = "0.10.1"
