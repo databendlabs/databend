@@ -40,12 +40,8 @@ impl NameResolutionContext {
             ident.is_quoted(),
         ) {
             (false, true, false) => Some(NameResolutionSuggest::Quoted),
-            (true, false, true) => {
-                if !ident_needs_quote(&ident.name) {
-                    Some(NameResolutionSuggest::Unqoted)
-                } else {
-                    None
-                }
+            (true, false, true) if !ident_needs_quote(&ident.name) => {
+                Some(NameResolutionSuggest::Unqoted)
             }
             _ => None,
         }
