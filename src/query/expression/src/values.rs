@@ -1848,9 +1848,10 @@ impl ColumnBuilder {
 
     pub fn push_repeat(&mut self, item: ScalarRef, n: usize) {
         match (self, item) {
-            (ColumnBuilder::Null { len }, ScalarRef::Null) => *len += n,
-            (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray) => *len += n,
-            (ColumnBuilder::EmptyMap { len }, ScalarRef::EmptyMap) => *len += n,
+            (ColumnBuilder::Null { len }, ScalarRef::Null)
+            | (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray)
+            | (ColumnBuilder::EmptyMap { len }, ScalarRef::EmptyMap) => *len += n,
+
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => {
                 builder.push_repeat(value, n)
             }
@@ -1876,15 +1877,9 @@ impl ColumnBuilder {
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
                 builder.push_repeat(value, n);
             }
-            (this @ ColumnBuilder::Array(_), value @ ScalarRef::Array(_)) => {
-                // todo
-                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
-                this.append_column(&other.build());
-            }
-            (this @ ColumnBuilder::Map(_), value @ ScalarRef::Map(_)) => {
-                // todo
-                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
-                this.append_column(&other.build());
+            (ColumnBuilder::Array(builder), ScalarRef::Array(value))
+            | (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
+                builder.push_repeat(value, n);
             }
             (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
                 builder.push_repeat(value, n);
@@ -1894,10 +1889,8 @@ impl ColumnBuilder {
                     builder.push_null();
                 }
             }
-            (this @ ColumnBuilder::Nullable(_), value) => {
-                // todo
-                let other = ColumnBuilder::repeat(&value, n, &this.data_type());
-                this.append_column(&other.build());
+            (ColumnBuilder::Nullable(builder), value) => {
+                builder.push_repeat(value, n);
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());

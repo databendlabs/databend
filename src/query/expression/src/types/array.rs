@@ -362,6 +362,20 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         self.offsets.push(len as u64);
     }
 
+    pub fn push_repeat(&mut self, item: T::Column, n: usize) {
+        if n == 0 {
+            return;
+        }
+        let before = T::builder_len(&self.builder);
+        T::append_column(&mut self.builder, &item);
+        let len = T::builder_len(&self.builder) - before;
+        for _ in 1..n {
+            T::append_column(&mut self.builder, &item);
+        }
+        self.offsets.reserve(n);
+        self.offsets.extend((0..n).map(|i| (len * (i + 1)) as u64));
+    }
+
     pub fn push_default(&mut self) {
         let len = T::builder_len(&self.builder);
         self.offsets.push(len as u64);

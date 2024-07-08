@@ -355,6 +355,13 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         self.validity.push(true);
     }
 
+    pub fn push_repeat(&mut self, item: T::ScalarRef<'_>, n: usize) {
+        for _ in 0..n {
+            T::push_item(&mut self.builder, item.clone());
+        }
+        self.validity.extend_constant(n, true)
+    }
+
     pub fn push_null(&mut self) {
         T::push_default(&mut self.builder);
         self.validity.push(false);
