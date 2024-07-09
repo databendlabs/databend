@@ -19,8 +19,8 @@ use std::sync::Arc;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 
@@ -101,7 +101,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -134,7 +134,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.inner
@@ -165,7 +165,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         self.inner.accumulate_row(place, columns, row)?;
         self.set_flag(place, 1);
         Ok(())

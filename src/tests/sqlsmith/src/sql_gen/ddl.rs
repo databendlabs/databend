@@ -124,7 +124,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     } else {
                         let mut fields_name = Vec::with_capacity(len);
                         for i in 0..len {
-                            let field_name = format!("t_{}_{}", depth, i);
+                            let rand_name = self
+                                .rng
+                                .sample_iter(&Alphanumeric)
+                                .take(5)
+                                .map(char::from)
+                                .collect::<String>();
+                            let name = format!("t_{}_{}_{}", depth, i, rand_name);
+                            let field_name = if self.rng.gen_bool(0.5) {
+                                Identifier::from_name(None, name)
+                            } else {
+                                Identifier::from_name_with_quoted(None, name, Some('"'))
+                            };
                             fields_name.push(field_name);
                         }
                         Some(fields_name)

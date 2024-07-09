@@ -1,27 +1,40 @@
 statement ok
+DROP FUNCTION IF EXISTS cal
+
+statement ok
+DROP FUNCTION IF EXISTS notnull
+
+statement ok
+DROP FUNCTION IF EXISTS array_except
+
+statement ok
 CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d
 
 statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p))
+
+statement ok
+CREATE FUNCTION array_except AS (x, y) -> array_filter(x, el -> not contains(y, el))
 
 query B
 SELECT notnull(null)
 ----
 0
 
-
-
 query B
 SELECT notnull('null')
 ----
 1
 
-
-
 query F
 SELECT cal(1, 2, 3, 4, 6)
 ----
 6.0
+
+query T
+SELECT array_except([1,2], [2,3])
+----
+[1]
 
 statement ok
 DROP FUNCTION cal
@@ -29,6 +42,8 @@ DROP FUNCTION cal
 statement ok
 DROP FUNCTION notnull
 
+statement ok
+DROP FUNCTION array_except
 
 ## test js udf
 statement ok

@@ -181,6 +181,7 @@ impl UserFunctionsTable {
     #[async_backtrace::framed]
     async fn get_udfs(ctx: Arc<dyn TableContext>) -> Result<Vec<UserDefinedFunction>> {
         let tenant = ctx.get_tenant();
+
         UserApiProvider::instance().list_udf(&tenant).await
     }
 }

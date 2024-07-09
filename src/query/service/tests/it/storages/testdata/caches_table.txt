@@ -1,18 +1,18 @@
 ---------- TABLE INFO ------------
 DB.Table: 'system'.'caches', Table: caches-table_id:1, ver:0, Engine: SystemCache
 -------- TABLE CONTENTS ----------
-+-------------+----------------------------------+----------+----------+
-| Column 0    | Column 1                         | Column 2 | Column 3 |
-+-------------+----------------------------------+----------+----------+
-| 'test-node' | 'bloom_index_filter_cache'       | 0        | 0        |
-| 'test-node' | 'bloom_index_meta_cache'         | 0        | 0        |
-| 'test-node' | 'file_meta_data_cache'           | 0        | 0        |
-| 'test-node' | 'inverted_index_file_cache'      | 0        | 0        |
-| 'test-node' | 'inverted_index_meta_cache'      | 0        | 0        |
-| 'test-node' | 'prune_partitions_cache'         | 0        | 0        |
-| 'test-node' | 'segment_info_cache'             | 0        | 0        |
-| 'test-node' | 'table_snapshot_cache'           | 0        | 0        |
-| 'test-node' | 'table_snapshot_statistic_cache' | 0        | 0        |
-+-------------+----------------------------------+----------+----------+
++-------------+----------------------------------------------+----------+----------+
+| Column 0    | Column 1                                     | Column 2 | Column 3 |
++-------------+----------------------------------------------+----------+----------+
+| 'test-node' | 'memory_cache_bloom_index_file_meta_data'    | 0        | 0        |
+| 'test-node' | 'memory_cache_bloom_index_filter'            | 0        | 0        |
+| 'test-node' | 'memory_cache_compact_segment_info'          | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_file'           | 0        | 0        |
+| 'test-node' | 'memory_cache_inverted_index_file_meta_data' | 0        | 0        |
+| 'test-node' | 'memory_cache_parquet_file_meta'             | 0        | 0        |
+| 'test-node' | 'memory_cache_prune_partitions'              | 0        | 0        |
+| 'test-node' | 'memory_cache_table_snapshot'                | 0        | 0        |
+| 'test-node' | 'memory_cache_table_statistics'              | 0        | 0        |
++-------------+----------------------------------------------+----------+----------+
 
 

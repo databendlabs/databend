@@ -81,7 +81,7 @@ where
     T::Scalar: Ord,
 {
     fn eq(&self, other: &Self) -> bool {
-        self == other
+        self.inner == other.inner && self.desc == other.desc
     }
 }
 

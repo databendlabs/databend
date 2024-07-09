@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod algorithm;
 mod cursor;
+mod loser_tree;
 mod merger;
 mod rows;
 mod spill;

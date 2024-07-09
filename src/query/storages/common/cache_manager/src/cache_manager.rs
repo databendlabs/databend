@@ -99,6 +99,7 @@ impl CacheManager {
                         queue_size,
                         config.disk_cache_config.max_bytes,
                         config.data_cache_key_reload_policy.clone(),
+                        config.disk_cache_config.sync_data,
                     )?
                 }
             }
@@ -110,10 +111,12 @@ impl CacheManager {
         } else {
             max_server_memory_usage * config.table_data_deserialized_memory_ratio / 100
         };
-        let table_column_array_cache = Self::new_in_memory_cache(
+
+        // Cache of deserialized table data
+        let in_memory_table_data_cache = Self::new_named_cache_with_meter(
             memory_cache_capacity,
             ColumnArrayMeter,
-            "table_data_column_array",
+            "memory_cache_table_data",
         );
 
         // setup in-memory table meta cache
@@ -129,30 +132,34 @@ impl CacheManager {
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
                 table_data_cache,
-                table_column_array_cache,
+                table_column_array_cache: in_memory_table_data_cache,
             }));
         } else {
-            let table_snapshot_cache =
-                Self::new_item_cache(config.table_meta_snapshot_count, "table_snapshot");
-            let table_statistic_cache =
-                Self::new_item_cache(config.table_meta_statistic_count, "table_statistics");
-            let segment_info_cache = Self::new_in_memory_cache(
+            let table_snapshot_cache = Self::new_named_cache(
+                config.table_meta_snapshot_count,
+                "memory_cache_table_snapshot",
+            );
+            let table_statistic_cache = Self::new_named_cache(
+                config.table_meta_statistic_count,
+                "memory_cache_table_statistics",
+            );
+            let segment_info_cache = Self::new_named_cache_with_meter(
                 config.table_meta_segment_bytes,
                 CompactSegmentInfoMeter {},
-                "segment_info",
+                "memory_cache_compact_segment_info",
             );
-            let bloom_index_filter_cache = Self::new_in_memory_cache(
+            let bloom_index_filter_cache = Self::new_named_cache_with_meter(
                 config.table_bloom_index_filter_size,
                 BloomIndexFilterMeter {},
-                "bloom_index_filter",
+                "memory_cache_bloom_index_filter",
             );
-            let bloom_index_meta_cache = Self::new_item_cache(
+            let bloom_index_meta_cache = Self::new_named_cache(
                 config.table_bloom_index_meta_count,
-                "bloom_index_file_meta_data",
+                "memory_cache_bloom_index_file_meta_data",
             );
-            let inverted_index_meta_cache = Self::new_item_cache(
+            let inverted_index_meta_cache = Self::new_named_cache(
                 config.inverted_index_meta_count,
-                "inverted_index_file_meta_data",
+                "memory_cache_inverted_index_file_meta_data",
             );
 
             // setup in-memory inverted index filter cache
@@ -161,16 +168,20 @@ impl CacheManager {
             } else {
                 config.inverted_index_filter_size
             };
-            let inverted_index_file_cache = Self::new_in_memory_cache(
+            let inverted_index_file_cache = Self::new_named_cache_with_meter(
                 inverted_index_file_size,
                 InvertedIndexFileMeter {},
-                "inverted_index_file",
+                "memory_cache_inverted_index_file",
             );
-            let prune_partitions_cache =
-                Self::new_item_cache(config.table_prune_partitions_count, "prune_partitions");
+            let prune_partitions_cache = Self::new_named_cache(
+                config.table_prune_partitions_count,
+                "memory_cache_prune_partitions",
+            );
 
-            let file_meta_data_cache =
-                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "parquet_file_meta");
+            let file_meta_data_cache = Self::new_named_cache(
+                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
+                "memory_cache_parquet_file_meta",
+            );
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -182,7 +193,7 @@ impl CacheManager {
                 file_meta_data_cache,
                 table_statistic_cache,
                 table_data_cache,
-                table_column_array_cache,
+                table_column_array_cache: in_memory_table_data_cache,
             }));
         }
 
@@ -238,7 +249,7 @@ impl CacheManager {
     }
 
     // create cache that meters size by `Count`
-    fn new_item_cache<V>(
+    fn new_named_cache<V>(
         capacity: u64,
         name: impl Into<String>,
     ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
@@ -250,7 +261,7 @@ impl CacheManager {
     }
 
     // create cache that meters size by `meter`
-    fn new_in_memory_cache<V, M>(
+    fn new_named_cache_with_meter<V, M>(
         capacity: u64,
         meter: M,
         name: &str,
@@ -273,6 +284,7 @@ impl CacheManager {
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
         disk_cache_key_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> Result<Option<TableDataCache>> {
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
@@ -280,6 +292,7 @@ impl CacheManager {
                 population_queue_size,
                 disk_cache_bytes_size,
                 disk_cache_key_reload_policy,
+                sync_data,
             )?;
             Ok(Some(cache_holder))
         } else {

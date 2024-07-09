@@ -143,14 +143,13 @@ pub fn eval_aggr(
     rows: usize,
 ) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let cols: Vec<Column> = columns.to_owned();
     let arguments = columns.iter().map(|x| x.data_type()).collect();
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
-    func.accumulate(eval.addr, &cols, None, rows)?;
+    func.accumulate(eval.addr, columns.into(), None, rows)?;
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(eval.addr, &mut builder)?;
     Ok((builder.build(), data_type))

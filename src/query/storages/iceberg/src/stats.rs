@@ -15,44 +15,39 @@
 use std::collections::HashMap;
 
 use databend_common_expression::types::Number;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
-use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
-use icelake::types::DataFile;
+use iceberg::spec::DataFile;
+use iceberg::spec::Datum;
+use iceberg::spec::PrimitiveLiteral;
 
 /// Try to convert statistics in [`DataFile`] to [`StatisticsOfColumns`].
 pub fn get_stats_of_data_file(schema: &TableSchema, df: &DataFile) -> Option<StatisticsOfColumns> {
-    match (&df.lower_bounds, &df.upper_bounds, &df.null_value_counts) {
-        (Some(lower), Some(upper), Some(null_counts)) => {
-            let mut stats: HashMap<u32, ColumnStatistics> =
-                HashMap::with_capacity(schema.num_fields());
-            for field in schema.fields.iter() {
-                if let Some(stat) =
-                    get_column_stats(field, lower, upper, null_counts, &df.distinct_counts)
-                {
-                    stats.insert(field.column_id, stat);
-                }
-            }
-            Some(stats)
+    let mut stats: HashMap<u32, ColumnStatistics> = HashMap::with_capacity(schema.num_fields());
+    for field in schema.fields.iter() {
+        if let Some(stat) = get_column_stats(
+            field,
+            df.lower_bounds(),
+            df.upper_bounds(),
+            df.null_value_counts(),
+        ) {
+            stats.insert(field.column_id, stat);
         }
-        (_, _, _) => None,
     }
+    Some(stats)
 }
 
 /// Try get [`ColumnStatistics`] for one column.
 fn get_column_stats(
     field: &TableField,
-    lower: &HashMap<i32, Vec<u8>>,
-    upper: &HashMap<i32, Vec<u8>>,
-    null_counts: &HashMap<i32, i64>,
-    distinct_counts: &Option<HashMap<i32, i64>>,
+    lower: &HashMap<i32, Datum>,
+    upper: &HashMap<i32, Datum>,
+    null_counts: &HashMap<i32, u64>,
 ) -> Option<ColumnStatistics> {
     // The column id in iceberg is 1-based while the column id in Databend is 0-based.
     let iceberg_col_id = field.column_id as i32 + 1;
@@ -62,53 +57,28 @@ fn get_column_stats(
         null_counts.get(&iceberg_col_id),
     ) {
         (Some(lo), Some(up), Some(nc)) => {
-            let min = parse_binary_value(&field.data_type, lo)?;
-            let max = parse_binary_value(&field.data_type, up)?;
-            let distinct_of_values = distinct_counts
-                .as_ref()
-                .and_then(|dc| dc.get(&iceberg_col_id))
-                .map(|dc| *dc as u64);
+            let min = parse_datum(lo)?;
+            let max = parse_datum(up)?;
             Some(ColumnStatistics::new(
-                min,
-                max,
-                *nc as u64,
-                0, // this field is not used.
-                distinct_of_values,
+                min, max, *nc, 0, // this field is not used.
+                None,
             ))
         }
         (_, _, _) => None,
     }
 }
 
-/// Deserialize binary value to [`Scalar`] according to [Binary single-value serialization](https://iceberg.apache.org/spec/#binary-single-value-serialization)
-fn parse_binary_value(ty: &TableDataType, data: &[u8]) -> Option<Scalar> {
-    let ty = ty.remove_nullable();
-    match ty {
-        TableDataType::Boolean => Some(Scalar::Boolean(data[0] != 0)),
-        TableDataType::Number(ty) => with_integer_mapped_type!(|NUM_TYPE| match ty {
-            NumberDataType::NUM_TYPE => {
-                let v = NUM_TYPE::from_le_bytes(data.try_into().ok()?);
-                Some(Scalar::Number(NUM_TYPE::upcast_scalar(v)))
-            }
-            NumberDataType::Float32 => {
-                let v = f32::from_le_bytes(data.try_into().ok()?);
-                Some(Scalar::Number(F32::upcast_scalar(F32::from(v))))
-            }
-            NumberDataType::Float64 => {
-                let v = f64::from_le_bytes(data.try_into().ok()?);
-                Some(Scalar::Number(F64::upcast_scalar(F64::from(v))))
-            }
-        }),
-        TableDataType::Date => {
-            let v = i32::from_le_bytes(data.try_into().ok()?);
-            Some(Scalar::Date(v))
-        }
-        TableDataType::Timestamp => {
-            let v = i64::from_le_bytes(data.try_into().ok()?);
-            Some(Scalar::Timestamp(v))
-        }
-        TableDataType::String => Some(Scalar::String(String::from_utf8(data.to_vec()).ok()?)),
-        // TODO: support Decimal.
-        _ => None, // Not supported.
+/// TODO: we need to support more types.
+fn parse_datum(data: &Datum) -> Option<Scalar> {
+    match data.literal() {
+        PrimitiveLiteral::Boolean(v) => Some(Scalar::Boolean(*v)),
+        PrimitiveLiteral::Int(v) => Some(Scalar::Number(i32::upcast_scalar(*v))),
+        PrimitiveLiteral::Long(v) => Some(Scalar::Number(i64::upcast_scalar(*v))),
+        PrimitiveLiteral::Float(v) => Some(Scalar::Number(F32::upcast_scalar(F32::from(*v)))),
+        PrimitiveLiteral::Double(v) => Some(Scalar::Number(F64::upcast_scalar(F64::from(*v)))),
+        PrimitiveLiteral::Date(v) => Some(Scalar::Date(*v)),
+        PrimitiveLiteral::Timestamp(v) => Some(Scalar::Timestamp(*v)),
+        PrimitiveLiteral::String(v) => Some(Scalar::String(v.clone())),
+        _ => None,
     }
 }

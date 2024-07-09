@@ -21,6 +21,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_meta_app::schema::CatalogOption;
+use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
@@ -70,10 +71,14 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                         .unwrap_or(Box::new(StorageParams::None))
                 ),
             ),
-            CatalogOption::Iceberg(op) => (
-                String::from("iceberg"),
-                format!("STORAGE PARAMS\n{}", op.storage_params),
-            ),
+            CatalogOption::Iceberg(op) => (String::from("iceberg"), match op {
+                IcebergCatalogOption::Rest(cfg) => {
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.uri, cfg.warehouse)
+                }
+                IcebergCatalogOption::Hms(cfg) => {
+                    format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
+                }
+            }),
         };
 
         let block = DataBlock::new(

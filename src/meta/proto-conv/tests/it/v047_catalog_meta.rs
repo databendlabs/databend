@@ -15,8 +15,6 @@
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::storage::StorageS3Config;
 use minitrace::func_name;
 
 use crate::common;
@@ -44,18 +42,7 @@ fn test_decode_v47_catalog() -> anyhow::Result<()> {
     ];
 
     let want = || databend_common_meta_app::schema::CatalogMeta {
-        catalog_option: CatalogOption::Iceberg(IcebergCatalogOption {
-            storage_params: Box::new(databend_common_meta_app::storage::StorageParams::S3(
-                StorageS3Config {
-                    endpoint_url: "http://127.0.0.1:9900".to_string(),
-                    region: "hello".to_string(),
-                    bucket: "world".to_string(),
-                    access_key_id: "databend_has_super_power".to_string(),
-                    secret_access_key: "databend_has_super_power".to_string(),
-                    ..Default::default()
-                },
-            )),
-        }),
+        catalog_option: CatalogOption::Default,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
     };
 

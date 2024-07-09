@@ -712,13 +712,11 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
-    pub copied_files: Option<UpsertTableCopiedFileReq>,
-    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_label: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
@@ -727,7 +725,8 @@ pub struct UpdateMultiTableMetaReq {
 /// The result of updating multiple table meta
 ///
 /// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
-pub type UpdateMultiTableMetaResult = std::result::Result<(), Vec<(u64, u64, TableMeta)>>;
+pub type UpdateMultiTableMetaResult =
+    std::result::Result<UpdateTableMetaReply, Vec<(u64, u64, TableMeta)>>;
 
 impl UpsertTableOptionReq {
     pub fn new(
@@ -780,7 +779,7 @@ pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateTableMetaReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
