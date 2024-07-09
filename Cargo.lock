@@ -12112,7 +12112,7 @@ dependencies = [
 [[package]]
 name = "proj"
 version = "0.27.2"
-source = "git+https://github.com/georust/proj?branch=main#46d46f287da00b1a3dccb5b3b34a0cd7eaff9622"
+source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#17fa19f6133b87266c39952479e675d6a8d81fed"
 dependencies = [
  "geo-types",
  "libc",
@@ -12124,7 +12124,7 @@ dependencies = [
 [[package]]
 name = "proj-sys"
 version = "0.24.0"
-source = "git+https://github.com/georust/proj?branch=main#46d46f287da00b1a3dccb5b3b34a0cd7eaff9622"
+source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#17fa19f6133b87266c39952479e675d6a8d81fed"
 dependencies = [
  "cmake",
  "flate2",

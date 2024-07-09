@@ -1825,7 +1825,7 @@ fn round_geometry_coordinates(geom: geo::Geometry<f64>) -> geo::Geometry<f64> {
                         .map(|coord| coord!( x:round_coordinate(coord.x), y:round_coordinate(coord.y)))
                         .collect(),
                 ),
-                rounded_inner_rings.try_into().unwrap(),
+                rounded_inner_rings,
             );
 
             geo::Geometry::Polygon(rounded_polygon)
@@ -1868,7 +1868,7 @@ fn round_geometry_coordinates(geom: geo::Geometry<f64>) -> geo::Geometry<f64> {
                         rounded_inner_rings.push(LineString(rounded_coords));
                     }
 
-                    Polygon::new(LineString(outer_ring), rounded_inner_rings.try_into().unwrap())
+                    Polygon::new(LineString(outer_ring), rounded_inner_rings)
                 })
                 .collect();
             geo::Geometry::MultiPolygon(geo::MultiPolygon::new(rounded_polygons))
