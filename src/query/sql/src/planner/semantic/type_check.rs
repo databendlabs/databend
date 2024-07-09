@@ -4356,7 +4356,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
                 Some(names) => names
                     .iter()
                     .map(|i| {
-                        if i.quote.is_some() {
+                        if i.is_quoted() {
                             i.name.clone()
                         } else {
                             i.name.to_lowercase()
