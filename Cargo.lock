@@ -4492,6 +4492,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
