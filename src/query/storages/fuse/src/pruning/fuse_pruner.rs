@@ -325,7 +325,7 @@ impl FusePruner {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
-                        // inverse prun
+                        // inverse prune
                         for (segment_location, compact_segment_info) in &pruned_segments {
                             // for delete_prune
                             match inverse_range_index.as_ref() {

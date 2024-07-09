@@ -28,6 +28,7 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use futures_util::future;
+use log::info;
 
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
@@ -133,7 +134,10 @@ impl BlockPruner {
                 );
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                if range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas)) {
+                let start = Instant::now();
+                let should_keep = range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
+                info!("takes {:?} to range prune block", start.elapsed());
+                if should_keep {
                     // Perf.
                     {
                         metrics_inc_blocks_range_pruning_after(1);
@@ -165,10 +169,14 @@ impl BlockPruner {
 
                                     pruning_stats.set_blocks_bloom_pruning_before(1);
                                 }
-                                let keep = bloom_pruner
+
+                                let start = Instant::now();
+                                let keep_by_bloom = bloom_pruner
                                     .should_keep(&index_location, index_size, &block_meta.col_stats, column_ids, &block_meta)
-                                    .await
-                                    && limit_pruner.within_limit(row_count);
+                                    .await;
+                                info!("takes {:?} to bloom prune block", start.elapsed());
+
+                                let keep = keep_by_bloom && limit_pruner.within_limit(row_count);
                                 if keep {
                                     // Perf.
                                     {
@@ -193,6 +201,7 @@ impl BlockPruner {
 
                                 if keep {
                                     if let Some(inverted_index_pruner) = inverted_index_pruner {
+                                        info!("using inverted index");
                                         // Perf.
                                         {
                                             metrics_inc_blocks_inverted_index_pruning_before(1);

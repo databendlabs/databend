@@ -191,7 +191,7 @@ where
     let start = Instant::now();
     let r = decode(encoding, &decompressed_data);
     info!(
-        "takes {:?} to decompression block meta of size {}",
+        "takes {:?} to decode block meta of size {}",
         start.elapsed(),
         size
     );
