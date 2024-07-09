@@ -85,6 +85,7 @@ fn test_assume_not_null(file: &mut impl Write) {
         "a2",
         UInt8Type::from_data_with_validity(vec![1u8, 2, 3], vec![true, true, false]),
     )]);
+    run_ast(file, "assume_not_null(NULL)", &[]);
 }
 
 fn test_inet_aton(file: &mut impl Write) {
