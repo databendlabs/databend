@@ -36,5 +36,13 @@ ignore = [
     # Degradation of service in h2 servers with CONTINUATION Flood(Wait for tonic to fix)
     "RUSTSEC-2024-0332",
     # `rustls::ConnectionCommon::complete_io` could fall into an infinite loop based on network input
-    "RUSTSEC-2024-0336"
+    "RUSTSEC-2024-0336",
+    # gix-fs: Traversal outside working tree enables arbitrary code execution
+    "RUSTSEC-2024-0350",
+    # gix-index: Traversal outside working tree enables arbitrary code execution
+    "RUSTSEC-2024-0348",
+    # gix-index: Refs and paths with reserved Windows device names access the devices
+    "RUSTSEC-2024-0352",
+    # gix-ref: Refs and paths with reserved Windows device names access the devices
+    "RUSTSEC-2024-0351"
 ]
