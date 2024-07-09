@@ -192,6 +192,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             aggregate_functions,
             offsets_aggregate_states,
             aggregate_functions_arguments,
+            ..
         } = &**params;
 
         // This can beneficial for the case of dereferencing
