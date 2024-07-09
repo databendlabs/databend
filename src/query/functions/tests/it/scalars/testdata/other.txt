@@ -197,15 +197,6 @@ evaluation (internal):
 +--------+---------------------------------------------------------------------+
 
 
-ast            : assume_not_null(NULL)
-raw expr       : assume_not_null(NULL)
-checked expr   : assume_not_null<NULL>(NULL)
-optimized expr : NULL
-output type    : NULL
-output domain  : {NULL}
-output         : NULL
-
-
 ast            : inet_aton('1.2.3.4')
 raw expr       : inet_aton('1.2.3.4')
 checked expr   : inet_aton<String>("1.2.3.4")

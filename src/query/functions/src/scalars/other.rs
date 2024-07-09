@@ -191,12 +191,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         }))
     });
 
-    registry.register_1_arg_core::<NullType, NullType, _, _>(
-        "assume_not_null",
-        |_, _| FunctionDomain::Domain(()),
-        |val, _| val.to_owned(),
-    );
-
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
         |_, domain| {
