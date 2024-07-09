@@ -30,10 +30,10 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::DecimalType;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 use ethnum::i256;
@@ -225,7 +225,7 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -262,7 +262,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
@@ -276,7 +276,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = BitmapType::index_column(&column, row) {
@@ -372,7 +372,7 @@ where
         Ok(Arc::new(func))
     }
 
-    fn get_filter_bitmap(&self, columns: &[Column]) -> Bitmap {
+    fn get_filter_bitmap(&self, columns: InputColumns) -> Bitmap {
         let filter_col = T::try_downcast_column(&columns[1]).unwrap();
 
         let mut result = MutableBitmap::from_len_zeroed(columns[0].len());
@@ -390,7 +390,7 @@ where
         Bitmap::from(result)
     }
 
-    fn filter_row(&self, columns: &[Column], row: usize) -> Result<bool> {
+    fn filter_row(&self, columns: InputColumns, row: usize) -> Result<bool> {
         let check_col = T::try_downcast_column(&columns[1]).unwrap();
         let check_val_opt = T::index_column(&check_col, row);
 
@@ -443,7 +443,7 @@ where
     fn accumulate(
         &self,
         place: StateAddr,
-        columns: &[Column],
+        columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -460,7 +460,7 @@ where
         &self,
         places: &[StateAddr],
         offset: usize,
-        columns: &[Column],
+        columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let predicate = self.get_filter_bitmap(columns);
@@ -470,11 +470,12 @@ where
         let new_places_slice = new_places.as_slice();
         let row_size = predicate.len() - predicate.unset_bits();
 
+        let input = [column];
         self.inner
-            .accumulate_keys(new_places_slice, offset, vec![column].as_slice(), row_size)
+            .accumulate_keys(new_places_slice, offset, input.as_slice().into(), row_size)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         if self.filter_row(columns, row)? {
             return self.inner.accumulate_row(place, columns, row);
         }

@@ -242,23 +242,22 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
             let resp = catalog
-                .update_table_meta(table.get_table_info(), req)
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
-            if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
-                update_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    share_name_vec,
-                    *db_id,
-                    share_table_info,
-                )
-                .await?;
+            if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+                for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                    update_share_table_info(
+                        self.ctx.get_tenant().tenant_name(),
+                        self.ctx.get_application_level_data_operator()?.operator(),
+                        share_name_vec,
+                        *db_id,
+                        share_table_info,
+                    )
+                    .await?;
+                }
             }
 
             return Ok(PipelineBuildResult::create());
@@ -335,23 +334,22 @@ impl ModifyTableColumnInterpreter {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta: table_info.meta,
-                copied_files: None,
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
             let resp = catalog
-                .update_table_meta(table.get_table_info(), req)
+                .update_single_table_meta(req, table.get_table_info())
                 .await?;
-            if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
-                update_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    share_name_vec,
-                    *db_id,
-                    share_table_info,
-                )
-                .await?;
+            if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+                for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                    update_share_table_info(
+                        self.ctx.get_tenant().tenant_name(),
+                        self.ctx.get_application_level_data_operator()?.operator(),
+                        share_name_vec,
+                        *db_id,
+                        share_table_info,
+                    )
+                    .await?;
+                }
             }
 
             return Ok(PipelineBuildResult::create());
@@ -525,21 +523,20 @@ impl ModifyTableColumnInterpreter {
             table_id,
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
-            copied_files: None,
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
-        let resp = catalog.update_table_meta(table_info, req).await?;
-        if let Some((share_name_vec, db_id, share_table_info)) = &resp.share_vec_table_info {
-            update_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                share_name_vec,
-                *db_id,
-                share_table_info,
-            )
-            .await?;
+        let resp = catalog.update_single_table_meta(req, table_info).await?;
+        if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+            for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
         }
 
         Ok(PipelineBuildResult::create())

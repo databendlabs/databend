@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
@@ -407,18 +408,24 @@ impl ShareApiTestSuite {
                 .options
                 .insert("key".to_string(), "value".to_string());
 
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta,
+            };
+            let table = mt
+                .get_table((tenant_name, db_name, table_name).into())
+                .await
+                .unwrap();
             let res = mt
-                .update_table_meta(UpdateTableMetaReq {
-                    table_id,
-                    seq: MatchSeq::Any,
-                    new_table_meta,
-                    copied_files: None,
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
+                .update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    ..Default::default()
                 })
                 .await?;
-            let (share_names, share_db_id, table_info) = res.share_vec_table_info.unwrap();
-            assert_eq!(share_db_id, db_id);
+            let share_vec_table_infos = res.unwrap().share_vec_table_infos.unwrap();
+            let (share_names, share_db_id, table_info) = &share_vec_table_infos[0];
+            assert_eq!(*share_db_id, db_id);
             assert_eq!(share_names.len(), 2);
             assert!(share_names.contains(&share_name1.share_name().to_string()));
             assert!(share_names.contains(&share_name2.share_name().to_string()));

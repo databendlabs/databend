@@ -500,7 +500,7 @@ impl<T: Number> TransformWindow<T> {
             };
             let cols = agg.arg_columns(data);
             for row in start_row..end_row {
-                agg.accumulate_row(&cols, row)?;
+                agg.accumulate_row(cols, row)?;
             }
         }
 

@@ -1669,6 +1669,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub cloud_control_grpc_timeout: u64,
 
+    #[clap(long, value_name = "VALUE", default_value = "50")]
+    pub max_cached_queries_profiles: usize,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
 }
@@ -1754,6 +1757,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: self.udf_server_allow_list,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: self.max_cached_queries_profiles,
             settings: self
                 .settings
                 .into_iter()
@@ -1852,6 +1856,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             udf_server_allow_list: inner.udf_server_allow_list,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
+            max_cached_queries_profiles: inner.max_cached_queries_profiles,
             settings: HashMap::new(),
         }
     }
