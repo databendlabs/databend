@@ -8,6 +8,12 @@ statement ok
 select * from t2 ignore_result;
 
 statement ok
+drop stage if exists unload_t2;
+
+statement ok
+create stage unload_t2;
+
+statement ok
 copy into @unload_t2 from t2 file_format=(type=parquet);
 
 statement ok
