@@ -558,13 +558,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?.await;
 
             // get old db, not exists return err
-            let (old_db_id_seq, old_db_id, db_meta_seq, mut db_meta) = get_db_or_err(
-                self,
-                tenant_dbname,
-                format!("rename_database: {}", tenant_dbname.display()),
-            )
-            .await?;
-
+            let (old_db_id_seq, old_db_id) = get_u64_value(self, tenant_dbname).await?;
             if req.if_exists {
                 if old_db_id_seq == 0 {
                     return Ok(RenameDatabaseReply { share_spec: None });
@@ -572,6 +566,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             } else {
                 db_has_to_exist(old_db_id_seq, tenant_dbname, "rename_database: src (db)")?;
             }
+
+            let id_key = DatabaseId { db_id: old_db_id };
+            let (db_meta_seq, db_meta) = get_pb_value(self, &id_key).await?;
+            db_has_to_exist(db_meta_seq, tenant_dbname, "rename_database: src (db)")?;
+            // safe to unwrap
+            let mut db_meta = db_meta.unwrap();
 
             debug!(
                 old_db_id = old_db_id,
