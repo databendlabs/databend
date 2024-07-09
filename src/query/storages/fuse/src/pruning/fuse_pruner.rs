@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_base::runtime::Runtime;
@@ -41,6 +42,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use log::info;
 use log::warn;
 use opendal::Operator;
 
@@ -344,21 +346,45 @@ impl FusePruner {
                                     }
                                 }
                                 None => {
+                                    let start = Instant::now();
+                                    let block_metas = compact_segment_info.block_metas()?;
+                                    // TODO metrics & duplicated code
+                                    info!(
+                                        "takes {:?} to extract block meta from compact segment {}",
+                                        start.elapsed(),
+                                        segment_location.location.0,
+                                    );
+
+                                    let start = Instant::now();
                                     res.extend(
                                         block_pruner
-                                            .pruning(
-                                                segment_location.clone(),
-                                                compact_segment_info.block_metas()?,
-                                            )
+                                            .pruning(segment_location.clone(), block_metas)
                                             .await?,
+                                    );
+                                    info!(
+                                        "takes {:?} to prune blocks of segment {}",
+                                        start.elapsed(),
+                                        segment_location.location.0,
                                     );
                                 }
                             }
                         }
                     } else {
                         for (location, info) in pruned_segments {
+                            let start = Instant::now();
                             let block_metas = info.block_metas()?;
-                            res.extend(block_pruner.pruning(location, block_metas).await?);
+                            info!(
+                                "takes {:?} to extract block meta from compact segment {}",
+                                start.elapsed(),
+                                location.location.0,
+                            );
+                            let start = Instant::now();
+                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
+                            info!(
+                                "takes {:?} to prune blocks of segment {}",
+                                start.elapsed(),
+                                location.location.0,
+                            );
                         }
                     }
                     Result::<_, ErrorCode>::Ok((res, deleted_segments))
