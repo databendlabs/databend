@@ -88,6 +88,7 @@ fn test_agg_hashtable() {
         ];
 
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
+        let params = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
         let mut hashtable = AggregateHashTable::new(

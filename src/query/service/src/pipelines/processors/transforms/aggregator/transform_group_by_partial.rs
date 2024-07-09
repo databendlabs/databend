@@ -187,7 +187,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
                         &group_columns,
-                        &[vec![]],
+                        &[(&vec![]).into()],
                         &[],
                         rows_num,
                     )?;
