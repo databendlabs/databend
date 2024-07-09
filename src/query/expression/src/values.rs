@@ -1509,9 +1509,7 @@ impl ColumnBuilder {
         if !scalar.is_null() {
             if let DataType::Nullable(ty) = data_type {
                 let mut builder = ColumnBuilder::with_capacity(ty, 1);
-                for _ in 0..n {
-                    builder.push(scalar.clone());
-                }
+                builder.push_repeat(scalar.clone(), n);
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
                     validity: Bitmap::new_constant(true, n).make_mut(),
