@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 #[serde(default)]
 pub struct TenantQuota {
@@ -31,18 +29,4 @@ pub struct TenantQuota {
 
     // The max number of users can be created in the tenant.
     pub max_users: u32,
-}
-
-impl TryFrom<Vec<u8>> for TenantQuota {
-    type Error = ErrorCode;
-
-    fn try_from(value: Vec<u8>) -> databend_common_exception::Result<Self> {
-        match serde_json::from_slice(&value) {
-            Ok(quota) => Ok(quota),
-            Err(err) => Err(ErrorCode::IllegalTenantQuotaFormat(format!(
-                "Cannot deserialize tenant quota from bytes. cause {}",
-                err
-            ))),
-        }
-    }
 }
