@@ -2,8 +2,14 @@ onlyif http
 statement ok
 set max_threads = 8;
 
+onlyif http
+statement ok
+SET max_vacuum_temp_files_after_query=0;
+
+onlyif http
 statement ok
 SET aggregate_spilling_bytes_threshold_per_proc=1;
+
 
 onlyif http
 query T
@@ -20,6 +26,10 @@ SELECT (SELECT COUNT() FROM system.temp_files) > 1;
 onlyif http
 statement ok
 unset max_threads;
+
+onlyif http
+statement ok
+unset max_vacuum_temp_files_after_query;
 
 onlyif http
 statement ok
