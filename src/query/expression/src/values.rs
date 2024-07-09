@@ -1765,7 +1765,7 @@ impl ColumnBuilder {
                 ArrayType::push_item(builder, value);
             }
             (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
-                builder.push(value);
+                ArrayType::push_item(builder, value);
             }
             (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
                 BitmapType::push_item(builder, value);
@@ -1778,8 +1778,8 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.iter()) {
-                    field.push(scalar.clone());
+                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                    field.push(scalar);
                 }
             }
             (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
@@ -1819,20 +1819,18 @@ impl ColumnBuilder {
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
                 StringType::push_item_repeat(builder, *value, n);
             }
-            (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
-                builder.push_repeat(value, n);
-            }
-            (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
+            (ColumnBuilder::Array(builder), ScalarRef::Array(value))
+            | (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
                 builder.push_repeat(value, n);
             }
             (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
-                BitmapType::push_item_repeat(builder, *value, n);
+                BitmapType::push_item_repeat(builder, value, n);
             }
             (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
                 NullableType::push_item_repeat(builder, None, n);
             }
             (ColumnBuilder::Nullable(builder), value) => {
-                NullableType::push_item_repeat(builder, Some(value.clone()), n);
+                builder.push_repeat(value.clone(), n);
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
