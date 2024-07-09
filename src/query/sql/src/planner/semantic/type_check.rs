@@ -2994,10 +2994,8 @@ impl<'a> TypeChecker<'a> {
                     };
                     if let Ok(res) = self.resolve(&is_not_null_expr) {
                         if let SConstantExpr(c) = res.0 {
-                            if let Scalar::Boolean(b) = c.value {
-                                if !b {
-                                    continue;
-                                }
+                            if Scalar::Boolean(false) == c.value {
+                                continue;
                             }
                         }
                     }
