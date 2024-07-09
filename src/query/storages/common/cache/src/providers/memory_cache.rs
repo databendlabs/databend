@@ -100,6 +100,11 @@ mod impls {
             guard.size()
         }
 
+        fn capacity(&self) -> u64 {
+            let guard = self.read();
+            guard.capacity()
+        }
+
         fn len(&self) -> usize {
             let guard = self.read();
             guard.len()
@@ -142,6 +147,14 @@ mod impls {
         fn size(&self) -> u64 {
             if let Some(cache) = self {
                 cache.size()
+            } else {
+                0
+            }
+        }
+
+        fn capacity(&self) -> u64 {
+            if let Some(cache) = self {
+                cache.capacity()
             } else {
                 0
             }

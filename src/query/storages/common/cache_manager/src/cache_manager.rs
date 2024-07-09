@@ -28,6 +28,7 @@ use databend_storages_common_cache::Named;
 use databend_storages_common_cache::NamedCache;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheBuilder;
+use databend_storages_common_cache::Unit;
 use log::info;
 
 use crate::caches::BloomIndexFilterCache;
@@ -39,6 +40,7 @@ use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::BlockMetaCache;
 use crate::BloomIndexFilterMeter;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
@@ -59,7 +61,8 @@ pub struct CacheManager {
     prune_partitions_cache: Option<PrunePartitionsCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
-    table_column_array_cache: Option<ColumnArrayCache>,
+    in_memory_table_data_cache: Option<ColumnArrayCache>,
+    block_meta_cache: Option<BlockMetaCache>,
 }
 
 impl CacheManager {
@@ -117,6 +120,7 @@ impl CacheManager {
             memory_cache_capacity,
             ColumnArrayMeter,
             "memory_cache_table_data",
+            Unit::Bytes,
         );
 
         // setup in-memory table meta cache
@@ -132,34 +136,41 @@ impl CacheManager {
                 file_meta_data_cache: None,
                 table_statistic_cache: None,
                 table_data_cache,
-                table_column_array_cache: in_memory_table_data_cache,
+                in_memory_table_data_cache,
+                block_meta_cache: None,
             }));
         } else {
             let table_snapshot_cache = Self::new_named_cache(
                 config.table_meta_snapshot_count,
                 "memory_cache_table_snapshot",
+                Unit::Count,
             );
             let table_statistic_cache = Self::new_named_cache(
                 config.table_meta_statistic_count,
                 "memory_cache_table_statistics",
+                Unit::Count,
             );
             let segment_info_cache = Self::new_named_cache_with_meter(
                 config.table_meta_segment_bytes,
                 CompactSegmentInfoMeter {},
                 "memory_cache_compact_segment_info",
+                Unit::Bytes,
             );
             let bloom_index_filter_cache = Self::new_named_cache_with_meter(
                 config.table_bloom_index_filter_size,
                 BloomIndexFilterMeter {},
                 "memory_cache_bloom_index_filter",
+                Unit::Bytes,
             );
             let bloom_index_meta_cache = Self::new_named_cache(
                 config.table_bloom_index_meta_count,
                 "memory_cache_bloom_index_file_meta_data",
+                Unit::Count,
             );
             let inverted_index_meta_cache = Self::new_named_cache(
                 config.inverted_index_meta_count,
                 "memory_cache_inverted_index_file_meta_data",
+                Unit::Count,
             );
 
             // setup in-memory inverted index filter cache
@@ -172,16 +183,27 @@ impl CacheManager {
                 inverted_index_file_size,
                 InvertedIndexFileMeter {},
                 "memory_cache_inverted_index_file",
+                Unit::Bytes,
             );
             let prune_partitions_cache = Self::new_named_cache(
-                config.table_prune_partitions_count,
+                // config.table_prune_partitions_count,
+                0,
                 "memory_cache_prune_partitions",
+                Unit::Count,
             );
 
             let file_meta_data_cache = Self::new_named_cache(
                 DEFAULT_FILE_META_DATA_CACHE_ITEMS,
                 "memory_cache_parquet_file_meta",
+                Unit::Count,
             );
+
+            let block_meta_cache = Self::new_named_cache(
+                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
+                "memory_cache_block_meta",
+                Unit::Count,
+            );
+
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -193,7 +215,8 @@ impl CacheManager {
                 file_meta_data_cache,
                 table_statistic_cache,
                 table_data_cache,
-                table_column_array_cache: in_memory_table_data_cache,
+                in_memory_table_data_cache,
+                block_meta_cache,
             }));
         }
 
@@ -206,6 +229,10 @@ impl CacheManager {
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
         self.table_snapshot_cache.clone()
+    }
+
+    pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
+        self.block_meta_cache.clone()
     }
 
     pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
@@ -245,16 +272,17 @@ impl CacheManager {
     }
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
-        self.table_column_array_cache.clone()
+        self.in_memory_table_data_cache.clone()
     }
 
     // create cache that meters size by `Count`
     fn new_named_cache<V>(
         capacity: u64,
         name: impl Into<String>,
+        unit: Unit,
     ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into()))
+            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into(), unit))
         } else {
             None
         }
@@ -265,6 +293,7 @@ impl CacheManager {
         capacity: u64,
         meter: M,
         name: &str,
+        unit: Unit,
     ) -> Option<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>
     where
         M: CountableMeter<String, Arc<V>>,
@@ -272,7 +301,7 @@ impl CacheManager {
         if capacity > 0 {
             Some(
                 InMemoryCacheBuilder::new_in_memory_cache(capacity, meter)
-                    .name_with(name.to_owned()),
+                    .name_with(name.to_owned(), unit),
             )
         } else {
             None

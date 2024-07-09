@@ -113,6 +113,11 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         cache.size()
     }
 
+    fn capacity(&self) -> u64 {
+        let cache = self.read();
+        cache.capacity()
+    }
+
     fn len(&self) -> usize {
         let cache = self.read();
         cache.len()

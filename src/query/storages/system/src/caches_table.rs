@@ -49,6 +49,8 @@ struct CachesTableColumns {
     names: Vec<String>,
     num_items: Vec<u64>,
     size: Vec<u64>,
+    capacity: Vec<u64>,
+    unit: Vec<String>,
 }
 
 impl SyncSystemTable for CachesTable {
@@ -142,6 +144,8 @@ impl CachesTable {
             TableField::new("name", TableDataType::String),
             TableField::new("num_items", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("capacity", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("unit", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -173,5 +177,7 @@ impl CachesTable {
         row.names.push(cache.name().to_string());
         row.num_items.push(cache.len() as u64);
         row.size.push(cache.size());
+        row.capacity.push(cache.capacity());
+        row.unit.push(cache.unit().to_string());
     }
 }

@@ -17,10 +17,12 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::io::Write;
 use std::marker::PhantomData;
+use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
+use log::info;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -155,6 +157,45 @@ pub fn decode<'a, T: Deserialize<'a>>(encoding: &MetaEncoding, data: &'a [u8]) -
         }
         MetaEncoding::Json => Ok(from_slice::<T>(data)?),
     }
+}
+
+pub fn read_and_deserialize_test<R, T>(
+    reader: &mut R,
+    size: u64,
+    encoding: &MetaEncoding,
+    compression: &MetaCompression,
+) -> Result<T>
+where
+    R: Read,
+    T: DeserializeOwned,
+{
+    let mut compressed_data = vec![0; size as usize];
+
+    let start = Instant::now();
+    reader.read_exact(&mut compressed_data)?;
+
+    info!(
+        "takes {:?} to cp segment raw bytes buffer of size {}",
+        start.elapsed(),
+        size
+    );
+
+    let start = Instant::now();
+    let decompressed_data = decompress(compression, compressed_data)?;
+    info!(
+        "takes {:?} to decompression block meta of size {}",
+        start.elapsed(),
+        size
+    );
+
+    let start = Instant::now();
+    let r = decode(encoding, &decompressed_data);
+    info!(
+        "takes {:?} to decode block meta of size {}",
+        start.elapsed(),
+        size
+    );
+    r
 }
 
 pub fn read_and_deserialize<R, T>(
