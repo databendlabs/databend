@@ -51,6 +51,7 @@ pub struct ParquetRSReaderBuilder<'a> {
     op: Operator,
     table_schema: TableSchemaRef,
     schema_desc: SchemaDescPtr,
+    arrow_schema: Option<arrow_schema::Schema>,
 
     push_downs: Option<&'a PushDownInfo>,
     options: ParquetReadOptions,
@@ -75,14 +76,15 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         ctx: Arc<dyn TableContext>,
         op: Operator,
         table_schema: TableSchemaRef,
-        arrow_schema: &arrow_schema::Schema,
+        arrow_schema: arrow_schema::Schema,
     ) -> Result<ParquetRSReaderBuilder<'a>> {
-        let schema_desc = Arc::new(arrow_to_parquet_schema(arrow_schema)?);
+        let schema_desc = Arc::new(arrow_to_parquet_schema(&arrow_schema)?);
         Ok(Self::create_with_parquet_schema(
             ctx,
             op,
             table_schema,
             schema_desc,
+            Some(arrow_schema),
         ))
     }
 
@@ -91,12 +93,14 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         op: Operator,
         table_schema: TableSchemaRef,
         schema_desc: SchemaDescPtr,
+        arrow_schema: Option<arrow_schema::Schema>,
     ) -> ParquetRSReaderBuilder<'a> {
         ParquetRSReaderBuilder {
             ctx,
             op,
             table_schema,
             schema_desc,
+            arrow_schema,
             push_downs: None,
             options: Default::default(),
             pruner: None,
@@ -145,6 +149,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
                     &self.table_schema,
                     &self.schema_desc,
                     &self.partition_columns,
+                    self.arrow_schema.as_ref(),
                 )
             })
             .transpose()?;
@@ -157,7 +162,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         }
         self.built_topk = self
             .topk
-            .map(|topk| build_topk(topk, &self.schema_desc))
+            .map(|topk| build_topk(topk, &self.schema_desc, self.arrow_schema.as_ref()))
             .transpose()?;
         Ok(())
     }
@@ -276,6 +281,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         let data_schema = DataSchema::from(schema);
         NoPretchPolicyBuilder::create(
             &self.schema_desc,
+            self.arrow_schema.as_ref(),
             data_schema,
             projection.clone(),
             output_field_paths.clone(),
@@ -286,6 +292,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         let (_, output_leaves, output_schema, paths) = self.built_output.as_ref().unwrap();
         TopkOnlyPolicyBuilder::create(
             &self.schema_desc,
+            self.arrow_schema.as_ref(),
             self.built_topk.as_ref().unwrap(),
             output_schema,
             output_leaves,
@@ -308,6 +315,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
 
         PredicateAndTopkPolicyBuilder::create(
             &self.schema_desc,
+            self.arrow_schema.as_ref(),
             predicate,
             topk,
             output_leaves,
