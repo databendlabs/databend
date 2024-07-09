@@ -174,7 +174,15 @@ where
             (count, None)
         } else if !A::SHOULD_PEEK_TOP2 {
             debug_assert!(!cursor.is_finished());
-            (1, None)
+            let limit = cursor
+                .num_rows()
+                .min(cursor.row_index + max_rows - self.temp_sorted_num_rows);
+            let mut p = cursor.cursor_mut();
+            p.advance();
+            while p.row_index < limit && p.current() == cursor.current() {
+                p.advance();
+            }
+            (p.row_index - cursor.row_index, None)
         } else {
             let next_cursor = &self.sorted_cursors.peek_top2().0;
             if cursor.last().le(&next_cursor.current()) {
