@@ -25,8 +25,6 @@ SELECT * FROM `05_0028_at_t0`
 1 (1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000') [101,2] 4.0
 
 statement ok
-create table `05_0028_at_t0_1`(a int not null, b Tuple(Bool, Int64, Float64, String, Date, Timestamp) not null, c Array(UInt8) not null, d double not null) AS SELECT * FROM `05_0028_at_t0`;
-
 create table `05_0028_at_t0_1`(a int not null, b Tuple(Bool, Int64, Float64, String, Date, Timestamp) not null, c Array(UInt8) not null, "s-f_f" double not null) AS SELECT * FROM `05_0028_at_t0`;
 
 query ITIF
