@@ -4439,7 +4439,6 @@ name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4473,7 +4472,6 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4598,7 +4596,6 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
- "databend-storages-common-io",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
@@ -5413,16 +5410,11 @@ version = "0.1.0"
 dependencies = [
  "arrow-cast",
  "arrow-schema",
- "async-backtrace",
- "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
- "log",
- "minitrace",
- "opendal",
  "serde",
  "typetag",
 ]
