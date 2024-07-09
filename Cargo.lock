@@ -5416,6 +5416,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "enum-as-inner 0.5.1",
+ "log",
  "parquet",
  "pot",
  "rmp-serde",

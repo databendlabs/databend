@@ -27,6 +27,7 @@ use crate::meta::format::compress;
 use crate::meta::format::decode_segment_header;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
+use crate::meta::format::read_and_deserialize_test;
 use crate::meta::format::MetaCompression;
 use crate::meta::format::SegmentHeader;
 use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
@@ -249,12 +250,13 @@ impl CompactSegmentInfo {
 
     pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
         let mut reader = Cursor::new(&self.raw_block_metas.bytes);
-        read_and_deserialize(
+        let r = read_and_deserialize_test(
             &mut reader,
             self.raw_block_metas.bytes.len() as u64,
             &self.raw_block_metas.encoding,
             &self.raw_block_metas.compression,
-        )
+        );
+        r
     }
 }
 
