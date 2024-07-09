@@ -247,7 +247,7 @@ impl DataBlock {
     ) {
         match value {
             Value::Scalar(scalar) => {
-                builder.push_repeat(scalar.as_ref(), len);
+                builder.push_repeat(&scalar.as_ref(), len);
             }
             Value::Column(c) => {
                 let c = c.slice(start..(start + len));

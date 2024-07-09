@@ -151,6 +151,14 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         builder.push(item)
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        if n == 1 {
+            builder.push(item)
+        } else {
+            builder.resize(builder.len() + n, item)
+        }
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Num::default())
     }

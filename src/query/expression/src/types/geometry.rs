@@ -140,6 +140,10 @@ impl ValueType for GeometryType {
         builder.commit_row();
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n)
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.commit_row();
     }

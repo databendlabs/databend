@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::once;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -138,6 +137,10 @@ impl ValueType for StringType {
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
         builder.put_str(item);
         builder.commit_row();
+    }
+
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n);
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
@@ -464,20 +467,9 @@ impl StringColumnBuilder {
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {
-        let bytes = scalar.as_bytes();
-        let len = bytes.len();
-        let mut data = Vec::with_capacity(len * n);
-        for _ in 0..n {
-            data.extend_from_slice(bytes);
-        }
-        let offsets = once(0)
-            .chain((0..n).map(|i| (len * (i + 1)) as u64))
-            .collect();
-        StringColumnBuilder {
-            data,
-            offsets,
-            need_estimated: false,
-        }
+        let mut builder = Self::with_capacity(n, scalar.len() * n);
+        builder.push_repeat(scalar, n);
+        builder
     }
 
     pub fn repeat_default(n: usize) -> Self {

@@ -185,6 +185,17 @@ impl<T: ValueType> ValueType for NullableType<T> {
         }
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        match item {
+            Some(item) => builder.push_repeat(item, n),
+            None => {
+                for _ in 0..n {
+                    builder.push_null()
+                }
+            }
+        }
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push_null();
     }
@@ -356,9 +367,7 @@ impl<T: ValueType> NullableColumnBuilder<T> {
     }
 
     pub fn push_repeat(&mut self, item: T::ScalarRef<'_>, n: usize) {
-        for _ in 0..n {
-            T::push_item(&mut self.builder, item.clone());
-        }
+        T::push_item_repeat(&mut self.builder, item, n);
         self.validity.extend_constant(n, true)
     }
 

@@ -122,6 +122,10 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(&item, n)
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push_default();
     }
