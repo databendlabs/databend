@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -47,6 +48,500 @@ use crate::IndexType;
 use crate::ScalarExpr;
 use crate::Visibility;
 
+struct PredicatesSplitter {
+    equi_columns_preds: Vec<(BoundColumnRef, BoundColumnRef)>,
+    range_preds: Vec<(String, BoundColumnRef, ConstantExpr)>,
+    residual_preds: Vec<ScalarExpr>,
+}
+
+impl PredicatesSplitter {
+    fn new() -> Self {
+        Self {
+            equi_columns_preds: vec![],
+            range_preds: vec![],
+            residual_preds: vec![],
+        }
+    }
+
+    fn split(&mut self, pred: &ScalarExpr) {
+        if let ScalarExpr::FunctionCall(func) = pred {
+            match func.func_name.as_str() {
+                "and" => {
+                    self.split(&func.arguments[0]);
+                    self.split(&func.arguments[1]);
+                }
+                "eq" if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
+                    && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
+                {
+                    let col0 = BoundColumnRef::try_from(func.arguments[0].clone()).unwrap();
+                    let col1 = BoundColumnRef::try_from(func.arguments[1].clone()).unwrap();
+                    self.equi_columns_preds.push((col0, col1));
+                }
+                "eq" | "lt" | "lte" | "gt" | "gte"
+                    if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
+                        && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
+                {
+                    let func_name = func.func_name.clone();
+                    let col = BoundColumnRef::try_from(func.arguments[0].clone()).unwrap();
+                    let val = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
+                    self.range_preds.push((func_name, col, val));
+                }
+                "eq" | "lt" | "lte" | "gt" | "gte"
+                    if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
+                        && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
+                {
+                    let func_name = match func.func_name.as_str() {
+                        "lt" => "gt".to_string(),
+                        "lte" => "gte".to_string(),
+                        "gt" => "lt".to_string(),
+                        "gte" => "lte".to_string(),
+                        "eq" => "eq".to_string(),
+                        _ => unreachable!(),
+                    };
+                    let val = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
+                    let col = BoundColumnRef::try_from(func.arguments[1].clone()).unwrap();
+                    self.range_preds.push((func_name, col, val));
+                }
+                _ => {
+                    self.residual_preds.push(pred.clone());
+                }
+            }
+        } else {
+            self.residual_preds.push(pred.clone());
+        }
+    }
+}
+
+struct EquivalenceClasses {
+    column_to_equivalence_class: HashMap<String, HashSet<String>>,
+}
+
+impl EquivalenceClasses {
+    fn new() -> Self {
+        Self {
+            column_to_equivalence_class: HashMap::new(),
+        }
+    }
+
+    fn add_equivalence_class(&mut self, col1: &BoundColumnRef, col2: &BoundColumnRef) {
+        let mut equivalence_columns = HashSet::new();
+
+        let col1_name = match &col1.column.table_name {
+            Some(table_name) => {
+                format!("{}.{}", table_name, col1.column.column_name)
+            }
+            None => col1.column.column_name.clone(),
+        };
+        let col2_name = match &col2.column.table_name {
+            Some(table_name) => {
+                format!("{}.{}", table_name, col2.column.column_name)
+            }
+            None => col2.column.column_name.clone(),
+        };
+
+        equivalence_columns.insert(col1_name.clone());
+        equivalence_columns.insert(col2_name.clone());
+
+        if let Some(c1) = self.column_to_equivalence_class.get(&col1_name) {
+            for c in c1 {
+                equivalence_columns.insert(c.clone());
+            }
+        }
+        if let Some(c2) = self.column_to_equivalence_class.get(&col2_name) {
+            for c in c2 {
+                equivalence_columns.insert(c.clone());
+            }
+        }
+
+        for column in &equivalence_columns {
+            if let Some(orig_columns) = self.column_to_equivalence_class.get_mut(column) {
+                for equi_column in &equivalence_columns {
+                    if equi_column == column {
+                        continue;
+                    }
+                    orig_columns.insert(equi_column.clone());
+                }
+            } else {
+                let mut equi_cols = equivalence_columns.clone();
+                equi_cols.remove(column);
+                self.column_to_equivalence_class
+                    .insert(column.clone(), equi_cols);
+            }
+        }
+    }
+
+    // Equijoin subsumption test.
+    fn check(&self, view_equi_classes: &EquivalenceClasses) -> bool {
+        for (col, view_equi_cols) in view_equi_classes.column_to_equivalence_class.iter() {
+            if let Some(query_equi_cols) = self.column_to_equivalence_class.get(col) {
+                // checking whether every non-trivial view equivalence class
+                // is a subset of some query equivalence class
+                if view_equi_cols.is_subset(query_equi_cols) {
+                    continue;
+                }
+            }
+            return false;
+        }
+        true
+    }
+}
+
+#[derive(Eq, Clone, Debug)]
+enum BoundValue {
+    Closed(Scalar),
+    Open(Scalar),
+    // -∞
+    NegativeInfinite,
+    // +∞
+    PositiveInfinite,
+}
+
+#[allow(clippy::non_canonical_partial_ord_impl)]
+impl PartialOrd for BoundValue {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        fn cmp_scalar(s1: &Scalar, s2: &Scalar) -> Ordering {
+            match (s1, s2) {
+                (Scalar::Number(n1), Scalar::Number(n2)) => {
+                    if n1.is_integer() && n2.is_integer() {
+                        let v1 = n1.integer_to_i128().unwrap();
+                        let v2 = n2.integer_to_i128().unwrap();
+                        v1.cmp(&v2)
+                    } else {
+                        todo!()
+                    }
+                }
+                (_, _) => s1.cmp(s2),
+            }
+        }
+
+        match (self, other) {
+            (BoundValue::NegativeInfinite, BoundValue::NegativeInfinite) => Some(Ordering::Equal),
+            (BoundValue::PositiveInfinite, BoundValue::PositiveInfinite) => Some(Ordering::Equal),
+            (BoundValue::NegativeInfinite, _) => Some(Ordering::Less),
+            (_, BoundValue::NegativeInfinite) => Some(Ordering::Greater),
+            (BoundValue::PositiveInfinite, _) => Some(Ordering::Greater),
+            (_, BoundValue::PositiveInfinite) => Some(Ordering::Less),
+            (BoundValue::Open(v1), BoundValue::Open(v2)) => Some(cmp_scalar(v1, v2)),
+            (BoundValue::Closed(v1), BoundValue::Closed(v2)) => Some(cmp_scalar(v1, v2)),
+            (BoundValue::Open(v1), BoundValue::Closed(v2)) => {
+                let res = cmp_scalar(v1, v2);
+                if res == Ordering::Equal {
+                    Some(Ordering::Less)
+                } else {
+                    Some(res)
+                }
+            }
+            (BoundValue::Closed(v1), BoundValue::Open(v2)) => {
+                let res = cmp_scalar(v1, v2);
+                if res == Ordering::Equal {
+                    Some(Ordering::Greater)
+                } else {
+                    Some(res)
+                }
+            }
+        }
+    }
+}
+
+impl Ord for BoundValue {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap_or(Ordering::Equal)
+    }
+}
+
+impl PartialEq for BoundValue {
+    fn eq(&self, other: &Self) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+#[derive(Debug)]
+struct RangeValues {
+    bounds: Option<(BoundValue, BoundValue)>,
+}
+
+//                 +------+
+//                 | orig |
+//                 +------+
+//        +-----+
+// case 1 | new |
+//        +-----+
+// upper < orig_lower
+//                            +-----+
+// case 2                     | new |
+//                            +-----+
+// lower > orig_upper
+//                  +-----+
+// case 3           | new |
+//                  +-----+
+// lower >= orig_lower && upper <= orig_upper
+//               +-----------+
+// case 4        |    new    |
+//               +-----------+
+// lower < orig_lower upper > orig_upper
+//             +-----+
+// case 5      | new |
+//             +-----+
+// upper >= orig_lower && upper <= orig_upper && lower <= orig_lower
+//                       +-----+
+// case 6                | new |
+//                       +-----+
+// lower >= orig_lower && lower <= orig_upper && upper >= orig_upper
+
+impl RangeValues {
+    fn new() -> Self {
+        Self {
+            bounds: Some((BoundValue::NegativeInfinite, BoundValue::PositiveInfinite)),
+        }
+    }
+
+    fn insert(&mut self, lower_bound: BoundValue, upper_bound: BoundValue) {
+        if let Some((orig_lower_bound, orig_upper_bound)) = &self.bounds {
+            // case 1 and case 2
+            if upper_bound.cmp(orig_lower_bound) == Ordering::Less
+                || lower_bound.cmp(orig_upper_bound) == Ordering::Greater
+            {
+                self.bounds = None;
+                return;
+            }
+            match (
+                lower_bound.cmp(orig_lower_bound),
+                upper_bound.cmp(orig_upper_bound),
+            ) {
+                // case 3
+                (Ordering::Greater | Ordering::Equal, Ordering::Less | Ordering::Equal) => {
+                    self.bounds = Some((lower_bound, upper_bound))
+                }
+                // case 4
+                (Ordering::Less, Ordering::Greater) => {}
+                (Ordering::Less, Ordering::Less | Ordering::Equal) => {
+                    // case 5
+                    if matches!(
+                        upper_bound.cmp(orig_lower_bound),
+                        Ordering::Greater | Ordering::Equal
+                    ) {
+                        self.bounds = Some((orig_lower_bound.clone(), upper_bound));
+                    }
+                }
+                (Ordering::Greater | Ordering::Equal, Ordering::Greater) => {
+                    // case 6
+                    if matches!(
+                        lower_bound.cmp(orig_upper_bound),
+                        Ordering::Less | Ordering::Equal
+                    ) {
+                        self.bounds = Some((lower_bound, orig_upper_bound.clone()));
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct RangeClasses {
+    column_to_range_class: HashMap<String, RangeValues>,
+}
+
+impl RangeClasses {
+    fn new() -> Self {
+        Self {
+            column_to_range_class: HashMap::new(),
+        }
+    }
+
+    fn add_range_class(&mut self, func_name: &str, col: &BoundColumnRef, val: &ConstantExpr) {
+        let col_name = match &col.column.table_name {
+            Some(table_name) => {
+                format!("{}.{}", table_name, col.column.column_name)
+            }
+            None => col.column.column_name.clone(),
+        };
+
+        let (lower_bound, upper_bound) = match func_name {
+            "eq" => (
+                BoundValue::Closed(val.value.clone()),
+                BoundValue::Closed(val.value.clone()),
+            ),
+            "lt" => (
+                BoundValue::NegativeInfinite,
+                BoundValue::Open(val.value.clone()),
+            ),
+            "lte" => (
+                BoundValue::NegativeInfinite,
+                BoundValue::Closed(val.value.clone()),
+            ),
+            "gt" => (
+                BoundValue::Open(val.value.clone()),
+                BoundValue::PositiveInfinite,
+            ),
+            "gte" => (
+                BoundValue::Closed(val.value.clone()),
+                BoundValue::PositiveInfinite,
+            ),
+            _ => unreachable!(),
+        };
+        if !self.column_to_range_class.contains_key(&col_name) {
+            self.column_to_range_class
+                .insert(col_name.clone(), RangeValues::new());
+        }
+        if let Some(range_values) = self.column_to_range_class.get_mut(&col_name) {
+            range_values.insert(lower_bound, upper_bound);
+        }
+    }
+
+    // Range subsumption test.
+    fn check(&self, view_range_classes: &RangeClasses) -> bool {
+        for (col, view_range_values) in view_range_classes.column_to_range_class.iter() {
+            if let Some(query_range_values) = self.column_to_range_class.get(col) {
+                match (&query_range_values.bounds, &view_range_values.bounds) {
+                    (
+                        Some((query_lower_bound, query_upper_bound)),
+                        Some((view_lower_bound, view_upper_bound)),
+                    ) => {
+                        if view_lower_bound.cmp(query_lower_bound) == Ordering::Less
+                            || view_upper_bound.cmp(query_upper_bound) == Ordering::Greater
+                        {
+                            return false;
+                        }
+                    }
+                    (_, _) => {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+struct ResidualClasses {
+    residual_preds: HashSet<ScalarExpr>,
+}
+
+impl ResidualClasses {
+    fn new() -> Self {
+        Self {
+            residual_preds: HashSet::new(),
+        }
+    }
+
+    fn add_residual_pred(&mut self, pred: &ScalarExpr) {
+        self.residual_preds.insert(pred.clone());
+    }
+
+    // Residual subsumption test.
+    fn check(&self, view_residual_classes: &ResidualClasses) -> bool {
+        // TODO
+        for query_residual_pred in self.residual_preds.iter() {
+            if !view_residual_classes
+                .residual_preds
+                .contains(query_residual_pred)
+            {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+struct MaterializedViewMatcher {
+    preds_splitter: PredicatesSplitter,
+    equi_classes: EquivalenceClasses,
+    range_classes: RangeClasses,
+    residual_classes: ResidualClasses,
+    output_rows: Vec<String>,
+}
+
+impl MaterializedViewMatcher {
+    fn new() -> Self {
+        Self {
+            preds_splitter: PredicatesSplitter::new(),
+            equi_classes: EquivalenceClasses::new(),
+            range_classes: RangeClasses::new(),
+            residual_classes: ResidualClasses::new(),
+            output_rows: Vec::new(),
+        }
+    }
+
+    fn init(&mut self, query_info: &RewriteInfomartion) {
+        if let Some(predicates) = query_info.predicates {
+            for pred in predicates {
+                self.preds_splitter.split(pred);
+            }
+
+            for equi_pred in &self.preds_splitter.equi_columns_preds {
+                self.equi_classes
+                    .add_equivalence_class(&equi_pred.0, &equi_pred.1);
+            }
+            for range_pred in &self.preds_splitter.range_preds {
+                self.range_classes
+                    .add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
+            }
+            for residual_pred in &self.preds_splitter.residual_preds {
+                self.residual_classes.add_residual_pred(residual_pred);
+            }
+        }
+
+        for item in &query_info.selection.items {
+            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
+                let col_name = match &col.column.table_name {
+                    Some(table_name) => {
+                        format!("{}.{}", table_name, col.column.column_name)
+                    }
+                    None => col.column.column_name.clone(),
+                };
+                self.output_rows.push(col_name);
+            }
+        }
+    }
+
+    fn match_view(&self, view_matcher: &MaterializedViewMatcher) -> bool {
+        // 3.1.2 Do all required rows exist in the view?
+        // 1. Compute equivalence classes for the query and the view.
+        // 2. Check that every view equivalence class is a subset of a
+        //    query equivalence class. If not, reject the view
+        // 3. Compute range intervals for the query and the view.
+        // 4. Check that every view range contains the corresponding
+        //    query range. If not, reject the view.
+        // 5. Check that every conjunct in the residual predicate of the
+        //    view matches a conjunct in the residual predicate of the query.
+        //    If not, reject the view.
+        if !self.equi_classes.check(&view_matcher.equi_classes) {
+            return false;
+        }
+        if !self.range_classes.check(&view_matcher.range_classes) {
+            return false;
+        }
+        if !self.residual_classes.check(&view_matcher.residual_classes) {
+            return false;
+        }
+
+        // 3.1.3 Can the required rows be selected?
+
+        // 3.1.4 Can output expressions be computed?
+
+        // 3.3 Aggregation queries and views
+
+        true
+    }
+}
+
+// MaterializedViewRewriter is based on "Optimizing Queries Using Materialized Views:
+// A Practical, Scalable Solution" by Goldstein and Larson.
+#[allow(dead_code)]
+struct MaterializedViewRewriter {}
+
+impl MaterializedViewRewriter {
+    #[allow(dead_code)]
+    fn new() -> Self {
+        Self {}
+    }
+
+    #[allow(dead_code)]
+    fn rewrite(&self) {}
+}
+
 pub fn try_rewrite(
     table_index: IndexType,
     base_columns: &[ColumnEntry],
@@ -60,6 +555,20 @@ pub fn try_rewrite(
     let query_info = collect_information(s_expr)?;
     if !query_info.can_apply_index() {
         return Ok(None);
+    }
+
+    let mut query_matcher = MaterializedViewMatcher::new();
+    query_matcher.init(&query_info);
+
+    for (_, _, view_s_expr) in index_plans.iter() {
+        let view_info = collect_information(view_s_expr)?;
+
+        let mut view_matcher = MaterializedViewMatcher::new();
+        view_matcher.init(&view_info);
+
+        if !query_matcher.match_view(&view_matcher) {
+            continue;
+        }
     }
 
     let col_index_map = base_columns
