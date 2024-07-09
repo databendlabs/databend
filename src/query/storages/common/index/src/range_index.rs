@@ -79,7 +79,6 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace]
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
         let start = Instant::now();
