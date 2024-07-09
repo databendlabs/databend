@@ -45,7 +45,7 @@ impl BlockPruner {
     pub async fn pruning(
         &self,
         segment_location: SegmentLocation,
-        block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Arc<Vec<Arc<BlockMeta>>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Apply internal column pruning.
         let block_meta_indexes = self.internal_column_pruning(&block_metas);
@@ -90,7 +90,7 @@ impl BlockPruner {
     async fn block_pruning(
         &self,
         segment_location: SegmentLocation,
-        block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
@@ -285,7 +285,7 @@ impl BlockPruner {
     fn block_pruning_sync(
         &self,
         segment_location: SegmentLocation,
-        block_metas: Vec<Arc<BlockMeta>>,
+        block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();

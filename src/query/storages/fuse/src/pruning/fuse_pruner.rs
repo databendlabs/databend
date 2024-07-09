@@ -28,6 +28,8 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -41,6 +43,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use log::info;
 use log::warn;
@@ -339,7 +342,7 @@ impl FusePruner {
                                             block_pruner
                                                 .pruning(
                                                     segment_location.clone(),
-                                                    compact_segment_info.block_metas()?,
+                                                    Arc::new(compact_segment_info.block_metas()?),
                                                 )
                                                 .await?,
                                         );
@@ -347,7 +350,7 @@ impl FusePruner {
                                 }
                                 None => {
                                     let start = Instant::now();
-                                    let block_metas = compact_segment_info.block_metas()?;
+                                    let block_metas = Arc::new(compact_segment_info.block_metas()?);
                                     // TODO metrics & duplicated code
                                     info!(
                                         "takes {:?} to extract block meta from compact segment {}",
@@ -372,7 +375,8 @@ impl FusePruner {
                     } else {
                         for (location, info) in pruned_segments {
                             let start = Instant::now();
-                            let block_metas = info.block_metas()?;
+                            let block_metas =
+                                Self::block_metas_with_cache(&location.location.0, &info)?;
                             info!(
                                 "takes {:?} to extract block meta from compact segment {}",
                                 start.elapsed(),
@@ -416,6 +420,23 @@ impl FusePruner {
         }
     }
 
+    pub fn block_metas_with_cache(
+        path: &str,
+        segment: &CompactSegmentInfo,
+    ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
+        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
+            if let Some(metas) = cache.get(path) {
+                return Ok(metas);
+            } else {
+                let block_metas = Arc::new(segment.block_metas()?);
+                cache.put(path.to_string(), block_metas.clone());
+                Ok(block_metas)
+            }
+        } else {
+            Ok(Arc::new(segment.block_metas()?))
+        }
+    }
+
     #[async_backtrace::framed]
     pub async fn stream_pruning(
         &mut self,
@@ -445,7 +466,7 @@ impl FusePruner {
                                 location: ("".to_string(), 0),
                                 snapshot_loc: None,
                             },
-                            batch,
+                            Arc::new(batch),
                         )
                         .await?;
 

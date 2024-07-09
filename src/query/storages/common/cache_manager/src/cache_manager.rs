@@ -39,6 +39,7 @@ use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::BlockMetaCache;
 use crate::BloomIndexFilterMeter;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
@@ -60,6 +61,7 @@ pub struct CacheManager {
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
     table_column_array_cache: Option<ColumnArrayCache>,
+    block_meta_cache: Option<BlockMetaCache>,
 }
 
 impl CacheManager {
@@ -133,6 +135,7 @@ impl CacheManager {
                 table_statistic_cache: None,
                 table_data_cache,
                 table_column_array_cache: in_memory_table_data_cache,
+                block_meta_cache: None,
             }));
         } else {
             let table_snapshot_cache = Self::new_named_cache(
@@ -174,7 +177,8 @@ impl CacheManager {
                 "memory_cache_inverted_index_file",
             );
             let prune_partitions_cache = Self::new_named_cache(
-                config.table_prune_partitions_count,
+                //config.table_prune_partitions_count,
+                0,
                 "memory_cache_prune_partitions",
             );
 
@@ -182,6 +186,10 @@ impl CacheManager {
                 DEFAULT_FILE_META_DATA_CACHE_ITEMS,
                 "memory_cache_parquet_file_meta",
             );
+
+            let block_meta_cache =
+                Self::new_item_cache(DEFAULT_FILE_META_DATA_CACHE_ITEMS, "block_meta");
+
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 segment_info_cache,
@@ -194,6 +202,7 @@ impl CacheManager {
                 table_statistic_cache,
                 table_data_cache,
                 table_column_array_cache: in_memory_table_data_cache,
+                block_meta_cache,
             }));
         }
 
@@ -206,6 +215,10 @@ impl CacheManager {
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
         self.table_snapshot_cache.clone()
+    }
+
+    pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
+        self.block_meta_cache.clone()
     }
 
     pub fn get_table_snapshot_statistics_cache(&self) -> Option<TableSnapshotStatisticCache> {
