@@ -71,7 +71,7 @@ impl ParquetRSTable {
             self.operator.clone(),
             table_schema.clone(),
             self.schema_descr.clone(),
-            Some(table_schema.as_ref().into()),
+            Some(self.arrow_schema.clone()),
         )
         .with_options(self.read_options)
         .with_push_downs(plan.push_downs.as_ref())
