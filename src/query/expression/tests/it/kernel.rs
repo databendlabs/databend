@@ -137,32 +137,33 @@ pub fn test_pass() {
             (2, 3, 1),
         ];
         for i in 0..3 {
-            let mut columns = Vec::new();
-            columns.push(BlockEntry::new(
-                DataType::Number(NumberDataType::UInt8),
-                Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-            ));
-            columns.push(BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Value::Column(UInt8Type::from_data_with_validity(
-                    vec![(i + 10) as u8; 4],
-                    vec![true, true, false, false],
-                )),
-            ));
-            columns.push(BlockEntry::new(
-                DataType::Array(Box::new(DataType::String)),
-                Value::Scalar(Scalar::Array(StringType::from_data(vec![
-                    (20 + i).to_string(),
-                    (30 + i).to_string(),
-                ]))),
-            ));
-            columns.push(BlockEntry::new(
-                DataType::Tuple(vec![DataType::Boolean, DataType::Date]),
-                Value::Scalar(Scalar::Tuple(vec![
-                    Scalar::Boolean(i % 2 == 0),
-                    Scalar::Date(9 + i),
-                ])),
-            ));
+            let columns = vec![
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt8),
+                    Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
+                ),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                    Value::Column(UInt8Type::from_data_with_validity(
+                        vec![(i + 10) as u8; 4],
+                        vec![true, true, false, false],
+                    )),
+                ),
+                BlockEntry::new(
+                    DataType::Array(Box::new(DataType::String)),
+                    Value::Scalar(Scalar::Array(StringType::from_data(vec![
+                        (20 + i).to_string(),
+                        (30 + i).to_string(),
+                    ]))),
+                ),
+                BlockEntry::new(
+                    DataType::Tuple(vec![DataType::Boolean, DataType::Date]),
+                    Value::Scalar(Scalar::Tuple(vec![
+                        Scalar::Boolean(i % 2 == 0),
+                        Scalar::Date(9 + i),
+                    ])),
+                ),
+            ];
             blocks.push(DataBlock::new(columns, 4))
         }
 
