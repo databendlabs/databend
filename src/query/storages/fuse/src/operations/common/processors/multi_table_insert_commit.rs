@@ -233,7 +233,7 @@ async fn build_update_table_meta_req(
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
-    let snapshot = snapshot_generator.generate_new_snapshot(
+    let mut snapshot = snapshot_generator.generate_new_snapshot(
         table.schema().as_ref().clone(),
         fuse_table.cluster_key_meta.clone(),
         previous.clone(),
@@ -246,9 +246,17 @@ async fn build_update_table_meta_req(
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
+        if let Some(previous) = ctx
+            .txn_mgr()
+            .lock()
+            .get_table_snapshot_by_id(fuse_table.get_id())
+        {
+            snapshot.prev_snapshot_id = previous.prev_snapshot_id;
+            assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+        }
         ctx.txn_mgr()
             .lock()
-            .upsert_table_snapshot(fuse_table.get_id(), snapshot.clone());
+            .upsert_table_snapshot(fuse_table.get_id(), Arc::new(snapshot.clone()));
     } else {
         let dal = fuse_table.get_operator();
         dal.write(&location, snapshot.to_bytes()?).await?;

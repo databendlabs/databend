@@ -61,7 +61,7 @@ pub struct TxnBuffer {
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
 
     // table_id -> latest snapshot
-    snapshots: HashMap<u64, TableSnapshot>,
+    snapshots: HashMap<u64, Arc<TableSnapshot>>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,20 +110,15 @@ impl TxnBuffer {
         }
     }
 
-    fn upsert_table_snapshot(&mut self, table_id: u64, mut snapshot: TableSnapshot) {
-        match self.snapshots.get_mut(&table_id) {
-            Some(previous) => {
-                snapshot.prev_snapshot_id = previous.prev_snapshot_id;
-                assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
-                *previous = snapshot;
-            }
-            None => {
-                self.snapshots.insert(table_id, snapshot);
-            }
-        }
+    fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: Arc<TableSnapshot>) {
+        self.snapshots.insert(table_id, snapshot);
     }
 
-    fn snapshots(&mut self) -> HashMap<u64, TableSnapshot> {
+    fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<&TableSnapshot> {
+        self.snapshots.get(&table_id).map(|s| s.as_ref())
+    }
+
+    fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {
         std::mem::take(&mut self.snapshots)
     }
 }
@@ -304,11 +299,15 @@ impl TxnManager {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
     }
 
-    pub fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: TableSnapshot) {
+    pub fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: Arc<TableSnapshot>) {
         self.txn_buffer.upsert_table_snapshot(table_id, snapshot);
     }
 
-    pub fn snapshots(&mut self) -> HashMap<u64, TableSnapshot> {
+    pub fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {
         self.txn_buffer.snapshots()
+    }
+
+    pub fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<&TableSnapshot> {
+        self.txn_buffer.get_table_snapshot_by_id(table_id)
     }
 }

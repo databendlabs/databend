@@ -144,7 +144,7 @@ impl FuseTable {
             catalog,
             table_info,
             location_generator,
-            snapshot,
+            Arc::new(snapshot),
             snapshot_location,
             copied_files,
             &[],
@@ -202,7 +202,7 @@ impl FuseTable {
         catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
-        snapshot: TableSnapshot,
+        snapshot: Arc<TableSnapshot>,
         snapshot_location: String,
         copied_files: &Option<UpsertTableCopiedFileReq>,
         update_stream_meta: &[UpdateStreamMetaReq],
@@ -233,7 +233,7 @@ impl FuseTable {
             .await?;
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
-        TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
+        TableSnapshot::cache().put(snapshot_location.clone(), snapshot);
         Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
 
         Ok(())

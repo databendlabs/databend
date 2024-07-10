@@ -352,28 +352,40 @@ where F: SnapshotGenerator + Send + 'static
             }
             State::TryCommit {
                 data,
-                snapshot,
+                mut snapshot,
                 table_info,
             } => {
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 let is_active = self.ctx.txn_mgr().lock().is_active();
-                if is_active {
+                let snapshot_ref = if is_active {
+                    if let Some(previous) = self
+                        .ctx
+                        .txn_mgr()
+                        .lock()
+                        .get_table_snapshot_by_id(table_info.ident.table_id)
+                    {
+                        snapshot.prev_snapshot_id = previous.prev_snapshot_id;
+                        assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+                    }
+                    let snapshot_ref = Arc::new(snapshot);
                     self.ctx
                         .txn_mgr()
                         .lock()
-                        .upsert_table_snapshot(table_info.ident.table_id, snapshot.clone());
+                        .upsert_table_snapshot(table_info.ident.table_id, snapshot_ref.clone());
+                    snapshot_ref
                 } else {
                     self.dal.write(&location, data).await?;
-                }
+                    Arc::new(snapshot)
+                };
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(
                     catalog.clone(),
                     &table_info,
                     &self.location_gen,
-                    snapshot,
+                    snapshot_ref,
                     location,
                     &self.copied_files,
                     &self.update_stream_meta,
