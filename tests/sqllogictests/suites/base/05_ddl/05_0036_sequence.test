@@ -46,20 +46,20 @@ select * from tmp2 order by a;
 1024
 
 statement ok
-INSERT INTO tmp3 values(1,nextval(seq),3);
+INSERT INTO tmp3 values(1,nextval(seq) + 1,3);
 
 query III
 select * from tmp3;
 ----
-1 5 3
+1 6 3
 
 statement ok
 INSERT INTO tmp3 select 10,nextval(seq),20 from numbers(3);
 
 query III
-select * from tmp3 order by b;
+select * from tmp3 order by b,a;
 ----
-1 5 3
+1 6 3
 10 6 20
 10 7 20
 10 8 20
