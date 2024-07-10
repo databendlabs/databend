@@ -126,7 +126,6 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         RelOperator::Sort(_)
         | RelOperator::Limit(_)
         | RelOperator::Exchange(_)
-        | RelOperator::AddRowNumber(_)
         | RelOperator::UnionAll(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::ProjectSet(_)
