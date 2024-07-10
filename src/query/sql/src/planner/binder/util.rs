@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::quote::QuotedIdent;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::parser::Dialect;
+use databend_common_ast::span::merge_span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::Binder;
+use crate::NameResolutionContext;
+use crate::NameResolutionSuggest;
 
 /// Ident name can not contain ' or "
 /// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
@@ -84,5 +91,133 @@ impl Binder {
             }
         }
         Ok(())
+    }
+
+    pub fn fully_table_identifier(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        table: &Identifier,
+    ) -> FullyTableIdentifier<'_> {
+        let Binder {
+            ctx,
+            name_resolution_ctx,
+            dialect,
+            ..
+        } = self;
+        let catalog = catalog.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_catalog(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+        });
+        let database = database.to_owned().unwrap_or(Identifier {
+            span: None,
+            name: ctx.get_current_database(),
+            quote: Some(dialect.default_ident_quote()),
+            is_hole: false,
+        });
+        let database = Identifier {
+            span: merge_span(catalog.span, database.span),
+            ..database
+        };
+        let table = Identifier {
+            span: merge_span(database.span, table.span),
+            name: table.name.clone(),
+            ..*table
+        };
+        FullyTableIdentifier {
+            name_resolution_ctx,
+            dialect: *dialect,
+            catalog,
+            database,
+            table,
+        }
+    }
+}
+
+pub struct FullyTableIdentifier<'a> {
+    name_resolution_ctx: &'a NameResolutionContext,
+    dialect: Dialect,
+    pub catalog: Identifier,
+    pub database: Identifier,
+    pub table: Identifier,
+}
+
+impl FullyTableIdentifier<'_> {
+    pub fn new(
+        name_resolution_ctx: &NameResolutionContext,
+        dialect: Dialect,
+        catalog: Identifier,
+        database: Identifier,
+        table: Identifier,
+    ) -> FullyTableIdentifier<'_> {
+        FullyTableIdentifier {
+            name_resolution_ctx,
+            dialect,
+            catalog,
+            database,
+            table,
+        }
+    }
+
+    pub fn catalog_name(&self) -> String {
+        normalize_identifier(&self.catalog, self.name_resolution_ctx).name
+    }
+
+    pub fn database_name(&self) -> String {
+        normalize_identifier(&self.database, self.name_resolution_ctx).name
+    }
+
+    pub fn table_name(&self) -> String {
+        normalize_identifier(&self.table, self.name_resolution_ctx).name
+    }
+
+    pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {
+        let Self {
+            catalog,
+            database,
+            table,
+            ..
+        } = self;
+        match err.code() {
+            ErrorCode::UNKNOWN_DATABASE => {
+                let error_message = match self.name_resolution_ctx.not_found_suggest(database) {
+                    Some(NameResolutionSuggest::Quoted) => {
+                        format!(
+                            "Unknown database {catalog}.{database} (unquoted). Did you mean {} (quoted)?",
+                            QuotedIdent(&database.name, self.dialect.default_ident_quote())
+                        )
+                    }
+                    Some(NameResolutionSuggest::Unqoted) => {
+                        format!(
+                            "Unknown database {catalog}.{database} (quoted). Did you mean {} (unquoted)?",
+                            &database.name
+                        )
+                    }
+                    None => format!("Unknown database {catalog}.{database} ."),
+                };
+                ErrorCode::UnknownDatabase(error_message).set_span(database.span)
+            }
+            ErrorCode::UNKNOWN_TABLE => {
+                let error_message = match self.name_resolution_ctx.not_found_suggest(table) {
+                    Some(NameResolutionSuggest::Quoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (unquoted). Did you mean {} (quoted)?",
+                            QuotedIdent(&table.name, self.dialect.default_ident_quote())
+                        )
+                    }
+                    Some(NameResolutionSuggest::Unqoted) => {
+                        format!(
+                            "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {} (unquoted)?",
+                            &table.name
+                        )
+                    }
+                    None => format!("Unknown table {catalog}.{database}.{table} ."),
+                };
+                ErrorCode::UnknownTable(error_message).set_span(table.span)
+            }
+            _ => err,
+        }
     }
 }
