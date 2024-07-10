@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -58,6 +59,9 @@ pub struct TxnBuffer {
     stream_tables: HashMap<u64, StreamSnapshot>,
 
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+
+    // table_id -> latest snapshot
+    snapshots: HashMap<u64, TableSnapshot>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +78,7 @@ impl TxnBuffer {
         self.update_stream_meta.clear();
         self.deduplicated_labels.clear();
         self.stream_tables.clear();
+        self.snapshots.clear();
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
@@ -102,6 +107,19 @@ impl TxnBuffer {
             self.update_stream_meta
                 .entry(stream_meta.stream_id)
                 .or_insert(stream_meta.clone());
+        }
+    }
+
+    fn upsert_table_snapshot(&mut self, table_id: u64, mut snapshot: TableSnapshot) {
+        match self.snapshots.get_mut(&table_id) {
+            Some(previous) => {
+                snapshot.prev_snapshot_id = previous.prev_snapshot_id;
+                assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+                *previous = snapshot;
+            }
+            None => {
+                self.snapshots.insert(table_id, snapshot);
+            }
         }
     }
 }
@@ -280,5 +298,9 @@ impl TxnManager {
 
     pub fn need_purge_files(&mut self) -> Vec<(StageInfo, Vec<String>)> {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
+    }
+
+    pub fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: TableSnapshot) {
+        self.txn_buffer.upsert_table_snapshot(table_id, snapshot);
     }
 }

@@ -284,7 +284,7 @@ where F: SnapshotGenerator + Send + 'static
                 match self.snapshot_gen.generate_new_snapshot(
                     schema,
                     cluster_key_meta,
-                    previous,
+                    previous.clone(),
                     Some(table_info.ident.seq),
                 ) {
                     Ok(snapshot) => {
@@ -358,8 +358,15 @@ where F: SnapshotGenerator + Send + 'static
                 let location = self
                     .location_gen
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
-
-                self.dal.write(&location, data).await?;
+                let is_active = self.ctx.txn_mgr().lock().is_active();
+                if is_active {
+                    self.ctx
+                        .txn_mgr()
+                        .lock()
+                        .upsert_table_snapshot(table_info.ident.table_id, snapshot.clone());
+                } else {
+                    self.dal.write(&location, data).await?;
+                }
 
                 let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
                 match FuseTable::update_table_meta(

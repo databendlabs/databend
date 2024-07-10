@@ -90,7 +90,8 @@ impl AsyncSink for CommitMultiTableInsert {
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
             update_table_metas.push((
-                build_update_table_meta_req(table.as_ref(), &snapshot_generator).await?,
+                build_update_table_meta_req(table.as_ref(), &snapshot_generator, self.ctx.as_ref())
+                    .await?,
                 table.get_table_info().clone(),
             ));
             snapshot_generators.insert(table_id, snapshot_generator);
@@ -173,6 +174,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                 *req = build_update_table_meta_req(
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
+                                    self.ctx.as_ref(),
                                 )
                                 .await?;
                                 break;
@@ -227,22 +229,30 @@ impl AsyncSink for CommitMultiTableInsert {
 async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
+    ctx: &dyn TableContext,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     let snapshot = snapshot_generator.generate_new_snapshot(
         table.schema().as_ref().clone(),
         fuse_table.cluster_key_meta.clone(),
-        previous,
+        previous.clone(),
         Some(fuse_table.table_info.ident.seq),
     )?;
 
     // write snapshot
-    let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
     let location = location_generator
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
-    dal.write(&location, snapshot.to_bytes()?).await?;
+    let is_active = ctx.txn_mgr().lock().is_active();
+    if is_active {
+        ctx.txn_mgr()
+            .lock()
+            .upsert_table_snapshot(fuse_table.get_id(), snapshot.clone());
+    } else {
+        let dal = fuse_table.get_operator();
+        dal.write(&location, snapshot.to_bytes()?).await?;
+    }
 
     // build new table meta
     let new_table_meta =
