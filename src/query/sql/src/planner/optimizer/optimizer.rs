@@ -24,7 +24,7 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
-use super::distributed::MergeSourceOptimizer;
+use super::distributed::MergeOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::target_table_position;
@@ -459,7 +459,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?;
-    let mut new_columns_set = plan.columns_set.clone();
+    let new_columns_set = plan.columns_set.clone();
     if join_order_changed
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
@@ -481,31 +481,17 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     }
 
     plan.change_join_order = join_order_changed;
-    if opt_ctx.enable_distributed_optimization {
-        let merge_source_optimizer = MergeSourceOptimizer::create();
-        // Inner join shouldn't add `RowNumber` node.
-        let mut enable_right_broadcast = false;
-
-        if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
-            && merge_source_optimizer
-                .merge_source_matcher
-                .matches(&join_s_expr)
+    let distributed = !join_s_expr.has_merge_exchange();
+    if opt_ctx.enable_distributed_optimization && distributed {
+        let merge_optimizer = MergeOptimizer::create();
+        // Left join changes to shuffle.
+        if matches!(join_op.join_type, JoinType::Left | JoinType::LeftAnti)
+            && merge_optimizer.merge_matcher.matches(&join_s_expr)
         {
-            // If source is physical table, use row_id
-            let source_has_row_id = if let Some(source_row_id_index) = plan.source_row_id_index {
-                new_columns_set.insert(source_row_id_index);
-                true
-            } else {
-                false
-            };
-            // Todo(xudong): should consider the cost of shuffle and broadcast.
-            // Current behavior is to always use broadcast join.(source table is usually small)
-            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, source_has_row_id)?;
-            enable_right_broadcast = true;
-        }
-        let distributed = !join_s_expr.has_merge_exchange();
-        plan.distributed = distributed;
-        plan.enable_right_broadcast = enable_right_broadcast;
+            join_s_expr = merge_optimizer.optimize(&join_s_expr)?;
+        };
+
+        plan.distributed = true;
         plan.columns_set = new_columns_set;
         Ok(Plan::MergeInto {
             schema: plan.schema(),

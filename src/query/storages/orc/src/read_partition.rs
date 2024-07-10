@@ -20,8 +20,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
-
-use crate::orc_file_partition::OrcFilePartition;
+use databend_storages_common_stage::SingleFilePartition;
 
 pub async fn read_partitions_simple(
     ctx: Arc<dyn TableContext>,
@@ -50,7 +49,7 @@ pub async fn read_partitions_simple(
     let partitions = files
         .into_iter()
         .map(|v| {
-            let part = OrcFilePartition {
+            let part = SingleFilePartition {
                 path: v.path.clone(),
                 size: v.size as usize,
             };

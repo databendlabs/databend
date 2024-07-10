@@ -15,15 +15,14 @@
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::binder::MergeIntoType;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plans::MergeIntoOp;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoOrganize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    // merge_into_operation
-    pub merge_into_op: MergeIntoOp,
+    pub merge_type: MergeIntoType,
 }
 
 impl MergeIntoOrganize {

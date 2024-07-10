@@ -1,0 +1,41 @@
+statement ok
+use default
+
+statement ok
+set unquoted_ident_case_sensitive = 0
+
+statement ok
+set quoted_ident_case_sensitive = 1
+
+statement ok
+set sql_dialect = 'mysql'
+
+statement ok
+CREATE TABLE `Student`(id int)
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.Student \(unquoted\)\. Did you mean `Student` \(quoted\)\?
+INSERT INTO Student VALUES(1)
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.Student \(unquoted\)\. Did you mean `Student` \(quoted\)\?
+update Student set id = 1
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.Student \(unquoted\)\. Did you mean `Student` \(quoted\)?
+delete from Student
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.Student \(unquoted\)\. Did you mean `Student` \(quoted\)\?
+select * from Student
+
+statement ok
+set unquoted_ident_case_sensitive = 1
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
+INSERT INTO student VALUES(1)
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
+update student set id = 1
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
+delete from student
+
+statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
+select * from student

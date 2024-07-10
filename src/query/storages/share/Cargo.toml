@@ -17,6 +17,7 @@ databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enumflags2 = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

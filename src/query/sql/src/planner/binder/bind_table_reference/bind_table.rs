@@ -44,8 +44,12 @@ impl Binder {
         temporal: &Option<TemporalClause>,
         consume: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (catalog, database, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let fully_table = self.fully_table_identifier(catalog, database, table);
+        let (catalog, database, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
         let table_alias_name = alias
             .as_ref()
             .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
@@ -108,20 +112,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    return Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database `{}` in catalog '{catalog}'",
-                        database
-                    ))
-                    .set_span(*span));
-                }
-                if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                    ))
-                    .set_span(*span));
-                }
-                return Err(e);
+                return Err(fully_table.not_found_suggest_error(e));
             }
         };
 
