@@ -143,12 +143,10 @@ impl CacheManager {
             let table_snapshot_cache = Self::new_named_cache(
                 config.table_meta_snapshot_count,
                 "memory_cache_table_snapshot",
-                Unit::Count,
             );
             let table_statistic_cache = Self::new_named_cache(
                 config.table_meta_statistic_count,
                 "memory_cache_table_statistics",
-                Unit::Count,
             );
             let segment_info_cache = Self::new_named_cache_with_meter(
                 config.table_meta_segment_bytes,
@@ -165,12 +163,10 @@ impl CacheManager {
             let bloom_index_meta_cache = Self::new_named_cache(
                 config.table_bloom_index_meta_count,
                 "memory_cache_bloom_index_file_meta_data",
-                Unit::Count,
             );
             let inverted_index_meta_cache = Self::new_named_cache(
                 config.inverted_index_meta_count,
                 "memory_cache_inverted_index_file_meta_data",
-                Unit::Count,
             );
 
             // setup in-memory inverted index filter cache
@@ -189,19 +185,16 @@ impl CacheManager {
                 // config.table_prune_partitions_count,
                 0,
                 "memory_cache_prune_partitions",
-                Unit::Count,
             );
 
             let file_meta_data_cache = Self::new_named_cache(
                 DEFAULT_FILE_META_DATA_CACHE_ITEMS,
                 "memory_cache_parquet_file_meta",
-                Unit::Count,
             );
 
             let block_meta_cache = Self::new_named_cache(
-                DEFAULT_FILE_META_DATA_CACHE_ITEMS,
+                config.block_meta_count,
                 "memory_cache_block_meta",
-                Unit::Count,
             );
 
             GlobalInstance::set(Arc::new(Self {
@@ -279,10 +272,9 @@ impl CacheManager {
     fn new_named_cache<V>(
         capacity: u64,
         name: impl Into<String>,
-        unit: Unit,
     ) -> Option<NamedCache<InMemoryItemCacheHolder<V>>> {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into(), unit))
+            Some(InMemoryCacheBuilder::new_item_cache(capacity).name_with(name.into(), Unit::Count))
         } else {
             None
         }

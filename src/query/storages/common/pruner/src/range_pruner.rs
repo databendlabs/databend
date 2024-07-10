@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -25,7 +24,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
-use log::info;
 use log::warn;
 
 pub trait RangePruner {
@@ -75,7 +73,6 @@ impl RangePruner for RangeIndex {
         stats: &StatisticsOfColumns,
         metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool {
-        let start = Instant::now();
         let apply = self.apply(stats, |k| {
             if let Some(metas) = metas {
                 metas.get(k).is_none()
@@ -83,8 +80,6 @@ impl RangePruner for RangeIndex {
                 false
             }
         });
-
-        info!("range prunner apply takes {:?}", start.elapsed());
 
         match apply {
             Ok(r) => r,

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::is_internal_column;
@@ -42,7 +41,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
-use log::info;
 
 use crate::Index;
 
@@ -81,7 +79,6 @@ impl RangeIndex {
 
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
-        // let start = Instant::now();
         let input_domains = self
             .expr
             .column_refs()
@@ -124,21 +121,12 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
-        // info!("takes {:?} to calculate the domian", start.elapsed());
-
-        // let start = Instant::now();
-
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
             &input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
-
-        // info!(
-        //     "takes {:?} to constant fold range expr with index",
-        //     start.elapsed()
-        // );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
