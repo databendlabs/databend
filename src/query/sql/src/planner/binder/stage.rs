@@ -99,7 +99,7 @@ impl BindContext {
                 ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
             ) {
                 return Err(ErrorCode::SemanticError(
-                    "Aggregate and window are not allowed value expressions".to_string(),
+                    "Aggregate and window are not allowed in value expressions".to_string(),
                 ));
             }
 
