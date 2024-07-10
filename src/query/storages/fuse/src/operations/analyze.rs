@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use async_trait::async_trait;
 use async_trait::unboxed_simple;
 use databend_common_catalog::catalog::CatalogManager;
@@ -26,7 +29,9 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
+use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
@@ -54,6 +59,7 @@ impl FuseTable {
         table: &str,
         snapshot_id: SnapshotId,
         pipeline: &mut Pipeline,
+        histogram_info_receiver: Receiver<DataBlock>,
     ) -> Result<()> {
         pipeline.add_sink(|input| {
             SinkAnalyzeState::create(
@@ -64,6 +70,7 @@ impl FuseTable {
                 table,
                 snapshot_id,
                 input,
+                histogram_info_receiver.clone(),
             )
         })?;
         Ok(())
@@ -73,11 +80,16 @@ impl FuseTable {
 struct SinkAnalyzeState {
     ctx: Arc<dyn TableContext>,
     output_schema: Arc<DataSchema>,
+    input_port: Arc<InputPort>,
 
     catalog: String,
     database: String,
     table: String,
     snapshot_id: SnapshotId,
+    collect_histogram_info: bool,
+    histogram_info_receiver: Receiver<DataBlock>,
+    input_data: Option<DataBlock>,
+    finished: bool,
 }
 
 impl SinkAnalyzeState {
@@ -90,16 +102,21 @@ impl SinkAnalyzeState {
         table: &str,
         snapshot_id: SnapshotId,
         input: Arc<InputPort>,
+        histogram_info_receiver: Receiver<DataBlock>,
     ) -> Result<ProcessorPtr> {
-        let sinker = AsyncSinker::create(input, SinkAnalyzeState {
+        Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
             ctx,
             output_schema,
+            input_port: input,
             catalog: catalog.to_string(),
             database: database.to_string(),
             table: table.to_string(),
             snapshot_id,
-        });
-        Ok(ProcessorPtr::create(sinker))
+            collect_histogram_info: false,
+            histogram_info_receiver,
+            input_data: None,
+            finished: false,
+        })))
     }
 
     #[unboxed_simple]
@@ -164,7 +181,7 @@ impl SinkAnalyzeState {
 
         let snapshot = snapshot.unwrap();
         // 3. Generate new table statistics
-        let table_statistics = TableSnapshotStatistics::new(ndv_states, self.snapshot_id);
+        let table_statistics = TableSnapshotStatistics::new(ndv_states, HashMap::new(), self.snapshot_id);
         let table_statistics_location = table
             .meta_location_generator
             .snapshot_statistics_location_from_uuid(
@@ -194,30 +211,98 @@ impl SinkAnalyzeState {
 
         Ok(true)
     }
-}
-
-#[async_trait]
-impl AsyncSink for SinkAnalyzeState {
-    const NAME: &'static str = "SinkAnalyzeState";
 
     #[unboxed_simple]
     #[async_backtrace::framed]
-    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
-
-        loop {
-            if let Err(e) = self.merge_analyze_states(data_block.clone()).await {
-                if e.code() == mismatch_code {
-                    log::warn!("Retry after got TableVersionMismatched");
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
-
-            break;
+    async fn create_histogram(&mut self, data_block: DataBlock) -> Result<()>{
+        if data_block.num_rows() == 0 {
+            return Ok(());
         }
-        Ok(true)
+        // always use the latest table
+        let tenant = self.ctx.get_tenant();
+        let catalog = CatalogManager::instance()
+            .get_catalog(tenant.tenant_name(), &self.catalog, self.ctx.txn_mgr())
+            .await?;
+        let table = catalog
+            .get_table(&tenant, &self.database, &self.table)
+            .await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = table.read_table_snapshot().await?;
+        if snapshot.is_none() {
+            return Ok(());
+        }
+
+        let table_statistics = table
+            .read_table_snapshot_statistics(snapshot.as_ref())
+            .await?;
+
+        let mut histograms = table_statistics.map(|s| s.histograms.clone()).unwrap_or_default();
+
+
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for SinkAnalyzeState {
+    fn name(&self) -> String {
+        "SinkAnalyzeState".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.input_data.is_some() {
+            if !self.input_port.has_data() {
+                self.input_port.set_need_data();
+            }
+            return Ok(Event::Async);
+        }
+
+
+        if self.input_port.is_finished() {
+            if !self.finished {
+                return Ok(Event::Async);
+            }
+            return Ok(Event::Finished);
+        }
+
+        if self.input_port.has_data() {
+            self.input_data = Some(self.input_port.pull_data().unwrap()?);
+            self.input_port.set_need_data();
+            return Ok(Event::Async);
+        }
+
+        self.input_port.set_need_data();
+        Ok(Event::NeedData)
+    }
+
+    #[async_backtrace::framed]
+    async fn async_process(&mut self) -> Result<()> {
+        if !self.collect_histogram_info {
+            let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
+            if let Some(data_block) = self.input_data.take() {
+                loop {
+                    if let Err(e) = self.merge_analyze_states(data_block.clone()).await {
+                        if e.code() == mismatch_code {
+                            log::warn!("Retry after got TableVersionMismatched");
+                            continue;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                    break;
+                }
+                self.collect_histogram_info = true;
+            }
+        } else if let Ok(res) = self.histogram_info_receiver.recv().await {
+            self.create_histogram(res).await;
+        } else {
+            self.finished = true;
+        }
+        return Ok(());
     }
 }
 
@@ -273,4 +358,36 @@ pub async fn regenerate_statistics(
     }
 
     Ok((col_stats, cluster_stats))
+}
+
+pub struct HistogramInfoSink {
+    sender: Option<Sender<DataBlock>>,
+}
+
+impl HistogramInfoSink {
+    pub fn create(tx: Option<Sender<DataBlock>>, input: Arc<InputPort>) -> Box<dyn Processor> {
+        AsyncSinker::create(input, HistogramInfoSink { sender: tx })
+    }
+}
+
+#[async_trait]
+impl AsyncSink for HistogramInfoSink {
+    const NAME: &'static str = "HistogramInfoSink";
+
+    #[async_backtrace::framed]
+    async fn on_finish(&mut self) -> Result<()> {
+        drop(self.sender.take());
+        Ok(())
+    }
+
+    #[unboxed_simple]
+    #[async_backtrace::framed]
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        if let Some(sender) = self.sender.as_ref() {
+            if sender.send(data_block).await.is_err() {
+                return Err(ErrorCode::Internal("HistogramInfoSink sender failed"));
+            };
+        }
+        Ok(false)
+    }
 }

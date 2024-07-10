@@ -70,6 +70,7 @@ thrift = "0.17.0"
 typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
+async-channel = "1.7.1"
 
 [dev-dependencies]
 criterion = { workspace = true }

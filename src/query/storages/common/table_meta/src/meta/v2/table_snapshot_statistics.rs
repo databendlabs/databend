@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use databend_common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
-
+use databend_common_storage::Histogram;
 use crate::meta::v1;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
@@ -33,14 +33,16 @@ pub struct TableSnapshotStatistics {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
     pub hll: HashMap<ColumnId, MetaHLL>,
+    pub histograms: HashMap<ColumnId, Histogram>
 }
 
 impl TableSnapshotStatistics {
-    pub fn new(hll: HashMap<ColumnId, MetaHLL>, snapshot_id: SnapshotId) -> Self {
+    pub fn new(hll: HashMap<ColumnId, MetaHLL>, histograms: HashMap<ColumnId, Histogram>,snapshot_id: SnapshotId) -> Self {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,
             hll,
+            histograms,
         }
     }
 
@@ -62,6 +64,7 @@ impl From<v1::TableSnapshotStatistics> for TableSnapshotStatistics {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id: value.snapshot_id,
             hll: HashMap::new(),
+            histograms: HashMap::new(),
         }
     }
 }
