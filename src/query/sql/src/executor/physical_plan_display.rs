@@ -21,7 +21,6 @@ use itertools::Itertools;
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::MergeIntoManipulate;
 use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
@@ -46,8 +45,6 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -110,19 +107,12 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
-            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
-                write!(f, "{}", merge_into_row_id_apply)?
-            }
-            PhysicalPlan::MergeIntoAddRowNumber(add_row_number) => write!(f, "{}", add_row_number)?,
             PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
             PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
                 write!(f, "{}", merge_into_manipulate)?
             }
             PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
                 write!(f, "{}", merge_into_organize)?
-            }
-            PhysicalPlan::MergeIntoSerialize(merge_into_serialize) => {
-                write!(f, "{}", merge_into_serialize)?
             }
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
@@ -528,18 +518,6 @@ impl Display for MergeInto {
     }
 }
 
-impl Display for MergeIntoAddRowNumber {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoAddRowNumber")
-    }
-}
-
-impl Display for MergeIntoAppendNotMatched {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoAppendNotMatched")
-    }
-}
-
 impl Display for MergeIntoSplit {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoSplit")
@@ -555,12 +533,6 @@ impl Display for MergeIntoManipulate {
 impl Display for MergeIntoOrganize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoOrganize")
-    }
-}
-
-impl Display for MergeIntoSerialize {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoSerialize")
     }
 }
 

@@ -64,7 +64,7 @@ impl Interpreter for CommitInterpreter {
                 let table_descriptions = req
                     .update_table_metas
                     .iter()
-                    .map(|req| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
+                    .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
                     .collect::<Vec<_>>();
                 let stream_descriptions = req
                     .update_stream_metas
@@ -75,7 +75,8 @@ impl Interpreter for CommitInterpreter {
             };
 
             let mismatched_tids = {
-                let ret = catalog.update_multi_table_meta(req).await;
+                self.ctx.txn_mgr().lock().set_auto_commit();
+                let ret = catalog.retryable_update_multi_table_meta(req).await;
                 if let Err(ref e) = ret {
                     // other errors may occur, especially the version mismatch of streams,
                     // let's log it here for the convenience of diagnostics

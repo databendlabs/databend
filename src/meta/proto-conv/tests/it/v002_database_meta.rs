@@ -53,6 +53,7 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::from_iter(vec![1]),
         from_share: None,
         using_share_endpoint: None,
+        from_share_db_id: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

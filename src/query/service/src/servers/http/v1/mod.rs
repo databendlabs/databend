@@ -13,10 +13,10 @@
 // limitations under the License.
 
 mod http_query_handlers;
-pub mod json_block;
 mod login;
 mod query;
 mod stage;
+pub mod string_block;
 mod suggestions;
 
 pub use http_query_handlers::make_final_uri;
@@ -26,7 +26,6 @@ pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryError;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
-pub(crate) use json_block::JsonBlock;
 pub(crate) use login::login_handler;
 pub use query::ExecuteStateKind;
 pub use query::ExpiringMap;
@@ -36,6 +35,7 @@ pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
 pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
+pub(crate) use string_block::StringBlock;
 pub use suggestions::list_suggestions;
 pub use suggestions::SuggestionsResponse;
 

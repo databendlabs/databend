@@ -1,11 +1,12 @@
 [package]
 name = "databend-common-ast"
-version = "0.0.0"
+version = "0.0.1"
 publish = true
 description = "SQL parser for Databend"
 authors = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
+repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 
 [lib]
 doctest = false
@@ -20,7 +21,7 @@ itertools = { workspace = true }
 logos = "0.12.1"
 minitrace = { workspace = true }
 nom = "7.1.1"
-nom-rule = "0.3.0"
+nom-rule = "0.3.1"
 ordered-float = { workspace = true }
 pratt = "0.4.0"
 pretty = "0.11.3"

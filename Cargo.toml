@@ -52,6 +52,7 @@ members = [
     "src/query/storages/common/index",
     "src/query/storages/common/io",
     "src/query/storages/common/pruner",
+    "src/query/storages/common/stage",
     "src/query/storages/common/txn",
     "src/query/storages/common/table_meta",
     "src/query/storages/delta",
@@ -104,8 +105,8 @@ members = [
     "src/tests/sqlsmith",
 ]
 
-[workspace.dependencies]
 # Workspace dependencies
+[workspace.dependencies]
 databend-common-arrow = { path = "src/common/arrow" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
@@ -198,6 +199,7 @@ databend-storages-common-cache-manager = { path = "src/query/storages/common/cac
 databend-storages-common-index = { path = "src/query/storages/common/index" }
 databend-storages-common-io = { path = "src/query/storages/common/io" }
 databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
+databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 databend-storages-common-txn = { path = "src/query/storages/common/txn" }
 

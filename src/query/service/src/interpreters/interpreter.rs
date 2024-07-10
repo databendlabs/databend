@@ -49,6 +49,8 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::admin::v1::query_profiling::ProfilesCacheElement;
+use crate::servers::admin::v1::query_profiling::ProfilesCacheQueue;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
 use crate::stream::DataBlockStream;
@@ -132,10 +134,16 @@ pub trait Interpreter: Sync + Send {
                         "{}",
                         serde_json::to_string(&QueryProfiles {
                             query_id: query_ctx.get_id(),
-                            profiles: query_profiles,
+                            profiles: query_profiles.clone(),
                             statistics_desc: get_statistics_desc(),
                         })?
                     );
+                    let profiles_queue = ProfilesCacheQueue::instance()?;
+
+                    profiles_queue.append_data(ProfilesCacheElement {
+                        query_id: query_ctx.get_id(),
+                        profiles: query_profiles,
+                    })?;
                 }
 
                 hook_vacuum_temp_files(&query_ctx)?;

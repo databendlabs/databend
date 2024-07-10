@@ -67,6 +67,38 @@ impl<C> NamedCache<C> {
     }
 }
 
+pub trait CacheAccessorExt<K, V, S, M> {
+    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>>;
+}
+
+impl<K, V, S, M, C> CacheAccessorExt<K, V, S, M> for NamedCache<C>
+where
+    C: CacheAccessor<K, V, S, M>,
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
+    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>> {
+        let r = self.get(k);
+        if r.is_none() {
+            metrics_inc_cache_miss_count(len, &self.name);
+        }
+        r
+    }
+}
+
+impl<K, V, S, M, C> CacheAccessorExt<K, V, S, M> for Option<NamedCache<C>>
+where
+    C: CacheAccessor<K, V, S, M>,
+    K: Eq + Hash,
+    S: BuildHasher,
+    M: CountableMeter<K, Arc<V>>,
+{
+    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>> {
+        self.as_ref().and_then(|cache| cache.get_with_len(k, len))
+    }
+}
+
 impl<K, V, S, M, C> CacheAccessor<K, V, S, M> for NamedCache<C>
 where
     C: CacheAccessor<K, V, S, M>,

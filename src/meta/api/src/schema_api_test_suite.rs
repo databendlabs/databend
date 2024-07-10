@@ -19,6 +19,7 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::vec;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -118,6 +119,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -2578,15 +2580,17 @@ impl SchemaApiTestSuite {
                 new_table_meta.statistics = table_statistics;
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
-                mt.update_table_meta(UpdateTableMetaReq {
+                let req = UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    copied_files: None,
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
+                };
+                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    ..Default::default()
                 })
-                .await?;
+                .await?
+                .unwrap();
 
                 let table = mt
                     .get_table((tenant_name, "db1", "tb2").into())
@@ -2605,21 +2609,21 @@ impl SchemaApiTestSuite {
                 let new_table_meta = table.meta.clone();
                 let table_id = table.ident.table_id;
                 let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version + 1),
+                    new_table_meta: new_table_meta.clone(),
+                };
                 let res = mt
-                    .update_table_meta(UpdateTableMetaReq {
-                        table_id,
-                        seq: MatchSeq::Exact(table_version + 1),
-                        new_table_meta: new_table_meta.clone(),
-                        copied_files: None,
-                        deduplicated_label: None,
-                        update_stream_meta: vec![],
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
                     })
-                    .await;
+                    .await?;
 
                 let err = res.unwrap_err();
-                let err = ErrorCode::from(err);
 
-                assert_eq!(ErrorCode::TABLE_VERSION_MISMATCHED, err.code());
+                assert!(!err.is_empty());
             }
 
             info!("--- update table meta, with upsert file req");
@@ -2651,15 +2655,19 @@ impl SchemaApiTestSuite {
                     expire_at: None,
                     fail_if_duplicated: true,
                 };
-                mt.update_table_meta(UpdateTableMetaReq {
+
+                let req = UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    copied_files: Some(upsert_source_table),
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
+                };
+                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    copied_files: vec![(table_id, upsert_source_table)],
+                    ..Default::default()
                 })
-                .await?;
+                .await?
+                .unwrap();
 
                 let table = mt
                     .get_table((tenant_name, "db1", "tb2").into())
@@ -2697,15 +2705,18 @@ impl SchemaApiTestSuite {
                     expire_at: None,
                     fail_if_duplicated: true,
                 };
-                mt.update_table_meta(UpdateTableMetaReq {
+                let req = UpdateTableMetaReq {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
-                    copied_files: Some(upsert_source_table),
-                    deduplicated_label: None,
-                    update_stream_meta: vec![],
+                };
+                mt.update_multi_table_meta(UpdateMultiTableMetaReq {
+                    update_table_metas: vec![(req, table.as_ref().clone())],
+                    copied_files: vec![(table_id, upsert_source_table)],
+                    ..Default::default()
                 })
-                .await?;
+                .await?
+                .unwrap();
 
                 let table = mt
                     .get_table((tenant_name, "db1", "tb2").into())
@@ -2743,19 +2754,21 @@ impl SchemaApiTestSuite {
                     expire_at: None,
                     fail_if_duplicated: true,
                 };
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                };
                 let result = mt
-                    .update_table_meta(UpdateTableMetaReq {
-                        table_id,
-                        seq: MatchSeq::Exact(table_version),
-                        new_table_meta: new_table_meta.clone(),
-                        copied_files: Some(upsert_source_table),
-                        deduplicated_label: None,
-                        update_stream_meta: vec![],
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        copied_files: vec![(table_id, upsert_source_table)],
+                        ..Default::default()
                     })
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
+                assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
             }
         }
         Ok(())
@@ -3588,7 +3601,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -3598,12 +3611,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let _ = mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident,
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let _ = mt.update_multi_table_meta(req).await?;
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -3724,7 +3748,7 @@ impl SchemaApiTestSuite {
 
         let req = CreateTableReq {
             create_option: CreateOption::Create,
-            name_ident: tbl_name_ident,
+            name_ident: tbl_name_ident.clone(),
             table_meta: create_table_meta.clone(),
             as_dropped: false,
         };
@@ -3741,7 +3765,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -3751,12 +3775,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: create_table_meta.clone(),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let _ = mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident.clone(),
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let _ = mt.update_multi_table_meta(req).await?;
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -5647,7 +5682,11 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
         let created_on = Utc::now();
-
+        let tbl_name_ident = TableNameIdent {
+            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
@@ -5663,11 +5702,7 @@ impl SchemaApiTestSuite {
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
+                name_ident: tbl_name_ident.clone(),
                 table_meta: table_meta(created_on),
                 as_dropped: false,
             };
@@ -5685,7 +5720,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -5695,12 +5730,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let _ = mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident.clone(),
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let _ = mt.update_multi_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -5723,7 +5769,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file2".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
                 fail_if_duplicated: true,
@@ -5733,12 +5779,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let _ = mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident.clone(),
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let _ = mt.update_multi_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -7101,6 +7158,11 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
 
         info!("--- prepare db and table");
+        let tbl_name_ident = TableNameIdent {
+            tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
         {
             let plan = CreateDatabaseReq {
                 create_option: CreateOption::Create,
@@ -7115,17 +7177,13 @@ impl SchemaApiTestSuite {
 
             let req = CreateTableReq {
                 create_option: CreateOption::Create,
-                name_ident: TableNameIdent {
-                    tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
+                name_ident: tbl_name_ident.clone(),
                 table_meta: table_meta(created_on),
                 as_dropped: false,
             };
             let resp = mt.create_table(req.clone()).await?;
             table_id = resp.table_id;
-        }
+        };
 
         info!("--- create and get stage file info");
         {
@@ -7137,7 +7195,7 @@ impl SchemaApiTestSuite {
             let mut file_info = BTreeMap::new();
             file_info.insert("file".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -7147,12 +7205,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let _ = mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident.clone(),
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let _ = mt.update_multi_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -7184,7 +7253,7 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -7194,15 +7263,26 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            let result = mt.update_table_meta(req).await;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident.clone(),
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            let result = mt.update_multi_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
+            assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -7228,7 +7308,7 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
-            let req = UpsertTableCopiedFileReq {
+            let copied_file_req = UpsertTableCopiedFileReq {
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: false,
@@ -7238,12 +7318,23 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
-                copied_files: Some(req),
-                deduplicated_label: None,
-                update_stream_meta: vec![],
             };
 
-            mt.update_table_meta(req).await?;
+            let table = mt
+                .get_table(GetTableReq {
+                    inner: tbl_name_ident,
+                })
+                .await?
+                .as_ref()
+                .clone();
+
+            let req = UpdateMultiTableMetaReq {
+                update_table_metas: vec![(req, table)],
+                copied_files: vec![(table_id, copied_file_req)],
+                ..Default::default()
+            };
+
+            mt.update_multi_table_meta(req).await?.unwrap();
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -7408,7 +7499,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             file_infos.insert(format!("file{}", i), stage_info);
         }
 
-        let req = UpsertTableCopiedFileReq {
+        let copied_file_req = UpsertTableCopiedFileReq {
             file_info: file_infos.clone(),
             expire_at: Some((Utc::now().timestamp() + 86400) as u64),
             fail_if_duplicated: true,
@@ -7418,12 +7509,15 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             table_id: self.table_id,
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
-            copied_files: Some(req),
-            deduplicated_label: None,
-            update_stream_meta: vec![],
         };
 
-        self.mt.update_table_meta(req).await?;
+        let req = UpdateMultiTableMetaReq {
+            update_table_metas: vec![(req, Default::default())],
+            copied_files: vec![(self.table_id, copied_file_req)],
+            ..Default::default()
+        };
+
+        self.mt.update_multi_table_meta(req).await?.unwrap();
 
         Ok(file_infos)
     }
