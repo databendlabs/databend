@@ -54,7 +54,6 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::display::display_tuple_field_name;
@@ -119,6 +118,7 @@ use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::planner::semantic::lowering::TypeCheck;
+use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -3351,23 +3351,7 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if !GlobalConfig::instance().query.enable_udf_server {
-            return Err(ErrorCode::Unimplemented(
-                "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
-            ));
-        }
-
-        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-        let address = &udf_definition.address;
-        if udf_server_allow_list
-            .iter()
-            .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-            )));
-        }
-
+        UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Require {} parameters, but got: {}",
@@ -3397,7 +3381,7 @@ impl<'a> TypeChecker<'a> {
                 name,
                 func_name: udf_definition.handler,
                 display_name,
-                udf_type: UDFType::Server(address.clone()),
+                udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
                 arguments: args,
