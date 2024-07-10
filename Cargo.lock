@@ -3117,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -10688,9 +10688,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
+checksum = "8f0f33cd048b8e0f5cd2fc6fd26f4feda8e33b4781673e59fe1406b137600e9d"
 dependencies = [
  "nom",
  "pratt 0.3.0",

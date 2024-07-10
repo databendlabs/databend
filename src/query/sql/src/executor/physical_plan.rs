@@ -24,7 +24,6 @@ use itertools::Itertools;
 
 use super::physical_plans::MergeIntoManipulate;
 use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSerialize;
 use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -58,8 +57,6 @@ use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoAddRowNumber;
-use crate::executor::physical_plans::MergeIntoAppendNotMatched;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -124,12 +121,9 @@ pub enum PhysicalPlan {
 
     /// MergeInto
     MergeInto(Box<MergeInto>),
-    MergeIntoAppendNotMatched(Box<MergeIntoAppendNotMatched>),
-    MergeIntoAddRowNumber(Box<MergeIntoAddRowNumber>),
     MergeIntoSplit(Box<MergeIntoSplit>),
     MergeIntoManipulate(Box<MergeIntoManipulate>),
     MergeIntoOrganize(Box<MergeIntoOrganize>),
-    MergeIntoSerialize(Box<MergeIntoSerialize>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -316,16 +310,6 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeIntoAddRowNumber(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
             PhysicalPlan::MergeIntoSplit(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -337,11 +321,6 @@ impl PhysicalPlan {
                 plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::MergeIntoOrganize(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MergeIntoSerialize(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -455,12 +434,9 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(v) => v.plan_id,
             PhysicalPlan::DeleteSource(v) => v.plan_id,
             PhysicalPlan::MergeInto(v) => v.plan_id,
-            PhysicalPlan::MergeIntoAddRowNumber(v) => v.plan_id,
-            PhysicalPlan::MergeIntoAppendNotMatched(v) => v.plan_id,
             PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
             PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
             PhysicalPlan::MergeIntoOrganize(v) => v.plan_id,
-            PhysicalPlan::MergeIntoSerialize(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
@@ -514,15 +490,12 @@ impl PhysicalPlan {
             PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
-            PhysicalPlan::MergeIntoAddRowNumber(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoOrganize(plan) => plan.output_schema(),
-            PhysicalPlan::MergeIntoSerialize(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
@@ -578,12 +551,9 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
-            PhysicalPlan::MergeIntoAppendNotMatched(_) => "MergeIntoAppendNotMatched".to_string(),
-            PhysicalPlan::MergeIntoAddRowNumber(_) => "AddRowNumber".to_string(),
             PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
             PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
             PhysicalPlan::MergeIntoOrganize(_) => "MergeIntoOrganize".to_string(),
-            PhysicalPlan::MergeIntoSerialize(_) => "MergeIntoSerialize".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
@@ -652,20 +622,11 @@ impl PhysicalPlan {
             }
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MergeIntoAddRowNumber(plan) => {
-                Box::new(std::iter::once(plan.input.as_ref()))
-            }
-            PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
-                Box::new(std::iter::once(plan.input.as_ref()))
-            }
             PhysicalPlan::MergeIntoSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoManipulate(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::MergeIntoOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MergeIntoSerialize(plan) => {
-                Box::new(std::iter::once(plan.input.as_ref()))
-            }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -718,12 +679,9 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoAddRowNumber(_)
-            | PhysicalPlan::MergeIntoAppendNotMatched(_)
             | PhysicalPlan::MergeIntoSplit(_)
             | PhysicalPlan::MergeIntoManipulate(_)
             | PhysicalPlan::MergeIntoOrganize(_)
-            | PhysicalPlan::MergeIntoSerialize(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)

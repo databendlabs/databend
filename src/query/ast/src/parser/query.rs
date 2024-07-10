@@ -395,6 +395,7 @@ pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
     )(i)
 }
 
+#[allow(clippy::type_complexity)]
 pub fn select_target(i: Input) -> IResult<SelectTarget> {
     fn qualified_wildcard_transform(
         res: Option<(Identifier, &Token<'_>, Option<(Identifier, &Token<'_>)>)>,
