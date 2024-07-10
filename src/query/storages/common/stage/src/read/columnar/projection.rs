@@ -36,7 +36,6 @@ pub fn project_columnar(
     let mut pushdown_columns = vec![];
     let mut output_projection = vec![];
 
-    let mut num_inputs = 0;
     for (i, to_field) in output_schema.fields().iter().enumerate() {
         let field_name = to_field.name();
         let expr = match input_schema
@@ -110,12 +109,9 @@ pub fn project_columnar(
                 }
             }
         };
-        if !matches!(expr, Expr::Constant { .. }) {
-            num_inputs += 1;
-        }
         output_projection.push(expr);
     }
-    if num_inputs == 0 {
+    if pushdown_columns.is_empty() {
         return Err(ErrorCode::BadBytes(format!(
             "not column name match in file {location}",
         )));
