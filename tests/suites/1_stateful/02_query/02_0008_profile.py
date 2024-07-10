@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import requests
-import time
 import json
 
 # Define the URLs and credentials
