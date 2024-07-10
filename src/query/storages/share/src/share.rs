@@ -12,51 +12,98 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
+use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
-use databend_common_meta_app::share::ShareTableInfoMap;
 use databend_common_meta_app::share::ShareTableSpec;
+use log::error;
 use opendal::Operator;
 
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareSpecVec {
-    share_specs: BTreeMap<String, ext::ShareSpecExt>,
+pub fn get_share_dir(tenant: &str, share_name: &str) -> String {
+    format!("{}/{}/{}", SHARE_CONFIG_PREFIX, tenant, share_name)
 }
 
-pub fn get_share_spec_location(tenant: &str) -> String {
-    format!("{}/{}/share_specs.json", SHARE_CONFIG_PREFIX, tenant,)
-}
-
-pub fn share_table_info_location(tenant: &str, share_name: &str) -> String {
+pub fn get_share_database_dir(tenant: &str, share_name: &str, db_id: u64) -> String {
     format!(
-        "{}/{}/{}_table_info.json",
+        "{}/{}/{}/{}",
+        SHARE_CONFIG_PREFIX, tenant, share_name, db_id
+    )
+}
+
+pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
+    format!(
+        "{}/{}/{}/share_specs.json",
         SHARE_CONFIG_PREFIX, tenant, share_name
     )
 }
 
+pub fn share_table_info_location(
+    tenant: &str,
+    share_name: &str,
+    db_id: u64,
+    table_id: u64,
+) -> String {
+    format!(
+        "{}/{}/{}/{}/{}_table_info.json",
+        SHARE_CONFIG_PREFIX, tenant, share_name, db_id, table_id
+    )
+}
+
 #[async_backtrace::framed]
-pub async fn save_share_table_info(
+pub async fn save_share_spec(
     tenant: &str,
     operator: Operator,
-    share_table_info: &[ShareTableInfoMap],
+    share_specs: &[ShareSpec],
 ) -> Result<()> {
-    for (share_name, share_table_info) in share_table_info {
-        let location = share_table_info_location(tenant, share_name);
-        match share_table_info {
-            Some(table_info_map) => {
-                operator
-                    .write(&location, serde_json::to_vec(table_info_map)?)
-                    .await?;
-            }
-            None => {
+    for share_spec in share_specs {
+        let share_name = &share_spec.name;
+        let location = get_share_spec_location(tenant, share_name);
+        let share_spec_ext = ext::ShareSpecExt::from_share_spec(share_spec.clone(), &operator);
+        let data = serde_json::to_string(&share_spec_ext)?;
+        operator.write(&location, data).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_table_info(
+    tenant: &str,
+    operator: Operator,
+    share_name: &str,
+    db_id: u64,
+    share_table_id: u64,
+) -> Result<()> {
+    let location = share_table_info_location(tenant, share_name, db_id, share_table_id);
+
+    operator.delete(&location).await?;
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_table_object(
+    tenant: &str,
+    operator: Operator,
+    share_name: &str,
+    revoke_share_object: &[ShareObject],
+) -> Result<()> {
+    for share_object in revoke_share_object {
+        match share_object {
+            ShareObject::Table((db_id, table_id, _share_table)) => {
+                let location = share_table_info_location(tenant, share_name, *db_id, *table_id);
+
                 operator.delete(&location).await?;
+            }
+            ShareObject::Db(db_id) => {
+                let dir = get_share_database_dir(tenant, share_name, *db_id);
+                operator.remove_all(&dir).await?;
             }
         }
     }
@@ -65,30 +112,53 @@ pub async fn save_share_table_info(
 }
 
 #[async_backtrace::framed]
-pub async fn save_share_spec(
+pub async fn update_share_table_info(
     tenant: &str,
     operator: Operator,
-    spec_vec: Option<Vec<ShareSpec>>,
-    share_table_info: Option<Vec<ShareTableInfoMap>>,
+    share_name_vec: &[String],
+    db_id: u64,
+    share_table_info: &TableInfo,
 ) -> Result<()> {
-    if let Some(share_spec) = spec_vec {
-        let location = get_share_spec_location(tenant);
-        let mut share_spec_vec = ShareSpecVec::default();
-        for spec in share_spec {
-            let share_name = spec.name.clone();
-            let share_spec_ext = ext::ShareSpecExt::from_share_spec(spec, &operator);
-            share_spec_vec
-                .share_specs
-                .insert(share_name, share_spec_ext);
+    let data = serde_json::to_string(share_table_info)?;
+    for share_name in share_name_vec {
+        let location =
+            share_table_info_location(tenant, share_name, db_id, share_table_info.ident.table_id);
+
+        if let Err(e) = operator.write(&location, data.clone()).await {
+            error!(
+                "update_share_table_info of share {} table {} error: {:?}",
+                share_name, share_table_info.name, e
+            );
         }
-        operator
-            .write(&location, serde_json::to_vec(&share_spec_vec)?)
-            .await?;
     }
 
-    // save share table info
-    if let Some(share_table_info) = share_table_info {
-        save_share_table_info(tenant, operator, &share_table_info).await?
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_dir(
+    tenant: &str,
+    operator: Operator,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_dir(tenant, &share_spec.name);
+        operator.remove_all(&dir).await?;
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+pub async fn remove_share_db_dir(
+    tenant: &str,
+    operator: Operator,
+    db_id: u64,
+    share_specs: &[ShareSpec],
+) -> Result<()> {
+    for share_spec in share_specs {
+        let dir = get_share_database_dir(tenant, &share_spec.name, db_id);
+        operator.remove_all(&dir).await?;
     }
 
     Ok(())

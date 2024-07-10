@@ -18,10 +18,10 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::InputColumns;
 use databend_common_functions::aggregates::get_layout_offsets;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
@@ -60,21 +60,12 @@ impl WindowFuncAggImpl {
     }
 
     #[inline]
-    pub fn arg_columns(&self, data: &DataBlock) -> Vec<Column> {
-        self.args
-            .iter()
-            .map(|index| {
-                data.get_by_offset(*index)
-                    .value
-                    .as_column()
-                    .cloned()
-                    .unwrap()
-            })
-            .collect()
+    pub fn arg_columns<'a>(&'a self, data: &'a DataBlock) -> InputColumns {
+        InputColumns::new_block_proxy(&self.args, data)
     }
 
     #[inline]
-    pub fn accumulate_row(&self, args: &[Column], row: usize) -> Result<()> {
+    pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
         self.agg.accumulate_row(self.place, args, row)
     }
 

@@ -23,7 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
-use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheAccessorExt;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -160,19 +160,21 @@ impl BlockReader {
 
                 let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
 
-                // first, check column array object cache
-                if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                // first, check in memory table data cache
+                if let Some(cache_array) = column_array_cache.get_with_len(&column_cache_key, len) {
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }
 
-                // and then, check column data cache
-                if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                // and then, check on disk table data cache
+                if let Some(cached_column_raw_data) =
+                    column_data_cache.get_with_len(&column_cache_key, len)
+                {
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     continue;
                 }
 
-                // if all cache missed, prepare the ranges to be read
+                // if all caches missed, prepare the ranges to be read
                 ranges.push((*column_id, offset..(offset + len)));
 
                 // Perf

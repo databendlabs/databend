@@ -30,6 +30,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -49,9 +50,15 @@ impl HashFlightScatter {
         func_ctx: FunctionContext,
         hash_keys: Vec<RemoteExpr>,
         scatter_size: usize,
+        local_pos: usize,
     ) -> Result<Box<dyn FlightScatter>> {
         if hash_keys.len() == 1 {
-            return OneHashKeyFlightScatter::try_create(func_ctx, &hash_keys[0], scatter_size);
+            return OneHashKeyFlightScatter::try_create(
+                func_ctx,
+                &hash_keys[0],
+                scatter_size,
+                local_pos,
+            );
         }
         let hash_key = hash_keys
             .iter()
@@ -79,6 +86,7 @@ struct OneHashKeyFlightScatter {
     scatter_size: usize,
     func_ctx: FunctionContext,
     indices_scalar: Expr,
+    default_scatter_index: u64,
 }
 
 impl OneHashKeyFlightScatter {
@@ -86,7 +94,13 @@ impl OneHashKeyFlightScatter {
         func_ctx: FunctionContext,
         hash_key: &RemoteExpr,
         scatter_size: usize,
+        local_pos: usize,
     ) -> Result<Box<dyn FlightScatter>> {
+        let default_scatter_index = if shuffle_by_block_id_in_merge_into(hash_key) {
+            local_pos as u64
+        } else {
+            0
+        };
         let indices_scalar = check_function(
             None,
             "modulo",
@@ -112,6 +126,7 @@ impl OneHashKeyFlightScatter {
             scatter_size,
             func_ctx,
             indices_scalar,
+            default_scatter_index,
         }))
     }
 }
@@ -122,7 +137,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
         let num = data_block.num_rows();
 
         let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(indices, num)?;
+        let indices = get_hash_values(indices, num, self.default_scatter_index)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
         let block_meta = data_block.get_meta();
@@ -143,7 +158,7 @@ impl FlightScatter for HashFlightScatter {
             let mut hash_keys = Vec::with_capacity(self.hash_key.len());
             for expr in &self.hash_key {
                 let indices = evaluator.run(expr).unwrap();
-                let indices = get_hash_values(indices, num)?;
+                let indices = get_hash_values(indices, num, 0)?;
                 hash_keys.push(indices)
             }
             self.combine_hash_keys(&hash_keys, num)
@@ -186,10 +201,38 @@ impl HashFlightScatter {
     }
 }
 
-fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
+fn shuffle_by_block_id_in_merge_into(expr: &RemoteExpr) -> bool {
+    if let RemoteExpr::FunctionCall {
+        id: FunctionID::Builtin { name, .. },
+        args,
+        ..
+    } = expr
+    {
+        if name == "bit_and" {
+            if let RemoteExpr::FunctionCall {
+                id: FunctionID::Builtin { name, .. },
+                ..
+            } = &args[0]
+            {
+                if name == "bit_shift_right" {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+fn get_hash_values(
+    column: Value<AnyType>,
+    rows: usize,
+    default_scatter_index: u64,
+) -> Result<Buffer<u64>> {
     match column {
         Value::Scalar(c) => match c {
-            databend_common_expression::Scalar::Null => Ok(vec![0; rows].into()),
+            databend_common_expression::Scalar::Null => {
+                Ok(vec![default_scatter_index; rows].into())
+            }
             databend_common_expression::Scalar::Number(NumberScalar::UInt64(x)) => {
                 Ok(vec![x; rows].into())
             }
@@ -205,7 +248,7 @@ fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
                 if null_map.unset_bits() == 0 {
                     Ok(column.column)
                 } else if null_map.unset_bits() == null_map.len() {
-                    Ok(vec![0; rows].into())
+                    Ok(vec![default_scatter_index; rows].into())
                 } else {
                     let mut need_new_vec = true;
                     if let Some(column) = unsafe { column.column.get_mut() } {
@@ -213,7 +256,11 @@ fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
                             .iter_mut()
                             .zip(null_map.iter())
                             .for_each(|(x, valid)| {
-                                *x *= valid as u64;
+                                if valid {
+                                    *x *= valid as u64;
+                                } else {
+                                    *x = default_scatter_index;
+                                }
                             });
                         need_new_vec = false;
                     }
@@ -225,7 +272,7 @@ fn get_hash_values(column: Value<AnyType>, rows: usize) -> Result<Buffer<u64>> {
                             .column
                             .iter()
                             .zip(null_map.iter())
-                            .map(|(x, b)| if b { *x } else { 0 })
+                            .map(|(x, b)| if b { *x } else { default_scatter_index })
                             .collect())
                     }
                 }

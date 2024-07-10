@@ -85,12 +85,19 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let (catalog_name, database_name, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let fully_table = self.fully_table_identifier(catalog, database, table);
+        let (catalog_name, database_name, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
+
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
-            .await?;
+            .await
+            .map_err(|err| fully_table.not_found_suggest_error(err))?;
+
         let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {

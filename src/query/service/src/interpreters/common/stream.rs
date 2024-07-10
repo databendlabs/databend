@@ -121,8 +121,7 @@ where F: Fn(&TableEntry) -> bool {
 }
 
 pub struct StreamTableUpdates {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
-    pub table_infos: Vec<TableInfo>,
+    pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
 }
 pub async fn query_build_update_stream_req(
     ctx: &Arc<QueryContext>,
@@ -142,11 +141,9 @@ pub async fn query_build_update_stream_req(
 
     let cap = streams.len();
     let mut update_table_meta_reqs = Vec::with_capacity(cap);
-    let mut table_infos = Vec::with_capacity(cap);
     for table in streams.into_iter() {
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let stream_info = stream.get_table_info();
-        table_infos.push(stream_info.clone());
 
         let source_table = stream.source_table(ctx.clone()).await?;
         let inner_fuse = FuseTable::try_from_table(source_table.as_ref())?;
@@ -161,18 +158,17 @@ pub async fn query_build_update_stream_req(
         new_table_meta.options = options;
         new_table_meta.updated_on = Utc::now();
 
-        update_table_meta_reqs.push(UpdateTableMetaReq {
-            table_id: stream_info.ident.table_id,
-            seq: MatchSeq::Exact(stream_info.ident.seq),
-            new_table_meta,
-            copied_files: None,
-            update_stream_meta: vec![],
-            deduplicated_label: None,
-        });
+        update_table_meta_reqs.push((
+            UpdateTableMetaReq {
+                table_id: stream_info.ident.table_id,
+                seq: MatchSeq::Exact(stream_info.ident.seq),
+                new_table_meta,
+            },
+            stream_info.clone(),
+        ));
     }
 
     Ok(Some(StreamTableUpdates {
         update_table_metas: update_table_meta_reqs,
-        table_infos,
     }))
 }

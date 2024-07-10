@@ -31,6 +31,7 @@ use log::info;
 
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
+use crate::CacheAccessorExt;
 use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
@@ -70,7 +71,7 @@ pub struct TableDataCache<T = LruDiskCacheHolder> {
     _cache_populator: DiskCachePopulator,
 }
 
-const TABLE_DATA_CACHE_NAME: &str = "table_data";
+pub const DISK_TABLE_DATA_CACHE_NAME: &str = "disk_cache_table_data";
 
 pub struct TableDataCacheBuilder;
 
@@ -98,16 +99,32 @@ impl TableDataCacheBuilder {
     }
 }
 
+impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
+    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
+        let r = self.get(k);
+        if r.is_none() {
+            metrics_inc_cache_miss_count(len, DISK_TABLE_DATA_CACHE_NAME);
+        }
+        r
+    }
+}
+
+impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for Option<TableDataCache> {
+    fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
+        self.as_ref().and_then(|cache| cache.get_with_len(k, len))
+    }
+}
+
 impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
-        metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
+        metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
-            metrics_inc_cache_hit_count(1, TABLE_DATA_CACHE_NAME);
             Profile::record_usize_profile(ProfileStatisticsName::ScanCacheBytes, item.len());
+            metrics_inc_cache_hit_count(1, DISK_TABLE_DATA_CACHE_NAME);
             Some(item)
         } else {
-            metrics_inc_cache_miss_count(1, TABLE_DATA_CACHE_NAME);
+            metrics_inc_cache_miss_count(1, DISK_TABLE_DATA_CACHE_NAME);
             None
         }
     }
@@ -119,11 +136,11 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
             let msg = CacheItem { key: k, value: v };
             match self.population_queue.try_send(msg) {
                 Ok(_) => {
-                    metrics_inc_cache_population_pending_count(1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(TrySendError::Full(_)) => {
-                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
-                    metrics_inc_cache_population_overflow_count(1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_overflow_count(1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     error!("table data cache population thread is down");
@@ -167,7 +184,7 @@ where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync +
                         }
                     }
                     self.cache.put(key, value);
-                    metrics_inc_cache_population_pending_count(-1, TABLE_DATA_CACHE_NAME);
+                    metrics_inc_cache_population_pending_count(-1, DISK_TABLE_DATA_CACHE_NAME);
                 }
                 Err(_) => {
                     info!("table data cache worker shutdown");

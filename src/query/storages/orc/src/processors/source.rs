@@ -27,12 +27,12 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 use orc_rust::async_arrow_reader::StripeFactory;
 use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
-use crate::orc_file_partition::OrcFilePartition;
 use crate::strip::StripeInMemory;
 use crate::utils::map_orc_error;
 
@@ -81,7 +81,7 @@ impl ORCSource {
             Some(part) => part,
             None => return Ok(false),
         };
-        let file = OrcFilePartition::from_part(&part)?.clone();
+        let file = SingleFilePartition::from_part(&part)?.clone();
         let path = file.path.clone();
         let size = file.size;
 

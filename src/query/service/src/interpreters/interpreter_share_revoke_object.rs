@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::RevokeShareObjectReq;
+use databend_common_storages_share::remove_share_table_object;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::UserApiProvider;
 
@@ -61,13 +62,24 @@ impl Interpreter for RevokeShareObjectInterpreter {
         };
         let resp = meta_api.revoke_share_object(req).await?;
 
-        save_share_spec(
-            self.ctx.get_tenant().tenant_name(),
-            self.ctx.get_application_level_data_operator()?.operator(),
-            resp.spec_vec,
-            Some(vec![resp.share_table_info]),
-        )
-        .await?;
+        if let Some(share_spec) = &resp.share_spec {
+            save_share_spec(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &[share_spec.clone()],
+            )
+            .await?;
+
+            if let Some(revoke_object) = resp.revoke_object {
+                remove_share_table_object(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    &[revoke_object],
+                )
+                .await?;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }
