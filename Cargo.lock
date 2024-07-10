@@ -9874,7 +9874,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2caa5afb8bf9f3a2652760ce7d4f62d21c4d5a423e68466fca30df82f2330164"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.4",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -12112,7 +12112,7 @@ dependencies = [
 [[package]]
 name = "proj"
 version = "0.27.2"
-source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#17fa19f6133b87266c39952479e675d6a8d81fed"
+source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#0ee2597690b906c5eed44777eaaef19c888a016a"
 dependencies = [
  "geo-types",
  "libc",
@@ -12124,7 +12124,7 @@ dependencies = [
 [[package]]
 name = "proj-sys"
 version = "0.24.0"
-source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#17fa19f6133b87266c39952479e675d6a8d81fed"
+source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#0ee2597690b906c5eed44777eaaef19c888a016a"
 dependencies = [
  "cmake",
  "flate2",
