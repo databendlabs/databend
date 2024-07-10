@@ -480,15 +480,13 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         })
     }
 
+    plan.change_join_order = join_order_changed;
     let distributed = !join_s_expr.has_merge_exchange();
     if opt_ctx.enable_distributed_optimization && distributed {
         let merge_optimizer = MergeOptimizer::create();
-        // If inner join && !join_order_changed, source will broadcast,
-        // others use shuffle.
-        if matches!(
-            join_op.join_type,
-            JoinType::Left | JoinType::LeftAnti | JoinType::Inner if join_order_changed
-        ) && merge_optimizer.merge_matcher.matches(&join_s_expr)
+        // Left join changes to shuffle.
+        if matches!(join_op.join_type, JoinType::Left | JoinType::LeftAnti)
+            && merge_optimizer.merge_matcher.matches(&join_s_expr)
         {
             join_s_expr = merge_optimizer.optimize(&join_s_expr)?;
         };

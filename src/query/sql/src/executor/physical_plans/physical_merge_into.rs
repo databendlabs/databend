@@ -118,6 +118,7 @@ impl PhysicalPlanBuilder {
             merge_type,
             distributed,
             row_id_index,
+            change_join_order,
             can_try_update_column_only,
             lazy_columns,
             ..
@@ -184,7 +185,9 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        if *distributed && !is_insert_only {
+        let source_is_broadcast =
+            matches!(merge_type, MergeIntoType::MatchedOnly) && !change_join_order;
+        if *distributed && !is_insert_only && !source_is_broadcast {
             let mut row_id_column = None;
             for column_binding in bind_context.columns.iter() {
                 if BindContext::match_column_binding(

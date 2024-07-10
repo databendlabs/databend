@@ -561,6 +561,7 @@ impl Binder {
             merge_type,
             distributed: false,
             row_id_index,
+            change_join_order: false,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lazy_columns,
             lock_guard,
