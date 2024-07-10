@@ -104,8 +104,8 @@ members = [
     "src/tests/sqlsmith",
 ]
 
-[workspace.dependencies]
 # Workspace dependencies
+[workspace.dependencies]
 databend-common-arrow = { path = "src/common/arrow" }
 databend-common-ast = { path = "src/query/ast" }
 databend-common-async-functions = { path = "src/query/async_functions" }
