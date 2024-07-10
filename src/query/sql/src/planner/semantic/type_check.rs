@@ -151,7 +151,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::ScalarExpr::ConstantExpr as SConstantExpr;
 
 /// A helper for type checking.
 ///
@@ -2993,7 +2992,7 @@ impl<'a> TypeChecker<'a> {
                         not: true,
                     };
                     if let Ok(res) = self.resolve(&is_not_null_expr) {
-                        if let SConstantExpr(c) = res.0 {
+                        if let ScalarExpr::ConstantExpr(c) = res.0 {
                             if Scalar::Boolean(false) == c.value {
                                 continue;
                             }
