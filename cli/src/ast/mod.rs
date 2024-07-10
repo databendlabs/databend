@@ -14,7 +14,10 @@
 
 mod tokenizer;
 
-use sqlformat::{Indent, QueryParams};
+use databend_common_ast::{
+    ast::pretty_statement,
+    parser::{parse_sql, Dialect},
+};
 pub use tokenizer::*;
 
 use crate::session::QueryKind;
@@ -24,10 +27,7 @@ pub fn format_query(query: &str) -> String {
     if kind == QueryKind::Put || kind == QueryKind::Get {
         return query.to_owned();
     }
-    let options = sqlformat::FormatOptions {
-        indent: Indent::Spaces(2),
-        uppercase: true,
-        lines_between_queries: 1,
-    };
-    sqlformat::format(query, &QueryParams::None, options)
+    let tokens = databend_common_ast::parser::tokenize_sql(query).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::Experimental).unwrap();
+    pretty_statement(stmt, 80).unwrap()
 }
