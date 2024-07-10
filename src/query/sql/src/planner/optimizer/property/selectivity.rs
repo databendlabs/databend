@@ -27,7 +27,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_storage::Datum;
+use databend_common_storage::{Datum, DEFAULT_HISTOGRAM_BUCKETS};
 use databend_common_storage::F64;
 
 use crate::optimizer::histogram_from_ndv;

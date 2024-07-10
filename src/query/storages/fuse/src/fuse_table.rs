@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -791,12 +791,14 @@ impl Table for FuseTable {
             if let Some(table_statistics) = table_statistics {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    table_statistics.histograms.clone(),
                     Some(table_statistics.column_distinct_values()),
                     snapshot.summary.row_count,
                 )
             } else {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    HashMap::new(),
                     None,
                     snapshot.summary.row_count,
                 )

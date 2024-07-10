@@ -22,13 +22,12 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::F64;
-use databend_common_storage::Datum;
+use databend_common_storage::{Datum, DEFAULT_HISTOGRAM_BUCKETS, Histogram};
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Distribution;
-use crate::optimizer::Histogram;
 use crate::optimizer::NewStatistic;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -37,7 +36,6 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::optimizer::UniformSampleSet;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -511,10 +509,12 @@ impl Operator for Join {
             left_stat_info.cardinality,
             left_stat_info.statistics.clone(),
         );
+        dbg!(&left_statistics);
         let (mut right_cardinality, mut right_statistics) = (
             right_stat_info.cardinality,
             right_stat_info.statistics.clone(),
         );
+        dbg!(&right_statistics);
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
         let inner_join_cardinality = self.inner_join_cardinality(

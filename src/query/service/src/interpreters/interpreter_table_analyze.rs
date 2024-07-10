@@ -22,7 +22,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
@@ -33,7 +32,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
-
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -178,30 +177,39 @@ impl Interpreter for AnalyzeTableInterpreter {
 
             log::info!("Analyze via sql {:?}", sql);
 
-            let histogram_sql = index_cols
+            let mut histogram_sql = index_cols
                 .iter()
-                .map(|c| {
+                .enumerate()
+                .map(|(i, c)| {
                     format!(
                         "WITH quantiles_{} AS (
-                       select {}, NTILE(100) OVER (ORDER BY {}) AS quantile
-                       from {}.{} where {} is distinct from NULL
-                     )
+                            SELECT {}, NTILE({}) OVER (ORDER BY {}) AS quantile
+                            FROM {}.{} WHERE {} IS DISTINCT FROM NULL
+                        )
 
-                    SELECT quantile,
-                      COUNT(DISTINCT {}) AS ndv,
-                      MAX({}) AS max_value
-                    FROM quantiles_{}
-                    GROUP BY quantile
-                    ORDER BY quantile \n",
-                        c.0, c.1, c.1, plan.database, plan.table, c.1, c.1, c.1, c.0
+                        SELECT quantile + {} * 100 AS quantile,
+                            COUNT(DISTINCT {}) AS ndv,
+                            MAX({}) AS max_value,
+                            COUNT() as count,
+                            {} AS col_index,
+                        FROM quantiles_{}
+                        GROUP BY quantile \n",
+                        c.0, c.1, DEFAULT_HISTOGRAM_BUCKETS, c.1, plan.database, plan.table, c.1, i, c.1, c.1, c.0, c.0
                     )
                 })
+                .collect::<Vec<_>>()
                 .join(" UNION ALL ");
+
+            histogram_sql = format!(
+                "WITH combined_histograms AS ({})
+                 SELECT * FROM combined_histograms ORDER BY quantile;",
+                histogram_sql
+            );
 
             log::info!("Generate histogram by sql {:?}", histogram_sql);
 
             let (plan, plan_schema) = self.plan_sql(sql).await?;
-            let (histogram_plan, histogram_schema) = self.plan_sql(histogram_sql).await?;
+            let (histogram_plan, _) = self.plan_sql(histogram_sql).await?;
 
             let mut build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &plan).await?;

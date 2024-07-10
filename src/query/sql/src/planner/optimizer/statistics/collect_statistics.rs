@@ -67,6 +67,7 @@ impl CollectStatisticsOptimizer {
                     .await?;
 
                 let mut column_stats = HashMap::new();
+                let mut histograms = HashMap::new();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -81,6 +82,9 @@ impl CollectStatisticsOptimizer {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(col_id as ColumnId);
                                 column_stats.insert(*column_index, col_stat.cloned());
+                                let histogram =
+                                    column_statistics_provider.histogram(col_id as ColumnId);
+                                histograms.insert(*column_index, histogram);
                             }
                         }
                     }
@@ -90,6 +94,7 @@ impl CollectStatisticsOptimizer {
                 scan.statistics = Arc::new(Statistics {
                     table_stats,
                     column_stats,
+                    histograms,
                 });
 
                 Ok(s_expr.replace_plan(Arc::new(RelOperator::Scan(scan))))

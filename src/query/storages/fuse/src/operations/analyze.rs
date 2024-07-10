@@ -26,6 +26,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
@@ -36,6 +37,9 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
+use databend_common_storage::{Datum, DEFAULT_HISTOGRAM_BUCKETS};
+use databend_common_storage::Histogram;
+use databend_common_storage::HistogramBucket;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::MetaHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -90,6 +94,8 @@ struct SinkAnalyzeState {
     histogram_info_receiver: Receiver<DataBlock>,
     input_data: Option<DataBlock>,
     finished: bool,
+    ndv_states: HashMap<ColumnId, MetaHLL>,
+    histograms: HashMap<ColumnId, Histogram>,
 }
 
 impl SinkAnalyzeState {
@@ -116,16 +122,12 @@ impl SinkAnalyzeState {
             histogram_info_receiver,
             input_data: None,
             finished: false,
+            ndv_states: Default::default(),
+            histograms: Default::default(),
         })))
     }
 
-    #[unboxed_simple]
-    #[async_backtrace::framed]
-    pub async fn merge_analyze_states(&mut self, data_block: DataBlock) -> Result<bool> {
-        if data_block.num_rows() == 0 {
-            return Ok(false);
-        }
-
+    async fn get_table(&self) -> Result<Arc<dyn Table>> {
         // always use the latest table
         let tenant = self.ctx.get_tenant();
         let catalog = CatalogManager::instance()
@@ -134,11 +136,21 @@ impl SinkAnalyzeState {
         let table = catalog
             .get_table(&tenant, &self.database, &self.table)
             .await?;
+        Ok(table)
+    }
 
+    #[unboxed_simple]
+    #[async_backtrace::framed]
+    pub async fn merge_analyze_states(&mut self, data_block: DataBlock) -> Result<()> {
+        if data_block.num_rows() == 0 {
+            return Ok(());
+        }
+        let table = self.get_table().await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let snapshot = table.read_table_snapshot().await?;
+
         if snapshot.is_none() {
-            return Ok(true);
+            return Ok(());
         }
         let table_statistics = table
             .read_table_snapshot_statistics(snapshot.as_ref())
@@ -179,9 +191,71 @@ impl SinkAnalyzeState {
             }
         }
 
+        self.ndv_states = ndv_states;
+        Ok(())
+    }
+
+    #[unboxed_simple]
+    #[async_backtrace::framed]
+    async fn create_histogram(&mut self, data_block: DataBlock) -> Result<()> {
+        if data_block.num_rows() == 0 {
+            return Ok(());
+        }
+        let table = self.get_table().await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = table.read_table_snapshot().await?;
+        if snapshot.is_none() {
+            return Ok(());
+        }
+
+        let table_statistics = table
+            .read_table_snapshot_statistics(snapshot.as_ref())
+            .await?;
+
+        let mut histograms = table_statistics
+            .map(|s| s.histograms.clone())
+            .unwrap_or_default();
+
+        // Each column has a histogram and a histogram has `DEFAULT_HISTOGRAM_BUCKETS` buckets
+        for chunk in data_block.split_by_rows_no_tail(DEFAULT_HISTOGRAM_BUCKETS).iter() {
+            let mut buckets = Vec::with_capacity(DEFAULT_HISTOGRAM_BUCKETS);
+            let last_column = chunk.columns().last().unwrap();
+            let value = last_column.value.index(0).clone().unwrap();
+            let col_id = value.as_number().unwrap().as_u_int32().unwrap();
+            for row in 0..chunk.num_rows() {
+                let column = &chunk.columns()[1];
+                let value = column.value.index(row).clone().unwrap();
+                let number = value.as_number().unwrap();
+                let ndv = number.as_u_int64().unwrap();
+                let upper_bound =
+                    Datum::from_scalar(chunk.columns()[2].value.index(row).unwrap().to_owned())
+                        .ok_or_else(|| {
+                            ErrorCode::Internal("Don't support the type to generate histogram")
+                        })?;
+                let count_col = &chunk.columns()[3];
+                let val = count_col.value.index(row).clone().unwrap();
+                let number = val.as_number().unwrap();
+                let count = number.as_u_int64().unwrap();
+                buckets.push(HistogramBucket::new(upper_bound, *count as f64, *ndv as f64));
+            }
+            histograms.insert(*col_id, Histogram::new(buckets));
+        }
+
+        self.histograms = histograms;
+        Ok(())
+    }
+
+    async fn commit_statistics(&self) -> Result<()> {
+        let table = self.get_table().await?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let snapshot = table.read_table_snapshot().await?;
         let snapshot = snapshot.unwrap();
         // 3. Generate new table statistics
-        let table_statistics = TableSnapshotStatistics::new(ndv_states, HashMap::new(), self.snapshot_id);
+        let table_statistics = TableSnapshotStatistics::new(
+            self.ndv_states.clone(),
+            self.histograms.clone(),
+            self.snapshot_id,
+        );
         let table_statistics_location = table
             .meta_location_generator
             .snapshot_statistics_location_from_uuid(
@@ -207,39 +281,7 @@ impl SinkAnalyzeState {
             &None,
             &table.operator,
         )
-        .await?;
-
-        Ok(true)
-    }
-
-    #[unboxed_simple]
-    #[async_backtrace::framed]
-    async fn create_histogram(&mut self, data_block: DataBlock) -> Result<()>{
-        if data_block.num_rows() == 0 {
-            return Ok(());
-        }
-        // always use the latest table
-        let tenant = self.ctx.get_tenant();
-        let catalog = CatalogManager::instance()
-            .get_catalog(tenant.tenant_name(), &self.catalog, self.ctx.txn_mgr())
-            .await?;
-        let table = catalog
-            .get_table(&tenant, &self.database, &self.table)
-            .await?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot = table.read_table_snapshot().await?;
-        if snapshot.is_none() {
-            return Ok(());
-        }
-
-        let table_statistics = table
-            .read_table_snapshot_statistics(snapshot.as_ref())
-            .await?;
-
-        let mut histograms = table_statistics.map(|s| s.histograms.clone()).unwrap_or_default();
-
-
-        todo!()
+        .await
     }
 }
 
@@ -261,7 +303,6 @@ impl Processor for SinkAnalyzeState {
             return Ok(Event::Async);
         }
 
-
         if self.input_port.is_finished() {
             if !self.finished {
                 return Ok(Event::Async);
@@ -282,24 +323,25 @@ impl Processor for SinkAnalyzeState {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.collect_histogram_info {
-            let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
             if let Some(data_block) = self.input_data.take() {
-                loop {
-                    if let Err(e) = self.merge_analyze_states(data_block.clone()).await {
-                        if e.code() == mismatch_code {
-                            log::warn!("Retry after got TableVersionMismatched");
-                            continue;
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                    break;
-                }
+                self.merge_analyze_states(data_block.clone()).await?;
                 self.collect_histogram_info = true;
             }
         } else if let Ok(res) = self.histogram_info_receiver.recv().await {
-            self.create_histogram(res).await;
+            self.create_histogram(res).await?;
         } else {
+            let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
+            loop {
+                if let Err(e) = self.commit_statistics().await {
+                    if e.code() == mismatch_code {
+                        log::warn!("Retry after got TableVersionMismatched");
+                        continue;
+                    } else {
+                        return Err(e);
+                    }
+                }
+                break;
+            }
             self.finished = true;
         }
         return Ok(());
