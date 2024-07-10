@@ -4174,7 +4174,6 @@ dependencies = [
  "chrono",
  "dashmap",
  "databend-common-arrow",
- "databend-common-auth",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
