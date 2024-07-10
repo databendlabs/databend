@@ -2977,7 +2977,6 @@ impl<'a> TypeChecker<'a> {
                 // if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
                 // with constant Literal::Null arguments removed.
                 let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
-
                 for arg in args.iter() {
                     if let Expr::Literal {
                         span: _,
@@ -2992,6 +2991,13 @@ impl<'a> TypeChecker<'a> {
                         expr: Box::new((*arg).clone()),
                         not: true,
                     };
+                    if let Ok(res) = self.resolve(&is_not_null_expr) {
+                        if let ScalarExpr::ConstantExpr(c) = res.0 {
+                            if Scalar::Boolean(false) == c.value {
+                                continue;
+                            }
+                        }
+                    }
 
                     let assume_not_null_expr = Expr::FunctionCall {
                         span,
