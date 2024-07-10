@@ -122,6 +122,10 @@ impl TxnBuffer {
             }
         }
     }
+
+    fn snapshots(&mut self) -> HashMap<u64, TableSnapshot> {
+        std::mem::take(&mut self.snapshots)
+    }
 }
 
 impl TxnManager {
@@ -302,5 +306,9 @@ impl TxnManager {
 
     pub fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: TableSnapshot) {
         self.txn_buffer.upsert_table_snapshot(table_id, snapshot);
+    }
+
+    pub fn snapshots(&mut self) -> HashMap<u64, TableSnapshot> {
+        self.txn_buffer.snapshots()
     }
 }

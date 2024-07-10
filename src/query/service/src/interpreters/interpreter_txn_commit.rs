@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_txn::TxnManagerRef;
 use log::error;
@@ -58,6 +59,32 @@ impl Interpreter for CommitInterpreter {
         if is_active {
             let catalog = self.ctx.get_default_catalog()?;
 
+            {
+                let snapshots = self.ctx.txn_mgr().lock().snapshots();
+                for (table_id, snapshot) in snapshots {
+                    let table_info = self
+                        .ctx
+                        .txn_mgr()
+                        .lock()
+                        .get_table_from_buffer_by_id(table_id)
+                        .ok_or_else(|| {
+                            ErrorCode::UnknownTable(format!(
+                                "Unknown table id in txn manager: {}",
+                                table_id
+                            ))
+                        })?;
+                    let table = catalog.get_table_by_info(&table_info)?;
+                    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                    let dal = fuse_table.get_operator();
+                    let location = fuse_table.snapshot_loc().await?.ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Table {} has no snapshot location",
+                            table_info.name
+                        ))
+                    })?;
+                    dal.write(&location, snapshot.to_bytes()?).await?;
+                }
+            }
             let req = self.ctx.txn_mgr().lock().req();
 
             let update_summary = {
