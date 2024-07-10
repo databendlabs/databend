@@ -62,7 +62,6 @@ impl Binder {
             }
 
             RelOperator::Exchange(_)
-            | RelOperator::AddRowNumber(_)
             | RelOperator::Scan(_)
             | RelOperator::CteScan(_)
             | RelOperator::DummyTableScan(_)
