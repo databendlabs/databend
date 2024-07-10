@@ -22,7 +22,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_pipeline_core::PlanProfile;
-use databend_common_storages_system::ProfilesCacheQueue;
+use databend_common_storages_system::ProfilesLogQueue;
 use http::StatusCode;
 use poem::web::Json;
 use poem::web::Path;
@@ -118,7 +118,7 @@ async fn get_cluster_profile(query_id: &str) -> Result<Vec<PlanProfile>, ErrorCo
 }
 
 pub fn get_profile_from_cache(target: &str) -> Result<Vec<PlanProfile>, ErrorCode> {
-    let profiles_queue = ProfilesCacheQueue::instance()?;
+    let profiles_queue = ProfilesLogQueue::instance()?;
     for element in profiles_queue.data.read().event_queue.iter().flatten() {
         if element.query_id == target {
             return Ok(element.profiles.clone());

@@ -56,8 +56,8 @@ impl SyncSystemTable for QueriesProfilingTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let queries_profiles = ctx.get_queries_profile();
 
-        let cache_queue = ProfilesCacheQueue::instance()?;
-        let cache_profiles: Vec<ProfilesCacheElement> = cache_queue
+        let cache_queue = ProfilesLogQueue::instance()?;
+        let cache_profiles: Vec<ProfilesLogElement> = cache_queue
             .data
             .read()
             .event_queue
@@ -164,12 +164,12 @@ impl QueriesProfilingTable {
 }
 
 #[derive(Clone)]
-pub struct ProfilesCacheElement {
+pub struct ProfilesLogElement {
     pub query_id: String,
     pub profiles: Vec<PlanProfile>,
 }
 
-impl SystemLogElement for ProfilesCacheElement {
+impl SystemLogElement for ProfilesLogElement {
     const TABLE_NAME: &'static str = "profiles_cache_not_table";
     fn schema() -> TableSchemaRef {
         unreachable!()
@@ -182,4 +182,4 @@ impl SystemLogElement for ProfilesCacheElement {
     }
 }
 
-pub type ProfilesCacheQueue = SystemLogQueue<ProfilesCacheElement>;
+pub type ProfilesLogQueue = SystemLogQueue<ProfilesLogElement>;

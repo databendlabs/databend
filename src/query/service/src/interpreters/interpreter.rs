@@ -34,8 +34,8 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
-use databend_common_storages_system::ProfilesCacheElement;
-use databend_common_storages_system::ProfilesCacheQueue;
+use databend_common_storages_system::ProfilesLogElement;
+use databend_common_storages_system::ProfilesLogQueue;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use log::error;
@@ -138,9 +138,9 @@ pub trait Interpreter: Sync + Send {
                             statistics_desc: get_statistics_desc(),
                         })?
                     );
-                    let profiles_queue = ProfilesCacheQueue::instance()?;
+                    let profiles_queue = ProfilesLogQueue::instance()?;
 
-                    profiles_queue.append_data(ProfilesCacheElement {
+                    profiles_queue.append_data(ProfilesLogElement {
                         query_id: query_ctx.get_id(),
                         profiles: query_profiles,
                     })?;
