@@ -19,7 +19,6 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 enum-as-inner = "0.5"
-log = { workspace = true }
 parquet = { workspace = true }
 rmp-serde = "1.1.1"
 serde = { workspace = true }
