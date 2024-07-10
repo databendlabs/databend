@@ -4439,7 +4439,6 @@ name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4456,6 +4455,7 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
@@ -4472,7 +4472,6 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4491,6 +4490,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
@@ -4596,6 +4596,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
  "futures",
@@ -5399,6 +5400,21 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "databend-storages-common-stage"
+version = "0.1.0"
+dependencies = [
+ "arrow-cast",
+ "arrow-schema",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
  "serde",
  "typetag",
 ]
