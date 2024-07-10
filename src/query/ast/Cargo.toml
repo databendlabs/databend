@@ -6,6 +6,7 @@ description = "SQL parser for Databend"
 authors = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
+repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 
 [lib]
 doctest = false
