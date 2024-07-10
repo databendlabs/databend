@@ -17,17 +17,23 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_factory::NavigationPoint;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
-use databend_common_sql::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
+
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -42,6 +48,28 @@ pub struct AnalyzeTableInterpreter {
 impl AnalyzeTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AnalyzeTablePlan) -> Result<Self> {
         Ok(AnalyzeTableInterpreter { ctx, plan })
+    }
+
+    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, DataSchemaRef)> {
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(&sql).await?;
+        let (select_plan, schema) = match &plan {
+            Plan::Query {
+                s_expr,
+                metadata,
+                bind_context,
+                ..
+            } => {
+                let mut builder =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                (
+                    builder.build(s_expr, bind_context.column_set()).await?,
+                    bind_context.output_schema(),
+                )
+            }
+            _ => unreachable!(),
+        };
+        Ok((select_plan, schema))
     }
 }
 
@@ -143,66 +171,71 @@ impl Interpreter for AnalyzeTableInterpreter {
                 })
                 .join(", ");
 
-            let levels = generate_quantile_levels(DEFAULT_HISTOGRAM_BUCKETS);
-            let quantile_select_expr = index_cols
-                .iter()
-                .map(|c| {
-                    format!(
-                        "QUANTILE_DISC({})({}) as quantile_{}",
-                        levels, c.1, c.0
-                    )
-                })
-                .join(", ");
-
             let sql = format!(
-                "SELECT {ndv_select_expr}, {is_full} as is_full, {quantile_select_expr} from {}.{} {temporal_str}",
+                "SELECT {ndv_select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
                 plan.database, plan.table,
             );
 
             log::info!("Analyze via sql {:?}", sql);
 
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&sql).await?;
-            let (select_plan, schema) = match &plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    let mut builder1 =
-                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                    (
-                        builder1.build(s_expr, bind_context.column_set()).await?,
-                        bind_context.output_schema(),
+            let histogram_sql = index_cols
+                .iter()
+                .map(|c| {
+                    format!(
+                        "WITH quantiles_{} AS (
+                       select {}, NTILE(100) OVER (ORDER BY {}) AS quantile
+                       from {}.{} where {} is distinct from NULL
+                     )
+
+                    SELECT quantile,
+                      COUNT(DISTINCT {}) AS ndv,
+                      MAX({}) AS max_value
+                    FROM quantiles_{}
+                    GROUP BY quantile
+                    ORDER BY quantile \n",
+                        c.0, c.1, c.1, plan.database, plan.table, c.1, c.1, c.1, c.0
                     )
-                }
-                _ => unreachable!(),
-            };
+                })
+                .join(" UNION ALL ");
+
+            log::info!("Generate histogram by sql {:?}", histogram_sql);
+
+            let (plan, plan_schema) = self.plan_sql(sql).await?;
+            let (histogram_plan, histogram_schema) = self.plan_sql(histogram_sql).await?;
 
             let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &select_plan).await?;
+                build_query_pipeline_without_render_result_set(&self.ctx, &plan).await?;
+
+            let mut histogram_build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &histogram_plan).await?;
+            let (tx, rx) = async_channel::unbounded();
+            histogram_build_res.main_pipeline.add_sink(|input_port| {
+                Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                    Some(tx.clone()),
+                    input_port,
+                )))
+            })?;
+
+            build_res
+                .sources_pipelines
+                .push(histogram_build_res.main_pipeline.finalize());
+            build_res
+                .sources_pipelines
+                .extend(histogram_build_res.sources_pipelines);
 
             FuseTable::do_analyze(
                 self.ctx.clone(),
-                schema,
+                plan_schema,
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
                 snapshot.snapshot_id,
                 &mut build_res.main_pipeline,
+                rx,
             )?;
             return Ok(build_res);
         }
 
         return Ok(PipelineBuildResult::create());
     }
-}
-
-fn generate_quantile_levels(n: usize) -> String {
-    let mut levels = Vec::with_capacity(n as usize);
-    for i in 0..n+1 {
-        levels.push(format!("{:.3}", i as f64 / n as f64));
-    }
-    levels.join(", ")
 }

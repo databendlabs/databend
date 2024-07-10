@@ -70,6 +70,7 @@ mod merge;
 mod metrics_layer;
 mod multi_table_insert;
 mod statistics;
+mod histogram;
 
 pub use copy::CopyStatus;
 pub use copy::FileParseError;
@@ -78,3 +79,4 @@ pub use merge::MergeStatus;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;
+pub use histogram::Histogram;

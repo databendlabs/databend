@@ -35,9 +35,9 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = column_distinct_values
-                    .as_ref()
-                    .map_or(row_count, |map| map.get(&column_id).map_or(row_count, |v| *v));
+                let ndv = column_distinct_values.as_ref().map_or(row_count, |map| {
+                    map.get(&column_id).map_or(row_count, |v| *v)
+                });
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
                     max: Datum::from_scalar(stat.max),
