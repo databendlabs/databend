@@ -33,12 +33,67 @@ use indexmap::IndexMap;
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
+use crate::plans::walk_expr_mut;
 use crate::plans::ConstantExpr;
+use crate::plans::VisitorMut;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+
+struct ExprValuesRewriter {
+    ctx: Arc<dyn TableContext>,
+    scalars: Vec<ScalarExpr>,
+}
+
+impl ExprValuesRewriter {
+    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
+        Self {
+            ctx,
+            scalars: vec![],
+        }
+    }
+
+    pub fn reset_scalars(&mut self) {
+        self.scalars.clear();
+    }
+
+    pub fn scalars(&self) -> &[ScalarExpr] {
+        &self.scalars
+    }
+}
+
+impl<'a> VisitorMut<'a> for ExprValuesRewriter {
+    fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
+        if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
+            let catalog = self.ctx.get_default_catalog()?;
+            let value = databend_common_base::runtime::block_on(async move {
+                async_func
+                    .function
+                    .generate(catalog.clone(), async_func)
+                    .await
+            })?;
+
+            *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                span: async_func.span,
+                value,
+            });
+        }
+
+        if matches!(
+            expr,
+            ScalarExpr::WindowFunction(_)
+                | ScalarExpr::AggregateFunction(_)
+                | ScalarExpr::UDFCall(_)
+        ) {
+            self.scalars.push(expr.clone());
+            return Ok(());
+        }
+
+        walk_expr_mut(self, expr)
+    }
+}
 
 impl BindContext {
     pub async fn exprs_to_scalar(
@@ -68,7 +123,9 @@ impl BindContext {
         );
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
-        let catalog = ctx.get_default_catalog()?;
+
+        // check invalid ScalarExpr
+        let mut rewriter = ExprValuesRewriter::new(ctx.clone());
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
@@ -81,25 +138,13 @@ impl BindContext {
 
             let (mut scalar, data_type) = scalar_binder.bind(expr)?;
 
-            if let ScalarExpr::AsyncFunctionCall(async_func) = &scalar {
-                let value = async_func
-                    .function
-                    .generate(catalog.clone(), async_func)
-                    .await?;
-                let expr = ConstantExpr {
-                    span: async_func.span,
-                    value,
-                };
-                scalar = ScalarExpr::ConstantExpr(expr);
-            }
+            rewriter.reset_scalars();
+            rewriter.visit(&mut scalar)?;
 
-            // check invalid ScalarExpr
-            if matches!(
-                &scalar,
-                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
-            ) {
+            if !rewriter.scalars().is_empty() {
                 return Err(ErrorCode::SemanticError(
-                    "Aggregate and window are not allowed in value expressions".to_string(),
+                    "Aggregate, external udf and window functions are not allowed in value expressions"
+                        .to_string(),
                 ));
             }
 
