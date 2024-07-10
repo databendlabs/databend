@@ -199,7 +199,7 @@ where
         let cursor_finished = match (count, next_cursor) {
             (count, None) => {
                 self.temp_sorted_num_rows += count;
-                self.temp_output_indices.push((input_index, start, count));
+                self.push_output_indices((input_index, start, count));
 
                 // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
                 // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
@@ -228,8 +228,7 @@ where
                 let cursor_finished = cursor.is_finished();
                 let row_index = cursor.row_index;
 
-                self.temp_output_indices
-                    .push((input_index, start, row_index - start));
+                self.push_output_indices((input_index, start, row_index - start));
 
                 if cursor_finished {
                     // Pop the current `cursor`.
@@ -257,6 +256,16 @@ where
 
         debug_assert!(self.temp_sorted_num_rows <= max_rows);
         self.temp_sorted_num_rows != max_rows
+    }
+
+    fn push_output_indices(&mut self, (input, start, count): (usize, usize, usize)) {
+        match self.temp_output_indices.last_mut() {
+            Some((pre_input, pre_start, pre_count)) if input == *pre_input => {
+                debug_assert_eq!(*pre_start + *pre_count, start);
+                *pre_count += count
+            }
+            _ => self.temp_output_indices.push((input, start, count)),
+        }
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {
