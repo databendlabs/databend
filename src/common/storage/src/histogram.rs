@@ -18,6 +18,7 @@ use std::fmt::Debug;
 
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+
 use crate::Datum;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;

@@ -19,59 +19,8 @@ use std::fmt::Debug;
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_storage::Datum;
-
-pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
-
-/// A histogram is a representation of the distribution of a column.
-///
-/// We are constructing this in an "Equi-height" fashion, which means
-/// every bucket has roughly the same number of rows.
-///
-/// Real-world data distribution is often skewed,
-/// so an equal-height histogram is better than an equal-width histogram,
-/// the former can use multiple buckets to show the skew data, but for the latter,
-/// it is difficult to give the exact frequency of the skew data
-/// when the skew data and other data fall into the same bucket
-///
-/// We choose this approach because so far the histogram is originally
-/// constructed from NDV(number of distinct values) and the total number
-/// of rows instead of maintaining a real histogram for each column,
-/// which brings the assumption that the data is uniformly distributed.
-#[derive(Debug, Clone)]
-pub struct Histogram {
-    pub buckets: Vec<HistogramBucket>,
-}
-
-impl Histogram {
-    pub fn new(buckets: Vec<HistogramBucket>) -> Self {
-        Self { buckets }
-    }
-
-    /// Get number of buckets
-    pub fn num_buckets(&self) -> usize {
-        self.buckets.len()
-    }
-
-    /// Get number of values
-    pub fn num_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_values())
-    }
-
-    /// Get number of distinct values
-    /// TODO(leiysky): this is not accurate, find a better way to calculate NDV
-    pub fn num_distinct_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_distinct())
-    }
-
-    /// Get iterator of buckets
-    pub fn buckets_iter(&self) -> impl DoubleEndedIterator<Item = &HistogramBucket> {
-        self.buckets.iter()
-    }
-}
+use databend_common_storage::Histogram;
+use databend_common_storage::HistogramBucket;
 
 /// Construct a histogram from NDV and total number of rows.
 ///
@@ -133,63 +82,21 @@ pub fn histogram_from_ndv(
             // The first bucket is a dummy bucket
             // which is used to record the min value of the column
             // So we don't need to record the min value for each bucket
-            buckets.push(HistogramBucket {
+            buckets.push(HistogramBucket::new(
                 upper_bound,
-                num_values: 1.0,
-                num_distinct: 1.0,
-            });
+                1.0,
+                1.0,
+            ));
             continue;
         }
-        let bucket = HistogramBucket {
+        let bucket = HistogramBucket::new(
             upper_bound,
-            num_values: (num_rows / num_buckets as u64) as f64,
-            num_distinct: (ndv / num_buckets as u64) as f64,
-        };
+            (num_rows / num_buckets as u64) as f64,
+             (ndv / num_buckets as u64) as f64);
         buckets.push(bucket);
     }
 
     Ok(Histogram { buckets })
-}
-
-#[derive(Debug, Clone)]
-pub struct HistogramBucket {
-    /// Upper bound value of the bucket.
-    upper_bound: Datum,
-    /// Estimated number of values in the bucket.
-    num_values: f64,
-    /// Estimated number of distinct values in the bucket.
-    num_distinct: f64,
-}
-
-impl HistogramBucket {
-    pub fn new(upper_bound: Datum, num_values: f64, num_distinct: f64) -> Self {
-        Self {
-            upper_bound,
-            num_values,
-            num_distinct,
-        }
-    }
-
-    pub fn upper_bound(&self) -> &Datum {
-        &self.upper_bound
-    }
-
-    pub fn num_values(&self) -> f64 {
-        self.num_values
-    }
-
-    pub fn num_distinct(&self) -> f64 {
-        self.num_distinct
-    }
-
-    pub fn aggregate_values(&mut self) {
-        self.num_values = self.num_distinct;
-    }
-
-    pub fn update(&mut self, selectivity: f64) {
-        self.num_values *= selectivity;
-        self.num_distinct *= selectivity
-    }
 }
 
 trait SampleSet {
@@ -279,28 +186,5 @@ impl SampleSet for UniformSampleSet {
                 self.min, self.max
             )),
         }
-    }
-}
-
-pub struct InterleavedBucket {
-    pub left_ndv: f64,
-    pub right_ndv: f64,
-    pub left_num_rows: f64,
-    pub right_num_rows: f64,
-    pub max_val: f64,
-}
-
-impl fmt::Display for Histogram {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for bucket in &self.buckets {
-            writeln!(
-                f,
-                "{}: {} values, {} distinct values",
-                bucket.upper_bound(),
-                bucket.num_values,
-                bucket.num_distinct
-            )?;
-        }
-        Ok(())
     }
 }
