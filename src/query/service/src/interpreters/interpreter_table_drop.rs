@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_share::remove_share_table_info;
 use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
@@ -74,6 +75,7 @@ impl Interpreter for DropTableInterpreter {
                 }
             }
         };
+        let table_id = tbl.get_table_info().ident.table_id;
 
         let engine = tbl.get_table_info().engine();
         if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
@@ -119,7 +121,7 @@ impl Interpreter for DropTableInterpreter {
         let owner_object = OwnershipObject::Table {
             catalog_name: self.plan.catalog.clone(),
             db_id: db.get_db_info().ident.db_id,
-            table_id: tbl.get_table_info().ident.table_id,
+            table_id,
         };
 
         role_api.revoke_ownership(&owner_object).await?;
@@ -150,14 +152,25 @@ impl Interpreter for DropTableInterpreter {
         }
 
         // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = resp.spec_vec {
+        if let Some((db_id, spec_vec)) = resp.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
+                &spec_vec,
             )
             .await?;
+
+            // remove table spec
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    table_id,
+                )
+                .await?;
+            }
         }
 
         Ok(build_res)

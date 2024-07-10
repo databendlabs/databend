@@ -34,6 +34,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
@@ -57,15 +58,28 @@ pub struct ShareDatabase {
     ctx: DatabaseContext,
 
     db_info: DatabaseInfo,
+
+    from_share_db_id: u64,
 }
 
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
         debug_assert!(
-            db_info.meta.from_share.is_some() && db_info.meta.using_share_endpoint.is_some()
+            db_info.meta.from_share.is_some()
+                && db_info.meta.using_share_endpoint.is_some()
+                && db_info.meta.from_share_db_id.is_some()
         );
-        Ok(Box::new(Self { ctx, db_info }))
+        let from_share_db_id = db_info.meta.from_share_db_id.as_ref().unwrap();
+        let from_share_db_id = match from_share_db_id {
+            ShareDbId::Usage(id) => *id,
+            ShareDbId::Reference(id) => *id,
+        };
+        Ok(Box::new(Self {
+            ctx,
+            db_info,
+            from_share_db_id,
+        }))
     }
 
     fn load_share_tables(&self, table_infos: Vec<Arc<TableInfo>>) -> Result<Vec<Arc<dyn Table>>> {
@@ -107,8 +121,8 @@ impl ShareDatabase {
     async fn add_share_endpoint_into_table_info(&self, table_info: TableInfo) -> Result<TableInfo> {
         let mut table_info = table_info;
         let db_type = table_info.db_type.clone();
+        let share_endpoint_meta = self.get_share_endpoint_meta().await?;
         if let DatabaseType::ShareDB(params) = db_type {
-            let share_endpoint_meta = self.get_share_endpoint_meta().await?;
             let mut params = params;
             params.share_endpoint_url = share_endpoint_meta.url.clone();
             params.share_endpoint_credential = share_endpoint_meta.credential.clone().unwrap();
@@ -131,6 +145,7 @@ impl ShareDatabase {
                 self.get_tenant().tenant_name(),
                 from_share.tenant_name(),
                 from_share.share_name(),
+                self.from_share_db_id,
                 table_name,
             )
             .await?;
@@ -152,6 +167,7 @@ impl ShareDatabase {
                 &share_endpoint_meta,
                 self.get_tenant().tenant_name(),
                 from_share.tenant_name(),
+                self.from_share_db_id,
                 from_share.share_name(),
             )
             .await?;

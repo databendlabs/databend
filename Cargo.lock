@@ -4562,6 +4562,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enumflags2",
  "goldenfile",
+ "log",
  "opendal",
  "serde",
  "serde_json",

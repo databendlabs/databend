@@ -52,16 +52,16 @@ use crate::SharedSigner;
 
 pub fn create_share_table_operator(
     share_params: &ShareDBParams,
-    table_name: &str,
+    table_id: u64,
 ) -> databend_common_exception::Result<Operator> {
     let share_ident_raw = &share_params.share_ident;
     let signer = SharedSigner::new(
         &share_params.share_endpoint_url,
         &format!(
-            "/tenant/{}/{}/table/{}/presign_files",
+            "/{}/{}/{}/presign_files",
             share_ident_raw.tenant_name(),
             share_ident_raw.share_name(),
-            table_name
+            table_id
         ),
         share_params.share_endpoint_credential.clone(),
     );
