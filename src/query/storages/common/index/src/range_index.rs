@@ -81,7 +81,7 @@ impl RangeIndex {
 
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
-        let start = Instant::now();
+        // let start = Instant::now();
         let input_domains = self
             .expr
             .column_refs()
@@ -124,9 +124,9 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
-        info!("takes {:?} to calculate the domian", start.elapsed());
+        // info!("takes {:?} to calculate the domian", start.elapsed());
 
-        let start = Instant::now();
+        // let start = Instant::now();
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
@@ -135,10 +135,10 @@ impl RangeIndex {
             &BUILTIN_FUNCTIONS,
         );
 
-        info!(
-            "takes {:?} to constant fold range expr with index",
-            start.elapsed()
-        );
+        // info!(
+        //     "takes {:?} to constant fold range expr with index",
+        //     start.elapsed()
+        // );
 
         // Only return false, which means to skip this block, when the expression is folded to a constant false.
         Ok(!matches!(new_expr, Expr::Constant {
