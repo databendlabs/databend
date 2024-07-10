@@ -21,6 +21,9 @@ statement ok
 DROP FUNCTION IF EXISTS gcd;
 
 statement ok
+DROP FUNCTION IF EXISTS gcd_prefix;
+
+statement ok
 DROP FUNCTION IF EXISTS gcd_error;
 
 statement ok
@@ -87,7 +90,7 @@ statement ok
 CREATE OR REPLACE FUNCTION bool_select (BOOLEAN, BIGINT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'bool_select' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
-CREATE OR REPLACE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815/ab/cc/d';
+CREATE OR REPLACE FUNCTION gcd_prefix (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815/ab/cc/d';
 
 statement ok
 CREATE OR REPLACE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
@@ -180,16 +183,17 @@ NULL
 NULL
 
 query I
-SELECT gcd(a,b) d from (select number + 1 a, a * 2  b from numbers(3) where number in (select * from numbers(300))) order by d;
+SELECT gcd(a,b) d, gcd_prefix(a, b) from (select number + 1 a, a * 2  b from numbers(3) where number in (select * from numbers(300))) order by d;
 ----
-1
-2
-3
+1 1
+2 2
+3 3
 
 query I
 SELECT sum(gcd_error(a,b)) from (select number + 1 a, a * 2  b from numbers(3000))
 ----
 4501500
+
 
 statement ok 
 create or replace table gcd_target(id int);

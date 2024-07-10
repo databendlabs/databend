@@ -80,6 +80,7 @@ impl BindContext {
             }
 
             let (mut scalar, data_type) = scalar_binder.bind(expr)?;
+
             if let ScalarExpr::AsyncFunctionCall(async_func) = &scalar {
                 let value = async_func
                     .function
@@ -91,6 +92,17 @@ impl BindContext {
                 };
                 scalar = ScalarExpr::ConstantExpr(expr);
             }
+
+            // check invalid ScalarExpr
+            if matches!(
+                &scalar,
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AggregateFunction(_)
+            ) {
+                return Err(ErrorCode::SemanticError(
+                    "Aggregate and window are not allowed value expressions".to_string(),
+                ));
+            }
+
             let target_type = schema.field(i).data_type();
             if data_type != *target_type {
                 scalar = wrap_cast(&scalar, target_type);
