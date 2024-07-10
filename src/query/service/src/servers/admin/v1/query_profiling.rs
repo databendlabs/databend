@@ -21,11 +21,8 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
-use databend_common_storages_system::SystemLogElement;
-use databend_common_storages_system::SystemLogQueue;
+use databend_common_storages_system::ProfilesCacheQueue;
 use http::StatusCode;
 use poem::web::Json;
 use poem::web::Path;
@@ -132,23 +129,3 @@ pub fn get_profile_from_cache(target: &str) -> Result<Vec<PlanProfile>, ErrorCod
         target
     )))
 }
-#[derive(Clone)]
-pub struct ProfilesCacheElement {
-    pub query_id: String,
-    pub profiles: Vec<PlanProfile>,
-}
-
-impl SystemLogElement for ProfilesCacheElement {
-    const TABLE_NAME: &'static str = "profiles_cache_not_table";
-    fn schema() -> TableSchemaRef {
-        unreachable!()
-    }
-    fn fill_to_data_block(
-        &self,
-        _: &mut Vec<ColumnBuilder>,
-    ) -> databend_common_exception::Result<()> {
-        unreachable!()
-    }
-}
-
-pub type ProfilesCacheQueue = SystemLogQueue<ProfilesCacheElement>;
