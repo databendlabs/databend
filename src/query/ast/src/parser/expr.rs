@@ -1240,10 +1240,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
-    let placeholder = map(consumed(rule! { Placeholder }), |(_, _)| {
-        ExprElement::Placeholder {
-            name: "?".to_string(),
-        }
+    let placeholder = map(rule! { Placeholder }, |(_)| ExprElement::Placeholder {
+        name: "?".to_string(),
     });
 
     let (rest, (span, elem)) = consumed(alt((

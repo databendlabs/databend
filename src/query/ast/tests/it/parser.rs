@@ -1006,6 +1006,7 @@ fn test_query() {
         r#"select * from t left join lateral(select 1) on true, lateral(select 2)"#,
         r#"select * from t, lateral flatten(input => u.col) f"#,
         r#"select * from flatten(input => parse_json('{"a":1, "b":[77,88]}'), outer => true)"#,
+        r#"select * from t where a = ?"#,
     ];
 
     for case in cases {
