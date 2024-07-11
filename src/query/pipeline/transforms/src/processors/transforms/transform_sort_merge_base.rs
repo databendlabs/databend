@@ -60,9 +60,6 @@ use super::TransformSortMergeLimit;
 use crate::processors::sort::utils::ORDER_COL_NAME;
 use crate::processors::sort::SortSpillMetaWithParams;
 
-/// A spilled block file is at most 8MB.
-const SPILL_BATCH_BYTES_SIZE: usize = 8 * 1024 * 1024;
-
 /// The memory will be doubled during merging.
 const MERGE_RATIO: usize = 2;
 
@@ -81,7 +78,7 @@ pub trait MergeSort<R: Rows> {
     fn num_rows(&self) -> usize;
 
     /// Prepare the blocks to spill.
-    fn prepare_spill(&mut self, spill_batch_size: usize) -> Result<Vec<DataBlock>>;
+    fn prepare_spill(&mut self, spill_batch_rows: usize) -> Result<Vec<DataBlock>>;
 
     /// Finish the merge sorter and output the remain data.
     ///
@@ -113,10 +110,11 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     may_spill: bool,
     max_memory_usage: usize,
     spilling_bytes_threshold: usize,
+    spilling_batch_bytes: usize,
     // The following two fields will be passed to the spill processor.
     // If these two fields are not zero, it means we need to spill.
     /// The number of rows of each spilled block.
-    spill_batch_size: usize,
+    spill_batch_rows: usize,
     /// The number of spilled blocks in each merge of the spill processor.
     spill_num_merge: usize,
 
@@ -136,6 +134,7 @@ where
         output_order_col: bool,
         max_memory_usage: usize,
         spilling_bytes_threshold: usize,
+        spilling_batch_bytes: usize,
         inner: M,
     ) -> Result<Self> {
         let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
@@ -150,7 +149,9 @@ where
             next_index: 0,
             max_memory_usage,
             spilling_bytes_threshold,
-            spill_batch_size: 0,
+            spilling_batch_bytes,
+
+            spill_batch_rows: 0,
             spill_num_merge: 0,
             may_spill,
             _r: PhantomData,
@@ -159,26 +160,26 @@ where
 
     fn prepare_spill(&mut self) -> Result<Vec<DataBlock>> {
         let mut spill_meta = Box::new(SortSpillMeta {}) as Box<dyn BlockMetaInfo>;
-        if self.spill_batch_size == 0 {
+        if self.spill_batch_rows == 0 {
             debug_assert_eq!(self.spill_num_merge, 0);
             // We use the first memory calculation to estimate the batch size and the number of merge.
             self.spill_num_merge = self
                 .inner
                 .num_bytes()
-                .div_ceil(SPILL_BATCH_BYTES_SIZE)
+                .div_ceil(self.spilling_batch_bytes)
                 .max(2);
-            self.spill_batch_size = self.inner.num_rows().div_ceil(self.spill_num_merge);
+            self.spill_batch_rows = self.inner.num_rows().div_ceil(self.spill_num_merge);
             // The first block to spill will contain the parameters of spilling.
             // Later blocks just contain a empty struct `SortSpillMeta` to save memory.
             spill_meta = Box::new(SortSpillMetaWithParams {
-                batch_size: self.spill_batch_size,
+                batch_rows: self.spill_batch_rows,
                 num_merge: self.spill_num_merge,
             }) as Box<dyn BlockMetaInfo>;
         } else {
             debug_assert!(self.spill_num_merge > 0);
         }
 
-        let mut blocks = self.inner.prepare_spill(self.spill_batch_size)?;
+        let mut blocks = self.inner.prepare_spill(self.spill_batch_rows)?;
 
         // Fill the spill meta.
         if let Some(b) = blocks.first_mut() {
@@ -266,6 +267,7 @@ pub struct TransformSortMergeBuilder {
     output_order_col: bool,
     max_memory_usage: usize,
     spilling_bytes_threshold_per_core: usize,
+    spilling_batch_bytes: usize,
     enable_loser_tree: bool,
     limit: Option<usize>,
 }
@@ -288,6 +290,7 @@ impl TransformSortMergeBuilder {
             output_order_col: false,
             max_memory_usage: 0,
             spilling_bytes_threshold_per_core: 0,
+            spilling_batch_bytes: 8 * 1024 * 1024,
             enable_loser_tree: false,
             limit: None,
         }
@@ -321,6 +324,13 @@ impl TransformSortMergeBuilder {
         self
     }
 
+    pub fn with_spilling_batch_bytes(mut self, spilling_batch_bytes: usize) -> Self {
+        if spilling_batch_bytes > 0 {
+            self.spilling_batch_bytes = spilling_batch_bytes;
+        }
+        self
+    }
+
     pub fn with_enable_loser_tree(mut self, enable_loser_tree: bool) -> Self {
         self.enable_loser_tree = enable_loser_tree;
         self
@@ -351,6 +361,7 @@ impl TransformSortMergeBuilder {
             output_order_col,
             max_memory_usage,
             spilling_bytes_threshold_per_core,
+            spilling_batch_bytes,
             enable_loser_tree,
             ..
         } = self;
@@ -373,6 +384,7 @@ impl TransformSortMergeBuilder {
                             output_order_col,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            spilling_batch_bytes,
                             TransformSortMerge::create(
                                 schema,
                                 sort_desc,
@@ -392,6 +404,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortDateImpl::create(schema, sort_desc, block_size, enable_loser_tree),
                     )?,
                 ),
@@ -405,6 +418,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortTimestampImpl::create(
                             schema,
                             sort_desc,
@@ -423,6 +437,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortStringImpl::create(
                             schema,
                             sort_desc,
@@ -441,6 +456,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortCommonImpl::create(
                             schema,
                             sort_desc,
@@ -461,6 +477,7 @@ impl TransformSortMergeBuilder {
                     output_order_col,
                     max_memory_usage,
                     spilling_bytes_threshold_per_core,
+                    spilling_batch_bytes,
                     MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
                 )?,
             )
@@ -480,6 +497,7 @@ impl TransformSortMergeBuilder {
             output_order_col,
             limit,
             spilling_bytes_threshold_per_core,
+            spilling_batch_bytes,
             max_memory_usage,
             ..
         } = self;
@@ -503,6 +521,7 @@ impl TransformSortMergeBuilder {
                             output_order_col,
                             max_memory_usage,
                             spilling_bytes_threshold_per_core,
+                            spilling_batch_bytes,
                             TransformSortMergeLimit::create(block_size, limit),
                         )?,
                     ),
@@ -517,6 +536,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortLimitDateImpl::create(block_size, limit),
                     )?,
                 ),
@@ -530,6 +550,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortLimitTimestampImpl::create(block_size, limit),
                     )?,
                 ),
@@ -543,6 +564,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortLimitStringImpl::create(block_size, limit),
                     )?,
                 ),
@@ -556,6 +578,7 @@ impl TransformSortMergeBuilder {
                         output_order_col,
                         max_memory_usage,
                         spilling_bytes_threshold_per_core,
+                        spilling_batch_bytes,
                         MergeSortLimitCommonImpl::create(block_size, limit),
                     )?,
                 ),
@@ -571,6 +594,7 @@ impl TransformSortMergeBuilder {
                     output_order_col,
                     max_memory_usage,
                     spilling_bytes_threshold_per_core,
+                    spilling_batch_bytes,
                     MergeSortLimitCommonImpl::create(block_size, limit),
                 )?,
             )

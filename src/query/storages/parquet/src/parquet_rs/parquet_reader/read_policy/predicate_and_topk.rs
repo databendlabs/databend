@@ -63,6 +63,7 @@ pub struct PredicateAndTopkPolicyBuilder {
 impl PredicateAndTopkPolicyBuilder {
     pub fn create(
         schema_desc: &SchemaDescriptor,
+        arrow_schema: Option<&arrow_schema::Schema>,
         predicate: &(Arc<ParquetPredicate>, Vec<usize>),
         topk: Option<&BuiltTopK>,
         output_leaves: &[usize],
@@ -118,8 +119,11 @@ impl PredicateAndTopkPolicyBuilder {
             output_prefetched_field_indices.push(offset + index);
         }
 
-        let remain_field_levels =
-            parquet_to_arrow_field_levels(schema_desc, remain_projection.clone(), None)?;
+        let remain_field_levels = parquet_to_arrow_field_levels(
+            schema_desc,
+            remain_projection.clone(),
+            arrow_schema.map(|s| &s.fields),
+        )?;
         let remain_schema = TableSchema::new(remain_fields);
         let remain_field_paths = Arc::new(compute_output_field_paths(
             schema_desc,

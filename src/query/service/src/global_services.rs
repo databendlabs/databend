@@ -25,11 +25,10 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_sharing::ShareEndpointManager;
 use databend_common_storage::DataOperator;
-use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
 use databend_common_storages_iceberg::IcebergCreator;
+use databend_common_storages_system::ProfilesLogQueue;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
@@ -44,7 +43,6 @@ use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
-use crate::servers::admin::v1::query_profiling::ProfilesCacheQueue;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
@@ -133,14 +131,9 @@ impl GlobalServices {
         }
 
         RoleCacheManager::init()?;
-        ShareEndpointManager::init()?;
 
         DataOperator::init(&config.storage).await?;
-        ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.tenant_name().to_string(),
-        )?;
+
         CacheManager::init(
             &config.cache,
             &config.query.max_server_memory_usage,
@@ -151,7 +144,7 @@ impl GlobalServices {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
 
-        ProfilesCacheQueue::init(config.query.max_cached_queries_profiles);
+        ProfilesLogQueue::init(config.query.max_cached_queries_profiles);
 
         #[cfg(feature = "enable_queries_executor")]
         {
