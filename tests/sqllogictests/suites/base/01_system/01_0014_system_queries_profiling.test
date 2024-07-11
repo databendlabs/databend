@@ -1,0 +1,40 @@
+statement ok
+SELECT 10014
+
+query BBBB
+select count(*)=2, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)=1 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT 10014')
+----
+true true true true
+
+statement ok
+drop table if exists tbl_01_0014 all
+
+statement ok
+SELECT number FROM numbers_mt(5) where number < 2
+
+query BBBB
+select count(*)=2, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT number FROM numbers_mt(5) WHERE number < 2')
+----
+true true true true
+
+statement ok
+SELECT number % 3 AS c1 FROM numbers_mt(100) WHERE number > 2 GROUP BY number % 3
+
+query BBBB
+select count(*)=6, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT number % 3 AS c1 FROM numbers_mt(100) WHERE number > 2 GROUP BY number % 3')
+----
+true true true true
+
+statement ok
+CREATE TABLE tbl_01_0014 (test VARCHAR)
+
+statement ok
+INSERT INTO tbl_01_0014 VALUES ('a'), ('b'), ('c'), ('d'), ('e')
+
+statement ok
+select test from tbl_01_0014
+
+query BBBB
+select count(*)=1, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT test FROM tbl_01_0014')
+----
+true true true true
