@@ -249,7 +249,6 @@ futures-util = "0.3.24"
 geo = { version = "0.27.0", features = ["use-serde"] }
 geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
-proj = { git = "https://github.com/kkk25641463/proj.git", branch = "static_link", features = ["bundled_proj"] }
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
@@ -290,6 +289,7 @@ parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
+proj = { git = "https://github.com/datafuse-extras/proj.git", branch = "main", features = ["bundled_proj"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }

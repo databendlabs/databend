@@ -4090,9 +4090,15 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "base64 0.22.0",
+ "bytes",
+ "databend-common-auth",
+ "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
+ "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-storage",
+ "databend-common-users",
  "http 1.1.0",
  "log",
  "moka",
@@ -4175,6 +4181,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "databend-common-arrow",
+ "databend-common-auth",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -12122,7 +12129,7 @@ dependencies = [
 [[package]]
 name = "proj"
 version = "0.27.2"
-source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#55fb07881df07eb5c6c8d34404536170b1edca1c"
+source = "git+https://github.com/datafuse-extras/proj.git?branch=main#3746516afdbc86e9cc5b9a78c531d31d3975147a"
 dependencies = [
  "geo-types",
  "libc",
@@ -12134,7 +12141,7 @@ dependencies = [
 [[package]]
 name = "proj-sys"
 version = "0.24.0"
-source = "git+https://github.com/kkk25641463/proj.git?branch=static_link#55fb07881df07eb5c6c8d34404536170b1edca1c"
+source = "git+https://github.com/datafuse-extras/proj.git?branch=main#3746516afdbc86e9cc5b9a78c531d31d3975147a"
 dependencies = [
  "cmake",
  "flate2",
