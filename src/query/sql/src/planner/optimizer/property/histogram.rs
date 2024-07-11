@@ -82,17 +82,14 @@ pub fn histogram_from_ndv(
             // The first bucket is a dummy bucket
             // which is used to record the min value of the column
             // So we don't need to record the min value for each bucket
-            buckets.push(HistogramBucket::new(
-                upper_bound,
-                1.0,
-                1.0,
-            ));
+            buckets.push(HistogramBucket::new(upper_bound, 1.0, 1.0));
             continue;
         }
         let bucket = HistogramBucket::new(
             upper_bound,
             (num_rows / num_buckets as u64) as f64,
-             (ndv / num_buckets as u64) as f64);
+            (ndv / num_buckets as u64) as f64,
+        );
         buckets.push(bucket);
     }
 

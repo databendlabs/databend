@@ -22,7 +22,8 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
-use databend_common_storage::{Datum, DEFAULT_HISTOGRAM_BUCKETS};
+use databend_common_storage::Datum;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use itertools::Itertools;
 
 use crate::optimizer::histogram_from_ndv;

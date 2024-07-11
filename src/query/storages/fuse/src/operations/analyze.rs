@@ -37,9 +37,10 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
-use databend_common_storage::{Datum, DEFAULT_HISTOGRAM_BUCKETS};
+use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::MetaHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -217,11 +218,15 @@ impl SinkAnalyzeState {
             .unwrap_or_default();
 
         // Each column has a histogram and a histogram has `DEFAULT_HISTOGRAM_BUCKETS` buckets
-        for chunk in data_block.split_by_rows_no_tail(DEFAULT_HISTOGRAM_BUCKETS).iter() {
+        for chunk in data_block
+            .split_by_rows_no_tail(DEFAULT_HISTOGRAM_BUCKETS)
+            .iter()
+        {
+            dbg!(chunk);
             let mut buckets = Vec::with_capacity(DEFAULT_HISTOGRAM_BUCKETS);
             let last_column = chunk.columns().last().unwrap();
             let value = last_column.value.index(0).clone().unwrap();
-            let col_id = value.as_number().unwrap().as_u_int32().unwrap();
+            let col_id = value.as_number().unwrap().as_u_int8().unwrap();
             for row in 0..chunk.num_rows() {
                 let column = &chunk.columns()[1];
                 let value = column.value.index(row).clone().unwrap();
@@ -236,9 +241,13 @@ impl SinkAnalyzeState {
                 let val = count_col.value.index(row).clone().unwrap();
                 let number = val.as_number().unwrap();
                 let count = number.as_u_int64().unwrap();
-                buckets.push(HistogramBucket::new(upper_bound, *count as f64, *ndv as f64));
+                buckets.push(HistogramBucket::new(
+                    upper_bound,
+                    *count as f64,
+                    *ndv as f64,
+                ));
             }
-            histograms.insert(*col_id, Histogram::new(buckets));
+            histograms.insert(*col_id as ColumnId, Histogram::new(buckets));
         }
 
         self.histograms = histograms;

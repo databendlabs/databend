@@ -25,6 +25,7 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::NavigationPoint;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
@@ -32,7 +33,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
+
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -191,20 +192,27 @@ impl Interpreter for AnalyzeTableInterpreter {
                             COUNT(DISTINCT {}) AS ndv,
                             MAX({}) AS max_value,
                             COUNT() as count,
-                            {} AS col_index,
+                            {}::uint32 AS col_index
                         FROM quantiles_{}
                         GROUP BY quantile \n",
-                        c.0, c.1, DEFAULT_HISTOGRAM_BUCKETS, c.1, plan.database, plan.table, c.1, i, c.1, c.1, c.0, c.0
+                        c.0,
+                        c.1,
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                        c.1,
+                        plan.database,
+                        plan.table,
+                        c.1,
+                        i,
+                        c.1,
+                        c.1,
+                        c.0,
+                        c.0
                     )
                 })
                 .collect::<Vec<_>>()
                 .join(" UNION ALL ");
 
-            histogram_sql = format!(
-                "WITH combined_histograms AS ({})
-                 SELECT * FROM combined_histograms ORDER BY quantile;",
-                histogram_sql
-            );
+            histogram_sql = format!("SELECT * FROM ({}) ORDER BY quantile;", histogram_sql);
 
             log::info!("Generate histogram by sql {:?}", histogram_sql);
 
