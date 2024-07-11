@@ -407,7 +407,8 @@ fn get_local_time(
         .ok_or_else(|| ErrorCode::BadBytes(format!("Invalid time provided in times: {:?}", times)))
 }
 
-fn unwrap_local_time(
+#[inline]
+pub fn unwrap_local_time(
     tz: &Tz,
     enable_dst_hour_fix: bool,
     naive_datetime: &NaiveDateTime,

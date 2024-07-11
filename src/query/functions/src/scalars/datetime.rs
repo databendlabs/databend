@@ -20,7 +20,6 @@ use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Days;
-use chrono::MappedLocalTime;
 use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -65,6 +64,7 @@ use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
+use databend_common_io::cursor_ext::unwrap_local_time;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -312,7 +312,12 @@ fn string_to_format_timestmap(
             parsed
                 .to_naive_datetime_with_offset(0)
                 .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                .and_then(|res| convert_local_time(res, tz, enable_dst_hour_fix))
+                .and_then(
+                    |res| match unwrap_local_time(&tz, enable_dst_hour_fix, &res) {
+                        Ok(res) => Ok((res.timestamp_micros(), false)),
+                        Err(e) => Err(e),
+                    },
+                )
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
@@ -321,7 +326,12 @@ fn string_to_format_timestmap(
     } else {
         NaiveDateTime::parse_from_str(timestamp, format)
             .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
-            .and_then(|res| convert_local_time(res, tz, enable_dst_hour_fix))
+            .and_then(
+                |res| match unwrap_local_time(&tz, enable_dst_hour_fix, &res) {
+                    Ok(res) => Ok((res.timestamp_micros(), false)),
+                    Err(e) => Err(e),
+                },
+            )
     }
 }
 
@@ -1609,42 +1619,4 @@ fn months_between(date_a: i32, date_b: i32) -> f64 {
 
     // Total difference including fractional part
     total_months_diff as f64 + day_fraction
-}
-
-#[inline]
-fn convert_local_time(
-    res: NaiveDateTime,
-    tz: Tz,
-    enable_dst_hour_fix: bool,
-) -> Result<(i64, bool), ErrorCode> {
-    match res.and_local_timezone(tz) {
-        MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
-        MappedLocalTime::Ambiguous(t1, t2) => Err(ErrorCode::BadArguments(format!(
-            "The local time is ambiguous {}, {} with timezone {}",
-            t1, t2, tz
-        ))),
-        MappedLocalTime::None => {
-            if enable_dst_hour_fix {
-                if let Some(res2) = res.checked_add_signed(chrono::Duration::seconds(3600)) {
-                    return match res2.and_local_timezone(tz) {
-                        MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
-                        MappedLocalTime::Ambiguous(t1, t2) => {
-                            Err(ErrorCode::BadArguments(format!(
-                                "The local time is ambiguous {:?}, {:?} with timezone {:?}",
-                                t1, t2, tz
-                            )))
-                        }
-                        MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
-                            "The local time {:?}, {:?} can not map to a single unique result with timezone {:?}",
-                            res, res2, tz
-                        ))),
-                    };
-                }
-            }
-            Err(ErrorCode::BadArguments(format!(
-                "The time {} can not map to a single unique result with timezone {}",
-                res, tz
-            )))
-        }
-    }
 }
