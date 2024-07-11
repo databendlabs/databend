@@ -83,7 +83,7 @@ impl FuseTable {
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let Some(snapshot) = self.read_table_snapshot().await? else {
+        let Some(snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await? else {
             return Ok(());
         };
 

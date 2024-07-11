@@ -48,7 +48,7 @@ impl<'a> FuseSnapshot<'a> {
     pub async fn get_snapshots(self, limit: Option<usize>) -> Result<DataBlock> {
         let meta_location_generator = self.table.meta_location_generator.clone();
         let snapshot_location = self.table.snapshot_loc().await?;
-        let snapshot = self.table.read_table_snapshot().await?;
+        let snapshot = self.table.read_table_snapshot(self.ctx.txn_mgr()).await?;
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version =
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());

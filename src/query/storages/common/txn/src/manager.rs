@@ -114,8 +114,8 @@ impl TxnBuffer {
         self.snapshots.insert(table_id, snapshot);
     }
 
-    fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<&TableSnapshot> {
-        self.snapshots.get(&table_id).map(|s| s.as_ref())
+    fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<Arc<TableSnapshot>> {
+        self.snapshots.get(&table_id).cloned()
     }
 
     fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {
@@ -307,7 +307,7 @@ impl TxnManager {
         self.txn_buffer.snapshots()
     }
 
-    pub fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<&TableSnapshot> {
+    pub fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<Arc<TableSnapshot>> {
         self.txn_buffer.get_table_snapshot_by_id(table_id)
     }
 }

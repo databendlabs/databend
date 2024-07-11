@@ -46,7 +46,7 @@ impl FuseTable {
         col_indices: Vec<FieldIndex>,
         query_row_id_col: bool,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let snapshot_opt = self.read_table_snapshot().await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.txn_mgr()).await?;
 
         // check if table is empty
         let snapshot = if let Some(val) = snapshot_opt {

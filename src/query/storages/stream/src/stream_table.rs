@@ -317,7 +317,7 @@ impl Table for StreamTable {
         table_name: &str,
         consume: bool,
     ) -> Result<String> {
-        let table = self.source_table(ctx).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let table_desc = if consume {
             format!("{}.{} with consume", database_name, table_name)
@@ -330,6 +330,7 @@ impl Table for StreamTable {
                 &self.snapshot_loc(),
                 table_desc,
                 self.offset()?,
+                ctx.as_ref(),
             )
             .await
     }

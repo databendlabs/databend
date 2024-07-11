@@ -52,6 +52,7 @@ databend-query = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-storages-common-txn = { workspace = true }
 derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }

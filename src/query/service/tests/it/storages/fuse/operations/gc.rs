@@ -83,7 +83,10 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
 
     // create orphan snapshot, its timestamp is larger than the current one
     {
-        let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+        let current_snapshot = fuse_table
+            .read_table_snapshot(ctx.txn_mgr())
+            .await?
+            .unwrap();
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
@@ -190,7 +193,10 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     // no we have 2 snapshot, 2 segment, 2 blocks
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let base_snapshot = fuse_table
+        .read_table_snapshot(ctx.txn_mgr())
+        .await?
+        .unwrap();
     let base_timestamp = base_snapshot.timestamp.unwrap();
 
     // 2. prepare `seg_2`

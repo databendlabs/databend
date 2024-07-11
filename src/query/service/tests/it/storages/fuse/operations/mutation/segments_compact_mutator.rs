@@ -240,7 +240,7 @@ async fn build_mutator(
     ctx: Arc<dyn TableContext>,
     limit: Option<usize>,
 ) -> Result<Option<SegmentCompactMutator>> {
-    let snapshot_opt = tbl.read_table_snapshot().await?;
+    let snapshot_opt = tbl.read_table_snapshot(ctx.txn_mgr()).await?;
     let base_snapshot = if let Some(val) = snapshot_opt {
         val
     } else {

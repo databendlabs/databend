@@ -27,6 +27,7 @@ use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+use databend_storages_common_txn::TxnManager;
 use futures::TryStreamExt;
 use walkdir::WalkDir;
 
@@ -174,7 +175,7 @@ pub async fn check_data_dir(
     if check_table_statistic_file.is_some() {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_opt = fuse_table.read_table_snapshot().await?;
+        let snapshot_opt = fuse_table.read_table_snapshot(TxnManager::init()).await?;
         assert!(snapshot_opt.is_some());
         let snapshot = snapshot_opt.unwrap();
         let ts_location_opt = snapshot.table_statistics_location.clone();

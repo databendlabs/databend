@@ -186,7 +186,7 @@ impl Interpreter for DeleteInterpreter {
         let mut build_res = PipelineBuildResult::create();
 
         // check if table is empty
-        let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
+        let Some(snapshot) = fuse_table.read_table_snapshot(self.ctx.txn_mgr()).await? else {
             // no snapshot, no deletion
             return Ok(build_res);
         };

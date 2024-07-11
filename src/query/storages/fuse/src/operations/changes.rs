@@ -123,6 +123,7 @@ impl FuseTable {
         base_location: &Option<String>,
         table_desc: String,
         seq: u64,
+        ctx: &dyn TableContext,
     ) -> Result<String> {
         let cols = self
             .schema()
@@ -133,7 +134,7 @@ impl FuseTable {
 
         let suffix = format!("{:08x}", Utc::now().timestamp());
 
-        let optimized_mode = self.optimize_stream_mode(mode, base_location).await?;
+        let optimized_mode = self.optimize_stream_mode(mode, base_location, ctx).await?;
         let query = match optimized_mode {
             StreamMode::AppendOnly => {
                 let append_alias = format!("_change_append${}", suffix);
@@ -213,12 +214,13 @@ impl FuseTable {
         &self,
         mode: &StreamMode,
         base_location: &Option<String>,
+        ctx: &dyn TableContext,
     ) -> Result<StreamMode> {
         match mode {
             StreamMode::AppendOnly => Ok(StreamMode::AppendOnly),
             StreamMode::Standard => {
                 if let Some(base_location) = base_location {
-                    if let Some(latest_snapshot) = self.read_table_snapshot().await? {
+                    if let Some(latest_snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await? {
                         let latest_segments: HashSet<&Location> =
                             HashSet::from_iter(&latest_snapshot.segments);
 
@@ -437,7 +439,8 @@ impl FuseTable {
         let (base_snapshot, _) =
             SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator()).await?;
         let base_summary = base_snapshot.summary.clone();
-        let latest_summary = if let Some(snapshot) = self.read_table_snapshot().await? {
+        let latest_summary = if let Some(snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await?
+        {
             snapshot.summary.clone()
         } else {
             return Ok(None);

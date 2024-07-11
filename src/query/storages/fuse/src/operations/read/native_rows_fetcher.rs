@@ -25,6 +25,7 @@ use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -57,13 +58,14 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
 
     // To control the parallelism of fetching blocks.
     max_threads: usize,
+    ctx: Arc<dyn TableContext>,
 }
 
 #[async_trait::async_trait]
 impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
     #[async_backtrace::framed]
     async fn on_start(&mut self) -> Result<()> {
-        self.snapshot = self.table.read_table_snapshot().await?;
+        self.snapshot = self.table.read_table_snapshot(self.ctx.txn_mgr()).await?;
         Ok(())
     }
 
@@ -167,6 +169,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         reader: Arc<BlockReader>,
         column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
         max_threads: usize,
+        ctx: Arc<dyn TableContext>,
     ) -> Self {
         let schema = table.schema();
         let segment_reader =
@@ -183,6 +186,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             part_map: HashMap::new(),
             segment_blocks_cache: HashMap::new(),
             max_threads,
+            ctx,
         }
     }
 

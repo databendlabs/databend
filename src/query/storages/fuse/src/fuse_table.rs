@@ -76,6 +76,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_txn::TxnManager;
+use databend_storages_common_txn::TxnManagerRef;
 use log::error;
 use log::warn;
 use opendal::Operator;
@@ -101,7 +103,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
-
 #[derive(Clone)]
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
@@ -138,7 +139,7 @@ impl FuseTable {
 
         if need_refresh_schema {
             let table = Self::do_create(table_info.as_ref().clone())?;
-            let snapshot = table.read_table_snapshot().await?;
+            let snapshot = table.read_table_snapshot(TxnManager::init()).await?;
             let schema = snapshot
                 .ok_or_else(|| {
                     ErrorCode::ShareStorageError(
@@ -323,7 +324,20 @@ impl FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+    pub async fn read_table_snapshot(
+        &self,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        {
+            let guard = txn_mgr.lock();
+            if guard.is_active() {
+                if let Some(snapshot) =
+                    guard.get_table_snapshot_by_id(self.table_info.ident.table_id)
+                {
+                    return Ok(Some(snapshot.clone()));
+                }
+            }
+        }
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         self.read_table_snapshot_with_reader(reader).await
     }
@@ -556,7 +570,7 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot().await?;
+        let prev = self.read_table_snapshot(ctx.txn_mgr()).await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
@@ -610,7 +624,7 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
-        let prev = self.read_table_snapshot().await?;
+        let prev = self.read_table_snapshot(ctx.txn_mgr()).await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
@@ -748,12 +762,15 @@ impl Table for FuseTable {
 
         let stats = match self.table_type {
             FuseTableType::Attached => {
-                let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
-                    // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
-                    // IO or Deserialization related error should have already been thrown, thus
-                    // `Internal` error is used.
-                    ErrorCode::Internal("Failed to load snapshot of read_only attach table")
-                })?;
+                let snapshot = self
+                    .read_table_snapshot(ctx.txn_mgr())
+                    .await?
+                    .ok_or_else(|| {
+                        // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
+                        // IO or Deserialization related error should have already been thrown, thus
+                        // `Internal` error is used.
+                        ErrorCode::Internal("Failed to load snapshot of read_only attach table")
+                    })?;
                 let summary = &snapshot.summary;
                 TableStatistics {
                     num_rows: Some(summary.row_count),
@@ -782,9 +799,9 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn column_statistics_provider(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        let provider = if let Some(snapshot) = self.read_table_snapshot().await? {
+        let provider = if let Some(snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await? {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             if let Some(table_statistics) = table_statistics {
@@ -843,7 +860,7 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn generage_changes_query(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
         _consume: bool,
@@ -867,6 +884,7 @@ impl Table for FuseTable {
             location,
             format!("{}.{} {}", database_name, table_name, desc),
             *seq,
+            ctx.as_ref(),
         )
         .await
     }

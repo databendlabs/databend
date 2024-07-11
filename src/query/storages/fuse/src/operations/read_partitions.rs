@@ -71,7 +71,7 @@ impl FuseTable {
                 .await;
         }
 
-        let snapshot = self.read_table_snapshot().await?;
+        let snapshot = self.read_table_snapshot(ctx.txn_mgr()).await?;
         match snapshot {
             Some(snapshot) => {
                 let snapshot_loc = self

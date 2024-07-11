@@ -38,11 +38,11 @@ use databend_enterprise_fail_safe::FailSafeHandlerWrapper;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_txn::TxnManager;
 use log::info;
 use log::warn;
 use opendal::ErrorKind;
 use opendal::Operator;
-
 pub struct RealFailSafeHandler {}
 
 impl RealFailSafeHandler {}
@@ -154,7 +154,7 @@ impl Amender {
                 if e.code() == ErrorCode::STORAGE_NOT_FOUND {
                     let snapshot_location = table.snapshot_loc().await?.unwrap();
                     self.recover_object(&snapshot_location).await?;
-                    let snapshot = table.read_table_snapshot().await?;
+                    let snapshot = table.read_table_snapshot(TxnManager::init()).await?;
                     let schema = table.schema();
                     let operator = table.get_operator();
                     if let Some(snapshot) = snapshot {

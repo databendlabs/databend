@@ -126,7 +126,7 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
-        let snapshot = self.table.read_table_snapshot().await?;
+        let snapshot = self.table.read_table_snapshot(self.ctx.txn_mgr()).await?;
         let now = Utc::now();
         let timestamp = snapshot
             .as_ref()

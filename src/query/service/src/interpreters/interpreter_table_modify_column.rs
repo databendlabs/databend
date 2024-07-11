@@ -164,7 +164,7 @@ impl ModifyTableColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let prev_snapshot_id = fuse_table
-            .read_table_snapshot()
+            .read_table_snapshot(self.ctx.txn_mgr())
             .await
             .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
 

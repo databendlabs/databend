@@ -19,10 +19,10 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 use databend_enterprise_query::storages::fuse::operations::virtual_columns::do_refresh_virtual_column;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -45,7 +45,7 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let virtual_columns = vec!["v['a']".to_string(), "v[0]".to_string()];
     let table_ctx = fixture.new_query_ctx().await?;
 
-    let snapshot_opt = fuse_table.read_table_snapshot().await?;
+    let snapshot_opt = fuse_table.read_table_snapshot(table_ctx.txn_mgr()).await?;
     let snapshot = snapshot_opt.unwrap();
 
     let projection = Projection::Columns(vec![]);

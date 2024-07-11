@@ -59,7 +59,7 @@ impl FuseTable {
         num_segment_limit: Option<usize>,
     ) -> Result<()> {
         let compact_options = if let Some(v) = self
-            .compact_options_with_segment_limit(num_segment_limit)
+            .compact_options_with_segment_limit(num_segment_limit, ctx.as_ref())
             .await?
         {
             v
@@ -89,7 +89,7 @@ impl FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         let compact_options = if let Some(v) = self
-            .compact_options(limits.segment_limit, limits.block_limit)
+            .compact_options(limits.segment_limit, limits.block_limit, ctx.as_ref())
             .await?
         {
             v
@@ -230,8 +230,9 @@ impl FuseTable {
     async fn compact_options_with_segment_limit(
         &self,
         num_segment_limit: Option<usize>,
+        ctx: &dyn TableContext,
     ) -> Result<Option<CompactOptions>> {
-        self.compact_options(num_segment_limit, None).await
+        self.compact_options(num_segment_limit, None, ctx).await
     }
 
     #[async_backtrace::framed]
@@ -239,8 +240,9 @@ impl FuseTable {
         &self,
         num_segment_limit: Option<usize>,
         num_block_limit: Option<usize>,
+        ctx: &dyn TableContext,
     ) -> Result<Option<CompactOptions>> {
-        let snapshot_opt = self.read_table_snapshot().await?;
+        let snapshot_opt = self.read_table_snapshot(ctx.txn_mgr()).await?;
         let base_snapshot = if let Some(val) = snapshot_opt {
             val
         } else {

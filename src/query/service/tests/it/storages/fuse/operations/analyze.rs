@@ -83,7 +83,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
             .await?;
         let table = catalog.get_table(&ctx.get_tenant(), &db, &tbl).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_opt = fuse_table.read_table_snapshot().await?;
+        let snapshot_opt = fuse_table.read_table_snapshot(ctx.txn_mgr()).await?;
         assert!(snapshot_opt.is_some());
         assert!(snapshot_opt.unwrap().table_statistics_location.is_none());
     }

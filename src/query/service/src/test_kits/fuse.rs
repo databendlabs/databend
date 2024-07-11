@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManager;
 use futures_util::TryStreamExt;
 use opendal::Operator;
 use serde::Serialize;
@@ -63,7 +64,10 @@ pub async fn generate_snapshot_with_segments(
     segment_locations: Vec<Location>,
     time_stamp: Option<DateTime<Utc>>,
 ) -> Result<String> {
-    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let current_snapshot = fuse_table
+        .read_table_snapshot(TxnManager::init())
+        .await?
+        .unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
     let mut new_snapshot = TableSnapshot::from_previous(

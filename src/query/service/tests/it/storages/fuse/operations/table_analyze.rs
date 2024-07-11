@@ -125,7 +125,10 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     // check summary after update
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let after_update = fuse_table.read_table_snapshot().await?.unwrap();
+    let after_update = fuse_table
+        .read_table_snapshot(ctx.txn_mgr())
+        .await?
+        .unwrap();
     let base_summary = after_update.summary.clone();
     let id_stats = base_summary.col_stats.get(&0).unwrap();
     assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
@@ -159,7 +162,10 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     // check summary after analyze
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let after_analyze = fuse_table.read_table_snapshot().await?.unwrap();
+    let after_analyze = fuse_table
+        .read_table_snapshot(ctx.txn_mgr())
+        .await?
+        .unwrap();
     let last_summary = after_analyze.summary.clone();
     let id_stats = last_summary.col_stats.get(&0).unwrap();
     assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
@@ -204,7 +210,10 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let operator = fuse_table.get_operator();
 
     // genenrate snapshot without prev_table_seq
-    let snapshot_0 = fuse_table.read_table_snapshot().await?.unwrap();
+    let snapshot_0 = fuse_table
+        .read_table_snapshot(ctx.txn_mgr())
+        .await?
+        .unwrap();
     let snapshot_1 = TableSnapshot::from_previous(&snapshot_0, None);
     let snapshot_loc_1 = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;

@@ -37,7 +37,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         mode: TruncateMode,
     ) -> Result<()> {
-        if let Some(prev_snapshot) = self.read_table_snapshot().await? {
+        if let Some(prev_snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await? {
             // Delete operation commit can retry multi-times if table version mismatched.
             let prev_snapshot_id = if !matches!(mode, TruncateMode::Delete) {
                 Some(prev_snapshot.snapshot_id)

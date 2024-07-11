@@ -67,7 +67,7 @@ impl<'a> FuseColumn<'a> {
     pub async fn get_blocks(&self) -> Result<DataBlock> {
         let tbl = self.table;
         let snapshot_id = self.snapshot_id.clone();
-        let maybe_snapshot = tbl.read_table_snapshot().await?;
+        let maybe_snapshot = tbl.read_table_snapshot(self.ctx.txn_mgr()).await?;
         if let Some(snapshot) = maybe_snapshot {
             if let Some(snapshot_id) = snapshot_id {
                 // prepare the stream of snapshot

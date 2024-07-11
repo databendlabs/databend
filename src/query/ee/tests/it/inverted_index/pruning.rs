@@ -55,6 +55,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_txn::TxnManager;
 use opendal::Operator;
 
 async fn apply_block_pruning(
@@ -531,7 +532,7 @@ async fn test_block_pruner() -> Result<()> {
     let new_table = table.refresh(ctx.as_ref()).await?;
     let fuse_table = FuseTable::do_create(new_table.get_table_info().clone())?;
 
-    let snapshot = fuse_table.read_table_snapshot().await?;
+    let snapshot = fuse_table.read_table_snapshot(TxnManager::init()).await?;
     assert!(snapshot.is_some());
     let snapshot = snapshot.unwrap();
 

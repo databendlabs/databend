@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
@@ -20,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::test_kits::*;
@@ -68,6 +68,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             .await?;
     }
 
+    let ctx_clone = ctx.clone();
     let query_task = async move {
         // 2. test compact and select concurrency
         let query = format!(
@@ -112,7 +113,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
                     ))
                 })
                 .unwrap();
-            let snapshot0 = fuse_table0.read_table_snapshot().await?;
+            let snapshot0 = fuse_table0.read_table_snapshot(ctx_clone.txn_mgr()).await?;
 
             let fuse_table1 = table1
                 .as_any()
@@ -125,7 +126,7 @@ pub async fn test_snapshot_consistency() -> Result<()> {
                     ))
                 })
                 .unwrap();
-            let snapshot1 = fuse_table1.read_table_snapshot().await?;
+            let snapshot1 = fuse_table1.read_table_snapshot(ctx_clone.txn_mgr()).await?;
 
             let res = match (snapshot0, snapshot1) {
                 (None, None) => true,

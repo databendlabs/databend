@@ -72,7 +72,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             Err(_) => return Ok(PipelineBuildResult::create()),
         };
 
-        let r = table.read_table_snapshot().await;
+        let r = table.read_table_snapshot(self.ctx.txn_mgr()).await;
         let snapshot_opt = match r {
             Err(e) => return Err(e),
             Ok(v) => v,
@@ -98,7 +98,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                     .await
                 {
                     Ok(t) => !t
-                        .read_table_snapshot()
+                        .read_table_snapshot(self.ctx.txn_mgr())
                         .await
                         .is_ok_and(|s| s.is_some_and(|s| s.prev_table_seq.is_some())),
                     Err(_) => true,

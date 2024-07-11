@@ -53,7 +53,7 @@ pub async fn do_refresh_virtual_column(
         return Ok(());
     }
 
-    let snapshot_opt = fuse_table.read_table_snapshot().await?;
+    let snapshot_opt = fuse_table.read_table_snapshot(ctx.txn_mgr()).await?;
     let snapshot = if let Some(val) = snapshot_opt {
         val
     } else {

@@ -33,6 +33,7 @@ use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_txn::TxnManager;
 use tantivy::schema::Field;
 use tantivy::tokenizer::LowerCaser;
 use tantivy::tokenizer::SimpleTokenizer;
@@ -95,7 +96,9 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     let table_schema = new_fuse_table.schema();
 
     // get index location from new table snapshot
-    let new_snapshot = new_fuse_table.read_table_snapshot().await?;
+    let new_snapshot = new_fuse_table
+        .read_table_snapshot(TxnManager::init())
+        .await?;
     assert!(new_snapshot.is_some());
     let new_snapshot = new_snapshot.unwrap();
 

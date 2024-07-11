@@ -323,7 +323,7 @@ where F: SnapshotGenerator + Send + 'static
                 let schema = self.table.schema().as_ref().clone();
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let previous = fuse_table.read_table_snapshot().await?;
+                let previous = fuse_table.read_table_snapshot(self.ctx.txn_mgr()).await?;
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
@@ -512,7 +512,7 @@ where F: SnapshotGenerator + Send + 'static
             State::RefreshTable => {
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let previous = fuse_table.read_table_snapshot().await?;
+                let previous = fuse_table.read_table_snapshot(self.ctx.txn_mgr()).await?;
                 let cluster_key_meta = fuse_table.cluster_key_meta.clone();
                 self.state = State::GenerateSnapshot {
                     previous,

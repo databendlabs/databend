@@ -222,7 +222,7 @@ impl FuseTable {
     ) -> Result<(Arc<FuseTable>, Vec<String>)> {
         let retention =
             Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
-        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot().await? {
+        let root_snapshot = if let Some(snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await? {
             snapshot
         } else {
             return Err(ErrorCode::TableHistoricalDataNotFound(

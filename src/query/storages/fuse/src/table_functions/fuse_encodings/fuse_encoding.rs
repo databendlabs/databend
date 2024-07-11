@@ -83,7 +83,7 @@ impl<'a> FuseEncoding<'a> {
                 continue;
             }
             let mut columns_info = vec![];
-            let snapshot = table.read_table_snapshot().await?;
+            let snapshot = table.read_table_snapshot(self.ctx.txn_mgr()).await?;
             if snapshot.is_none() {
                 continue;
             }

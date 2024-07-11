@@ -344,7 +344,7 @@ impl FuseTable {
                                 FuseTable::try_from_table(latest_table_ref.as_ref())?;
                             latest_snapshot =
                                 latest_fuse_table
-                                    .read_table_snapshot()
+                                    .read_table_snapshot(ctx.txn_mgr())
                                     .await?
                                     .ok_or_else(|| {
                                         ErrorCode::Internal(

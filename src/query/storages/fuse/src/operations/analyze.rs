@@ -119,7 +119,7 @@ impl SinkAnalyzeState {
             .await?;
 
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot = table.read_table_snapshot().await?;
+        let snapshot = table.read_table_snapshot(self.ctx.txn_mgr()).await?;
         if snapshot.is_none() {
             return Ok(true);
         }

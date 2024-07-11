@@ -137,12 +137,15 @@ impl MergeIntoInterpreter {
 
         // Prepare MergeIntoBuildInfo for PhysicalPlanBuilder to build MergeInto physical plan.
         let table_info = fuse_table.get_table_info();
-        let table_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                fuse_table.schema().as_ref().clone(),
-                Some(table_info.ident.seq),
-            ))
-        });
+        let table_snapshot = fuse_table
+            .read_table_snapshot(self.ctx.txn_mgr())
+            .await?
+            .unwrap_or_else(|| {
+                Arc::new(TableSnapshot::new_empty_snapshot(
+                    fuse_table.schema().as_ref().clone(),
+                    Some(table_info.ident.seq),
+                ))
+            });
         let update_stream_meta =
             dml_build_update_stream_req(self.ctx.clone(), &merge_into.meta_data).await?;
         let merge_into_build_info = MergeIntoBuildInfo {

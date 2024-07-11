@@ -86,6 +86,7 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             column_leaves.clone(),
                             max_threads,
+                            ctx.clone(),
                         ),
                         need_wrap_nullable,
                     )
@@ -100,6 +101,7 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             column_leaves.clone(),
                             max_threads,
+                            ctx.clone(),
                         ),
                         need_wrap_nullable,
                     )
@@ -120,6 +122,7 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             read_settings,
                             max_threads,
+                            ctx.clone(),
                         ),
                         need_wrap_nullable,
                     )
@@ -134,6 +137,7 @@ pub fn row_fetch_processor(
                             block_reader.clone(),
                             read_settings,
                             max_threads,
+                            ctx.clone(),
                         ),
                         need_wrap_nullable,
                     )
