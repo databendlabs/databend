@@ -418,5 +418,6 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(pretty_expr(*date))
             .append(RcDoc::text(")")),
         Expr::Hole { name, .. } => RcDoc::text(":").append(RcDoc::text(name.to_string())),
+        Expr::Placeholder { name, .. } => RcDoc::text(name),
     }
 }

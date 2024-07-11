@@ -306,6 +306,9 @@ pub enum ExprElement {
     Hole {
         name: String,
     },
+    Placeholder {
+        name: String,
+    },
 }
 
 pub const BETWEEN_PREC: u32 = 20;
@@ -409,6 +412,7 @@ impl ExprElement {
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
+            ExprElement::Placeholder { .. } => Affix::Nilfix,
         }
     }
 }
@@ -450,6 +454,7 @@ impl Expr {
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
+            Expr::Placeholder { .. } => Affix::Nilfix,
         }
     }
 }
@@ -638,6 +643,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 date: Box::new(date),
             },
             ExprElement::Hole { name } => Expr::Hole {
+                span: transform_span(elem.span.tokens),
+                name,
+            },
+            ExprElement::Placeholder { name } => Expr::Placeholder {
                 span: transform_span(elem.span.tokens),
                 name,
             },
@@ -1231,6 +1240,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
+    let placeholder = map(consumed(rule! { Placeholder }), |(_, _)| {
+        ExprElement::Placeholder {
+            name: "?".to_string(),
+        }
+    });
+
     let (rest, (span, elem)) = consumed(alt((
         // Note: each `alt` call supports maximum of 21 parsers
         rule!(
@@ -1253,6 +1268,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
             | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
             | #position : "`POSITION(... IN ...)`"
+            | #placeholder : "?"
         ),
         rule!(
             #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"

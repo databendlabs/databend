@@ -227,6 +227,11 @@ pub enum Expr {
         span: Span,
         name: String,
     },
+    /// `?` or `$` Prepared statement arg placeholder
+    Placeholder {
+        span: Span,
+        name: String,
+    },
 }
 
 impl Expr {
@@ -262,7 +267,8 @@ impl Expr {
             | Expr::DateAdd { span, .. }
             | Expr::DateSub { span, .. }
             | Expr::DateTrunc { span, .. }
-            | Expr::Hole { span, .. } => *span,
+            | Expr::Hole { span, .. }
+            | Expr::Placeholder { span, .. } => *span,
         }
     }
 
@@ -396,6 +402,7 @@ impl Expr {
             } => merge_span(merge_span(*span, interval.whole_span()), date.whole_span()),
             Expr::DateTrunc { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::Hole { span, .. } => *span,
+            Expr::Placeholder { span, .. } => *span,
         }
     }
 
@@ -710,6 +717,9 @@ impl Display for Expr {
                     write!(f, "DATE_TRUNC({unit}, {date})")?;
                 }
                 Expr::Hole { name, .. } => {
+                    write!(f, ":{name}")?;
+                }
+                Expr::Placeholder { name, .. } => {
                     write!(f, ":{name}")?;
                 }
             }
