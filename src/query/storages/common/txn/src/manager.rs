@@ -60,8 +60,8 @@ pub struct TxnBuffer {
 
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
 
-    // table_id -> latest snapshot
-    snapshots: HashMap<u64, Arc<TableSnapshot>>,
+    // location -> latest snapshot
+    snapshots: HashMap<String, Arc<TableSnapshot>>,
 }
 
 #[derive(Debug, Clone)]
@@ -110,8 +110,16 @@ impl TxnBuffer {
         }
     }
 
-    fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: Arc<TableSnapshot>) {
-        self.snapshots.insert(table_id, snapshot);
+    fn upsert_table_snapshot(
+        &mut self,
+        old_location: Option<&str>,
+        new_location: &str,
+        snapshot: Arc<TableSnapshot>,
+    ) {
+        if let Some(old_location) = old_location {
+            self.snapshots.remove(old_location);
+        }
+        self.snapshots.insert(new_location.to_string(), snapshot);
     }
 
     fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<Arc<TableSnapshot>> {
@@ -299,8 +307,14 @@ impl TxnManager {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
     }
 
-    pub fn upsert_table_snapshot(&mut self, table_id: u64, snapshot: Arc<TableSnapshot>) {
-        self.txn_buffer.upsert_table_snapshot(table_id, snapshot);
+    pub fn upsert_table_snapshot(
+        &mut self,
+        old_location: Option<&str>,
+        new_location: &str,
+        snapshot: Arc<TableSnapshot>,
+    ) {
+        self.txn_buffer
+            .upsert_table_snapshot(old_location, new_location, snapshot);
     }
 
     pub fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {

@@ -60,6 +60,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
+        previous_location: Option<String>,
         cluster_key_meta: Option<ClusterKey>,
         table_info: TableInfo,
     },
@@ -67,6 +68,7 @@ enum State {
         data: Vec<u8>,
         snapshot: TableSnapshot,
         table_info: TableInfo,
+        previous_location: Option<String>,
     },
     Abort(ErrorCode),
     Finish,
@@ -251,6 +253,7 @@ where F: SnapshotGenerator + Send + 'static
                 previous,
                 cluster_key_meta,
                 table_info,
+                previous_location,
             } => {
                 let change_tracking_enabled_during_commit = {
                     let no_change_tracking_at_beginning = !self.change_tracking;
@@ -292,6 +295,7 @@ where F: SnapshotGenerator + Send + 'static
                             data: snapshot.to_bytes()?,
                             snapshot,
                             table_info,
+                            previous_location,
                         };
                     }
                     Err(e) => {
@@ -324,6 +328,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot(self.ctx.txn_mgr()).await?;
+                let previous_location = fuse_table.snapshot_loc().await?;
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
@@ -347,6 +352,7 @@ where F: SnapshotGenerator + Send + 'static
                         previous,
                         cluster_key_meta: fuse_table.cluster_key_meta.clone(),
                         table_info,
+                        previous_location,
                     };
                 }
             }
@@ -354,6 +360,7 @@ where F: SnapshotGenerator + Send + 'static
                 data,
                 mut snapshot,
                 table_info,
+                previous_location,
             } => {
                 let location = self
                     .location_gen
@@ -370,10 +377,11 @@ where F: SnapshotGenerator + Send + 'static
                         assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
                     }
                     let snapshot_ref = Arc::new(snapshot);
-                    self.ctx
-                        .txn_mgr()
-                        .lock()
-                        .upsert_table_snapshot(table_info.ident.table_id, snapshot_ref.clone());
+                    self.ctx.txn_mgr().lock().upsert_table_snapshot(
+                        previous_location.as_ref(),
+                        &location,
+                        snapshot_ref.clone(),
+                    );
                     snapshot_ref
                 } else {
                     self.dal.write(&location, data).await?;
@@ -513,11 +521,13 @@ where F: SnapshotGenerator + Send + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot(self.ctx.txn_mgr()).await?;
+                let previous_location = fuse_table.snapshot_loc().await?;
                 let cluster_key_meta = fuse_table.cluster_key_meta.clone();
                 self.state = State::GenerateSnapshot {
                     previous,
                     cluster_key_meta,
                     table_info: fuse_table.table_info.clone(),
+                    previous_location,
                 };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),

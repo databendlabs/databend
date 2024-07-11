@@ -254,9 +254,11 @@ async fn build_update_table_meta_req(
             snapshot.prev_snapshot_id = previous.prev_snapshot_id;
             assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
         }
-        ctx.txn_mgr()
-            .lock()
-            .upsert_table_snapshot(fuse_table.get_id(), Arc::new(snapshot.clone()));
+        ctx.txn_mgr().lock().upsert_table_snapshot(
+            fuse_table.snapshot_loc(),
+            &location,
+            Arc::new(snapshot.clone()),
+        );
     } else {
         let dal = fuse_table.get_operator();
         dal.write(&location, snapshot.to_bytes()?).await?;
