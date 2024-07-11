@@ -1014,10 +1014,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(name, _, opt_distinct, opt_args, _, opt_ignore_null, window)| ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct: opt_distinct.is_some(),
+                window_ignore_null: match name.to_string().as_str().to_lowercase().as_str() {
+                    "first_value" | "first" | "last_value" | "last" | "nth_value" => {
+                        opt_ignore_null.map(|key| key.0.kind == IGNORE)
+                    }
+                    _ => None,
+                },
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
-                window_ignore_null: opt_ignore_null.map(|key| key.0.kind == IGNORE),
                 window: Some(window.1),
                 lambda: None,
             },

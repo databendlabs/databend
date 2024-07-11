@@ -20880,7 +20880,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) IGNORE NULLS OVER ( w ) FROM e
+SELECT sum(d) OVER ( w ) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -20934,9 +20934,7 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: Some(
-                                    true,
-                                ),
+                                window_ignore_null: None,
                                 window: Some(
                                     WindowSpec(
                                         WindowSpec {

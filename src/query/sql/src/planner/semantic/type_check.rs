@@ -1466,12 +1466,9 @@ impl<'a> TypeChecker<'a> {
         };
 
         match func_name {
-            "lag" | "lead" => self.resolve_lag_lead_window_function(
-                func_name,
-                &arguments,
-                &arg_types,
-                ignore_null,
-            ),
+            "lag" | "lead" => {
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
+            }
             "first_value" | "first" | "last_value" | "last" | "nth_value" => self
                 .resolve_nth_value_window_function(func_name, &arguments, &arg_types, ignore_null),
             "ntile" => self.resolve_ntile_window_function(&arguments),
@@ -1486,7 +1483,6 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[ScalarExpr],
         arg_types: &[DataType],
-        ignore_null: bool,
     ) -> Result<WindowFuncType> {
         if args.is_empty() || args.len() > 3 {
             return Err(ErrorCode::InvalidArgument(format!(
@@ -1546,7 +1542,6 @@ impl<'a> TypeChecker<'a> {
             offset: offset.unsigned_abs(),
             default: cast_default,
             return_type: Box::new(return_type),
-            ignore_null,
         }))
     }
 

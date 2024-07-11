@@ -336,7 +336,6 @@ impl<'a> WindowRewriter<'a> {
                     offset: ll.offset,
                     default: new_default,
                     return_type: ll.return_type.clone(),
-                    ignore_null: ll.ignore_null,
                 })
             }
             WindowFuncType::NthValue(func) => {

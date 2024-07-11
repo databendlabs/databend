@@ -604,7 +604,6 @@ pub struct LagLeadFunction {
     pub offset: u64,
     pub default: Option<Box<ScalarExpr>>,
     pub return_type: Box<DataType>,
-    pub ignore_null: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

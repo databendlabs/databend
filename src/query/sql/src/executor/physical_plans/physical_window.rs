@@ -130,7 +130,6 @@ pub struct LagLeadFunctionDesc {
     pub arg: usize,
     pub return_type: DataType,
     pub default: LagLeadDefault,
-    pub ignore_null: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -305,7 +304,6 @@ impl PhysicalPlanBuilder {
                         ))
                     }?,
                     default: new_default,
-                    ignore_null: lag_lead.ignore_null,
                 })
             }
 
