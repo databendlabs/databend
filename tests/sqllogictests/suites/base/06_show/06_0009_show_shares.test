@@ -31,7 +31,7 @@ grant SELECT on TABLE show_shares.test_tb TO SHARE test_share
 # query RTTTTTT
 # show shares
 # ----
-# $DATE_IN_SHARE test_share show_shares test_tenant x comment
+# $DATE_IN_SHARE OUTBOUND test_share show_shares test_tenant x comment
 
 # query RTT
 # desc share test_share
