@@ -231,6 +231,7 @@ pub fn sort_merge(
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: Vec<DataBlock>,
+    sort_spilling_batch_bytes: usize,
     enable_loser_tree: bool,
 ) -> Result<Vec<DataBlock>> {
     let sort_desc = Arc::new(sort_desc);
@@ -241,6 +242,7 @@ pub fn sort_merge(
         false,
         0,
         0,
+        sort_spilling_batch_bytes,
         MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
     )?;
     for block in data_blocks {

@@ -447,6 +447,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("sort_spilling_batch_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8 * 1024 * 1024),
+                    desc: "Sets the uncompressed size that merge sorter will spill to storage",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
