@@ -349,7 +349,6 @@ impl Join {
                 _ => continue,
             }
         }
-
         if join_card_updated {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {

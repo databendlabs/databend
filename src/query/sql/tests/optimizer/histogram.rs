@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_sql::optimizer::Histogram;
-use databend_common_sql::optimizer::HistogramBucket;
 use databend_common_storage::Datum;
+use databend_common_storage::Histogram;
+use databend_common_storage::HistogramBucket;
 
 #[test]
 fn test_histogram() {

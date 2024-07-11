@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::fmt;
-use std::fmt::Debug;
 
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
