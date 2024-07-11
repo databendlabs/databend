@@ -204,6 +204,7 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l1_sort_descriptions.clone(),
             left_sorted_blocks,
+            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
         )?;
 
@@ -250,6 +251,7 @@ impl RangeJoinState {
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
+            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
         )?)?;
 
