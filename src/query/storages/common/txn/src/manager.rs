@@ -129,6 +129,10 @@ impl TxnBuffer {
     fn snapshots(&mut self) -> HashMap<String, Arc<TableSnapshot>> {
         std::mem::take(&mut self.snapshots)
     }
+
+    fn mutated_tables(&mut self) -> HashMap<u64, TableInfo> {
+        std::mem::take(&mut self.mutated_tables)
+    }
 }
 
 impl TxnManager {
@@ -323,5 +327,9 @@ impl TxnManager {
 
     pub fn get_table_snapshot_by_location(&self, location: &str) -> Option<Arc<TableSnapshot>> {
         self.txn_buffer.get_table_snapshot_by_location(location)
+    }
+
+    pub fn mutated_tables(&mut self) -> HashMap<u64, TableInfo> {
+        self.txn_buffer.mutated_tables()
     }
 }

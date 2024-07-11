@@ -142,7 +142,10 @@ impl Amender {
     }
 
     async fn recover_snapshot(&self, table: Box<FuseTable>) -> Result<()> {
-        match table.read_table_snapshot_without_cache().await {
+        match table
+            .read_table_snapshot_without_cache(TxnManager::init())
+            .await
+        {
             Ok(Some(snapshot)) => {
                 let schema = table.schema();
                 let operator = table.get_operator();

@@ -29,6 +29,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_txn::TxnManager;
 
 pub struct RealAttachTableHandler {}
 #[async_trait::async_trait]
@@ -43,7 +44,7 @@ impl AttachTableHandler for RealAttachTableHandler {
         let sp = plan.storage_params.as_ref().unwrap();
         let operator = DataOperator::try_create(sp).await?;
         let operator = operator.operator();
-        let reader = MetaReaders::table_snapshot_reader(operator.clone());
+        let reader = MetaReaders::table_snapshot_reader(operator.clone(),TxnManager::init());
         let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
         let snapshot_loc = operator.read(&hint).await?.to_vec();
         let snapshot_loc = String::from_utf8(snapshot_loc)?;

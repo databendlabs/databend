@@ -60,29 +60,22 @@ impl Interpreter for CommitInterpreter {
             let catalog = self.ctx.get_default_catalog()?;
 
             {
-                let snapshots = self.ctx.txn_mgr().lock().snapshots();
-                for (table_id, snapshot) in snapshots {
-                    // let table_info = self
-                    //     .ctx
-                    //     .txn_mgr()
-                    //     .lock()
-                    //     .get_table_from_buffer_by_id(table_id)
-                    //     .ok_or_else(|| {
-                    //         ErrorCode::UnknownTable(format!(
-                    //             "Unknown table id in txn manager: {}",
-                    //             table_id
-                    //         ))
-                    //     })?;
-                    // let table = catalog.get_table_by_info(&table_info)?;
-                    // let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                    // let dal = fuse_table.get_operator();
-                    // let location = fuse_table.snapshot_loc().await?.ok_or_else(|| {
-                    //     ErrorCode::Internal(format!(
-                    //         "Table {} has no snapshot location",
-                    //         table_info.name
-                    //     ))
-                    // })?;
-                    // dal.write(&location, snapshot.to_bytes()?).await?;
+                let mutated_tables = self.ctx.txn_mgr().lock().mutated_tables();
+                for table_info in mutated_tables.values() {
+                    let table = catalog.get_table_by_info(&table_info)?;
+                    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                    let dal = fuse_table.get_operator();
+                    if let Some(location) = fuse_table.snapshot_loc().await? {
+                        let snapshot = self
+                            .ctx
+                            .txn_mgr()
+                            .lock()
+                            .get_table_snapshot_by_location(&location);
+                        if let Some(snapshot) = snapshot
+                        {
+                            dal.write(&location, snapshot.to_bytes()?).await?;
+                        }
+                    }
                 }
             }
             let req = self.ctx.txn_mgr().lock().req();

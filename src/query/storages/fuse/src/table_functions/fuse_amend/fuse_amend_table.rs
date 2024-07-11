@@ -104,10 +104,15 @@ impl Table for FuseAmendTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        if ctx.txn_mgr().lock().is_active() {
+            return Err(ErrorCode::StorageOther(
+                "Cannot amend table in active transaction",
+            ));
+        }
         Ok((PartStatistics::default(), Partitions::default()))
     }
 
