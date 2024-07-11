@@ -1535,6 +1535,12 @@ pub struct QueryConfig {
     #[clap(skip)]
     udfs: Vec<UDFConfig>,
 
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub share_endpoint_address: String,
+
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub share_endpoint_auth_token_file: String,
+
     #[clap(skip)]
     quota: Option<TenantQuota>,
 
@@ -1734,6 +1740,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 users: self.users,
                 udfs: self.udfs,
             },
+            share_endpoint_address: self.share_endpoint_address,
+            share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
@@ -1817,6 +1825,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             default_compression: inner.default_compression,
             users: inner.builtin.users,
             udfs: inner.builtin.udfs,
+            share_endpoint_address: inner.share_endpoint_address,
+            share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
