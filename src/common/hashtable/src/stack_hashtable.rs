@@ -207,18 +207,3 @@ where K: Keyable
         self.inner.next()
     }
 }
-
-#[allow(dead_code)]
-pub struct StackHashtableIterMut<'a, K, V> {
-    inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,
-}
-
-impl<'a, K, V> Iterator for StackHashtableIterMut<'a, K, V>
-where K: Keyable
-{
-    type Item = &'a mut Entry<K, V>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
