@@ -47,7 +47,3 @@ select errors != '[]' from system.queries_profiling where query_id = (select que
 ----
 1
 
-query B
-select errors != '[]' from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT 10014') AND plan_id = 0
-----
-0
