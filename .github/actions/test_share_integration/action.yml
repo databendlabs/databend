@@ -39,6 +39,7 @@ runs:
 
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
+      secrets: inherit
       env:
         # we need workflow:write permission to create release if there were any workflow changes
         # which is not possible for github actions token
