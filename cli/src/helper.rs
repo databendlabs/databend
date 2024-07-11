@@ -15,6 +15,9 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
+use databend_common_ast::parser::all_reserved_keywords;
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::tokenize_sql;
 use rustyline::completion::Completer;
 use rustyline::completion::FilenameCompleter;
 use rustyline::completion::Pair;
@@ -27,10 +30,6 @@ use rustyline::validate::Validator;
 use rustyline::Context;
 use rustyline::Helper;
 use rustyline::Result;
-
-use crate::ast::all_reserved_keywords;
-use crate::ast::tokenize_sql;
-use crate::ast::TokenKind;
 
 pub struct CliHelper {
     completer: FilenameCompleter,
@@ -65,12 +64,12 @@ impl Highlighter for CliHelper {
                     || TokenKind::is_reserved_function_name(&token.kind)
                 {
                     line.replace_range(
-                        token.span.clone(),
+                        std::ops::Range::from(token.span),
                         &format!("\x1b[1;32m{}\x1b[0m", token.text()),
                     );
                 } else if TokenKind::is_literal(&token.kind) {
                     line.replace_range(
-                        token.span.clone(),
+                        std::ops::Range::from(token.span),
                         &format!("\x1b[1;33m{}\x1b[0m", token.text()),
                     );
                 }

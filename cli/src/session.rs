@@ -21,6 +21,8 @@ use anyhow::anyhow;
 use anyhow::Result;
 use async_recursion::async_recursion;
 use chrono::NaiveDateTime;
+use databend_common_ast::parser::token::TokenKind;
+use databend_common_ast::parser::token::Tokenizer;
 use databend_driver::ServerStats;
 use databend_driver::{Client, Connection};
 use once_cell::sync::Lazy;
@@ -33,7 +35,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 
-use crate::ast::{TokenKind, Tokenizer};
 use crate::config::Settings;
 use crate::config::TimeOption;
 use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay};
@@ -349,40 +350,15 @@ impl Session {
         'Parser: loop {
             let mut tokenizer = Tokenizer::new(&self.query);
 
-            let mut in_comment = false;
-            let mut in_comment_block = false;
-
             while let Some(Ok(token)) = tokenizer.next() {
-                match token.kind {
-                    TokenKind::SemiColon => {
-                        if in_comment_block || in_comment {
-                            continue;
-                        }
-
-                        // push to current and continue the tokenizer
-                        let (sql, remain) = self.query.split_at(token.span.end);
-                        if !sql.is_empty() {
-                            queries.push(sql.to_string());
-                        }
-                        self.query = remain.to_string();
-                        continue 'Parser;
+                if let TokenKind::SemiColon = token.kind {
+                    // push to current and continue the tokenizer
+                    let (sql, remain) = self.query.split_at(token.span.end as usize);
+                    if !sql.is_empty() {
+                        queries.push(sql.to_string());
                     }
-                    TokenKind::Comment => {
-                        if in_comment_block {
-                            continue;
-                        }
-                        in_comment = true;
-                    }
-                    TokenKind::Newline => {
-                        in_comment = false;
-                    }
-                    TokenKind::CommentBlockStart => {
-                        in_comment_block = true;
-                    }
-                    TokenKind::CommentBlockEnd => {
-                        in_comment_block = false;
-                    }
-                    _ => {}
+                    self.query = remain.to_string();
+                    continue 'Parser;
                 }
             }
             break;
