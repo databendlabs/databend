@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::Scalar;
 use ordered_float::OrderedFloat;
@@ -47,6 +48,7 @@ impl Datum {
             Scalar::Number(NumberScalar::Float32(v)) => {
                 Some(Datum::Float(F64::from(f32::from(v) as f64)))
             }
+            Scalar::Decimal(v) => Some(Datum::Float(F64::from(v.to_float64()))),
             Scalar::Number(NumberScalar::Float64(v)) => Some(Datum::Float(v)),
             Scalar::Binary(v) => Some(Datum::Bytes(v)),
             Scalar::String(v) => Some(Datum::Bytes(v.as_bytes().to_vec())),

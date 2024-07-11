@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
