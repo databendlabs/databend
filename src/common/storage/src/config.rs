@@ -13,7 +13,13 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::path::Path;
+use std::sync::Arc;
 
+use databend_common_auth::RefreshableToken;
+use databend_common_auth::TokenFile;
+use databend_common_base::base::tokio::sync::RwLock;
+use databend_common_base::base::GlobalInstance;
 use databend_common_meta_app::storage::StorageParams;
 use serde::Deserialize;
 use serde::Serialize;
@@ -38,4 +44,62 @@ pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
     pub params: StorageParams,
+}
+
+// TODO: This config should be moved out of common-storage crate.
+#[derive(Clone)]
+pub struct ShareTableConfig {
+    pub share_endpoint_address: Option<String>,
+    pub share_endpoint_token: RefreshableToken,
+}
+
+impl ShareTableConfig {
+    pub fn init(
+        share_endpoint_address: &str,
+        token_file: &str,
+        default_token: String,
+    ) -> databend_common_exception::Result<()> {
+        GlobalInstance::set(Self::try_create(
+            share_endpoint_address,
+            token_file,
+            default_token,
+        )?);
+
+        Ok(())
+    }
+
+    pub fn try_create(
+        share_endpoint_address: &str,
+        token_file: &str,
+        default_token: String,
+    ) -> databend_common_exception::Result<ShareTableConfig> {
+        let share_endpoint_address = if share_endpoint_address.is_empty() {
+            None
+        } else {
+            Some(share_endpoint_address.to_owned())
+        };
+        let share_endpoint_token = if token_file.is_empty() {
+            RefreshableToken::Direct(default_token)
+        } else {
+            let s = String::from(token_file);
+            let f = TokenFile::new(Path::new(&s))?;
+            RefreshableToken::File(Arc::new(RwLock::new(f)))
+        };
+        Ok(ShareTableConfig {
+            share_endpoint_address,
+            share_endpoint_token,
+        })
+    }
+
+    pub fn share_endpoint_address() -> Option<String> {
+        ShareTableConfig::instance().share_endpoint_address
+    }
+
+    pub fn share_endpoint_token() -> RefreshableToken {
+        ShareTableConfig::instance().share_endpoint_token
+    }
+
+    pub fn instance() -> ShareTableConfig {
+        GlobalInstance::get()
+    }
 }
