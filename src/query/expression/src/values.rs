@@ -1506,9 +1506,60 @@ impl ColumnBuilder {
     }
 
     pub fn repeat(scalar: &ScalarRef, n: usize, data_type: &DataType) -> ColumnBuilder {
-        let mut builder = ColumnBuilder::with_capacity_hint(data_type, n, false);
-        builder.push_repeat(scalar, n);
-        builder
+        if !scalar.is_null() {
+            if let DataType::Nullable(ty) = data_type {
+                let mut builder = ColumnBuilder::with_capacity(ty, 1);
+                builder.push_repeat(scalar, n);
+                return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                    builder,
+                    validity: Bitmap::new_constant(true, n).make_mut(),
+                }));
+            }
+        }
+
+        match scalar {
+            ScalarRef::Null => match data_type {
+                DataType::Null => ColumnBuilder::Null { len: n },
+                DataType::Nullable(inner) => {
+                    ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                        builder: Self::repeat_default(inner, n),
+                        validity: MutableBitmap::from_len_zeroed(n),
+                    }))
+                }
+                _ => unreachable!(),
+            },
+            ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
+            ScalarRef::EmptyMap => ColumnBuilder::EmptyMap { len: n },
+            ScalarRef::Number(num) => ColumnBuilder::Number(NumberColumnBuilder::repeat(*num, n)),
+            ScalarRef::Decimal(dec) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
+            }
+            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
+            ScalarRef::Binary(s) => ColumnBuilder::Binary(BinaryColumnBuilder::repeat(s, n)),
+            ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
+            ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
+            ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
+            ScalarRef::Array(col) => {
+                ColumnBuilder::Array(Box::new(ArrayColumnBuilder::repeat(col, n)))
+            }
+            ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat(b, n)),
+            ScalarRef::Tuple(fields) => {
+                let fields_ty = match data_type {
+                    DataType::Tuple(fields_ty) => fields_ty,
+                    _ => unreachable!(),
+                };
+                ColumnBuilder::Tuple(
+                    fields
+                        .iter()
+                        .zip(fields_ty)
+                        .map(|(field, ty)| ColumnBuilder::repeat(field, n, ty))
+                        .collect(),
+                )
+            }
+            ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
+            ScalarRef::Geometry(s) => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat(s, n)),
+        }
     }
 
     pub fn len(&self) -> usize {

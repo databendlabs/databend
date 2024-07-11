@@ -376,7 +376,6 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         for _ in 1..n {
             T::append_column(&mut self.builder, item);
         }
-        self.offsets.reserve(n);
         self.offsets
             .extend((1..=n).map(|i| (before + len * i) as u64));
     }

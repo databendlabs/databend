@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::once;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -334,9 +335,16 @@ impl BinaryColumnBuilder {
     }
 
     pub fn repeat(scalar: &[u8], n: usize) -> Self {
-        let mut builder = Self::with_capacity(n, scalar.len() * n);
-        builder.push_repeat(scalar, n);
-        builder
+        let len = scalar.len();
+        let data = scalar.iter().cloned().cycle().take(len * n).collect();
+        let offsets = once(0)
+            .chain((0..n).map(|i| (len * (i + 1)) as u64))
+            .collect();
+        BinaryColumnBuilder {
+            data,
+            offsets,
+            need_estimated: false,
+        }
     }
 
     pub fn repeat_default(n: usize) -> Self {
@@ -450,11 +458,18 @@ impl BinaryColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: &[u8], n: usize) {
-        self.data.reserve(item.len() * n);
-        self.offsets.reserve(n);
-        for _ in 0..n {
-            self.data.extend_from_slice(item);
-            self.commit_row();
+        if self.need_estimated && self.offsets.len() - 1 < 64 {
+            self.data.reserve(item.len() * n);
+            for _ in 0..n {
+                self.data.extend_from_slice(item);
+                self.commit_row();
+            }
+        } else {
+            let start = self.data.len();
+            let len = item.len();
+            self.data.extend(item.iter().cloned().cycle().take(len * n));
+            self.offsets
+                .extend((1..=n).map(|i| (start + len * i) as u64));
         }
     }
 
