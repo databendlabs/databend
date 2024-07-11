@@ -24,3 +24,6 @@ pub use layer::create_share_table_operator;
 
 mod signer;
 pub use signer::SharedSigner;
+
+mod share_endpoint;
+pub use share_endpoint::ShareEndpointManager;
