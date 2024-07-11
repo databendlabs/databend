@@ -86,7 +86,7 @@ pub struct CacheManager {
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
-    parqeut_file_meta_data_cache: CacheSlot<FileMetaDataCache>,
+    parquet_file_meta_data_cache: CacheSlot<FileMetaDataCache>,
     table_data_cache: CacheSlot<TableDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
@@ -116,10 +116,8 @@ impl CacheManager {
                             std::thread::available_parallelism()
                                 .expect("Cannot get thread count")
                                 .get() as u32,
-                        )
+                        ) * 5
                     };
-
-                    let queue_size = queue_size * 5;
 
                     info!(
                         "disk cache enabled, cache population queue size {}",
@@ -150,7 +148,7 @@ impl CacheManager {
         let in_memory_table_data_cache = Self::new_named_cache_with_meter_slot(
             memory_cache_capacity,
             ColumnArrayMeter,
-            "memory_cache_table_data",
+            MEMORY_CACHE_TABLE_DATA,
             Unit::Bytes,
         );
 
@@ -164,7 +162,7 @@ impl CacheManager {
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_file_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
-                parqeut_file_meta_data_cache: CacheSlot::new(None),
+                parquet_file_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
                 table_data_cache,
                 in_memory_table_data_cache,
@@ -173,31 +171,31 @@ impl CacheManager {
         } else {
             let table_snapshot_cache = Self::new_named_cache_slot(
                 config.table_meta_snapshot_count,
-                "memory_cache_table_snapshot",
+                MEMORY_CACHE_TABLE_SNAPSHOT,
             );
             let table_statistic_cache = Self::new_named_cache_slot(
                 config.table_meta_statistic_count,
-                "memory_cache_table_statistics",
+                MEMORY_CACHE_TABLE_STATISTICS,
             );
-            let segment_info_cache = Self::new_named_cache_with_meter_slot(
+            let compact_segment_info_cache = Self::new_named_cache_with_meter_slot(
                 config.table_meta_segment_bytes,
                 CompactSegmentInfoMeter {},
-                "memory_cache_compact_segment_info",
+                MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 Unit::Bytes,
             );
             let bloom_index_filter_cache = Self::new_named_cache_with_meter_slot(
                 config.table_bloom_index_filter_size,
                 BloomIndexFilterMeter {},
-                "memory_cache_bloom_index_filter",
+                MEMORY_CACHE_BLOOM_INDEX_FILTER,
                 Unit::Bytes,
             );
             let bloom_index_meta_cache = Self::new_named_cache_slot(
                 config.table_bloom_index_meta_count,
-                "memory_cache_bloom_index_file_meta_data",
+                MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA,
             );
             let inverted_index_meta_cache = Self::new_named_cache_slot(
                 config.inverted_index_meta_count,
-                "memory_cache_inverted_index_file_meta_data",
+                MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA,
             );
 
             // setup in-memory inverted index filter cache
@@ -209,31 +207,31 @@ impl CacheManager {
             let inverted_index_file_cache = Self::new_named_cache_with_meter_slot(
                 inverted_index_file_size,
                 InvertedIndexFileMeter {},
-                "memory_cache_inverted_index_file",
+                MEMORY_CACHE_INVERTED_INDEX_FILE,
                 Unit::Bytes,
             );
             let prune_partitions_cache = Self::new_named_cache_slot(
                 config.table_prune_partitions_count,
-                "memory_cache_prune_partitions",
+                MEMORY_CACHE_PRUNE_PARTITIONS,
             );
 
-            let file_meta_data_cache = Self::new_named_cache_slot(
+            let parquet_file_meta_data_cache = Self::new_named_cache_slot(
                 DEFAULT_FILE_META_DATA_CACHE_ITEMS,
-                "memory_cache_parquet_file_meta",
+                MEMORY_CACHE_PARQUET_FILE_META,
             );
 
             let block_meta_cache =
-                Self::new_named_cache_slot(config.block_meta_count, "memory_cache_block_meta");
+                Self::new_named_cache_slot(config.block_meta_count, MEMORY_CACHE_BLOCK_META);
 
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
-                compact_segment_info_cache: segment_info_cache,
+                compact_segment_info_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
                 prune_partitions_cache,
-                parqeut_file_meta_data_cache: file_meta_data_cache,
+                parquet_file_meta_data_cache,
                 table_statistic_cache,
                 table_data_cache,
                 in_memory_table_data_cache,
@@ -285,7 +283,7 @@ impl CacheManager {
     }
 
     pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
-        self.parqeut_file_meta_data_cache.get()
+        self.parquet_file_meta_data_cache.get()
     }
 
     pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
@@ -413,7 +411,7 @@ impl CacheManager {
                 );
             }
             MEMORY_CACHE_PARQUET_FILE_META => {
-                let cache = &self.parqeut_file_meta_data_cache;
+                let cache = &self.parquet_file_meta_data_cache;
                 Self::set_named_cache_capacity(cache, new_capacity, name)
             }
             MEMORY_CACHE_PRUNE_PARTITIONS => {
