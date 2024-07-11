@@ -211,14 +211,13 @@ async fn test_successfully_heartbeat_node() -> Result<()> {
 }
 
 fn create_test_node_info(id: &str) -> NodeInfo {
-    NodeInfo {
-        id: String::from(id),
-        secret: "".to_string(),
-        cpu_nums: 0,
-        version: 0,
-        flight_address: String::from("ip:port"),
-        binary_version: "binary_version".to_string(),
-    }
+    NodeInfo::create(
+        String::from(id),
+        "".to_string(),
+        0,
+        String::from("ip:port"),
+        "binary_version".to_string(),
+    )
 }
 
 async fn new_cluster_api() -> Result<(MetaStore, ClusterMgr)> {

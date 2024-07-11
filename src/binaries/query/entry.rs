@@ -110,9 +110,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     // Cluster register.
     {
-        ClusterDiscovery::instance()
-            .register_to_metastore(conf)
-            .await?;
+        ClusterDiscovery::instance().register_to_metastore().await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
             conf.query.cluster_id, conf.meta.endpoints
