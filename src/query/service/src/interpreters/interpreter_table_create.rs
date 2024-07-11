@@ -51,6 +51,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_share::remove_share_table_info;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -187,7 +188,7 @@ impl CreateTableInterpreter {
         req.as_dropped = true;
         req.table_meta.drop_on = Some(Utc::now());
         let table_meta = req.table_meta.clone();
-        let reply = catalog.create_table(req).await?;
+        let reply = catalog.create_table(req.clone()).await?;
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
@@ -245,14 +246,25 @@ impl CreateTableInterpreter {
         };
 
         // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
             save_share_spec(
-                tenant.tenant_name(),
+                self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
+                &spec_vec,
             )
             .await?;
+
+            // remove table info file
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
+            }
         }
 
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
@@ -364,14 +376,25 @@ impl CreateTableInterpreter {
         }
 
         // update share spec if needed
-        if let Some((spec_vec, share_table_info)) = reply.spec_vec {
+        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_info),
+                &spec_vec,
             )
             .await?;
+
+            // remove table spec
+            for share_spec in spec_vec {
+                remove_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_spec.name,
+                    db_id,
+                    revoke_table_id,
+                )
+                .await?;
+            }
         }
 
         Ok(PipelineBuildResult::create())

@@ -18,8 +18,10 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Lambda;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -88,5 +90,32 @@ impl UDFValidator {
                 format!("Parameters are not used: {:?}", params_not_used)
             },
         )))
+    }
+
+    pub fn is_udf_server_allowed(address: &str) -> Result<()> {
+        if !GlobalConfig::instance().query.enable_udf_server {
+            return Err(ErrorCode::Unimplemented(
+                "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
+            ));
+        }
+
+        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+        let url_addr = url::Url::parse(address)
+            .map_err_to_code(ErrorCode::InvalidArgument, || {
+                format!("udf server address '{address}' is invalid, please check the address",)
+            })?;
+
+        if udf_server_allow_list.iter().all(|allow_url| {
+            if let Ok(allow_url) = url::Url::parse(allow_url) {
+                allow_url.host_str() != url_addr.host_str()
+            } else {
+                true
+            }
+        }) {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+            )));
+        }
+        Ok(())
     }
 }

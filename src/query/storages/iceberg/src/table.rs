@@ -218,7 +218,7 @@ impl IcebergTable {
         let sp = self.get_storage_params()?;
         let op = init_operator(sp)?;
         let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, &arrow_schema)?
+            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
                 .with_options(read_options)
                 .with_push_downs(plan.push_downs.as_ref())
                 .with_pruner(Some(pruner));

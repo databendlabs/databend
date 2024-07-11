@@ -36,9 +36,9 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
+use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 
-use crate::read::one_file_partition::OneFilePartition;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -107,7 +107,7 @@ impl StageTable {
         let partitions = files
             .into_iter()
             .map(|v| {
-                let part = OneFilePartition {
+                let part = SingleFilePartition {
                     path: v.path.clone(),
                     size: v.size as usize,
                 };

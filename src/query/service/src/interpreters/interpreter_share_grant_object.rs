@@ -20,6 +20,7 @@ use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::share::GrantShareObjectReq;
 use databend_common_storages_share::save_share_spec;
+use databend_common_storages_share::update_share_table_info;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -61,13 +62,26 @@ impl Interpreter for GrantShareObjectInterpreter {
         };
         let resp = meta_api.grant_share_object(req).await?;
 
-        save_share_spec(
-            self.ctx.get_tenant().tenant_name(),
-            self.ctx.get_application_level_data_operator()?.operator(),
-            resp.spec_vec,
-            Some(vec![resp.share_table_info]),
-        )
-        .await?;
+        if let Some(share_spec) = &resp.share_spec {
+            save_share_spec(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &[share_spec.clone()],
+            )
+            .await?;
+
+            // if grant object is table, save table info
+            if let Some((db_id, share_table_info)) = &resp.grant_share_table {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &[share_spec.name.clone()],
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

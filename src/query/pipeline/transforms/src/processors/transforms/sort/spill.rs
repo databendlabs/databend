@@ -17,7 +17,7 @@ use databend_common_expression::BlockMetaInfo;
 /// Mark a partially sorted [`DataBlock`] as a block needs to be spilled.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SortSpillMetaWithParams {
-    pub batch_size: usize,
+    pub batch_rows: usize,
     pub num_merge: usize,
 }
 

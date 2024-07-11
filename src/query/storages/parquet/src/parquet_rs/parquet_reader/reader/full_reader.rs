@@ -90,9 +90,7 @@ impl ParquetRSFullReader {
         let reader = ParquetFileReader::new(reader, size);
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(
             reader,
-            ArrowReaderOptions::new()
-                .with_page_index(self.need_page_index)
-                .with_skip_arrow_metadata(true),
+            ArrowReaderOptions::new().with_page_index(self.need_page_index),
         )
         .await?
         .with_projection(self.projection.clone())
@@ -174,7 +172,7 @@ impl ParquetRSFullReader {
         let bytes = Bytes::from(raw);
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
-            ArrowReaderOptions::new().with_skip_arrow_metadata(true),
+            ArrowReaderOptions::new(),
         )?
         .with_projection(self.projection.clone())
         .with_batch_size(self.batch_size);

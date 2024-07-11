@@ -212,8 +212,8 @@ impl Binder {
             if !agg_index_checker.is_supported() {
                 return Err(ErrorCode::UnsupportedIndex(format!(
                     "Currently create aggregating index just support simple query, like: {}, \
-                and these aggregate funcs: {}, \
-                and non-deterministic functions are not support like: NOW()",
+                     and these aggregate funcs: {}, \
+                     and non-deterministic functions are not support like: NOW()",
                     "SELECT ... FROM ... WHERE ... GROUP BY ...",
                     SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
                 )));
