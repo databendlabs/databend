@@ -16,14 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::binder::MergeIntoType;
-use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MergeIntoManipulate;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -85,47 +79,17 @@ impl PipelineBuilder {
             }
 
             if need_unmatch {
-                // If merge into doesn't contain right broadcast join, execute insert in local.
-                if !merge_into_manipulate.enable_right_broadcast {
-                    let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-                        merge_into_manipulate.unmatched.clone(),
-                        merge_into_manipulate.unmatched_schema.clone(),
-                        self.func_ctx.clone(),
-                        self.ctx.clone(),
-                    )?;
-                    pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
-                } else {
-                    let input_num_columns = input_schema.num_fields();
-                    debug_assert!(
-                        merge_into_manipulate.source_row_id_idx.is_some()
-                            || merge_into_manipulate.source_row_number_idx.is_some()
-                    );
-                    let idx = merge_into_manipulate
-                        .source_row_id_idx
-                        .unwrap_or_else(|| merge_into_manipulate.source_row_number_idx.unwrap());
-                    let input_port = InputPort::create();
-                    let output_port = OutputPort::create();
-                    // project row number column
-                    let proc = ProcessorPtr::create(CompoundBlockOperator::create(
-                        input_port.clone(),
-                        output_port.clone(),
-                        input_num_columns,
-                        self.func_ctx.clone(),
-                        vec![BlockOperator::Project {
-                            projection: vec![idx],
-                        }],
-                    ));
-                    pipe_items.push(PipeItem {
-                        processor: proc,
-                        inputs_port: vec![input_port],
-                        outputs_port: vec![output_port],
-                    })
-                };
+                let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                    merge_into_manipulate.unmatched.clone(),
+                    merge_into_manipulate.unmatched_schema.clone(),
+                    self.func_ctx.clone(),
+                    self.ctx.clone(),
+                )?;
+                pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
             }
         }
 
         let output_len = pipe_items.iter().map(|item| item.outputs_port.len()).sum();
-
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             output_len,

@@ -49,13 +49,7 @@ pub fn parser_rows(rows: &Value) -> Result<Vec<Vec<String>>> {
     for row in rows.as_array().unwrap() {
         let mut parsed_row = Vec::new();
         for col in row.as_array().unwrap() {
-            let mut cell = col.as_str().unwrap();
-            if cell == "inf" {
-                cell = "Infinity";
-            }
-            if cell == "nan" {
-                cell = "NaN";
-            }
+            let cell = col.as_str().unwrap();
             // If the result is empty, we'll use `(empty)` to mark it explicitly to avoid confusion
             if cell.is_empty() {
                 parsed_row.push("(empty)".to_string());

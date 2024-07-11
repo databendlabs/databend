@@ -3117,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -4089,15 +4089,9 @@ dependencies = [
  "anyhow",
  "async-backtrace",
  "base64 0.22.0",
- "bytes",
- "databend-common-auth",
- "databend-common-base",
  "databend-common-config",
  "databend-common-exception",
- "databend-common-meta-api",
  "databend-common-meta-app",
- "databend-common-storage",
- "databend-common-users",
  "http 1.1.0",
  "log",
  "moka",
@@ -4180,7 +4174,6 @@ dependencies = [
  "chrono",
  "dashmap",
  "databend-common-arrow",
- "databend-common-auth",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -4439,7 +4432,6 @@ name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4456,6 +4448,7 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
@@ -4472,7 +4465,6 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4491,6 +4483,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
@@ -4562,6 +4555,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enumflags2",
  "goldenfile",
+ "log",
  "opendal",
  "serde",
  "serde_json",
@@ -4596,6 +4590,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
  "futures",
@@ -5399,6 +5394,21 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "databend-storages-common-stage"
+version = "0.1.0"
+dependencies = [
+ "arrow-cast",
+ "arrow-schema",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
  "serde",
  "typetag",
 ]
@@ -10672,9 +10682,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
+checksum = "8f0f33cd048b8e0f5cd2fc6fd26f4feda8e33b4781673e59fe1406b137600e9d"
 dependencies = [
  "nom",
  "pratt 0.3.0",

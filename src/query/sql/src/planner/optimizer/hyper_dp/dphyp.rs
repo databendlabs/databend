@@ -258,7 +258,7 @@ impl DPhpy {
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
                 Ok((Arc::new(new_s_expr), true))
             }
-            RelOperator::Exchange(_) | RelOperator::AddRowNumber(_) => {
+            RelOperator::Exchange(_) => {
                 unreachable!()
             }
             RelOperator::DummyTableScan(_)

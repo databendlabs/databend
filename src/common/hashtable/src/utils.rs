@@ -196,10 +196,15 @@ pub mod sse {
         }
 
         match size / 16 {
-            3 if !compare_sse2(a.add(32), b.add(32)) => false,
-            2 if !compare_sse2(a.add(16), b.add(16)) => false,
+            3 if !compare_sse2(a.add(32), b.add(32))
+                || !compare_sse2(a.add(16), b.add(16))
+                || !compare_sse2(a, b) =>
+            {
+                false
+            }
+            2 if !compare_sse2(a.add(16), b.add(16)) || !compare_sse2(a, b) => false,
             1 if !compare_sse2(a, b) => false,
-            _ => compare_sse2(a.add(size - 16), b.add(size - 16)),
+            _ => compare_sse2(a.add(size).sub(16), b.add(size).sub(16)),
         }
     }
 }

@@ -887,16 +887,16 @@ impl Binder {
                 let mut lock_guard = None;
                 let action_in_plan = match action {
                     ModifyColumnAction::SetMaskingPolicy(column, name) => {
-                        ModifyColumnActionInPlan::SetMaskingPolicy(
-                            column.to_string(),
-                            name.to_string(),
-                        )
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::SetMaskingPolicy(column, name.to_string())
                     }
                     ModifyColumnAction::UnsetMaskingPolicy(column) => {
-                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column.to_string())
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column)
                     }
                     ModifyColumnAction::ConvertStoredComputedColumn(column) => {
-                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
+                        let column = self.normalize_object_identifier(column);
+                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column)
                     }
                     ModifyColumnAction::SetDataType(column_def_vec) => {
                         let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
@@ -933,11 +933,12 @@ impl Binder {
                 })))
             }
             AlterTableAction::DropColumn { column } => {
+                let column = self.normalize_object_identifier(column);
                 Ok(Plan::DropTableColumn(Box::new(DropTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
+                    column,
                 })))
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {

@@ -1,0 +1,8 @@
+statement ok
+create or replace table t2(c varchar);
+
+statement ok
+insert into t2  select repeat('a', 1000000) from numbers(3000);
+
+statement ok
+select * from t2 ignore_result;

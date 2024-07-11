@@ -740,7 +740,6 @@ max_query_log_size = 10000
 management_mode = false
 jwt_key_file = ""
 users = []
-share_endpoint_address = ""
 
 [log]
 level = "INFO"

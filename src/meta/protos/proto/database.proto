@@ -23,6 +23,27 @@ package databend_proto;
 import "share.proto";
 import "tenant.proto";
 
+message ShareDbId {
+  oneof db_id {
+    ShareUsageDbId usage = 1;
+    ShareReferenceDbId reference = 2;
+  }
+}
+
+message ShareUsageDbId {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 id = 1;
+}
+
+message ShareReferenceDbId {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 id = 1;
+}
+
 // DatabaseMeta is a container of all non-identity information.
 message DatabaseMeta {
   uint64 ver = 100;
@@ -59,6 +80,9 @@ message DatabaseMeta {
 
   // share endpoint name
   optional string using_share_endpoint = 27;
+
+  // share db id
+  optional ShareDbId from_share_db_id = 28;
 
   reserved 30;
 }

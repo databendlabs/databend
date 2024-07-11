@@ -23,17 +23,22 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::PlanProfile;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
+use crate::SystemLogElement;
+use crate::SystemLogQueue;
 
 pub struct QueriesProfilingTable {
     table_info: TableInfo,
@@ -51,8 +56,19 @@ impl SyncSystemTable for QueriesProfilingTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let queries_profiles = ctx.get_queries_profile();
 
+        let cache_queue = ProfilesLogQueue::instance()?;
+        let cache_profiles: Vec<ProfilesLogElement> = cache_queue
+            .data
+            .read()
+            .event_queue
+            .iter()
+            .flatten()
+            .cloned()
+            .collect();
+
         let local_id = ctx.get_cluster().local_id.clone();
-        let total_size = queries_profiles.values().map(Vec::len).sum();
+        let total_size =
+            queries_profiles.values().map(Vec::len).sum::<usize>() + cache_profiles.len();
 
         let mut node: Vec<String> = Vec::with_capacity(total_size);
         let mut queries_id: Vec<String> = Vec::with_capacity(total_size);
@@ -63,6 +79,26 @@ impl SyncSystemTable for QueriesProfilingTable {
 
         for (query_id, query_profiles) in queries_profiles {
             for query_plan_profile in query_profiles {
+                node.push(local_id.clone());
+                queries_id.push(query_id.clone());
+                plan_id.push(query_plan_profile.id);
+                parent_id.push(query_plan_profile.parent_id);
+                plan_name.push(query_plan_profile.name.clone());
+
+                let mut statistics_map =
+                    HashMap::with_capacity(query_plan_profile.statistics.len());
+                for (idx, item_value) in query_plan_profile.statistics.iter().enumerate() {
+                    statistics_map
+                        .insert(ProfileStatisticsName::from(idx).to_string(), *item_value);
+                }
+
+                statistics.push(serde_json::to_vec(&statistics_map).unwrap());
+            }
+        }
+
+        for cache_element in cache_profiles {
+            let query_id = cache_element.query_id;
+            for query_plan_profile in cache_element.profiles {
                 node.push(local_id.clone());
                 queries_id.push(query_id.clone());
                 plan_id.push(query_plan_profile.id);
@@ -126,3 +162,24 @@ impl QueriesProfilingTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 }
+
+#[derive(Clone)]
+pub struct ProfilesLogElement {
+    pub query_id: String,
+    pub profiles: Vec<PlanProfile>,
+}
+
+impl SystemLogElement for ProfilesLogElement {
+    const TABLE_NAME: &'static str = "profiles_cache_not_table";
+    fn schema() -> TableSchemaRef {
+        unreachable!()
+    }
+    fn fill_to_data_block(
+        &self,
+        _: &mut Vec<ColumnBuilder>,
+    ) -> databend_common_exception::Result<()> {
+        unreachable!()
+    }
+}
+
+pub type ProfilesLogQueue = SystemLogQueue<ProfilesLogElement>;

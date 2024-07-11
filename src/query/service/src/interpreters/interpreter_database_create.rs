@@ -20,11 +20,13 @@ use databend_common_management::RoleApi;
 use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointClient;
 use databend_common_sql::plans::CreateDatabasePlan;
+use databend_common_storages_share::remove_share_db_dir;
 use databend_common_storages_share::save_share_spec;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -46,7 +48,7 @@ impl CreateDatabaseInterpreter {
         Ok(CreateDatabaseInterpreter { ctx, plan })
     }
 
-    async fn check_create_database_from_share(&self) -> Result<()> {
+    async fn check_create_database_from_share(&self) -> Result<Option<u64>> {
         // safe to unwrap
         let share_name = self.plan.meta.from_share.clone().unwrap();
         let share_endpoint = self.plan.meta.using_share_endpoint.clone().unwrap();
@@ -86,8 +88,13 @@ impl CreateDatabaseInterpreter {
                     share_name.display(),
                     tenant.tenant_name()
                 )))
+            } else if let Some(database) = share_spec.database {
+                Ok(Some(database.id))
             } else {
-                Ok(())
+                Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                    "share {:?} has no grant database",
+                    share_name
+                )))
             }
         } else {
             Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
@@ -128,11 +135,16 @@ impl Interpreter for CreateDatabaseInterpreter {
         };
 
         // if create from other tenant, check from share endpoint
-        if self.plan.meta.from_share.is_some() {
-            self.check_create_database_from_share().await?;
-        }
+        let share_db_id = if self.plan.meta.from_share.is_some() {
+            self.check_create_database_from_share().await?
+        } else {
+            None
+        };
 
-        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
+        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
+        if let Some(share_db_id) = share_db_id {
+            create_db_req.meta.from_share_db_id = Some(ShareDbId::Usage(share_db_id));
+        }
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in
@@ -152,17 +164,21 @@ impl Interpreter for CreateDatabaseInterpreter {
         }
 
         // handle share cleanups with the DropDatabaseReply
-        if let Some(spec_vec) = reply.spec_vec {
-            let mut share_table_into = Vec::with_capacity(spec_vec.len());
-            for share_spec in &spec_vec {
-                share_table_into.push((share_spec.name.clone(), None));
-            }
+        if let Some(share_specs) = reply.share_specs {
+            // since db is dropped, first we need to clean share db dir
+            remove_share_db_dir(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                reply.db_id,
+                &share_specs,
+            )
+            .await?;
 
+            // then write the new share spec
             save_share_spec(
                 self.ctx.get_tenant().tenant_name(),
                 self.ctx.get_application_level_data_operator()?.operator(),
-                Some(spec_vec),
-                Some(share_table_into),
+                &share_specs,
             )
             .await?;
         }

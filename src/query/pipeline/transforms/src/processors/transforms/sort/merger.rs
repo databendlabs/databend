@@ -54,7 +54,7 @@ where
     sorted_cursors: A,
     buffer: Vec<DataBlock>,
     pending_streams: VecDeque<usize>,
-    batch_size: usize,
+    batch_rows: usize,
     limit: Option<usize>,
 
     temp_sorted_num_rows: usize,
@@ -71,7 +71,7 @@ where
         schema: DataSchemaRef,
         streams: Vec<S>,
         sort_desc: Arc<Vec<SortColumnDescription>>,
-        batch_size: usize,
+        batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
         // We only create a merger when there are at least two streams.
@@ -86,7 +86,7 @@ where
             unsorted_streams: streams,
             sorted_cursors,
             buffer,
-            batch_size,
+            batch_rows,
             limit,
             sort_desc,
             pending_streams: pending_stream,
@@ -165,7 +165,7 @@ where
             return false;
         };
 
-        let max_rows = self.limit.unwrap_or(self.batch_size).min(self.batch_size);
+        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
         let (whole_block, next_cursor) = if self.sorted_cursors.len() == 1 {
             (true, None)
         } else {
@@ -260,7 +260,7 @@ where
         let block = DataBlock::concat(&self.temp_sorted_blocks)?;
 
         debug_assert_eq!(block.num_rows(), self.temp_sorted_num_rows);
-        debug_assert!(block.num_rows() <= self.batch_size);
+        debug_assert!(block.num_rows() <= self.batch_rows);
 
         self.limit = self.limit.map(|limit| limit - self.temp_sorted_num_rows);
         self.temp_sorted_blocks.clear();

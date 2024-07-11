@@ -13,6 +13,11 @@ SELECT    IFNULL(1, 2),    IFNULL(NULL, 2),    COALESCE(1, 2),    COALESCE(NULL,
 ----
 1 2 1 2
 
+query IIII
+select COALESCE(try_to_date('ab'),'2022-02-02');
+----
+2022-02-02
+
 statement ok
 DROP TABLE IF EXISTS t
 

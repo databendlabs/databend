@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_sql::plans::RenameDatabasePlan;
+use databend_common_storages_share::remove_share_table_object;
+use databend_common_storages_share::save_share_spec;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -50,13 +52,31 @@ impl Interpreter for RenameDatabaseInterpreter {
         for entity in &self.plan.entities {
             let catalog = self.ctx.get_catalog(&entity.catalog).await?;
             let tenant = self.plan.tenant.clone();
-            catalog
+            let reply = catalog
                 .rename_database(RenameDatabaseReq {
                     if_exists: entity.if_exists,
                     name_ident: DatabaseNameIdent::new(tenant, &entity.database),
                     new_db_name: entity.new_database.clone(),
                 })
                 .await?;
+            if let Some((share_specs, object)) = reply.share_spec {
+                save_share_spec(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &share_specs,
+                )
+                .await?;
+
+                for share_spec in &share_specs {
+                    remove_share_table_object(
+                        self.ctx.get_tenant().tenant_name(),
+                        self.ctx.get_application_level_data_operator()?.operator(),
+                        &share_spec.name,
+                        &[object.clone()],
+                    )
+                    .await?;
+                }
+            }
         }
 
         Ok(PipelineBuildResult::create())
