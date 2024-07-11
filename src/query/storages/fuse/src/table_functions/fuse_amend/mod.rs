@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//mod fuse_amend_table;
+// mod fuse_amend_table;
 mod fuse_amend_table;
 
 pub use fuse_amend_table::FuseAmendTable;
