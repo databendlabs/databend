@@ -25,9 +25,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_sharing::ShareEndpointManager;
 use databend_common_storage::DataOperator;
-use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
 use databend_common_storages_iceberg::IcebergCreator;
 use databend_common_storages_system::ProfilesLogQueue;
@@ -133,14 +131,9 @@ impl GlobalServices {
         }
 
         RoleCacheManager::init()?;
-        ShareEndpointManager::init()?;
 
         DataOperator::init(&config.storage).await?;
-        ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.tenant_name().to_string(),
-        )?;
+
         CacheManager::init(
             &config.cache,
             &config.query.max_server_memory_usage,
