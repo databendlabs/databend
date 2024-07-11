@@ -252,6 +252,7 @@ jobs:
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
+          secrets_token: ${{ secrets.DATABEND_BOT_TOKEN }}
           name: test-integration-sharing-linux
 
   test_stateful_cluster:

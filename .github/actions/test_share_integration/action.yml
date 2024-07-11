@@ -5,6 +5,9 @@ inputs:
     description: ""
     required: true
     default: "x86_64-unknown-linux-gnu"
+  secrets_token:
+    description: "secrets token"
+    required: true
 runs:
   using: "composite"
   steps:
@@ -39,10 +42,9 @@ runs:
 
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
-      secrets: inherit
       env:
         # we need workflow:write permission to create release if there were any workflow changes
         # which is not possible for github actions token
-        GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
+        GH_TOKEN: ${{ inputs.secrets_token }}
       run: |
         ./scripts/ci/ci-run-share-tests.sh
