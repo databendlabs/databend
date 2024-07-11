@@ -71,6 +71,10 @@ impl Histogram {
     pub fn buckets_iter(&self) -> impl DoubleEndedIterator<Item = &HistogramBucket> {
         self.buckets.iter()
     }
+
+    pub fn add_bucket(&mut self, bucket: HistogramBucket) {
+        self.buckets.push(bucket);
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

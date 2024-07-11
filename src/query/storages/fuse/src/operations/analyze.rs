@@ -64,7 +64,7 @@ impl FuseTable {
         table: &str,
         snapshot_id: SnapshotId,
         pipeline: &mut Pipeline,
-        histogram_info_receiver: Receiver<DataBlock>,
+        histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     ) -> Result<()> {
         pipeline.add_sink(|input| {
             SinkAnalyzeState::create(
@@ -75,7 +75,7 @@ impl FuseTable {
                 table,
                 snapshot_id,
                 input,
-                histogram_info_receiver.clone(),
+                histogram_info_receivers.clone(),
             )
         })?;
         Ok(())
@@ -92,9 +92,10 @@ struct SinkAnalyzeState {
     table: String,
     snapshot_id: SnapshotId,
     collect_histogram_info: bool,
-    histogram_info_receiver: Receiver<DataBlock>,
+    histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
     finished: bool,
+    commited: bool,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Histogram>,
 }
@@ -109,7 +110,7 @@ impl SinkAnalyzeState {
         table: &str,
         snapshot_id: SnapshotId,
         input: Arc<InputPort>,
-        histogram_info_receiver: Receiver<DataBlock>,
+        histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
             ctx,
@@ -120,9 +121,10 @@ impl SinkAnalyzeState {
             table: table.to_string(),
             snapshot_id,
             collect_histogram_info: false,
-            histogram_info_receiver,
+            histogram_info_receivers,
             input_data: None,
             finished: false,
+            commited: false,
             ndv_states: Default::default(),
             histograms: Default::default(),
         })))
@@ -198,59 +200,30 @@ impl SinkAnalyzeState {
 
     #[unboxed_simple]
     #[async_backtrace::framed]
-    async fn create_histogram(&mut self, data_block: DataBlock) -> Result<()> {
+    async fn create_histogram(&mut self, col_id: u32, data_block: DataBlock) -> Result<()> {
         if data_block.num_rows() == 0 {
             return Ok(());
         }
-        let table = self.get_table().await?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot = table.read_table_snapshot().await?;
-        if snapshot.is_none() {
-            return Ok(());
+        for row in 0..data_block.num_rows() {
+            let column = &data_block.columns()[1];
+            let value = column.value.index(row).clone().unwrap();
+            let number = value.as_number().unwrap();
+            let ndv = number.as_u_int64().unwrap();
+            let upper_bound =
+                Datum::from_scalar(data_block.columns()[2].value.index(row).unwrap().to_owned())
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Don't support the type to generate histogram")
+                    })?;
+            let count_col = &data_block.columns()[3];
+            let val = count_col.value.index(row).clone().unwrap();
+            let number = val.as_number().unwrap();
+            let count = number.as_u_int64().unwrap();
+            let bucket = HistogramBucket::new(upper_bound, *count as f64, *ndv as f64);
+            self.histograms
+                .entry(col_id)
+                .and_modify(|histogram| histogram.add_bucket(bucket.clone()))
+                .or_insert(Histogram::new(vec![bucket]));
         }
-
-        let table_statistics = table
-            .read_table_snapshot_statistics(snapshot.as_ref())
-            .await?;
-
-        let mut histograms = table_statistics
-            .map(|s| s.histograms.clone())
-            .unwrap_or_default();
-
-        // Each column has a histogram and a histogram has `DEFAULT_HISTOGRAM_BUCKETS` buckets
-        for chunk in data_block
-            .split_by_rows_no_tail(DEFAULT_HISTOGRAM_BUCKETS)
-            .iter()
-        {
-            dbg!(chunk);
-            let mut buckets = Vec::with_capacity(DEFAULT_HISTOGRAM_BUCKETS);
-            let last_column = chunk.columns().last().unwrap();
-            let value = last_column.value.index(0).clone().unwrap();
-            let col_id = value.as_number().unwrap().as_u_int8().unwrap();
-            for row in 0..chunk.num_rows() {
-                let column = &chunk.columns()[1];
-                let value = column.value.index(row).clone().unwrap();
-                let number = value.as_number().unwrap();
-                let ndv = number.as_u_int64().unwrap();
-                let upper_bound =
-                    Datum::from_scalar(chunk.columns()[2].value.index(row).unwrap().to_owned())
-                        .ok_or_else(|| {
-                            ErrorCode::Internal("Don't support the type to generate histogram")
-                        })?;
-                let count_col = &chunk.columns()[3];
-                let val = count_col.value.index(row).clone().unwrap();
-                let number = val.as_number().unwrap();
-                let count = number.as_u_int64().unwrap();
-                buckets.push(HistogramBucket::new(
-                    upper_bound,
-                    *count as f64,
-                    *ndv as f64,
-                ));
-            }
-            histograms.insert(*col_id as ColumnId, Histogram::new(buckets));
-        }
-
-        self.histograms = histograms;
         Ok(())
     }
 
@@ -258,6 +231,9 @@ impl SinkAnalyzeState {
         let table = self.get_table().await?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let snapshot = table.read_table_snapshot().await?;
+        if snapshot.is_none() {
+            return Ok(());
+        }
         let snapshot = snapshot.unwrap();
         // 3. Generate new table statistics
         let table_statistics = TableSnapshotStatistics::new(
@@ -280,7 +256,6 @@ impl SinkAnalyzeState {
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;
         new_snapshot.table_statistics_location = Some(table_statistics_location);
-
         FuseTable::commit_to_meta_server(
             self.ctx.as_ref(),
             &table.table_info,
@@ -316,6 +291,11 @@ impl Processor for SinkAnalyzeState {
             if !self.finished {
                 return Ok(Event::Async);
             }
+
+            if !self.commited {
+                return Ok(Event::Async);
+            }
+
             return Ok(Event::Finished);
         }
 
@@ -336,8 +316,19 @@ impl Processor for SinkAnalyzeState {
                 self.merge_analyze_states(data_block.clone()).await?;
                 self.collect_histogram_info = true;
             }
-        } else if let Ok(res) = self.histogram_info_receiver.recv().await {
-            self.create_histogram(res).await?;
+        } else if !self.finished {
+            let mut finished_count = 0;
+            let receivers = self.histogram_info_receivers.clone();
+            for (id, receiver) in receivers.iter() {
+                if let Ok(res) = receiver.recv().await {
+                    self.create_histogram(*id, res).await?;
+                } else {
+                    finished_count += 1;
+                }
+            }
+            if finished_count == self.histogram_info_receivers.len() {
+                self.finished = true;
+            }
         } else {
             let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
             loop {
@@ -351,7 +342,7 @@ impl Processor for SinkAnalyzeState {
                 }
                 break;
             }
-            self.finished = true;
+            self.commited = true;
         }
         return Ok(());
     }
