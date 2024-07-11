@@ -467,8 +467,8 @@ impl StringColumnBuilder {
     }
 
     pub fn repeat(scalar: &str, n: usize) -> Self {
-        let mut builder = BinaryColumnBuilder {
-            data: Vec::new(),
+        let mut builder = StringColumnBuilder {
+            data: Vec::new(), // lazy allocate
             offsets: Vec::with_capacity(n + 1),
             need_estimated: false,
         };
