@@ -44,7 +44,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -86,8 +85,6 @@ impl FastFieldDecoderValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),

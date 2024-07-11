@@ -37,8 +37,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
-use databend_common_io::constants::INF_BYTES_LOWER;
-use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
@@ -82,8 +80,6 @@ impl SeparatedTextDecoder {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
-                nan_bytes: params.nan_display.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
@@ -99,8 +95,6 @@ impl SeparatedTextDecoder {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
