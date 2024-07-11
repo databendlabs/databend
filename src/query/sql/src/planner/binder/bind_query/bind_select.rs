@@ -42,24 +42,10 @@ use crate::binder::project_set::SrfCollector;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::plans::ScalarExpr;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
 use crate::UdfRewriter;
 use crate::VirtualColumnRewriter;
-
-// A normalized IR for `SELECT` clause.
-#[derive(Debug, Default)]
-pub struct SelectList<'a> {
-    pub items: Vec<SelectItem<'a>>,
-}
-
-#[derive(Debug)]
-pub struct SelectItem<'a> {
-    pub select_target: &'a SelectTarget,
-    pub scalar: ScalarExpr,
-    pub alias: String,
-}
 
 impl Binder {
     #[async_backtrace::framed]

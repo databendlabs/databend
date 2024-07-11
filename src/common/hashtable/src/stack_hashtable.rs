@@ -208,6 +208,7 @@ where K: Keyable
     }
 }
 
+#[allow(dead_code)]
 pub struct StackHashtableIterMut<'a, K, V> {
     inner: std::iter::Chain<std::option::IterMut<'a, Entry<K, V>>, Table0IterMut<'a, K, V>>,
 }

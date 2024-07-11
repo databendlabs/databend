@@ -132,6 +132,7 @@ impl From<v0::TableSnapshot> for TableSnapshot {
     }
 }
 
+#[allow(dead_code)]
 // A memory light version of TableSnapshot(Without segments)
 // This *ONLY* used for some optimize operation, like PURGE/FUSE_SNAPSHOT function to avoid OOM.
 #[derive(Clone, Debug)]

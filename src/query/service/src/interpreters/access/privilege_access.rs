@@ -960,7 +960,7 @@ impl AccessChecker for PrivilegeAccess {
                         let udf = get_udf_names(selection)?;
                         self.validate_udf_access(udf).await?;
                     }
-                    for subquery in &plan.subquery_desc {
+                    if let  Some(subquery) = &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
@@ -985,7 +985,7 @@ impl AccessChecker for PrivilegeAccess {
                         let udf = get_udf_names(selection)?;
                         self.validate_udf_access(udf).await?;
                     }
-                    for subquery in &plan.subquery_desc {
+                    if let  Some(subquery) = &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {

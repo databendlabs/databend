@@ -393,6 +393,7 @@ pub struct QueryProgress {
     pub read_bytes: usize,
 
     pub write_rows: usize,
+    #[allow(dead_code)]
     pub write_bytes: usize,
 }
 

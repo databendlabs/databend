@@ -56,9 +56,11 @@ use crate::Visibility;
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
 pub struct SelectList<'a> {
+    #[allow(dead_code)]
     pub items: Vec<SelectItem<'a>>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,

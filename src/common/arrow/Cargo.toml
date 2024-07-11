@@ -114,7 +114,7 @@ num = { version = "0.4", default-features = false, features = ["std"] }
 num-traits = "0.2"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default_features = false, features = [
+parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default-features = false, features = [
     "serde_types",
     "async",
 ] }
@@ -137,7 +137,7 @@ tokio-util = { version = "0.7", features = ["compat"] }
 async-std = "1.12"
 env_logger = "0.10"
 flate2 = "1.0.28"
-proptest = { version = "1", default_features = false, features = ["std"] }
+proptest = { version = "1", default-features = false, features = ["std"] }
 quanta = "0.11.1"
 
 [lints]

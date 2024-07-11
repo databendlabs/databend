@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use educe::Educe;
 
@@ -28,9 +25,6 @@ use crate::IndexType;
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct ApplyRuleTask {
-    #[educe(Debug(ignore))]
-    pub ctx: Arc<dyn TableContext>,
-
     pub rule_id: RuleID,
     pub target_group_index: IndexType,
     pub m_expr_index: IndexType,
@@ -39,14 +33,8 @@ pub struct ApplyRuleTask {
 }
 
 impl ApplyRuleTask {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        rule_id: RuleID,
-        target_group_index: IndexType,
-        m_expr_index: IndexType,
-    ) -> Self {
+    pub fn new(rule_id: RuleID, target_group_index: IndexType, m_expr_index: IndexType) -> Self {
         Self {
-            ctx,
             rule_id,
             target_group_index,
             m_expr_index,
