@@ -304,6 +304,9 @@ async fn test_password_policy() -> Result<()> {
         .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
     assert!(res.is_ok());
+    // user login success, don't need change password
+    let need_change = res.unwrap();
+    assert!(!need_change);
 
     // login fail 3 times
     for _ in 0..3 {
@@ -331,11 +334,15 @@ async fn test_password_policy() -> Result<()> {
     user_info.clear_login_fail_history();
     // set last change password time as 31 days ago for test
     user_info.password_update_on = Some(Utc::now().checked_sub_signed(Duration::days(31)).unwrap());
-    // user can't log in because of not change password more than max allowed days
+    // user have not change password more than max allowed days
+    // user can login, but must change password first
     let res = user_mgr
         .check_login_password(&tenant, identity.clone(), &user_info)
         .await;
-    assert!(res.is_err());
+    assert!(res.is_ok());
+    // user login failed, need change password
+    let need_change = res.unwrap();
+    assert!(need_change);
 
     // update password policy
     let res = user_mgr

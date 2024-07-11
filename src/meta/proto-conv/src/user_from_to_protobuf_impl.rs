@@ -56,7 +56,7 @@ impl FromToProto for mt::principal::AuthInfo {
                 hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| Incompatible {
                     reason: format!("invalid PasswordHashMethod: {}", hash_method),
                 })?,
-                need_change: need_change.unwrap_or(true),
+                need_change: need_change.unwrap_or_default(),
             }),
             None => Err(Incompatible {
                 reason: "AuthInfo cannot be None".to_string(),

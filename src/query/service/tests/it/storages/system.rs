@@ -397,7 +397,11 @@ async fn test_users_table() -> Result<()> {
     UserApiProvider::instance()
         .add_user(&tenant, user_info, &CreateOption::Create)
         .await?;
-    let auth_data = AuthInfo::new(AuthType::Sha256Password, &Some("123456789".to_string()));
+    let auth_data = AuthInfo::new(
+        AuthType::Sha256Password,
+        &Some("123456789".to_string()),
+        false,
+    );
     assert!(auth_data.is_ok());
     let mut user_info = UserInfo::new("test1", "%", auth_data?);
     user_info.option.set_default_role(Some("role1".to_string()));
