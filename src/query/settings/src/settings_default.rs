@@ -692,7 +692,14 @@ impl DefaultSettings {
                 }),
                 ("parse_datetime_ignore_remainder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
+                    desc: "Ignore trailing chars when parse string to datetime",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                //parse_datetime_ignore_remainder
+                ("force_timestamp_conversion", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

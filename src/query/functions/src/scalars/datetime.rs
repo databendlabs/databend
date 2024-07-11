@@ -156,7 +156,9 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            match string_to_timestamp(val, ctx.func_ctx.tz.tz) {
+            let tz = ctx.func_ctx.tz.tz;
+            let force_timestamp_conversion = ctx.func_ctx.force_timestamp_conversion;
+            match string_to_timestamp(val, tz, force_timestamp_conversion) {
                 Ok(ts) => output.push(ts.timestamp_micros()),
                 Err(e) => {
                     ctx.set_error(
@@ -275,6 +277,8 @@ fn string_to_format_timestmap(
     let parse_tz = timezone_strftime
         .iter()
         .any(|&pattern| format.contains(pattern));
+    let force_timestamp_conversion = ctx.func_ctx.force_timestamp_conversion;
+    let tz = ctx.func_ctx.tz.tz;
     if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
         if let Err(e) = parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)) {
@@ -298,34 +302,17 @@ fn string_to_format_timestmap(
             parsed.second = Some(0);
         }
 
-        // fn handle_err<T>(result: Result<T, impl ToString>) -> Result<T, ErrorCode> {
-        //     result.map_err(|e| ErrorCode::BadArguments(e.to_string()))
-        // }
-        // Convert parsed timestamp to datetime or naive datetime based on parse_tz
         if parse_tz {
             parsed.offset.get_or_insert(0);
             parsed
                 .to_datetime()
                 .map(|res| (res.timestamp_micros(), false))
                 .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-            // handle_err(parsed.to_datetime()).map(|res| (res.timestamp_micros(), false))
         } else {
             parsed
                 .to_naive_datetime_with_offset(0)
                 .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
-                    MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
-                    _ => Err(ErrorCode::BadArguments(
-                        "The local time can not map to a single unique result".to_string(),
-                    )),
-                })
-            // handle_err(parsed.to_naive_datetime_with_offset(0))
-            // .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
-            // MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
-            // _ => Err(ErrorCode::BadArguments(
-            // "The local time can not map to a single unique result".to_string(),
-            // )),
-            // })
+                .and_then(|res| convert_local_time(res, tz, force_timestamp_conversion))
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
@@ -334,12 +321,7 @@ fn string_to_format_timestmap(
     } else {
         NaiveDateTime::parse_from_str(timestamp, format)
             .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
-            .and_then(|res| match res.and_local_timezone(ctx.func_ctx.tz.tz) {
-                MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
-                _ => Err(ErrorCode::BadArguments(
-                    "The local time can not map to a single unique result".to_string(),
-                )),
-            })
+            .and_then(|res| convert_local_time(res, tz, force_timestamp_conversion))
     }
 }
 
@@ -452,7 +434,11 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(
-            |val, output, ctx| match string_to_date(val, ctx.func_ctx.tz.tz) {
+            |val, output, ctx| match string_to_date(
+                val,
+                ctx.func_ctx.tz.tz,
+                ctx.func_ctx.force_timestamp_conversion,
+            ) {
                 Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 Err(e) => {
                     ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
@@ -1623,4 +1609,42 @@ fn months_between(date_a: i32, date_b: i32) -> f64 {
 
     // Total difference including fractional part
     total_months_diff as f64 + day_fraction
+}
+
+#[inline]
+fn convert_local_time(
+    res: NaiveDateTime,
+    tz: Tz,
+    force_timestamp_conversion: bool,
+) -> Result<(i64, bool), ErrorCode> {
+    match res.and_local_timezone(tz) {
+        MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
+        MappedLocalTime::Ambiguous(t1, t2) => Err(ErrorCode::BadArguments(format!(
+            "The local time is ambiguous {}, {} with timezone {}",
+            t1, t2, tz
+        ))),
+        MappedLocalTime::None => {
+            if force_timestamp_conversion {
+                if let Some(res2) = res.checked_add_signed(chrono::Duration::seconds(3600)) {
+                    return match res2.and_local_timezone(tz) {
+                        MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
+                        MappedLocalTime::Ambiguous(t1, t2) => {
+                            Err(ErrorCode::BadArguments(format!(
+                                "The local time is ambiguous {:?}, {:?} with timezone {:?}",
+                                t1, t2, tz
+                            )))
+                        }
+                        MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
+                            "The local time {:?}, {:?} can not map to a single unique result with timezone {:?}",
+                            res, res2, tz
+                        ))),
+                    };
+                }
+            }
+            Err(ErrorCode::BadArguments(format!(
+                "The time {} can not map to a single unique result with timezone {}",
+                res, tz
+            )))
+        }
+    }
 }

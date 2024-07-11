@@ -92,6 +92,7 @@ impl FastFieldDecoderValues {
                 disable_variant_check: false,
                 binary_format: Default::default(),
                 is_rounding_mode,
+                force_timestamp_conversion: format.force_timestamp_conversion,
             },
         }
     }
@@ -284,7 +285,10 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().force_timestamp_conversion,
+        )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
         column.push(days);
@@ -300,7 +304,11 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+        let ts = buffer_readr.read_timestamp_text(
+            &self.common_settings().timezone,
+            false,
+            self.common_settings.force_timestamp_conversion,
+        )?;
         match ts {
             DateTimeResType::Datetime(ts) => {
                 if !buffer_readr.eof() {

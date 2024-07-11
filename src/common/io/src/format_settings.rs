@@ -20,6 +20,7 @@ use crate::GeometryDataType;
 pub struct FormatSettings {
     pub timezone: Tz,
     pub geometry_format: GeometryDataType,
+    pub force_timestamp_conversion: bool,
 }
 
 // only used for tests
@@ -28,6 +29,7 @@ impl Default for FormatSettings {
         Self {
             timezone: "UTC".parse::<Tz>().unwrap(),
             geometry_format: GeometryDataType::default(),
+            force_timestamp_conversion: false,
         }
     }
 }

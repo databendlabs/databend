@@ -114,6 +114,7 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
+    pub force_timestamp_conversion: bool,
 }
 
 #[derive(Clone)]

@@ -557,3 +557,61 @@ unset timezone;
 statement ok
 unset parse_datetime_ignore_remainder;
 
+statement ok
+set timezone='Asia/Shanghai';
+
+statement ok
+unset force_timestamp_conversion;
+
+statement error 1006
+select to_timestamp('1947-04-15 00:00:00')
+
+query T
+select try_to_timestamp('1947-04-15 00:00:00')
+----
+NULL
+
+statement error 1006
+select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+
+query T
+select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+NULL
+
+query T
+select to_date('1947-04-15')
+----
+1947-04-15
+
+statement error 1006
+select to_date('1947-04-15 00:00:00')
+
+statement ok
+set force_timestamp_conversion = 1;
+
+query T
+select to_datetime('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
+
+query T
+select to_datetime('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
+
+query T
+select to_date('1947-04-15 00:00:00')
+----
+1947-04-15
+
+query T
+select to_date('1947-04-15')
+----
+1947-04-15
+
+statement ok
+unset timezone;
+
+statement ok
+unset force_timestamp_conversion;

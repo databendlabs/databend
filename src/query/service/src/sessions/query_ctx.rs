@@ -636,9 +636,11 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let force_timestamp_conversion = self.get_settings().get_force_timestamp_conversion()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
+            force_timestamp_conversion,
         };
         Ok(format)
     }
@@ -668,6 +670,7 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
+        let force_timestamp_conversion = settings.get_force_timestamp_conversion()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -688,6 +691,7 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
+            force_timestamp_conversion,
         })
     }
 

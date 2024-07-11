@@ -248,9 +248,10 @@ impl ArgType for DateType {
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
     tz: Tz,
+    force_timestamp_conversion: bool,
 ) -> databend_common_exception::Result<NaiveDate> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(&tz) {
+    match reader.read_date_text(&tz, force_timestamp_conversion) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
