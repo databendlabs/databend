@@ -54,7 +54,7 @@ pub struct FieldJsonAstDecoder {
     pub ident_case_sensitive: bool,
     pub is_select: bool,
     is_rounding_mode: bool,
-    force_timestamp_conversion: bool,
+    enable_dst_hour_fix: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -70,7 +70,7 @@ impl FieldJsonAstDecoder {
             ident_case_sensitive: options.ident_case_sensitive,
             is_select: options.is_select,
             is_rounding_mode: options.is_rounding_mode,
-            force_timestamp_conversion: options.force_timestamp_conversion,
+            enable_dst_hour_fix: options.enable_dst_hour_fix,
         }
     }
 
@@ -262,8 +262,7 @@ impl FieldJsonAstDecoder {
         match value {
             Value::String(v) => {
                 let mut reader = Cursor::new(v.as_bytes());
-                let date =
-                    reader.read_date_text(&self.timezone, self.force_timestamp_conversion)?;
+                let date = reader.read_date_text(&self.timezone, self.enable_dst_hour_fix)?;
                 let days = uniform_date(date);
                 check_date(days as i64)?;
                 column.push(days);
@@ -286,11 +285,8 @@ impl FieldJsonAstDecoder {
             Value::String(v) => {
                 let v = v.clone();
                 let mut reader = Cursor::new(v.as_bytes());
-                let ts = reader.read_timestamp_text(
-                    &self.timezone,
-                    false,
-                    self.force_timestamp_conversion,
-                )?;
+                let ts =
+                    reader.read_timestamp_text(&self.timezone, false, self.enable_dst_hour_fix)?;
 
                 match ts {
                     DateTimeResType::Datetime(ts) => {

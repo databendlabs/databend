@@ -696,8 +696,7 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                //parse_datetime_ignore_remainder
-                ("force_timestamp_conversion", DefaultSettingValue {
+                ("enable_dst_hour_fix", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
                     mode: SettingMode::Both,

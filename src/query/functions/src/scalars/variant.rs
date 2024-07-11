@@ -1002,7 +1002,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Some(val) => match string_to_date(
                     val.as_bytes(),
                     ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.force_timestamp_conversion,
+                    ctx.func_ctx.enable_dst_hour_fix,
                 ) {
                     Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                     Err(e) => {
@@ -1036,7 +1036,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Some(val) => match string_to_date(
                     val.as_bytes(),
                     ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.force_timestamp_conversion,
+                    ctx.func_ctx.enable_dst_hour_fix,
                 ) {
                     Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                     Err(_) => output.push_null(),
@@ -1061,7 +1061,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Some(val) => match string_to_timestamp(
                     val.as_bytes(),
                     ctx.func_ctx.tz.tz,
-                    ctx.func_ctx.force_timestamp_conversion,
+                    ctx.func_ctx.enable_dst_hour_fix,
                 ) {
                     Ok(ts) => output.push(ts.timestamp_micros()),
                     Err(e) => {
@@ -1096,7 +1096,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Some(val) => match string_to_timestamp(
                         val.as_bytes(),
                         ctx.func_ctx.tz.tz,
-                        ctx.func_ctx.force_timestamp_conversion,
+                        ctx.func_ctx.enable_dst_hour_fix,
                     ) {
                         Ok(ts) => output.push(ts.timestamp_micros()),
                         Err(_) => {

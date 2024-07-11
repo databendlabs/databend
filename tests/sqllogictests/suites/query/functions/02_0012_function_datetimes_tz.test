@@ -561,7 +561,7 @@ statement ok
 set timezone='Asia/Shanghai';
 
 statement ok
-unset force_timestamp_conversion;
+unset enable_dst_hour_fix;
 
 statement error 1006
 select to_timestamp('1947-04-15 00:00:00')
@@ -588,7 +588,7 @@ statement error 1006
 select to_date('1947-04-15 00:00:00')
 
 statement ok
-set force_timestamp_conversion = 1;
+set enable_dst_hour_fix = 1;
 
 query T
 select to_datetime('1947-04-15 00:00:00')
@@ -614,4 +614,4 @@ statement ok
 unset timezone;
 
 statement ok
-unset force_timestamp_conversion;
+unset enable_dst_hour_fix;

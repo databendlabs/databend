@@ -92,7 +92,7 @@ impl FastFieldDecoderValues {
                 disable_variant_check: false,
                 binary_format: Default::default(),
                 is_rounding_mode,
-                force_timestamp_conversion: format.force_timestamp_conversion,
+                enable_dst_hour_fix: format.enable_dst_hour_fix,
             },
         }
     }
@@ -287,7 +287,7 @@ impl FastFieldDecoderValues {
         let mut buffer_readr = Cursor::new(&buf);
         let date = buffer_readr.read_date_text(
             &self.common_settings().timezone,
-            self.common_settings().force_timestamp_conversion,
+            self.common_settings().enable_dst_hour_fix,
         )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
@@ -307,7 +307,7 @@ impl FastFieldDecoderValues {
         let ts = buffer_readr.read_timestamp_text(
             &self.common_settings().timezone,
             false,
-            self.common_settings.force_timestamp_conversion,
+            self.common_settings.enable_dst_hour_fix,
         )?;
         match ts {
             DateTimeResType::Datetime(ts) => {

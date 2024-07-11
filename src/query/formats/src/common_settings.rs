@@ -27,7 +27,7 @@ pub struct InputCommonSettings {
     pub disable_variant_check: bool,
     pub binary_format: BinaryFormat,
     pub is_rounding_mode: bool,
-    pub force_timestamp_conversion: bool,
+    pub enable_dst_hour_fix: bool,
 }
 
 #[derive(Clone)]

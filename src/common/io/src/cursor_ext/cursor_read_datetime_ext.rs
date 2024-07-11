@@ -38,12 +38,12 @@ pub enum DateTimeResType {
 }
 
 pub trait BufferReadDateTimeExt {
-    fn read_date_text(&mut self, tz: &Tz, force_timestamp_conversion: bool) -> Result<NaiveDate>;
+    fn read_date_text(&mut self, tz: &Tz, enable_dst_hour_fix: bool) -> Result<NaiveDate>;
     fn read_timestamp_text(
         &mut self,
         tz: &Tz,
         only_date_text: bool,
-        force_timestamp_conversion: bool,
+        enable_dst_hour_fix: bool,
     ) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
@@ -72,10 +72,10 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 impl<T> BufferReadDateTimeExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_date_text(&mut self, tz: &Tz, force_timestamp_conversion: bool) -> Result<NaiveDate> {
+    fn read_date_text(&mut self, tz: &Tz, enable_dst_hour_fix: bool) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
-        // Also need to consider force_timestamp_conversion, to_date('1947-04-15 00:00:00')
-        self.read_timestamp_text(tz, true, force_timestamp_conversion)
+        // Also need to consider enable_dst_hour_fix, to_date('1947-04-15 00:00:00')
+        self.read_timestamp_text(tz, true, enable_dst_hour_fix)
             .map(|dt| match dt {
                 DateTimeResType::Datetime(dt) => dt.naive_local().date(),
                 DateTimeResType::Date(nd) => nd,
@@ -86,7 +86,7 @@ where T: AsRef<[u8]>
         &mut self,
         tz: &Tz,
         only_date_text: bool,
-        force_timestamp_conversion: bool,
+        enable_dst_hour_fix: bool,
     ) -> Result<DateTimeResType> {
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
@@ -150,11 +150,11 @@ where T: AsRef<[u8]>
             // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
             if times.len() < 3 {
                 times.resize(3, 0);
-                let dt = get_local_time(tz, &d, &mut times, force_timestamp_conversion)?;
+                let dt = get_local_time(tz, &d, &mut times, enable_dst_hour_fix)?;
                 return Ok(DateTimeResType::Datetime(less_1000(dt)));
             }
 
-            let dt = get_local_time(tz, &d, &mut times, force_timestamp_conversion)?;
+            let dt = get_local_time(tz, &d, &mut times, enable_dst_hour_fix)?;
 
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
@@ -257,11 +257,11 @@ where T: AsRef<[u8]>
                         if only_date_text {
                             Ok(DateTimeResType::Date(d))
                         } else {
-                            // Now add a setting force_timestamp_conversion to control this behavior. If true, try to add a hour.
+                            // Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
                             if let Some(naive_datetime) = &d.and_hms_opt(1, 0, 0) {
                                 return Ok(DateTimeResType::Datetime(unwrap_local_time(
                                     tz,
-                                    force_timestamp_conversion,
+                                    enable_dst_hour_fix,
                                     naive_datetime,
                                 )?));
                             }
@@ -394,22 +394,22 @@ where T: AsRef<[u8]>
 // -- if unwrap() will cause session panic.
 // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
 // select to_date(to_timestamp('2021-03-28 01:00:00'));
-// Now add a setting force_timestamp_conversion to control this behavior. If true, try to add a hour.
+// Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
 fn get_local_time(
     tz: &Tz,
     d: &NaiveDate,
     times: &mut Vec<u32>,
-    force_timestamp_conversion: bool,
+    enable_dst_hour_fix: bool,
 ) -> Result<DateTime<Tz>> {
     d.and_hms_opt(times[0], times[1], times[2])
-        .map(|naive_datetime| unwrap_local_time(tz, force_timestamp_conversion, &naive_datetime))
+        .map(|naive_datetime| unwrap_local_time(tz, enable_dst_hour_fix, &naive_datetime))
         .transpose()?
         .ok_or_else(|| ErrorCode::BadBytes(format!("Invalid time provided in times: {:?}", times)))
 }
 
 fn unwrap_local_time(
     tz: &Tz,
-    force_timestamp_conversion: bool,
+    enable_dst_hour_fix: bool,
     naive_datetime: &NaiveDateTime,
 ) -> Result<DateTime<Tz>> {
     match tz.from_local_datetime(naive_datetime) {
@@ -419,7 +419,7 @@ fn unwrap_local_time(
             t1, t2, tz
         ))),
         LocalResult::None => {
-            if force_timestamp_conversion {
+            if enable_dst_hour_fix {
                 if let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600)) {
                     return match tz.from_local_datetime(&res2) {
                         MappedLocalTime::Single(t) => Ok(t),

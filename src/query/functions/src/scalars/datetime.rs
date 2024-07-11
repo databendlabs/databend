@@ -157,8 +157,8 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
             let tz = ctx.func_ctx.tz.tz;
-            let force_timestamp_conversion = ctx.func_ctx.force_timestamp_conversion;
-            match string_to_timestamp(val, tz, force_timestamp_conversion) {
+            let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
+            match string_to_timestamp(val, tz, enable_dst_hour_fix) {
                 Ok(ts) => output.push(ts.timestamp_micros()),
                 Err(e) => {
                     ctx.set_error(
@@ -277,7 +277,7 @@ fn string_to_format_timestmap(
     let parse_tz = timezone_strftime
         .iter()
         .any(|&pattern| format.contains(pattern));
-    let force_timestamp_conversion = ctx.func_ctx.force_timestamp_conversion;
+    let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
     let tz = ctx.func_ctx.tz.tz;
     if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
@@ -312,7 +312,7 @@ fn string_to_format_timestmap(
             parsed
                 .to_naive_datetime_with_offset(0)
                 .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                .and_then(|res| convert_local_time(res, tz, force_timestamp_conversion))
+                .and_then(|res| convert_local_time(res, tz, enable_dst_hour_fix))
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
@@ -321,7 +321,7 @@ fn string_to_format_timestmap(
     } else {
         NaiveDateTime::parse_from_str(timestamp, format)
             .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
-            .and_then(|res| convert_local_time(res, tz, force_timestamp_conversion))
+            .and_then(|res| convert_local_time(res, tz, enable_dst_hour_fix))
     }
 }
 
@@ -437,7 +437,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
             |val, output, ctx| match string_to_date(
                 val,
                 ctx.func_ctx.tz.tz,
-                ctx.func_ctx.force_timestamp_conversion,
+                ctx.func_ctx.enable_dst_hour_fix,
             ) {
                 Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
                 Err(e) => {
@@ -1615,7 +1615,7 @@ fn months_between(date_a: i32, date_b: i32) -> f64 {
 fn convert_local_time(
     res: NaiveDateTime,
     tz: Tz,
-    force_timestamp_conversion: bool,
+    enable_dst_hour_fix: bool,
 ) -> Result<(i64, bool), ErrorCode> {
     match res.and_local_timezone(tz) {
         MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),
@@ -1624,7 +1624,7 @@ fn convert_local_time(
             t1, t2, tz
         ))),
         MappedLocalTime::None => {
-            if force_timestamp_conversion {
+            if enable_dst_hour_fix {
                 if let Some(res2) = res.checked_add_signed(chrono::Duration::seconds(3600)) {
                     return match res2.and_local_timezone(tz) {
                         MappedLocalTime::Single(t) => Ok((t.timestamp_micros(), false)),

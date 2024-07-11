@@ -88,7 +88,7 @@ impl SeparatedTextDecoder {
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
                 is_rounding_mode: options_ext.is_rounding_mode,
-                force_timestamp_conversion: options_ext.force_timestamp_conversion,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -106,7 +106,7 @@ impl SeparatedTextDecoder {
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
-                force_timestamp_conversion: options_ext.force_timestamp_conversion,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -258,7 +258,7 @@ impl SeparatedTextDecoder {
         let mut buffer_readr = Cursor::new(&data);
         let date = buffer_readr.read_date_text(
             &self.common_settings().timezone,
-            self.common_settings().force_timestamp_conversion,
+            self.common_settings().enable_dst_hour_fix,
         )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
@@ -274,7 +274,7 @@ impl SeparatedTextDecoder {
             let t = buffer_readr.read_timestamp_text(
                 &self.common_settings().timezone,
                 false,
-                self.common_settings.force_timestamp_conversion,
+                self.common_settings.enable_dst_hour_fix,
             )?;
             match t {
                 DateTimeResType::Datetime(t) => {
