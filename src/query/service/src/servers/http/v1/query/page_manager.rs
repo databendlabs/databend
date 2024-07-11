@@ -38,7 +38,7 @@ pub enum Wait {
 #[derive(Clone)]
 pub struct Page {
     pub data: StringBlock,
-#[allow(dead_code)]
+    #[allow(dead_code)]
     pub total_rows: usize,
 }
 
