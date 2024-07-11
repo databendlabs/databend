@@ -31,6 +31,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod config;
+pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
 mod operator;
