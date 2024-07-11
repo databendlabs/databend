@@ -13,7 +13,7 @@ killall share-endpoint || true
 sleep 1
 
 echo "build share endpoint"
-git clone git@github.com:datafuselabs/share-endpoint.git
+git clone https://github.com/datafuselabs/share-endpoint.git
 cd share-endpoint
 cargo build --release
 
