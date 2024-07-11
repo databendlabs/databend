@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::once;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -334,14 +335,16 @@ impl BinaryColumnBuilder {
     }
 
     pub fn repeat(scalar: &[u8], n: usize) -> Self {
-        let mut builder = BinaryColumnBuilder {
-            data: Vec::new(), // lazy allocate
-            offsets: Vec::with_capacity(n + 1),
+        let len = scalar.len();
+        let data = scalar.repeat(n);
+        let offsets = once(0)
+            .chain((0..n).map(|i| (len * (i + 1)) as u64))
+            .collect();
+        BinaryColumnBuilder {
+            data,
+            offsets,
             need_estimated: false,
-        };
-        builder.offsets.push(0);
-        builder.push_repeat(scalar, n);
-        builder
+        }
     }
 
     pub fn repeat_default(n: usize) -> Self {
