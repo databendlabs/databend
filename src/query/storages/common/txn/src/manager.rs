@@ -122,11 +122,11 @@ impl TxnBuffer {
         self.snapshots.insert(new_location.to_string(), snapshot);
     }
 
-    fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<Arc<TableSnapshot>> {
-        self.snapshots.get(&table_id).cloned()
+    fn get_table_snapshot_by_location(&self, location: &str) -> Option<Arc<TableSnapshot>> {
+        self.snapshots.get(location).cloned()
     }
 
-    fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {
+    fn snapshots(&mut self) -> HashMap<String, Arc<TableSnapshot>> {
         std::mem::take(&mut self.snapshots)
     }
 }
@@ -317,11 +317,11 @@ impl TxnManager {
             .upsert_table_snapshot(old_location, new_location, snapshot);
     }
 
-    pub fn snapshots(&mut self) -> HashMap<u64, Arc<TableSnapshot>> {
+    pub fn snapshots(&mut self) -> HashMap<String, Arc<TableSnapshot>> {
         self.txn_buffer.snapshots()
     }
 
-    pub fn get_table_snapshot_by_id(&self, table_id: u64) -> Option<Arc<TableSnapshot>> {
-        self.txn_buffer.get_table_snapshot_by_id(table_id)
+    pub fn get_table_snapshot_by_location(&self, location: &str) -> Option<Arc<TableSnapshot>> {
+        self.txn_buffer.get_table_snapshot_by_location(location)
     }
 }

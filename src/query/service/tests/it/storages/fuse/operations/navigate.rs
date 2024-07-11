@@ -107,7 +107,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     // navigate from the instant that is just one ms before the timestamp of the latest snapshot
     let tbl = fuse_table
-        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker(),ctx.txn_mgr())
         .await?;
 
     // check we got the snapshot of the first insertion
@@ -121,7 +121,7 @@ async fn test_fuse_navigate() -> Result<()> {
         .sub(chrono::Duration::milliseconds(1));
     // navigate from the instant that is just one ms before the timestamp of the last insertion
     let res = fuse_table
-        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker())
+        .navigate_to_time_point(loc.clone(), instant, ctx.clone().get_abort_checker(),ctx.txn_mgr())
         .await;
     match res {
         Ok(_) => panic!("historical data should not exist"),
@@ -134,7 +134,7 @@ async fn test_fuse_navigate() -> Result<()> {
     let checker = ctx.clone().get_abort_checker();
     assert!(checker.is_aborting());
     let res = fuse_table
-        .navigate_to_time_point(loc, instant, ctx.get_abort_checker())
+        .navigate_to_time_point(loc, instant, ctx.get_abort_checker(),ctx.txn_mgr())
         .await;
 
     assert!(res.is_err());
@@ -209,7 +209,7 @@ async fn test_navigate_for_purge() -> Result<()> {
     // 2. grab the history
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(),TxnManager::init());
     let loc = fuse_table.snapshot_loc().await?.unwrap();
     assert_eq!(third_snapshot, loc);
     let version = TableMetaLocationGenerator::snapshot_version(loc.as_str());

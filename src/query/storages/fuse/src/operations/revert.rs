@@ -36,6 +36,7 @@ impl FuseTable {
             .navigate_to_point(
                 &navigation_descriptor.point,
                 ctx.clone().get_abort_checker(),
+                ctx.txn_mgr(),
             )
             .await?;
         let table_reverting_to = FuseTable::try_from_table(table.as_ref())?;

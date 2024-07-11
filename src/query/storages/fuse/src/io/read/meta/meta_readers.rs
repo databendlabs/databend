@@ -124,7 +124,7 @@ impl Loader<TableSnapshot> for LoaderWrapper<(Operator, TxnManagerRef)> {
         {
             let guard = txn_mgr.lock();
             if guard.is_active() {
-                if let Some(snapshot) = guard.get_table_snapshot_by_id(params.table_id) {
+                if let Some(snapshot) = guard.get_table_snapshot_by_location(&params.location) {
                     return Ok(snapshot.as_ref().clone());
                 }
             }

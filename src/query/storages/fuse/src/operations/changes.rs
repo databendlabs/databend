@@ -43,6 +43,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
+use databend_storages_common_txn::TxnManagerRef;
 use log::info;
 
 use crate::io::SegmentsIO;
@@ -65,10 +66,11 @@ impl FuseTable {
         desc: String,
         navigation: Option<&NavigationPoint>,
         abort_checker: AbortChecker,
+        txn_mgr: TxnManagerRef,
     ) -> Result<ChangesDesc> {
         // To support analyze table, we move the change tracking check out of the function.
         let source = if let Some(point) = navigation {
-            self.navigate_to_point(point, abort_checker)
+            self.navigate_to_point(point, abort_checker, txn_mgr.clone())
                 .await?
                 .as_ref()
                 .clone()
@@ -84,9 +86,12 @@ impl FuseTable {
                 .parse::<u64>()?,
             Some(_) => {
                 if let Some(snapshot_loc) = &location {
-                    let (snapshot, _) =
-                        SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator())
-                            .await?;
+                    let (snapshot, _) = SnapshotsIO::read_snapshot(
+                        snapshot_loc.clone(),
+                        self.get_operator(),
+                        txn_mgr,
+                    )
+                    .await?;
                     let Some(prev_table_seq) = snapshot.prev_table_seq else {
                         return Err(ErrorCode::IllegalStream(
                             "The stream navigation at point has not table version".to_string(),

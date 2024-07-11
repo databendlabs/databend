@@ -94,6 +94,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                             table_statistics.snapshot_id.simple().to_string(),
                         ),
                         self.ctx.clone().get_abort_checker(),
+                        self.ctx.txn_mgr(),
                     )
                     .await
                 {

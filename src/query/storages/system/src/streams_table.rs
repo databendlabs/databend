@@ -243,7 +243,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                 // safe unwrap.
                                 let stream_table =
                                     StreamTable::try_from_table(table.as_ref()).unwrap();
-                                match stream_table.source_table(ctx).await {
+                                match stream_table.source_table(ctx.clone()).await {
                                     Ok(source) => {
                                         // safe unwrap, has been checked in source_table.
                                         let fuse_table =

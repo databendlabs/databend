@@ -305,7 +305,7 @@ impl FuseTable {
         }
 
         let snapshot_location = root_snapshot_location_op.unwrap();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator(), ctx.txn_mgr());
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let params = LoadParams {
             location: snapshot_location.clone(),

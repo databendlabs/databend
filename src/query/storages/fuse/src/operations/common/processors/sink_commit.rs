@@ -367,18 +367,20 @@ where F: SnapshotGenerator + Send + 'static
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 let is_active = self.ctx.txn_mgr().lock().is_active();
                 let snapshot_ref = if is_active {
-                    if let Some(previous) = self
-                        .ctx
-                        .txn_mgr()
-                        .lock()
-                        .get_table_snapshot_by_id(table_info.ident.table_id)
-                    {
-                        snapshot.prev_snapshot_id = previous.prev_snapshot_id;
-                        assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+                    if let Some(l) = &previous_location {
+                        if let Some(previous) = self
+                            .ctx
+                            .txn_mgr()
+                            .lock()
+                            .get_table_snapshot_by_location(l.as_str())
+                        {
+                            snapshot.prev_snapshot_id = previous.prev_snapshot_id;
+                            assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+                        }
                     }
                     let snapshot_ref = Arc::new(snapshot);
                     self.ctx.txn_mgr().lock().upsert_table_snapshot(
-                        previous_location.as_ref(),
+                        previous_location.as_ref().map(|s| s.as_str()),
                         &location,
                         snapshot_ref.clone(),
                     );

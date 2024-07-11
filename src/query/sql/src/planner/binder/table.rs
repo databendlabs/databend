@@ -497,7 +497,9 @@ impl Binder {
                 .await?;
 
             if let Some(desc) = navigation {
-                table_meta = table_meta.navigate_to(desc, abort_checker).await?;
+                table_meta = table_meta
+                    .navigate_to(desc, abort_checker, self.ctx.txn_mgr())
+                    .await?;
             }
             Ok(table_meta)
         })

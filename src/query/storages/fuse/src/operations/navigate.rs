@@ -28,6 +28,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
@@ -47,10 +48,11 @@ impl FuseTable {
         &self,
         point: &NavigationPoint,
         abort_checker: AbortChecker,
+        txn_mgr: TxnManagerRef,
     ) -> Result<Arc<FuseTable>> {
         match point {
             NavigationPoint::SnapshotID(snapshot_id) => {
-                self.navigate_to_snapshot(snapshot_id.as_str(), abort_checker)
+                self.navigate_to_snapshot(snapshot_id.as_str(), abort_checker, txn_mgr)
                     .await
             }
             NavigationPoint::TimePoint(time_point) => {
@@ -59,15 +61,19 @@ impl FuseTable {
                         "Empty Table has no historical data",
                     ));
                 };
-                self.navigate_to_time_point(location, *time_point, abort_checker)
+                self.navigate_to_time_point(location, *time_point, abort_checker, txn_mgr)
                     .await
             }
-            NavigationPoint::StreamInfo(info) => self.navigate_to_stream(info).await,
+            NavigationPoint::StreamInfo(info) => self.navigate_to_stream(info, txn_mgr).await,
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn navigate_to_stream(&self, stream_info: &TableInfo) -> Result<Arc<FuseTable>> {
+    pub async fn navigate_to_stream(
+        &self,
+        stream_info: &TableInfo,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Arc<FuseTable>> {
         let options = stream_info.options();
         let stream_table_id = options
             .get(OPT_KEY_SOURCE_TABLE_ID)
@@ -88,7 +94,7 @@ impl FuseTable {
             return Ok(table.into());
         };
         let (snapshot, format_version) =
-            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator()).await?;
+            SnapshotsIO::read_snapshot(snapshot_loc.clone(), self.get_operator(), txn_mgr).await?;
         self.load_table_by_snapshot(snapshot.as_ref(), format_version)
     }
 
@@ -98,14 +104,20 @@ impl FuseTable {
         location: String,
         time_point: DateTime<Utc>,
         aborting: AbortChecker,
+        txn_mgr: TxnManagerRef,
     ) -> Result<Arc<FuseTable>> {
-        self.find(location, aborting, |snapshot| {
-            if let Some(ts) = snapshot.timestamp {
-                ts <= time_point
-            } else {
-                false
-            }
-        })
+        self.find(
+            location,
+            aborting,
+            |snapshot| {
+                if let Some(ts) = snapshot.timestamp {
+                    ts <= time_point
+                } else {
+                    false
+                }
+            },
+            txn_mgr,
+        )
         .await
     }
 
@@ -114,6 +126,7 @@ impl FuseTable {
         &self,
         snapshot_id: &str,
         abort_checker: AbortChecker,
+        txn_mgr: TxnManagerRef,
     ) -> Result<Arc<FuseTable>> {
         let Some(location) = self.snapshot_loc().await? else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
@@ -121,14 +134,19 @@ impl FuseTable {
             ));
         };
 
-        self.find(location, abort_checker, |snapshot| {
-            snapshot
-                .snapshot_id
-                .simple()
-                .to_string()
-                .as_str()
-                .starts_with(snapshot_id)
-        })
+        self.find(
+            location,
+            abort_checker,
+            |snapshot| {
+                snapshot
+                    .snapshot_id
+                    .simple()
+                    .to_string()
+                    .as_str()
+                    .starts_with(snapshot_id)
+            },
+            txn_mgr,
+        )
         .await
     }
 
@@ -138,12 +156,13 @@ impl FuseTable {
         location: String,
         abort_checker: AbortChecker,
         mut pred: P,
+        txn_mgr: TxnManagerRef,
     ) -> Result<Arc<FuseTable>>
     where
         P: FnMut(&TableSnapshot) -> bool,
     {
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator(), txn_mgr);
         // grab the table history as stream
         // snapshots are order by timestamp DESC.
         let mut snapshot_stream = reader.snapshot_history(
@@ -236,18 +255,18 @@ impl FuseTable {
         let (location, files) = match instant {
             Some(NavigationPoint::TimePoint(point)) => {
                 time_point = std::cmp::min(point, time_point);
-                self.list_by_time_point(time_point).await
+                self.list_by_time_point(time_point, ctx.txn_mgr()).await
             }
             Some(NavigationPoint::SnapshotID(snapshot_id)) => {
                 self.list_by_snapshot_id(snapshot_id.as_str(), time_point)
                     .await
             }
             Some(NavigationPoint::StreamInfo(info)) => self.list_by_stream(info, time_point).await,
-            None => self.list_by_time_point(time_point).await,
+            None => self.list_by_time_point(time_point, ctx.txn_mgr()).await,
         }?;
 
         let table = self
-            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker())
+            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker(),ctx.txn_mgr())
             .await?;
 
         Ok((table, files))
@@ -257,6 +276,7 @@ impl FuseTable {
     pub async fn list_by_time_point(
         &self,
         time_point: DateTime<Utc>,
+        txn_mgr: TxnManagerRef,
     ) -> Result<(String, Vec<String>)> {
         let prefix = format!(
             "{}/{}/",
@@ -274,7 +294,7 @@ impl FuseTable {
         }
 
         let location = files[0].clone();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator(), txn_mgr);
         let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
         let load_params = LoadParams {
             location,

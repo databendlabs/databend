@@ -103,6 +103,7 @@ impl StreamHandler for RealStreamHandler {
                 "".to_string(),
                 plan.navigation.as_ref(),
                 abort_checker,
+                ctx.txn_mgr(),
             )
             .await?;
         table.check_changes_valid(&table.get_table_info().desc, change_desc.seq)?;

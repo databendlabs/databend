@@ -246,16 +246,16 @@ async fn build_update_table_meta_req(
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     let is_active = ctx.txn_mgr().lock().is_active();
     if is_active {
-        if let Some(previous) = ctx
-            .txn_mgr()
-            .lock()
-            .get_table_snapshot_by_id(fuse_table.get_id())
-        {
-            snapshot.prev_snapshot_id = previous.prev_snapshot_id;
-            assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+        let old_location = fuse_table.snapshot_loc().await?;
+        if let Some(l) = &old_location {
+            if let Some(previous) = ctx.txn_mgr().lock().get_table_snapshot_by_location(l) {
+                snapshot.prev_snapshot_id = previous.prev_snapshot_id;
+                assert_eq!(snapshot.prev_table_seq, previous.prev_table_seq);
+            }
         }
+
         ctx.txn_mgr().lock().upsert_table_snapshot(
-            fuse_table.snapshot_loc(),
+            old_location.as_ref().map(|l| l.as_str()),
             &location,
             Arc::new(snapshot.clone()),
         );

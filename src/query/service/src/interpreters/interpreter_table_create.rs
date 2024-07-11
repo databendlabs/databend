@@ -319,7 +319,7 @@ impl CreateTableInterpreter {
                 // using application level data operator is a temp workaround
                 // please see discussions https://github.com/datafuselabs/databend/pull/10424
                 let operator = self.ctx.get_application_level_data_operator()?.operator();
-                let reader = MetaReaders::table_snapshot_reader(operator);
+                let reader = MetaReaders::table_snapshot_reader(operator, self.ctx.txn_mgr());
 
                 let params = LoadParams {
                     location: snapshot_loc.clone(),

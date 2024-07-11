@@ -40,6 +40,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_txn::TxnManagerRef;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -298,6 +299,7 @@ pub trait Table: Sync + Send {
         &self,
         navigation: &TimeNavigation,
         abort_checker: AbortChecker,
+        _txn_mgr:TxnManagerRef,
     ) -> Result<Arc<dyn Table>> {
         let _ = navigation;
         let _ = abort_checker;

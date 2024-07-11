@@ -328,14 +328,17 @@ impl FuseTable {
         &self,
         txn_mgr: TxnManagerRef,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator(),txn_mgr);
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator(), txn_mgr);
         self.read_table_snapshot_with_reader(reader).await
     }
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
-        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
+    pub async fn read_table_snapshot_without_cache(
+        &self,
+        txn_mgr: TxnManagerRef,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator(), txn_mgr);
         self.read_table_snapshot_with_reader(reader).await
     }
 
@@ -819,11 +822,12 @@ impl Table for FuseTable {
         &self,
         navigation: &TimeNavigation,
         abort_checker: AbortChecker,
+        txn_mgr: TxnManagerRef,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => {
-                Ok(self.navigate_to_point(point, abort_checker).await?)
-            }
+            TimeNavigation::TimeTravel(point) => Ok(self
+                .navigate_to_point(point, abort_checker, txn_mgr)
+                .await?),
             TimeNavigation::Changes {
                 append_only,
                 at,
@@ -831,7 +835,7 @@ impl Table for FuseTable {
                 desc,
             } => {
                 let mut end_point = if let Some(end) = end {
-                    self.navigate_to_point(end, abort_checker.clone())
+                    self.navigate_to_point(end, abort_checker.clone(), txn_mgr.clone())
                         .await?
                         .as_ref()
                         .clone()
@@ -839,7 +843,13 @@ impl Table for FuseTable {
                     self.clone()
                 };
                 let changes_desc = end_point
-                    .get_change_descriptor(*append_only, desc.clone(), Some(at), abort_checker)
+                    .get_change_descriptor(
+                        *append_only,
+                        desc.clone(),
+                        Some(at),
+                        abort_checker,
+                        txn_mgr,
+                    )
                     .await?;
                 end_point.changes_desc = Some(changes_desc);
                 Ok(Arc::new(end_point))

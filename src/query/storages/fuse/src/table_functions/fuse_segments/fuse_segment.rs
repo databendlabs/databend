@@ -71,7 +71,7 @@ impl<'a> FuseSegment<'a> {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
                 let reader =
-                    MetaReaders::table_snapshot_reader((tbl.get_operator(), self.ctx.txn_mgr()));
+                    MetaReaders::table_snapshot_reader(tbl.get_operator(), self.ctx.txn_mgr());
                 let mut snapshot_stream = reader.snapshot_history(
                     snapshot_location,
                     snapshot_version,

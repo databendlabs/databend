@@ -208,9 +208,12 @@ impl SnapshotsIO {
             }
         }
 
-        let (root_snapshot, format_version) = self
-            .read_snapshot(root_snapshot_file.clone(), data_accessor.clone())
-            .await?;
+        let (root_snapshot, format_version) = Self::read_snapshot(
+            root_snapshot_file.clone(),
+            data_accessor.clone(),
+            self.ctx.txn_mgr(),
+        )
+        .await?;
 
         Ok(Self::chain_snapshots(
             snapshot_lites,
