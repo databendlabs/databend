@@ -325,6 +325,11 @@ begin transaction;
 statement ok
 insert into s values(3,4),(1,2),(5,6);
 
+query I
+select count(*) from fuse_snapshot('default', 's');
+----
+1
+
 query II
 INSERT FIRST
     WHEN c3 = 5 THEN
@@ -334,6 +339,16 @@ INSERT FIRST
 SELECT * from s;
 ----
 1 2
+
+query I
+select count(*) from fuse_snapshot('default', 't1');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('default', 't2');
+----
+1
 
 query II
 select * from t1 order by c1;
@@ -348,6 +363,22 @@ select * from t2;
 
 statement ok
 rollback;
+
+query I
+select count(*) from fuse_snapshot('default', 's');
+----
+0
+
+query I
+select count(*) from fuse_snapshot('default', 't1');
+----
+0
+
+query I
+select count(*) from fuse_snapshot('default', 't2');
+----
+0
+
 
 query II
 select * from t1 order by c1;
