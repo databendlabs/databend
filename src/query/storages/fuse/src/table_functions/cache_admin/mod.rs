@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//mod fuse_amend_table;
-mod fuse_amend_table;
+mod set_cache_capacity;
 
-pub use fuse_amend_table::FuseAmendTable;
+pub use set_cache_capacity::SetCacheCapacity;

@@ -51,6 +51,7 @@ where
     fn contains_key(&self, k: &str) -> bool;
     fn size(&self) -> u64;
     fn capacity(&self) -> u64;
+    fn set_capacity(&self, capacity: u64);
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool {
         self.len() == 0
@@ -158,6 +159,10 @@ where
 
     fn capacity(&self) -> u64 {
         self.cache.capacity()
+    }
+
+    fn set_capacity(&self, capacity: u64) {
+        self.cache.set_capacity(capacity)
     }
 
     fn len(&self) -> usize {

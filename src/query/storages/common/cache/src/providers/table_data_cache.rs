@@ -165,6 +165,10 @@ impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache 
         self.external_cache.capacity()
     }
 
+    fn set_capacity(&self, cap: u64) {
+        self.external_cache.set_capacity(cap)
+    }
+
     fn len(&self) -> usize {
         self.external_cache.len()
     }

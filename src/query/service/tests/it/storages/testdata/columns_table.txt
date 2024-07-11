@@ -6,6 +6,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 +-----------------------------------+----------------------+------------------------+-----------------------+---------------------+----------+----------+----------+----------+
 | 'Comment'                         | 'system'             | 'engines'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'Engine'                          | 'system'             | 'engines'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'access'                          | 'system'             | 'caches'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'acquired_on'                     | 'system'             | 'locks'                | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'active_result_scan'              | 'system'             | 'query_cache'          | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'after'                           | 'system'             | 'tasks'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -20,6 +21,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'bytes_from_local_disk'           | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_memory'               | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_remote_disk'          | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'capacity'                        | 'system'             | 'caches'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cardinality'                     | 'information_schema' | 'statistics'           | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'cargo_features'                  | 'system'             | 'build_options'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                         | 'system'             | 'databases'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -185,6 +187,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'group_by_spilled_rows'           | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'handler_type'                    | 'system'             | 'query_log'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'has_profile'                     | 'system'             | 'query_log'            | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
+| 'hit'                             | 'system'             | 'caches'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'host'                            | 'system'             | 'clusters'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'host'                            | 'system'             | 'processes'            | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'hostname'                        | 'system'             | 'users'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -241,6 +244,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'message'                         | 'system'             | 'notification_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'message_source'                  | 'system'             | 'notification_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'metric'                          | 'system'             | 'metrics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'miss'                            | 'system'             | 'caches'               | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mode'                            | 'system'             | 'streams_terse'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'mysql_connection_id'             | 'system'             | 'processes'            | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
@@ -437,6 +441,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'type'                            | 'system'             | 'notifications'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                            | 'system'             | 'processes'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                            | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'unit'                            | 'system'             | 'caches'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'update_on'                       | 'system'             | 'roles'                | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'update_on'                       | 'system'             | 'users'                | 'Nullable(Timestamp)' | 'TIMESTAMP'         | ''       | ''       | 'YES'    | ''       |
 | 'updated_on'                      | 'system'             | 'background_tasks'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |

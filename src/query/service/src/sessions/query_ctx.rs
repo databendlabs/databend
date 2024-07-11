@@ -195,9 +195,11 @@ impl QueryContext {
                 }
             }
 
-            Some(table_args) => Ok(catalog
-                .get_table_function(&table_info.name, table_args)?
-                .as_table()),
+            Some(table_args) => {
+                Ok(catalog
+                    .get_table_function(&table_info.name, table_args)?
+                    .as_table())
+            }
         }
     }
 
