@@ -156,6 +156,11 @@ impl FuseTable {
         if let Some(cache_key) = derterministic_cache_key.as_ref() {
             if let Some(cache) = CacheItem::cache() {
                 if let Some(data) = cache.get(cache_key) {
+                    info!(
+                        "prune snapshot block from cache, final block numbers:{}, cost:{:?}",
+                        data.1.len(),
+                        start.elapsed()
+                    );
                     return Ok((data.0.clone(), data.1.clone()));
                 }
             }

@@ -337,24 +337,24 @@ impl FusePruner {
                                     deleted_segments.push(DeletedSegmentInfo {
                                         index: segment_location.segment_idx,
                                         summary: compact_segment_info.summary.clone(),
-                                    })
+                                    });
+                                    continue;
                                 };
-                            } else {
-                                // do not populate the block meta cache for deletion operations,
-                                // since block metas touched by deletion are not likely to
-                                // be accessed soon.
-                                let populate_block_meta_cache = false;
-                                let block_metas = Self::extract_block_metas(
-                                    &segment_location.location.0,
-                                    compact_segment_info,
-                                    populate_block_meta_cache,
-                                )?;
-                                res.extend(
-                                    block_pruner
-                                        .pruning(segment_location.clone(), block_metas)
-                                        .await?,
-                                );
                             }
+                            // do not populate the block meta cache for deletion operations,
+                            // since block metas touched by deletion are not likely to
+                            // be accessed soon.
+                            let populate_block_meta_cache = false;
+                            let block_metas = Self::extract_block_metas(
+                                &segment_location.location.0,
+                                compact_segment_info,
+                                populate_block_meta_cache,
+                            )?;
+                            res.extend(
+                                block_pruner
+                                    .pruning(segment_location.clone(), block_metas)
+                                    .await?,
+                            );
                         }
                     } else {
                         for (location, info) in pruned_segments {
