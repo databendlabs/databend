@@ -119,6 +119,8 @@ impl CacheManager {
                         )
                     };
 
+                    let queue_size = queue_size * 5;
+
                     info!(
                         "disk cache enabled, cache population queue size {}",
                         queue_size
@@ -211,8 +213,7 @@ impl CacheManager {
                 Unit::Bytes,
             );
             let prune_partitions_cache = Self::new_named_cache_slot(
-                // config.table_prune_partitions_count,
-                0,
+                config.table_prune_partitions_count,
                 "memory_cache_prune_partitions",
             );
 
