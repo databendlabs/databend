@@ -125,6 +125,10 @@ impl<'a> Evaluator<'a> {
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None, &mut EvaluateOptions::default())
+            .map_err(|err| {
+                let err_msg = format!("{}\nduring run expr: {}", err.message(), expr.sql_display());
+                ErrorCode::BadArguments(err_msg).set_span(err.span())
+            })
     }
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
