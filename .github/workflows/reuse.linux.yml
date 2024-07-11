@@ -240,6 +240,20 @@ jobs:
         with:
           name: test-stateful-standalone-linux
 
+  test_share_integration:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_share_integration
+        if: env.BUILD_PROFILE == 'debug'
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-integration-sharing-linux
+
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check, license]
