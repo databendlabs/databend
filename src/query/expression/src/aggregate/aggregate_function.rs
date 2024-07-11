@@ -234,11 +234,31 @@ pub struct InputColumnsIter<'a> {
     this: &'a InputColumns<'a>,
 }
 
+unsafe impl<'a> std::iter::TrustedLen for InputColumnsIter<'a> {}
+
 impl<'a> Iterator for InputColumnsIter<'a> {
     type Item = &'a Column;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|index| self.this.index(index))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+
+    fn count(self) -> usize
+    where Self: Sized {
+        self.iter.count()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.iter.nth(n).map(|index| self.this.index(index))
+    }
+
+    fn last(self) -> Option<Self::Item>
+    where Self: Sized {
+        self.iter.last().map(|index| self.this.index(index))
     }
 }
 

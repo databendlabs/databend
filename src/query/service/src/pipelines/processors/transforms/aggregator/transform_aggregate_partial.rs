@@ -173,7 +173,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
     #[inline(always)]
     fn aggregate_arguments<'a>(
         block: &'a DataBlock,
-        aggregate_functions_arguments: &'a Vec<Vec<usize>>,
+        aggregate_functions_arguments: &'a [Vec<usize>],
     ) -> Vec<InputColumns<'a>> {
         aggregate_functions_arguments
             .iter()
