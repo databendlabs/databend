@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -24,6 +25,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::BindContext;
 use databend_common_sql::Planner;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::NavigationPoint;
@@ -33,9 +35,11 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::RangeIndex;
 use itertools::Itertools;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -50,10 +54,10 @@ impl AnalyzeTableInterpreter {
         Ok(AnalyzeTableInterpreter { ctx, plan })
     }
 
-    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, DataSchemaRef)> {
+    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, BindContext)> {
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(&sql).await?;
-        let (select_plan, schema) = match &plan {
+        let (select_plan, bind_context) = match &plan {
             Plan::Query {
                 s_expr,
                 metadata,
@@ -64,12 +68,12 @@ impl AnalyzeTableInterpreter {
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
                     builder.build(s_expr, bind_context.column_set()).await?,
-                    bind_context.output_schema(),
+                    (**bind_context).clone(),
                 )
             }
             _ => unreachable!(),
         };
-        Ok((select_plan, schema))
+        Ok((select_plan, bind_context))
     }
 }
 
@@ -176,78 +180,69 @@ impl Interpreter for AnalyzeTableInterpreter {
                 plan.database, plan.table,
             );
 
-            log::info!("Analyze via sql {:?}", sql);
+            info!("Analyze via sql {:?}", sql);
 
-            let mut histogram_sql = index_cols
+            let (physical_plan, bind_context) = self.plan_sql(sql).await?;
+            let mut build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+
+            let mut histogram_sqls = index_cols
                 .iter()
-                .enumerate()
-                .map(|(i, c)| {
+                .map(|c| {
                     format!(
-                        "WITH quantiles_{} AS (
+                        "SELECT quantile,
+                            COUNT(DISTINCT {}) AS ndv,
+                            MAX({}) AS max_value,
+                            COUNT() as count
+                        FROM  (
                             SELECT {}, NTILE({}) OVER (ORDER BY {}) AS quantile
                             FROM {}.{} WHERE {} IS DISTINCT FROM NULL
                         )
-
-                        SELECT quantile + {} * 100 AS quantile,
-                            COUNT(DISTINCT {}) AS ndv,
-                            MAX({}) AS max_value,
-                            COUNT() as count,
-                            {}::uint32 AS col_index
-                        FROM quantiles_{}
-                        GROUP BY quantile \n",
-                        c.0,
+                        GROUP BY quantile ORDER BY quantile \n",
+                        c.1,
+                        c.1,
                         c.1,
                         DEFAULT_HISTOGRAM_BUCKETS,
                         c.1,
                         plan.database,
                         plan.table,
                         c.1,
-                        i,
-                        c.1,
-                        c.1,
-                        c.0,
-                        c.0
                     )
                 })
-                .collect::<Vec<_>>()
-                .join(" UNION ALL ");
+                .collect::<Vec<_>>();
+            let mut histogram_info_receivers = HashMap::new();
+            for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
+                info!("Analyze histogram via sql {:?}", sql);
+                let (histogram_plan, bind_context) = self.plan_sql(sql).await?;
+                let mut histogram_build_res =
+                    build_query_pipeline(&self.ctx, &bind_context.columns, &histogram_plan, false)
+                        .await?;
+                let (tx, rx) = async_channel::unbounded();
+                histogram_build_res.main_pipeline.add_sink(|input_port| {
+                    Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                        Some(tx.clone()),
+                        input_port.clone(),
+                    )))
+                })?;
 
-            histogram_sql = format!("SELECT * FROM ({}) ORDER BY quantile;", histogram_sql);
-
-            log::info!("Generate histogram by sql {:?}", histogram_sql);
-
-            let (plan, plan_schema) = self.plan_sql(sql).await?;
-            let (histogram_plan, _) = self.plan_sql(histogram_sql).await?;
-
-            let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &plan).await?;
-
-            let mut histogram_build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &histogram_plan).await?;
-            let (tx, rx) = async_channel::unbounded();
-            histogram_build_res.main_pipeline.add_sink(|input_port| {
-                Ok(ProcessorPtr::create(HistogramInfoSink::create(
-                    Some(tx.clone()),
-                    input_port,
-                )))
-            })?;
-
-            build_res
-                .sources_pipelines
-                .push(histogram_build_res.main_pipeline.finalize());
-            build_res
-                .sources_pipelines
-                .extend(histogram_build_res.sources_pipelines);
+                build_res
+                    .sources_pipelines
+                    .push(histogram_build_res.main_pipeline.finalize());
+                build_res
+                    .sources_pipelines
+                    .extend(histogram_build_res.sources_pipelines);
+                histogram_info_receivers.insert(*col_id, rx);
+            }
 
             FuseTable::do_analyze(
                 self.ctx.clone(),
-                plan_schema,
+                bind_context.output_schema(),
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
                 snapshot.snapshot_id,
                 &mut build_res.main_pipeline,
-                rx,
+                histogram_info_receivers,
             )?;
             return Ok(build_res);
         }

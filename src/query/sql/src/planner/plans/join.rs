@@ -511,12 +511,10 @@ impl Operator for Join {
             left_stat_info.cardinality,
             left_stat_info.statistics.clone(),
         );
-        dbg!(&left_statistics);
         let (mut right_cardinality, mut right_statistics) = (
             right_stat_info.cardinality,
             right_stat_info.statistics.clone(),
         );
-        dbg!(&right_statistics);
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
         let inner_join_cardinality = self.inner_join_cardinality(
