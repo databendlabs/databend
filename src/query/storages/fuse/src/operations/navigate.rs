@@ -266,7 +266,12 @@ impl FuseTable {
         }?;
 
         let table = self
-            .navigate_to_time_point(location, time_point, ctx.clone().get_abort_checker(),ctx.txn_mgr())
+            .navigate_to_time_point(
+                location,
+                time_point,
+                ctx.clone().get_abort_checker(),
+                ctx.txn_mgr(),
+            )
             .await?;
 
         Ok((table, files))

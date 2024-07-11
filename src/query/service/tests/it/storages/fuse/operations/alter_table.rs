@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_txn::TxnManager;
 use futures_util::TryStreamExt;
 use ordered_float::OrderedFloat;
 
@@ -73,7 +74,8 @@ async fn check_segment_column_ids(
         .unwrap();
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-    let snapshot_reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let snapshot_reader =
+        MetaReaders::table_snapshot_reader(fuse_table.get_operator(), TxnManager::init());
     let params = LoadParams {
         location: snapshot_loc.clone(),
         len_hint: None,

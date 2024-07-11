@@ -36,6 +36,7 @@ use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_txn::TxnManager;
 use futures::TryStreamExt;
 
 fn expected_data_block(
@@ -98,7 +99,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(), TxnManager::init());
 
     let load_params = LoadParams {
         location: snapshot_name.clone(),

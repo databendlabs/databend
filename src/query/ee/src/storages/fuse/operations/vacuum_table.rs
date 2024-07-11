@@ -72,7 +72,7 @@ pub async fn get_snapshot_referenced_files(
     }
 
     let root_snapshot_location = root_snapshot_location_op.unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(),ctx.txn_mgr());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(), ctx.txn_mgr());
     let ver = TableMetaLocationGenerator::snapshot_version(root_snapshot_location.as_str());
     let params = LoadParams {
         location: root_snapshot_location.clone(),

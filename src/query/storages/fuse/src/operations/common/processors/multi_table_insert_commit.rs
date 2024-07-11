@@ -255,7 +255,7 @@ async fn build_update_table_meta_req(
         }
 
         ctx.txn_mgr().lock().upsert_table_snapshot(
-            old_location.as_ref().map(|l| l.as_str()),
+            old_location.as_deref(),
             &location,
             Arc::new(snapshot.clone()),
         );

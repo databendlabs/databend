@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_txn::TxnManager;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Result<()> {
@@ -87,7 +88,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(), TxnManager::init());
 
     let load_params = LoadParams {
         location: snapshot_loc.clone(),
@@ -123,7 +124,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         .options()
         .get(OPT_KEY_SNAPSHOT_LOCATION)
         .unwrap();
-    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
+    let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator(), TxnManager::init());
 
     let params = LoadParams {
         location: snapshot_loc.clone(),

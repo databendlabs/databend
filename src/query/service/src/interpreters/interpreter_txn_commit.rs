@@ -62,7 +62,7 @@ impl Interpreter for CommitInterpreter {
             {
                 let mutated_tables = self.ctx.txn_mgr().lock().mutated_tables();
                 for table_info in mutated_tables.values() {
-                    let table = catalog.get_table_by_info(&table_info)?;
+                    let table = catalog.get_table_by_info(table_info)?;
                     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
                     let dal = fuse_table.get_operator();
                     if let Some(location) = fuse_table.snapshot_loc().await? {
@@ -71,8 +71,7 @@ impl Interpreter for CommitInterpreter {
                             .txn_mgr()
                             .lock()
                             .get_table_snapshot_by_location(&location);
-                        if let Some(snapshot) = snapshot
-                        {
+                        if let Some(snapshot) = snapshot {
                             dal.write(&location, snapshot.to_bytes()?).await?;
                         }
                     }

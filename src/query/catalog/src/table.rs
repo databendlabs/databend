@@ -299,7 +299,7 @@ pub trait Table: Sync + Send {
         &self,
         navigation: &TimeNavigation,
         abort_checker: AbortChecker,
-        _txn_mgr:TxnManagerRef,
+        _txn_mgr: TxnManagerRef,
     ) -> Result<Arc<dyn Table>> {
         let _ = navigation;
         let _ = abort_checker;

@@ -380,7 +380,7 @@ where F: SnapshotGenerator + Send + 'static
                     }
                     let snapshot_ref = Arc::new(snapshot);
                     self.ctx.txn_mgr().lock().upsert_table_snapshot(
-                        previous_location.as_ref().map(|s| s.as_str()),
+                        previous_location.as_deref(),
                         &location,
                         snapshot_ref.clone(),
                     );
