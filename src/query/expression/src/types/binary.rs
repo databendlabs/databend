@@ -455,8 +455,8 @@ impl BinaryColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: &[u8], n: usize) {
+        self.data.reserve(item.len() * n);
         if self.need_estimated && self.offsets.len() - 1 < 64 {
-            self.data.reserve(item.len() * n);
             for _ in 0..n {
                 self.data.extend_from_slice(item);
                 self.commit_row();
@@ -464,7 +464,9 @@ impl BinaryColumnBuilder {
         } else {
             let start = self.data.len();
             let len = item.len();
-            self.data.extend(item.iter().cloned().cycle().take(len * n));
+            for _ in 0..n {
+                self.data.extend_from_slice(item)
+            }
             self.offsets
                 .extend((1..=n).map(|i| (start + len * i) as u64));
         }

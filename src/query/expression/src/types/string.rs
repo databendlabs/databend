@@ -594,8 +594,8 @@ impl StringColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: &str, n: usize) {
+        self.data.reserve(item.len() * n);
         if self.need_estimated && self.offsets.len() - 1 < 64 {
-            self.data.reserve(item.len() * n);
             for _ in 0..n {
                 self.data.extend_from_slice(item.as_bytes());
                 self.commit_row();
@@ -603,8 +603,9 @@ impl StringColumnBuilder {
         } else {
             let start = self.data.len();
             let len = item.len();
-            self.data
-                .extend(item.as_bytes().iter().cloned().cycle().take(len * n));
+            for _ in 0..n {
+                self.data.extend_from_slice(item.as_bytes());
+            }
             self.offsets
                 .extend((1..=n).map(|i| (start + len * i) as u64));
         }
