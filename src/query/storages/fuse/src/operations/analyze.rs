@@ -40,7 +40,6 @@ use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::MetaHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;

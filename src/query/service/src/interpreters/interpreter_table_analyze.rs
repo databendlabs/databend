@@ -18,8 +18,6 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -186,7 +184,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             let mut build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
-            let mut histogram_sqls = index_cols
+            let histogram_sqls = index_cols
                 .iter()
                 .map(|c| {
                     format!(
