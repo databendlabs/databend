@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotLite;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
@@ -54,6 +55,7 @@ pub struct SnapshotLiteExtended {
 }
 
 // Read snapshot related operations.
+#[derive(Clone)]
 pub struct SnapshotsIO {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
@@ -76,8 +78,9 @@ impl SnapshotsIO {
     pub async fn read_snapshot(
         snapshot_location: String,
         data_accessor: Operator,
+        txn_mgr: TxnManagerRef,
     ) -> Result<(Arc<TableSnapshot>, FormatVersion)> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let reader = MetaReaders::table_snapshot_reader(data_accessor, txn_mgr);
         let ver: u64 = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
@@ -91,11 +94,12 @@ impl SnapshotsIO {
 
     #[async_backtrace::framed]
     async fn read_snapshot_lite(
+        self,
         snapshot_location: String,
         data_accessor: Operator,
         min_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<TableSnapshotLite> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let reader = MetaReaders::table_snapshot_reader(data_accessor, self.ctx.txn_mgr());
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
@@ -130,14 +134,16 @@ impl SnapshotsIO {
     ) -> Result<Vec<Result<TableSnapshotLite>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
-        let tasks = std::iter::from_fn(move || {
+        let tasks = std::iter::from_fn(|| {
             iter.next().map(|location| {
-                Self::read_snapshot_lite(
-                    location.clone(),
-                    self.operator.clone(),
-                    min_snapshot_timestamp,
-                )
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                let self_clone = self.clone();
+                self_clone
+                    .read_snapshot_lite(
+                        location.clone(),
+                        self.operator.clone(),
+                        min_snapshot_timestamp,
+                    )
+                    .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 
@@ -202,8 +208,9 @@ impl SnapshotsIO {
             }
         }
 
-        let (root_snapshot, format_version) =
-            Self::read_snapshot(root_snapshot_file.clone(), data_accessor.clone()).await?;
+        let (root_snapshot, format_version) = self
+            .read_snapshot(root_snapshot_file.clone(), data_accessor.clone())
+            .await?;
 
         Ok(Self::chain_snapshots(
             snapshot_lites,
@@ -221,7 +228,7 @@ impl SnapshotsIO {
         root_snapshot: String,
         limit: Option<usize>,
     ) -> Result<Vec<TableSnapshotLite>> {
-        let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal);
+        let table_snapshot_reader = MetaReaders::table_snapshot_reader(dal, self.ctx.txn_mgr());
         let format_version = TableMetaLocationGenerator::snapshot_version(root_snapshot.as_str());
         let lite_snapshot_stream = table_snapshot_reader
             .snapshot_history(root_snapshot, format_version, location_generator)
@@ -237,12 +244,13 @@ impl SnapshotsIO {
 
     #[async_backtrace::framed]
     async fn read_snapshot_lite_extend(
+        self,
         snapshot_location: String,
         data_accessor: Operator,
         root_snapshot: Arc<SnapshotLiteExtended>,
         ignore_timestamp: bool,
     ) -> Result<SnapshotLiteExtended> {
-        let reader = MetaReaders::table_snapshot_reader(data_accessor);
+        let reader = MetaReaders::table_snapshot_reader(data_accessor, self.ctx.txn_mgr());
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
         let load_params = LoadParams {
             location: snapshot_location,
@@ -301,13 +309,15 @@ impl SnapshotsIO {
         let mut iter = snapshot_files.iter();
         let tasks = std::iter::from_fn(move || {
             iter.next().map(|location| {
-                Self::read_snapshot_lite_extend(
-                    location.clone(),
-                    self.operator.clone(),
-                    root_snapshot.clone(),
-                    ignore_timestamp,
-                )
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                let self_clone = self.clone();
+                self_clone
+                    .read_snapshot_lite_extend(
+                        location.clone(),
+                        self.operator.clone(),
+                        root_snapshot.clone(),
+                        ignore_timestamp,
+                    )
+                    .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 

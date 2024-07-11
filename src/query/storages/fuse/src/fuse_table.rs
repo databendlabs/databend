@@ -328,17 +328,7 @@ impl FuseTable {
         &self,
         txn_mgr: TxnManagerRef,
     ) -> Result<Option<Arc<TableSnapshot>>> {
-        {
-            let guard = txn_mgr.lock();
-            if guard.is_active() {
-                if let Some(snapshot) =
-                    guard.get_table_snapshot_by_id(self.table_info.ident.table_id)
-                {
-                    return Ok(Some(snapshot.clone()));
-                }
-            }
-        }
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator(),txn_mgr);
         self.read_table_snapshot_with_reader(reader).await
     }
 

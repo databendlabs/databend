@@ -252,6 +252,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                             reason = SnapshotsIO::read_snapshot(
                                                 location,
                                                 fuse_table.get_operator(),
+                                                ctx.txn_mgr(),
                                             )
                                             .await
                                             .err()

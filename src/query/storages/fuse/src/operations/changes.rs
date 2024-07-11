@@ -224,9 +224,12 @@ impl FuseTable {
                         let latest_segments: HashSet<&Location> =
                             HashSet::from_iter(&latest_snapshot.segments);
 
-                        let (base_snapshot, _) =
-                            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator())
-                                .await?;
+                        let (base_snapshot, _) = SnapshotsIO::read_snapshot(
+                            base_location.clone(),
+                            self.get_operator(),
+                            ctx.txn_mgr(),
+                        )
+                        .await?;
                         let base_segments = HashSet::from_iter(&base_snapshot.segments);
 
                         // If the base segments are a subset of the latest segments,
@@ -342,16 +345,24 @@ impl FuseTable {
         let latest = self.snapshot_loc().await?;
 
         let latest_segments = if let Some(snapshot) = latest {
-            let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+            let (sn, _) = SnapshotsIO::read_snapshot(
+                snapshot.to_string(),
+                self.get_operator(),
+                ctx.txn_mgr(),
+            )
+            .await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
         };
 
         let base_segments = if let Some(snapshot) = base {
-            let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+            let (sn, _) = SnapshotsIO::read_snapshot(
+                snapshot.to_string(),
+                self.get_operator(),
+                ctx.txn_mgr(),
+            )
+            .await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -437,7 +448,8 @@ impl FuseTable {
         };
 
         let (base_snapshot, _) =
-            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator()).await?;
+            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator(), ctx.txn_mgr())
+                .await?;
         let base_summary = base_snapshot.summary.clone();
         let latest_summary = if let Some(snapshot) = self.read_table_snapshot(ctx.txn_mgr()).await?
         {

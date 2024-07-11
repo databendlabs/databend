@@ -35,6 +35,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::readers::VersionedReader;
+use databend_storages_common_txn::TxnManagerRef;
 use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
@@ -47,7 +48,8 @@ use self::thrift_file_meta_read::read_thrift_file_metadata;
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
-pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
+pub type TableSnapshotReader =
+    InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<(Operator, TxnManagerRef)>>;
 pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     CompactSegmentInfo,
     LoaderWrapper<(Operator, TableSchemaRef)>,
@@ -74,15 +76,18 @@ impl MetaReaders {
         CompactSegmentInfoReader::new(None, LoaderWrapper((dal, schema)))
     }
 
-    pub fn table_snapshot_reader(dal: Operator) -> TableSnapshotReader {
+    pub fn table_snapshot_reader(dal: Operator, txn_mgr: TxnManagerRef) -> TableSnapshotReader {
         TableSnapshotReader::new(
             CacheManager::instance().get_table_snapshot_cache(),
-            LoaderWrapper(dal),
+            LoaderWrapper((dal, txn_mgr)),
         )
     }
 
-    pub fn table_snapshot_reader_without_cache(dal: Operator) -> TableSnapshotReader {
-        TableSnapshotReader::new(None, LoaderWrapper(dal))
+    pub fn table_snapshot_reader_without_cache(
+        dal: Operator,
+        txn_mgr: TxnManagerRef,
+    ) -> TableSnapshotReader {
+        TableSnapshotReader::new(None, LoaderWrapper((dal, txn_mgr)))
     }
 
     pub fn table_snapshot_statistics_reader(dal: Operator) -> TableSnapshotStatisticsReader {
@@ -112,10 +117,19 @@ impl MetaReaders {
 pub struct LoaderWrapper<T>(T);
 
 #[async_trait::async_trait]
-impl Loader<TableSnapshot> for LoaderWrapper<Operator> {
+impl Loader<TableSnapshot> for LoaderWrapper<(Operator, TxnManagerRef)> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<TableSnapshot> {
-        let reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        let (dal, txn_mgr) = &self.0;
+        {
+            let guard = txn_mgr.lock();
+            if guard.is_active() {
+                if let Some(snapshot) = guard.get_table_snapshot_by_id(params.table_id) {
+                    return Ok(snapshot.as_ref().clone());
+                }
+            }
+        }
+        let reader = bytes_reader(dal, params.location.as_str(), params.len_hint).await?;
         let version = SnapshotVersion::try_from(params.ver)?;
         version.read(reader.reader())
     }
