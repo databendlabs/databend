@@ -28,7 +28,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use log::info;
+use log::warn;
 use passwords::analyzer;
 
 use crate::UserApiProvider;
@@ -363,7 +363,8 @@ impl UserApiProvider {
     // 1. Cannot be in a lockout period where logins are not allowed.
     // 2. the number of recent failed login attempts must not exceed the maximum retries,
     //    otherwise the user will be locked out.
-    // 3. must be within the maximum allowed number of days since last password changed.
+    // 3. must be within the maximum allowed number of days since last password changed,
+    //    otherwise the user can login but must change password first.
     #[async_backtrace::framed]
     pub async fn check_login_password(
         &self,
@@ -375,7 +376,7 @@ impl UserApiProvider {
         // Locked users cannot login for the duration of the lockout
         if let Some(lockout_time) = user_info.lockout_time {
             if let Ordering::Greater = lockout_time.cmp(&now) {
-                info!(
+                warn!(
                     "user {} can not login until {} because too many password fails",
                     identity.display(),
                     lockout_time
@@ -405,7 +406,7 @@ impl UserApiProvider {
                         .count();
 
                     if failed_retries >= password_policy.max_retries as usize {
-                        info!(
+                        warn!(
                             "user {} can not login because password fails for {} time retries",
                             identity.display(),
                             failed_retries
@@ -434,7 +435,7 @@ impl UserApiProvider {
                         // Password has not been changed for more than max age days,
                         // allow login, but must change password first.
                         if let Ordering::Less = max_change_time.cmp(&now) {
-                            info!(
+                            warn!(
                                 "user {} must change password first because password has expired in {}",
                                 identity.display(),
                                 max_change_time

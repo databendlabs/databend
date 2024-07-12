@@ -566,15 +566,16 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
-        // if user need change password, only change self password is allowed.
+        if let Plan::AlterUser(plan) = plan {
+            // Alter current user's password do not need to check privileges.
+            if plan.user.username == user.name && plan.user_option.is_none() {
+                return Ok(());
+            }
+        }
         let need_change = user.auth_info.get_need_change();
         if need_change {
-            if let Plan::AlterUser(plan) = plan {
-                if plan.user.username == user.name && plan.user_option.is_none() {
-                    return Ok(());
-                }
-            }
-            return Err(ErrorCode::PermissionDenied(
+            // If current user need change password, other operation is not allowed.
+            return Err(ErrorCode::NeedChangePasswordDenied(
                 "Must change password before execute other operations".to_string(),
             ));
         }
@@ -1085,22 +1086,14 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }
-            Plan::AlterUser(plan) => {
-                let current_user = self.ctx.get_current_user()?;
-                // Only alter current user's password do not need to check privileges.
-                if plan.user.username == current_user.name && plan.user_option.is_none() {
-                    return Ok(());
-                }
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
-                    .await?;
-            }
 
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
-            | Plan::RefreshTableIndex(_) => {
+            | Plan::RefreshTableIndex(_)
+            | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
                     .await?;
             }
