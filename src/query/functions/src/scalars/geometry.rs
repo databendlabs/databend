@@ -236,12 +236,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                 } else {
                     let l_geo: geo::Geometry = l_geos.to_geo().unwrap();
                     let r_geo: geo::Geometry = r_geos.to_geo().unwrap();
-                    if let Some(err) = check_geometry_collection(&l_geo) {
+                    if matches!(l_geo, geo::Geometry::GeometryCollection(_))
+                        || matches!(r_geo, geo::Geometry::GeometryCollection(_))
+                    {
                         builder.push_null();
-                        ctx.set_error(builder.len(), err);
-                    } else if let Some(err) = check_geometry_collection(&r_geo) {
-                        builder.push_null();
-                        ctx.set_error(builder.len(), err);
+                        ctx.set_error(
+                            builder.len(),
+                            ErrorCode::GeometryError(
+                                "A GEOMETRY object that is a GeometryCollection",
+                            )
+                            .to_string(),
+                        );
                     } else {
                         builder.push(l_geo.contains(&r_geo));
                     }
@@ -1816,13 +1821,5 @@ fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremu
             };
             Some(coord)
         }
-    }
-}
-
-fn check_geometry_collection(geometry: &geo::Geometry) -> Option<String> {
-    if let geo::Geometry::GeometryCollection(_) = geometry {
-        Some(ErrorCode::GeometryError("A GEOMETRY object that is a GeometryCollection").to_string())
-    } else {
-        None
     }
 }
