@@ -18,29 +18,11 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 #[test]
 fn test_timestamp_to_string_formats() {
     // Unix timestamp for "2024-01-01 01:02:03" UTC
-    let ts = 1_704_070_923;
-
+    let ts = 1_704_070_923_000_000;
     let tz = Tz::UTC;
 
-    // Test with a valid format
-    let ts_format = "%Y-%m-%d %H:%M:%S";
     assert_eq!(
-        timestamp_to_string(ts, tz, ts_format).to_string(),
-        "2024-01-01 01:02:03"
-    );
-
-    // Test with a format including fraction of a second
-    let ts_format = "%Y-%m-%d %H:%M:%S%.6f";
-    assert_eq!(
-        timestamp_to_string(ts, tz, ts_format).to_string(),
+        timestamp_to_string(ts, tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
-
-    // Test with an invalid format (should use default format)
-    // let ts_format = "%Y-%Q-%W"; // Invalid format specifiers
-    // assert_eq!(
-    // timestamp_to_string(ts, tz, ts_format).to_string(),
-    // "2024-01-01 01:02:03.000000" // Default format
-    // );
-    //
 }
