@@ -36,7 +36,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS UINT8)
-  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `UInt8`
+  | ^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `UInt8`, during run expr: CAST(NULL AS UInt8)
 
 
 
@@ -53,7 +53,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS STRING)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `String`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `String`, during run expr: CAST(NULL AS String)
 
 
 
@@ -118,7 +118,7 @@ error:
   --> SQL:1:22
   |
 1 | (CAST(a AS FLOAT32), CAST(a AS INT32), CAST(b AS FLOAT32), CAST(b AS INT32))
-  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295)` in expr `to_int32(a)`
+  |                      ^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int32(4294967295)` in expr `to_int32(a)`, during run expr: tuple(to_float32(a), to_int32(a), to_float32(b), to_int32(b))
 
 
 
@@ -126,7 +126,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([[a, b], NULL, NULL] AS Array(Array(Int8)))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Array(Int8)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Array(Int8)`, during run expr: CAST(array(CAST(array(a, b) AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL), CAST(NULL AS Array(Int16) NULL)) AS Array(Array(Int8)))
 
 
 
@@ -134,7 +134,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((a, b, NULL) AS TUPLE(Int8, UInt8, Boolean NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256)` in expr `to_int8()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ number overflowed while evaluating function `to_int8(256)` in expr `to_int8()`, during run expr: CAST(tuple(a, b, NULL) AS Tuple(Int8, UInt8, Boolean NULL))
 
 
 
@@ -206,7 +206,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`
+  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`, during run expr: CAST(NULL AS Variant)
 
 
 
@@ -348,7 +348,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS VARIANT)
-  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Variant`
+  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Variant`, during run expr: CAST(a AS Variant)
 
 
 
@@ -828,7 +828,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(str AS INT64)
-  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Int64`
+  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Int64`, during run expr: CAST(str AS Int64)
 
 
 
@@ -1742,7 +1742,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST((1, TRUE) AS Tuple(STRING))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String,)`, during run expr: CAST(tuple(1, true) AS Tuple(String,))
 
 
 
@@ -1750,7 +1750,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(('a',) AS Tuple(INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(tuple('a') AS Tuple(Int32,))
 
 
 
@@ -1776,7 +1776,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT NULL), INT))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32 NULL), Int32))
 
 
 
@@ -1784,7 +1784,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(((1, 'a'), 1) AS Tuple(Tuple(INT, INT), INT) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(tuple(tuple(1, 'a'), 1) AS Tuple(Tuple(Int32, Int32), Int32) NULL)
 
 
 
@@ -1801,7 +1801,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT)) NULL)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32)) NULL)
 
 
 
@@ -1809,7 +1809,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([(1,'a'),(2,'a')] AS Array(Tuple(INT, INT NULL)))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int32, Int32 NULL)))
 
 
 
@@ -1826,7 +1826,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST([['a'], ['b', 'c']] AS Array(Array(INT) NULL))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_int32('a')` in expr `to_int32()`, during run expr: CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int32) NULL))
 
 
 
@@ -1861,7 +1861,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(NULL AS BINARY)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: CAST(NULL AS Binary)
 
 
 
@@ -1900,7 +1900,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST(a AS BINARY)
-  | ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`
+  | ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`, during run expr: CAST(a AS Binary)
 
 
 
@@ -1957,7 +1957,7 @@ error:
   --> SQL:1:6
   |
 1 | CAST(CAST(NULL AS BINARY) AS STRING)
-  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`
+  |      ^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Binary`, during run expr: to_string(CAST(NULL AS Binary))
 
 
 
@@ -1996,7 +1996,7 @@ error:
   --> SQL:1:6
   |
 1 | CAST(CAST(a AS BINARY) AS STRING)
-  |      ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`
+  |      ^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Binary`, during run expr: to_string(CAST(a AS Binary))
 
 
 
@@ -3965,7 +3965,7 @@ error:
   --> SQL:1:1
   |
 1 | TRY_CAST((1, TRUE) AS Tuple(STRING))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String NULL,) NULL`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Tuple(UInt8, Boolean)` to type `Tuple(String NULL,) NULL`, during run expr: TRY_CAST(tuple(1, true) AS Tuple(String NULL,) NULL)
 
 
 
