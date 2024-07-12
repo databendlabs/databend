@@ -38,8 +38,6 @@ use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::INF_BYTES_LOWER;
-use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -78,8 +76,6 @@ impl NestedValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
