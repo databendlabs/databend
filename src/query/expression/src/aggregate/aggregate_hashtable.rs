@@ -32,6 +32,7 @@ use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::HashTableConfig;
+use crate::InputColumns;
 use crate::Payload;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
@@ -127,9 +128,9 @@ impl AggregateHashTable {
     pub fn add_groups(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
-        params: &[Vec<Column>],
-        agg_states: &[Column],
+        group_columns: InputColumns,
+        params: &[InputColumns],
+        agg_states: InputColumns,
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
@@ -147,6 +148,7 @@ impl AggregateHashTable {
                     .iter()
                     .map(|c| c.iter().map(|x| x.slice(start..end)).collect())
                     .collect::<Vec<_>>();
+                let step_params = step_params.iter().map(|v| v.into()).collect::<Vec<_>>();
                 let agg_states = agg_states
                     .iter()
                     .map(|c| c.slice(start..end))
@@ -154,9 +156,9 @@ impl AggregateHashTable {
 
                 new_count += self.add_groups_inner(
                     state,
-                    &step_group_columns,
+                    (&step_group_columns).into(),
                     &step_params,
-                    &agg_states,
+                    (&agg_states).into(),
                     end - start,
                 )?;
             }
@@ -168,9 +170,9 @@ impl AggregateHashTable {
     fn add_groups_inner(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
-        params: &[Vec<Column>],
-        agg_states: &[Column],
+        group_columns: InputColumns,
+        params: &[InputColumns],
+        agg_states: InputColumns,
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
@@ -205,7 +207,7 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(self.payload.state_addr_offsets.iter())
                 {
-                    aggr.accumulate_keys(state_places, *addr_offset, params.into(), row_count)?;
+                    aggr.accumulate_keys(state_places, *addr_offset, *params, row_count)?;
                 }
             } else {
                 for ((aggr, agg_state), addr_offset) in self
@@ -242,7 +244,7 @@ impl AggregateHashTable {
     fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
+        group_columns: InputColumns,
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
@@ -390,7 +392,7 @@ impl AggregateHashTable {
 
             let _ = self.probe_and_create(
                 &mut flush_state.probe_state,
-                &flush_state.group_columns,
+                (&flush_state.group_columns).into(),
                 row_count,
             );
 

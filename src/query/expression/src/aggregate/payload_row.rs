@@ -36,6 +36,7 @@ use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 use crate::Scalar;
 use crate::SelectVector;
 
@@ -165,7 +166,7 @@ pub unsafe fn serialize_column_to_rowformat(
 }
 
 pub unsafe fn row_match_columns(
-    cols: &[Column],
+    cols: InputColumns,
     address: &[*const u8],
     select_vector: &mut SelectVector,
     temp_vector: &mut SelectVector,

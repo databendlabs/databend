@@ -1,2 +1,2 @@
-Error: APIError: ResponseError with 1006: invalid utf8 sequence while evaluating function `to_string(D00C)` in expr `to_string()`
+Error: APIError: ResponseError with 1006: invalid utf8 sequence while evaluating function `to_string(D00C)` in expr `to_string()`, during run expr: `CAST(D00C AS String NULL)`
 null
