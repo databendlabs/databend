@@ -20,8 +20,6 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: datafuselabs/share-endpoint
-        token: ${{ inputs.secrets_token }}
-        ref: main
 
     - name: Download artifact
       uses: ./.github/actions/artifact_download
