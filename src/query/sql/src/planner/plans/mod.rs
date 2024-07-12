@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod add_row_number;
 mod aggregate;
 mod async_function;
 mod cache_scan;
@@ -57,7 +56,6 @@ mod union_all;
 mod update;
 mod window;
 
-pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
 pub use async_function::AsyncFunction;
 pub use cache_scan::*;

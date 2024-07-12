@@ -133,6 +133,10 @@ impl ValueType for EmptyArrayType {
         *len += 1
     }
 
+    fn push_item_repeat(len: &mut Self::ColumnBuilder, _: Self::ScalarRef<'_>, n: usize) {
+        *len += n
+    }
+
     fn push_default(len: &mut Self::ColumnBuilder) {
         *len += 1
     }

@@ -36,8 +36,9 @@ use super::CatalogInfo;
 use super::CreateOption;
 use super::ShareDBParams;
 use crate::schema::database_name_ident::DatabaseNameIdent;
+use crate::share::ShareObject;
 use crate::share::ShareSpec;
-use crate::share::ShareTableInfoMap;
+use crate::share::ShareVecTableInfo;
 use crate::storage::StorageParams;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -539,7 +540,8 @@ pub struct CreateTableReply {
     pub table_id_seq: Option<u64>,
     pub db_id: u64,
     pub new_table: bool,
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+    // (db id, removed table id, share spec vector)
+    pub spec_vec: Option<(u64, u64, Vec<ShareSpec>)>,
     pub prev_table_id: Option<u64>,
     pub orphan_table_name: Option<String>,
 }
@@ -580,7 +582,8 @@ impl Display for DropTableByIdReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableReply {
-    pub spec_vec: Option<(Vec<ShareSpec>, Vec<ShareTableInfoMap>)>,
+    // db id, share spec vector
+    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -686,6 +689,8 @@ impl Display for RenameTableReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTableReply {
     pub table_id: u64,
+    // vec<share spec>, table id
+    pub share_table_info: Option<(Vec<ShareSpec>, ShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -712,13 +717,11 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
-    pub copied_files: Option<UpsertTableCopiedFileReq>,
-    pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub deduplicated_label: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
-    pub update_table_metas: Vec<UpdateTableMetaReq>,
+    pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
@@ -727,7 +730,8 @@ pub struct UpdateMultiTableMetaReq {
 /// The result of updating multiple table meta
 ///
 /// If update fails due to table version mismatch, the `Err` will contain the (table id, seq , table meta)s that fail to update.
-pub type UpdateMultiTableMetaResult = std::result::Result<(), Vec<(u64, u64, TableMeta)>>;
+pub type UpdateMultiTableMetaResult =
+    std::result::Result<UpdateTableMetaReply, Vec<(u64, u64, TableMeta)>>;
 
 impl UpsertTableOptionReq {
     pub fn new(
@@ -772,17 +776,17 @@ pub struct SetTableColumnMaskPolicyReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetTableColumnMaskPolicyReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_info: Option<ShareVecTableInfo>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_info: Option<ShareVecTableInfo>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateTableMetaReply {
-    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+    pub share_vec_table_infos: Option<Vec<ShareVecTableInfo>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

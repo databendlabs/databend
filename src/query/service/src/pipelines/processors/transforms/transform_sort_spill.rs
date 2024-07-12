@@ -72,7 +72,7 @@ pub struct TransformSortSpill<R: Rows> {
     state: State,
     spiller: Spiller,
 
-    batch_size: usize,
+    batch_rows: usize,
     /// Blocks to merge one time.
     num_merge: usize,
     /// Unmerged list of blocks. Each list are sorted.
@@ -147,7 +147,7 @@ where R: Rows + Send + Sync + 'static
                         let meta =
                             SortSpillMetaWithParams::downcast_ref_from(block.get_meta().unwrap())
                                 .unwrap();
-                        self.batch_size = meta.batch_size;
+                        self.batch_rows = meta.batch_rows;
                         self.num_merge = meta.num_merge;
 
                         self.input_data = Some(block);
@@ -251,7 +251,7 @@ where R: Rows + Sync + Send + 'static
             num_merge: 0,
             unmerged_blocks: VecDeque::new(),
             final_merger: None,
-            batch_size: 0,
+            batch_rows: 0,
             sort_desc,
             _r: PhantomData,
         }
@@ -266,7 +266,7 @@ where R: Rows + Sync + Send + 'static
     }
 
     async fn spill(&mut self, block: DataBlock) -> Result<()> {
-        debug_assert!(self.num_merge >= 2 && self.batch_size > 0);
+        debug_assert!(self.num_merge >= 2 && self.batch_rows > 0);
 
         let location = self.spiller.spill_block(block).await?;
 
@@ -300,7 +300,7 @@ where R: Rows + Sync + Send + 'static
             self.schema.clone(),
             streams,
             self.sort_desc.clone(),
-            self.batch_size,
+            self.batch_rows,
             self.limit,
         )
     }
@@ -553,18 +553,18 @@ mod tests {
         (input, result)
     }
 
-    /// Returns (input, expected, batch_size, num_merge)
+    /// Returns (input, expected, batch_rows, num_merge)
     fn random_test_data(
         rng: &mut ThreadRng,
         limit: Option<usize>,
     ) -> (Vec<DataBlock>, DataBlock, usize, usize) {
-        let random_batch_size = rng.gen_range(1..=10);
+        let random_batch_rows = rng.gen_range(1..=10);
         let random_num_streams = rng.gen_range(5..=10);
         let random_num_merge = rng.gen_range(2..=10);
 
         let random_data = (0..random_num_streams)
             .map(|_| {
-                let mut data = (0..random_batch_size)
+                let mut data = (0..random_batch_rows)
                     .map(|_| rng.gen_range(0..=1000))
                     .collect::<Vec<_>>();
                 data.sort();
@@ -589,14 +589,14 @@ mod tests {
         };
         let result = DataBlock::new_from_columns(vec![Int32Type::from_data(result)]);
 
-        (input, result, random_batch_size, random_num_merge)
+        (input, result, random_batch_rows, random_num_merge)
     }
 
     async fn test(
         ctx: Arc<QueryContext>,
         mut input: Vec<DataBlock>,
         expected: DataBlock,
-        batch_size: usize,
+        batch_rows: usize,
         num_merge: usize,
         has_memory_block: bool,
         limit: Option<usize>,
@@ -604,7 +604,7 @@ mod tests {
         let mut transform = create_test_transform(ctx, limit).await?;
 
         transform.num_merge = num_merge;
-        transform.batch_size = batch_size;
+        transform.batch_rows = batch_rows;
 
         let memory_block = if has_memory_block { input.pop() } else { None };
 
@@ -627,8 +627,8 @@ mod tests {
         let expected = pretty_format_blocks(&[expected]).unwrap();
         assert_eq!(
             expected, result,
-            "batch_size: {}, num_merge: {}\nexpected:\n{}\nactual:\n{}",
-            batch_size, num_merge, expected, result
+            "batch_rows: {}, num_merge: {}\nexpected:\n{}\nactual:\n{}",
+            batch_rows, num_merge, expected, result
         );
 
         Ok(())
@@ -654,7 +654,7 @@ mod tests {
 
     async fn basic_test(
         ctx: Arc<QueryContext>,
-        batch_size: usize,
+        batch_rows: usize,
         num_merge: usize,
         limit: Option<usize>,
     ) -> Result<()> {
@@ -664,13 +664,13 @@ mod tests {
             ctx.clone(),
             input.clone(),
             expected.clone(),
-            batch_size,
+            batch_rows,
             num_merge,
             false,
             limit,
         )
         .await?;
-        test(ctx, input, expected, batch_size, num_merge, true, limit).await
+        test(ctx, input, expected, batch_rows, num_merge, true, limit).await
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -697,12 +697,12 @@ mod tests {
         rng: &mut ThreadRng,
         limit: Option<usize>,
     ) -> Result<()> {
-        let (input, expected, batch_size, num_merge) = random_test_data(rng, limit);
+        let (input, expected, batch_rows, num_merge) = random_test_data(rng, limit);
         test(
             ctx.clone(),
             input.clone(),
             expected.clone(),
-            batch_size,
+            batch_rows,
             num_merge,
             false,
             limit,
@@ -712,7 +712,7 @@ mod tests {
             ctx.clone(),
             input.clone(),
             expected.clone(),
-            batch_size,
+            batch_rows,
             num_merge,
             true,
             limit,

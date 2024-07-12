@@ -29,6 +29,8 @@ static CACHE_ACCESS_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_access_count"));
 static CACHE_MISS_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_miss_count"));
+static CACHE_MISS_BYTES: LazyLock<FamilyCounter<CacheLabels>> =
+    LazyLock::new(|| register_counter_family("cache_miss_bytes"));
 static CACHE_MISS_LOAD_MILLISECOND: LazyLock<FamilyHistogram<CacheLabels>> =
     LazyLock::new(|| register_histogram_family_in_milliseconds("cache_miss_load_millisecond"));
 static CACHE_HIT_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
@@ -47,8 +49,15 @@ pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_miss_count(c: u64, cache_name: &str) {
-    // increment_gauge!(("fuse_memory_miss_count"), c as f64);
     CACHE_MISS_COUNT
+        .get_or_create(&CacheLabels {
+            cache_name: cache_name.to_string(),
+        })
+        .inc_by(c);
+}
+
+pub fn metrics_inc_cache_miss_bytes(c: u64, cache_name: &str) {
+    CACHE_MISS_BYTES
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
         })

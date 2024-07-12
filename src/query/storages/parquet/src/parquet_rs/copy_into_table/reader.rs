@@ -15,19 +15,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_cast::can_cast_types;
-use arrow_schema::Field;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_cast;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
+use databend_storages_common_stage::project_columnar;
 use opendal::Operator;
 use parquet::file::metadata::FileMetaData;
 
@@ -77,74 +74,19 @@ impl RowGroupReaderForCopy {
         file_metadata: &FileMetaData,
         output_schema: TableSchemaRef,
         default_values: Option<Vec<RemoteExpr>>,
+        missing_as: &NullAs,
     ) -> Result<RowGroupReaderForCopy> {
         let arrow_schema = infer_schema_with_extension(file_metadata)?;
         let schema_descr = file_metadata.schema_descr_ptr();
-        let parquet_table_schema = arrow_to_table_schema(&arrow_schema)?;
-        let mut pushdown_columns = vec![];
-        let mut output_projection = vec![];
+        let parquet_table_schema = Arc::new(arrow_to_table_schema(&arrow_schema)?);
 
-        let mut num_inputs = 0;
-        for (i, to_field) in output_schema.fields().iter().enumerate() {
-            let field_name = to_field.name();
-            let expr = match parquet_table_schema
-                .fields()
-                .iter()
-                .position(|f| f.name() == field_name)
-            {
-                Some(pos) => {
-                    num_inputs += 1;
-                    pushdown_columns.push(pos);
-                    let from_field = parquet_table_schema.field(pos);
-                    let expr = Expr::ColumnRef {
-                        span: None,
-                        id: pos,
-                        data_type: from_field.data_type().into(),
-                        display_name: from_field.name().clone(),
-                    };
-
-                    // find a better way to do check cast
-                    if from_field.data_type == to_field.data_type {
-                        expr
-                    } else if can_cast_types(
-                        Field::from(from_field).data_type(),
-                        Field::from(to_field).data_type(),
-                    ) {
-                        check_cast(
-                            None,
-                            false,
-                            expr,
-                            &to_field.data_type().into(),
-                            &BUILTIN_FUNCTIONS,
-                        )?
-                    } else {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "Cannot cast column {} from {:?} to {:?}",
-                            field_name,
-                            from_field.data_type(),
-                            to_field.data_type()
-                        )));
-                    }
-                }
-                None => {
-                    if let Some(remote_expr) = &default_values.as_ref().and_then(|vals| vals.get(i))
-                    {
-                        remote_expr.as_expr(&BUILTIN_FUNCTIONS)
-                    } else {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "{} missing column {}",
-                            location, field_name,
-                        )));
-                    }
-                }
-            };
-            output_projection.push(expr);
-        }
-        if num_inputs == 0 {
-            return Err(ErrorCode::BadBytes(format!(
-                "not column name match in parquet file {location}",
-            )));
-        }
+        let (mut output_projection, mut pushdown_columns) = project_columnar(
+            &parquet_table_schema,
+            &output_schema,
+            missing_as,
+            &default_values,
+            location,
+        )?;
         pushdown_columns.sort();
         let mapping = pushdown_columns
             .clone()
@@ -169,8 +111,9 @@ impl RowGroupReaderForCopy {
         let mut reader_builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx,
             op,
-            Arc::new(parquet_table_schema),
+            parquet_table_schema,
             schema_descr,
+            Some(arrow_schema),
         )
         .with_push_downs(Some(&pushdowns));
         reader_builder.build_output()?;

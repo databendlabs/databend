@@ -14,15 +14,12 @@
 
 use std::sync::Arc;
 
-use arrow_cast::can_cast_types;
-use arrow_schema::Field;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_cast;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::NullAs;
+use databend_storages_common_stage::project_columnar;
 
 use crate::hashable_schema::HashableSchema;
 
@@ -30,6 +27,7 @@ use crate::hashable_schema::HashableSchema;
 pub struct ProjectionFactory {
     pub output_schema: TableSchemaRef,
     default_values: Option<Vec<RemoteExpr>>,
+    null_as: NullAs,
 
     projections: Arc<dashmap::DashMap<HashableSchema, Vec<Expr>>>,
 }
@@ -38,10 +36,12 @@ impl ProjectionFactory {
     pub fn try_create(
         output_schema: TableSchemaRef,
         default_values: Option<Vec<RemoteExpr>>,
+        null_as: NullAs,
     ) -> Result<Self> {
         Ok(Self {
             output_schema,
             default_values,
+            null_as,
             projections: Default::default(),
         })
     }
@@ -49,80 +49,16 @@ impl ProjectionFactory {
         if let Some(v) = self.projections.get(schema) {
             Ok(v.clone())
         } else {
-            let v = self.try_create_projection(schema.clone(), location)?;
+            let v = project_columnar(
+                &schema.table_schema,
+                &self.output_schema,
+                &self.null_as,
+                &self.default_values,
+                location,
+            )?
+            .0;
             self.projections.insert(schema.clone(), v.clone());
             Ok(v)
         }
-    }
-
-    fn try_create_projection(&self, schema: HashableSchema, location: &str) -> Result<Vec<Expr>> {
-        let mut pushdown_columns = vec![];
-        let mut output_projection = vec![];
-
-        let mut num_inputs = 0;
-        for (i, to_field) in self.output_schema.fields().iter().enumerate() {
-            let field_name = to_field.name();
-            let expr = match schema
-                .table_schema
-                .fields()
-                .iter()
-                .position(|f| f.name() == field_name)
-            {
-                Some(pos) => {
-                    pushdown_columns.push(pos);
-                    let from_field = schema.table_schema.field(pos);
-                    let expr = Expr::ColumnRef {
-                        span: None,
-                        id: pos,
-                        data_type: from_field.data_type().into(),
-                        display_name: from_field.name().clone(),
-                    };
-
-                    // find a better way to do check cast
-                    if from_field.data_type == to_field.data_type {
-                        expr
-                    } else if can_cast_types(
-                        Field::from(from_field).data_type(),
-                        Field::from(to_field).data_type(),
-                    ) {
-                        check_cast(
-                            None,
-                            false,
-                            expr,
-                            &to_field.data_type().into(),
-                            &BUILTIN_FUNCTIONS,
-                        )?
-                    } else {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
-                            location,
-                            field_name,
-                            from_field.data_type(),
-                            to_field.data_type()
-                        )));
-                    }
-                }
-                None => {
-                    if let Some(remote_exprs) = &self.default_values {
-                        remote_exprs[i].as_expr(&BUILTIN_FUNCTIONS)
-                    } else {
-                        return Err(ErrorCode::BadDataValueType(format!(
-                            "{} missing column {}",
-                            location, field_name,
-                        )));
-                    }
-                }
-            };
-            if !matches!(expr, Expr::Constant { .. }) {
-                num_inputs += 1;
-            }
-            output_projection.push(expr);
-        }
-        if num_inputs == 0 {
-            return Err(ErrorCode::BadBytes(format!(
-                "not column name match in parquet file {location}",
-            )));
-        }
-        Ok(output_projection)
     }
 }

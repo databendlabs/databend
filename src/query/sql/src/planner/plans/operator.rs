@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::add_row_number::AddRowNumber;
 use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
 use super::eval_scalar::EvalScalar;
@@ -102,7 +101,6 @@ pub enum RelOp {
     ConstantTableScan,
     ExpressionScan,
     CacheScan,
-    AddRowNumber,
     Udf,
     AsyncFunction,
     RecursiveCteScan,
@@ -124,7 +122,6 @@ pub enum RelOperator {
     Sort(Sort),
     Limit(Limit),
     Exchange(Exchange),
-    AddRowNumber(AddRowNumber),
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     Window(Window),
@@ -159,7 +156,6 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
             RelOperator::ExpressionScan(rel_op) => rel_op.rel_op(),
             RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
-            RelOperator::AddRowNumber(rel_op) => rel_op.rel_op(),
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
@@ -178,7 +174,6 @@ impl Operator for RelOperator {
             RelOperator::Sort(rel_op) => rel_op.arity(),
             RelOperator::Limit(rel_op) => rel_op.arity(),
             RelOperator::Exchange(rel_op) => rel_op.arity(),
-            RelOperator::AddRowNumber(rel_op) => rel_op.arity(),
             RelOperator::UnionAll(rel_op) => rel_op.arity(),
             RelOperator::DummyTableScan(rel_op) => rel_op.arity(),
             RelOperator::Window(rel_op) => rel_op.arity(),
@@ -213,7 +208,6 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::AddRowNumber(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -240,7 +234,6 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::AddRowNumber(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -267,7 +260,6 @@ impl Operator for RelOperator {
             RelOperator::ConstantTableScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::ExpressionScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::AddRowNumber(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
@@ -334,9 +326,6 @@ impl Operator for RelOperator {
             RelOperator::CacheScan(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::AddRowNumber(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
             RelOperator::Udf(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
@@ -384,9 +373,6 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Exchange(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::AddRowNumber(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::UnionAll(rel_op) => {

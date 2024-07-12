@@ -17,7 +17,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
-use databend_common_io::constants::INF_BYTES_LOWER;
+use databend_common_io::constants::INF_BYTES_LONG;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
@@ -86,7 +86,7 @@ impl FieldEncoderCSV {
                     false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
-                    inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                    inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
                     binary_format: params.binary_format,
                     geometry_format: params.geometry_format,
@@ -108,7 +108,7 @@ impl FieldEncoderCSV {
                     false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                     nan_bytes: params.nan_display.as_bytes().to_vec(),
-                    inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                    inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                     timezone: options_ext.timezone,
                     binary_format: Default::default(),
                     geometry_format: Default::default(),

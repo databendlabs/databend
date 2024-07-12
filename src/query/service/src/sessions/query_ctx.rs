@@ -636,9 +636,11 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
+            enable_dst_hour_fix,
         };
         Ok(format)
     }
@@ -668,6 +670,7 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -688,6 +691,7 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
+            enable_dst_hour_fix,
         })
     }
 
@@ -1022,7 +1026,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        SessionManager::instance().get_queries_profile()
+        SessionManager::instance().get_queries_profiles()
     }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin) {

@@ -384,7 +384,7 @@ impl SelectTarget {
 
     pub fn has_window(&self) -> bool {
         match self {
-            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+            SelectTarget::AliasedExpr { expr, .. } => match &**expr {
                 Expr::FunctionCall { func, .. } => func.window.is_some(),
                 _ => false,
             },
@@ -394,7 +394,7 @@ impl SelectTarget {
 
     pub fn function_call_name(&self) -> Option<String> {
         match self {
-            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+            SelectTarget::AliasedExpr { expr, .. } => match &**expr {
                 Expr::FunctionCall { func, .. } if func.window.is_none() => {
                     Some(func.name.name.to_lowercase())
                 }

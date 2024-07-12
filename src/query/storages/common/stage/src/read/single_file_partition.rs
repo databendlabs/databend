@@ -23,20 +23,20 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq)]
-pub struct OrcFilePartition {
+pub struct SingleFilePartition {
     pub path: String,
     pub size: usize,
 }
 
-#[typetag::serde(name = "orc_part")]
-impl PartInfo for OrcFilePartition {
+#[typetag::serde(name = "single_file_part")]
+impl PartInfo for SingleFilePartition {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
         info.as_any()
-            .downcast_ref::<OrcFilePartition>()
+            .downcast_ref::<SingleFilePartition>()
             .is_some_and(|other| self == other)
     }
 
@@ -47,12 +47,12 @@ impl PartInfo for OrcFilePartition {
     }
 }
 
-impl OrcFilePartition {
-    pub fn from_part(info: &PartInfoPtr) -> Result<&OrcFilePartition> {
+impl SingleFilePartition {
+    pub fn from_part(info: &PartInfoPtr) -> Result<&SingleFilePartition> {
         info.as_any()
-            .downcast_ref::<OrcFilePartition>()
+            .downcast_ref::<SingleFilePartition>()
             .ok_or_else(|| {
-                ErrorCode::Internal("Cannot downcast from PartInfo to OrcFilePartition.")
+                ErrorCode::Internal("Cannot downcast from PartInfo to SingleFilePartition.")
             })
     }
 }

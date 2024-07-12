@@ -63,7 +63,7 @@ pub fn column_chunks_to_record_batch(
     let field_levels = parquet_to_arrow_field_levels(
         &parquet_schema,
         ProjectionMask::leaves(&parquet_schema, projection_mask),
-        None,
+        Some(arrow_schema.fields()),
     )?;
     let mut record_reader = ParquetRecordBatchReader::try_new_with_row_groups(
         &field_levels,

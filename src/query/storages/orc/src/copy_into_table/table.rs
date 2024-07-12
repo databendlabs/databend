@@ -24,16 +24,17 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_storage::init_stage_operator;
+use databend_storages_common_stage::SingleFilePartition;
 
 use crate::copy_into_table::meta::read_metas_in_parallel_for_copy;
 use crate::copy_into_table::processors::decoder::StripeDecoderForCopy;
 use crate::copy_into_table::processors::source::ORCSourceForCopy;
 use crate::copy_into_table::projection::ProjectionFactory;
-use crate::orc_file_partition::OrcFilePartition;
 use crate::read_partition::read_partitions_simple;
 
 pub struct OrcTableForCopy {}
@@ -46,15 +47,20 @@ impl OrcTableForCopy {
         _push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
         let n = ctx.get_settings().get_max_threads()?;
+        let fmt = match &stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Orc(fmt) => fmt,
+            _ => unreachable!("do_read_partitions expect orc"),
+        };
         let parts = read_partitions_simple(ctx, stage_table_info).await?;
         let projections = Arc::new(ProjectionFactory::try_create(
             stage_table_info.schema.clone(),
             stage_table_info.default_values.clone(),
+            fmt.missing_field_as.clone(),
         )?);
         let op = init_stage_operator(&stage_table_info.stage_info)?;
         let mut files = vec![];
         for part in &parts.1.partitions {
-            let file = OrcFilePartition::from_part(part)?.clone();
+            let file = SingleFilePartition::from_part(part)?.clone();
             files.push((file.path, file.size as u64))
         }
         read_metas_in_parallel_for_copy(&op, &files, n as usize, &projections).await?;
@@ -80,6 +86,11 @@ impl OrcTableForCopy {
                 return Err(ErrorCode::Internal(""));
             };
 
+        let fmt = match &stage_table_info.stage_info.file_format_params {
+            FileFormatParams::Orc(fmt) => fmt,
+            _ => unreachable!("do_read_partitions expect orc"),
+        };
+
         let settings = ctx.get_settings();
         ctx.set_partitions(plan.parts.clone())?;
 
@@ -94,6 +105,7 @@ impl OrcTableForCopy {
         let projections = Arc::new(ProjectionFactory::try_create(
             stage_table_info.schema.clone(),
             stage_table_info.default_values.clone(),
+            fmt.missing_field_as.clone(),
         )?);
         let output_data_schema = Arc::new(DataSchema::from(stage_table_info.schema()));
         pipeline.add_transform(|input, output| {

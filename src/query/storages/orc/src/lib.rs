@@ -26,7 +26,6 @@
 mod chunk_reader_impl;
 mod copy_into_table;
 mod hashable_schema;
-mod orc_file_partition;
 mod processors;
 mod read_partition;
 mod read_pipeline;

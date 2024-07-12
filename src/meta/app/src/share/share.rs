@@ -71,7 +71,7 @@ pub struct CreateShareReq {
 pub struct CreateShareReply {
     pub share_id: u64,
 
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,7 +83,7 @@ pub struct DropShareReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropShareReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -97,7 +97,7 @@ pub struct AddShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct AddShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -110,7 +110,7 @@ pub struct RemoveShareAccountsReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RemoveShareAccountsReply {
     pub share_id: Option<u64>,
-    pub spec_vec: Option<Vec<ShareSpec>>,
+    pub share_spec: Option<ShareSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -165,7 +165,9 @@ pub enum ShareGrantObjectSeqAndId {
 
 // share name and shared (table name, table info) map
 pub type TableInfoMap = BTreeMap<String, TableInfo>;
-pub type ShareTableInfoMap = (String, Option<TableInfoMap>);
+
+// Vec<share name>, db id, table info
+pub type ShareVecTableInfo = (Vec<String>, u64, TableInfo);
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReq {
@@ -178,8 +180,8 @@ pub struct GrantShareObjectReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
-    pub share_table_info: ShareTableInfoMap,
+    pub share_spec: Option<ShareSpec>,
+    pub grant_share_table: Option<(u64, TableInfo)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,11 +192,19 @@ pub struct RevokeShareObjectReq {
     pub update_on: DateTime<Utc>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ShareObject {
+    // db id
+    Db(u64),
+    // db id, table id, table name
+    Table((u64, u64, String)),
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
-    pub spec_vec: Option<Vec<ShareSpec>>,
-    pub share_table_info: ShareTableInfoMap,
+    pub share_spec: Option<ShareSpec>,
+    pub revoke_object: Option<ShareObject>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
