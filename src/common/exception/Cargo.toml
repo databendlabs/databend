@@ -18,8 +18,6 @@ anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 backtrace = { workspace = true }
 bincode = { workspace = true }
-color-backtrace = { version = "0.6" }
-ctor = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 http = { workspace = true }
