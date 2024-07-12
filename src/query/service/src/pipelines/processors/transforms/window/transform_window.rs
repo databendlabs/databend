@@ -652,52 +652,73 @@ impl<T: Number> TransformWindow<T> {
     fn find_nth_non_null_value(
         &self,
         mut cur: RowPtr,
-        arg: usize,
+        arg_index: usize,
         ignore_null: bool,
         advance: bool,
     ) -> Scalar {
         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-        let mut col = block.get_by_offset(arg).to_column(block.num_rows());
+        let mut block_entry = block.get_by_offset(arg_index);
         if !ignore_null {
-            return col.index(cur.row).unwrap().to_owned();
-        }
-
-        let mut result = Scalar::Null;
-
-        while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
-            let value = col.index(cur.row).unwrap();
-            if value != ScalarRef::Null {
-                result = value.to_owned();
-                break;
-            }
-
-            cur = if advance {
-                let advance_cur = self.advance_row(cur);
-                if advance_cur.block != cur.block {
-                    let block = &self
-                        .blocks
-                        .get(advance_cur.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    col = block.get_by_offset(arg).to_column(block.num_rows());
-                }
-                advance_cur
-            } else if cur == self.frame_start {
-                return col.index(self.frame_start.row).unwrap().to_owned();
-            } else {
-                let back_cur = self.goback_row(cur);
-                if back_cur.block != cur.block {
-                    let block = &self
-                        .blocks
-                        .get(back_cur.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    col = block.get_by_offset(arg).to_column(block.num_rows());
-                }
-                back_cur
+            return match &block_entry.value {
+                Value::Scalar(scalar) => scalar.to_owned(),
+                Value::Column(col) => unsafe { col.index_unchecked(cur.row) }.to_owned(),
             };
         }
-        result
+
+        while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
+            match &block_entry.value {
+                Value::Scalar(scalar) => {
+                    if scalar != &Scalar::Null {
+                        return scalar.to_owned();
+                    }
+                    // If value is Scalar we can directly skip this block.
+                    if advance {
+                        cur.block += 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    } else if cur == self.frame_start {
+                        return scalar.to_owned();
+                    } else {
+                        cur.block -= 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    }
+                }
+                Value::Column(col) => {
+                    let value = col.index(cur.row).unwrap();
+                    if value != ScalarRef::Null {
+                        return value.to_owned();
+                    }
+
+                    cur = if advance {
+                        let advance_cur = self.advance_row(cur);
+                        if advance_cur.block != cur.block {
+                            block_entry = &self
+                                .blocks
+                                .get(advance_cur.block - self.first_block)
+                                .unwrap()
+                                .block
+                                .get_by_offset(arg_index);
+                        }
+                        advance_cur
+                    } else if cur == self.frame_start {
+                        return unsafe { col.index_unchecked(cur.row) }.to_owned();
+                    } else {
+                        let back_cur = self.goback_row(cur);
+                        if back_cur.block != cur.block {
+                            block_entry = &self
+                                .blocks
+                                .get(back_cur.block - self.first_block)
+                                .unwrap()
+                                .block
+                                .get_by_offset(arg_index);
+                        }
+                        back_cur
+                    };
+                }
+            }
+        }
+        Scalar::Null
     }
 }
 
