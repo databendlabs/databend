@@ -12,6 +12,9 @@ killall databend-meta || true
 killall share-endpoint || true
 sleep 1
 
+echo "current directory:"
+pwd
+
 echo "build share endpoint"
 git clone https://github.com/datafuselabs/share-endpoint.git
 cd share-endpoint
