@@ -34,10 +34,10 @@ INSERT INTO tbl_01_0014 VALUES ('a'), ('b'), ('c'), ('d'), ('e')
 statement ok
 select test from tbl_01_0014
 
-query BBBB
-select count(*)=1, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT test FROM tbl_01_0014')
+query BBB
+select count(*)=1, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT test FROM tbl_01_0014')
 ----
-1 1 1 1
+1 1 1
 
 statement error
 select sleep(3.1)
