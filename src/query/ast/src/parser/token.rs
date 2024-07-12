@@ -414,8 +414,6 @@ pub enum TokenKind {
     CATALOGS,
     #[token("CENTURY", ignore(ascii_case))]
     CENTURY,
-    #[token("CHANGE", ignore(ascii_case))]
-    CHANGE,
     #[token("CHANGES", ignore(ascii_case))]
     CHANGES,
     #[token("CLUSTER", ignore(ascii_case))]
@@ -779,8 +777,8 @@ pub enum TokenKind {
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
-    #[token("MUST", ignore(ascii_case))]
-    MUST,
+    #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
+    MUST_CHANGE_PASSWORD,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]

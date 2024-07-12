@@ -3940,9 +3940,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
     );
     let must_change_password = map(
         rule! {
-            MUST ~ ^CHANGE ~ ^PASSWORD ~ ^"=" ~ #literal_bool
+            MUST_CHANGE_PASSWORD ~ ^"=" ~ ^#literal_bool
         },
-        |(_, _, _, _, val)| UserOptionItem::MustChangePassword(val),
+        |(_, _, val)| UserOptionItem::MustChangePassword(val),
     );
 
     rule!(
