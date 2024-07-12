@@ -254,6 +254,7 @@ jobs:
         with:
           repository: datafuselabs/share-endpoint
           fetch-depth: 0
+          token: ${{ secrets.DATABEND_BOT_TOKEN }}
       - uses: ./.github/actions/test_share_integration
         if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
