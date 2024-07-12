@@ -55,7 +55,10 @@ impl SimpleTableFunc for SetCacheCapacity {
     }
 
     fn schema(&self) -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)])
+        TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
+            TableField::new("result", TableDataType::String),
+        ])
     }
 
     fn is_local_func(&self) -> bool {
@@ -63,14 +66,17 @@ impl SimpleTableFunc for SetCacheCapacity {
         false
     }
 
-    async fn apply(&self, _ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
+    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
         let cache_mgr = CacheManager::instance();
         let op = &self.operation;
         cache_mgr.set_cache_capacity(&op.cache_name, op.capacity)?;
-        let col = vec!["Ok".to_owned()];
+
+        let node = vec![ctx.get_cluster().local_id.clone()];
+        let res = vec!["Ok".to_owned()];
 
         Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(col),
+            StringType::from_data(node),
+            StringType::from_data(res),
         ])))
     }
 
