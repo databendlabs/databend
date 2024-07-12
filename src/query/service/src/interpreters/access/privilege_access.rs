@@ -572,6 +572,11 @@ impl AccessChecker for PrivilegeAccess {
                 return Ok(());
             }
         }
+        // In two case, user need to change password.
+        // 1. set `MUST_CHANGE_PASSWORD` when create user or alter user password,
+        //    and the user login first time.
+        // 2. The password has not been changed within the maximum period
+        //    specified in the password policy `MAX_AGE_DAYS`.
         let need_change = user.auth_info.get_need_change();
         if need_change {
             if let Plan::Query {
