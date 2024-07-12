@@ -39,9 +39,6 @@ try:
     cursor.execute(
         "create user u4 identified by 'abc123' with must_change_password = true;"
     )
-    cursor.execute(
-        "grant select on * to 'u4';"
-    )
 except mysql.connector.errors.OperationalError:
     print("root@127.0.0.1 is timeout")
 
@@ -154,7 +151,7 @@ try:
     )
     cursor = mydb.cursor()
     try:
-        cursor.execute("show tables;")
+        cursor.execute("select 123;")
     except mysql.connector.errors.DatabaseError as err:
         print("can't execute with error: {} ".format(str(err)))
 
@@ -167,7 +164,7 @@ try:
         host="127.0.0.1", user="u4", passwd="abc456", port="3307", connection_timeout=3
     )
     cursor = mydb.cursor()
-    cursor.execute("show tables;")
+    cursor.execute("select 123;")
 except mysql.connector.errors.OperationalError:
     print("u4 is timeout")
 

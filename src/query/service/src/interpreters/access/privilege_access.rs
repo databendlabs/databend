@@ -572,38 +572,13 @@ impl AccessChecker for PrivilegeAccess {
                 return Ok(());
             }
         }
-        // In two case, user need to change password.
+        // User need to change password first in two casese:
         // 1. set `MUST_CHANGE_PASSWORD` when create user or alter user password,
         //    and the user login first time.
         // 2. The password has not been changed within the maximum period
         //    specified in the password policy `MAX_AGE_DAYS`.
         let need_change = user.auth_info.get_need_change();
         if need_change {
-            if let Plan::Query {
-                metadata,
-                rewrite_kind: None,
-                ..
-            } = plan
-            {
-                // Some simple SQL used by BendSQL is allowed,
-                // such as: `select version()`, `select * from system.tables`
-                let mut allowed = true;
-                let metadata = metadata.read().clone();
-                for table in metadata.tables() {
-                    let db_name = table.database();
-                    let table_name = table.name();
-                    if !((db_name == "system"
-                        && SYSTEM_TABLES_ALLOW_LIST.iter().any(|x| x == &table_name))
-                        || db_name == "information_schema")
-                    {
-                        allowed = false;
-                        break;
-                    }
-                }
-                if allowed {
-                    return Ok(());
-                }
-            }
             // If current user need change password, other operation is not allowed.
             return Err(ErrorCode::NeedChangePasswordDenied(
                 "Must change password before execute other operations".to_string(),
