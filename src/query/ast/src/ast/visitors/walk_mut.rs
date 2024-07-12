@@ -110,15 +110,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
                     window,
                     lambda,
                 },
-        } => visitor.visit_function_call(
-            *span,
-            *distinct,
-            name,
-            args,
-            params,
-            window,
-            lambda,
-        ),
+        } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,
             operand,

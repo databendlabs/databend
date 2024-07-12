@@ -843,11 +843,18 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
                     let window = window.as_ref().unwrap();
+                    let rank_window = ["first_value", "first", "last_value", "last", "nth_value"];
+                    if !rank_window.contains(&func_name) && window.ignore_nulls.is_some() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {func_name} not support IGNORE/RESPECT NULLS option"
+                        ))
+                        .set_span(*span));
+                    }
                     let func = self.resolve_general_window_function(
                         *span,
                         func_name,
                         &args,
-                        &window.ignore_nulls
+                        &window.ignore_nulls,
                     )?;
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, &window.window, func)?
@@ -880,6 +887,13 @@ impl<'a> TypeChecker<'a> {
                     if let Some(window) = window {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
+                        if window.ignore_nulls.is_some() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "window function {func_name} not support IGNORE/RESPECT NULLS option"
+                            ))
+                                .set_span(*span));
+                        }
+                        // general window function
                         let func = WindowFuncType::Aggregate(new_agg_func);
                         self.resolve_window(*span, display_name, &window.window, func)?
                     } else {

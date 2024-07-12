@@ -14,13 +14,14 @@
 
 use std::mem;
 
-use databend_common_ast::ast::{Expr, WindowDesc};
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
@@ -614,13 +615,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     vec![ty]
                 };
-                self.gen_func(
-                    name.to_string(),
-                    vec![],
-                    args_type,
-                    window,
-                    None,
-                )
+                self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
         }
     }
@@ -639,16 +634,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 ignore_nulls,
                 window: Window::WindowReference(WindowRef {
                     window_name: Identifier::from_name(None, name),
-                })
-            }
-            )
+                }),
+            })
         } else {
             let window_spec = self.gen_window_spec();
             Some(WindowDesc {
                 ignore_nulls,
-                window: Window::WindowSpec(window_spec)
-            }
-            )
+                window: Window::WindowSpec(window_spec),
+            })
         }
     }
 
