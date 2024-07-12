@@ -446,7 +446,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn txn_mgr(&self) -> TxnManagerRef {
-        todo!()
+        self.ctx.txn_mgr()
     }
 
     fn incr_total_scan_value(&self, _value: ProgressValues) {
