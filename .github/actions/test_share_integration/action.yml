@@ -50,8 +50,6 @@ runs:
 
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
-      with:
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
       env:
         # we need workflow:write permission to create release if there were any workflow changes
         # which is not possible for github actions token
