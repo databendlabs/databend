@@ -126,14 +126,11 @@ impl<'a> Evaluator<'a> {
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None, &mut EvaluateOptions::default())
             .map_err(|err| {
-                if err
-                    .message()
-                    .contains(format!("`{}`", expr.sql_display()).as_str())
-                {
+                let expr_str = format!("`{}`", expr.sql_display());
+                if err.message().contains(expr_str.as_str()) {
                     err
                 } else {
-                    let err_msg =
-                        format!("{}, during run expr: {}", err.message(), expr.sql_display());
+                    let err_msg = format!("{}, during run expr: {}", err.message(), expr_str);
                     ErrorCode::BadArguments(err_msg).set_span(err.span())
                 }
             })
