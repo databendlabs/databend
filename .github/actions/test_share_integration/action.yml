@@ -20,6 +20,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: datafuselabs/share-endpoint
+        token: ${{ inputs.secrets_token }}
         ref: main
 
     - name: Download artifact
@@ -57,9 +58,5 @@ runs:
 
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
-      env:
-        # we need workflow:write permission to create release if there were any workflow changes
-        # which is not possible for github actions token
-        GH_TOKEN: ${{ inputs.secrets_token }}
       run: |
         ./scripts/ci/ci-run-share-tests.sh
