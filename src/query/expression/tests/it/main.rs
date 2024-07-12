@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 
 extern crate core;
 
+mod aggregate;
 mod block;
 mod column;
 mod common;
