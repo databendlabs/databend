@@ -1099,6 +1099,15 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
     ))(i)
 }
 
+pub fn window_function(i: Input) -> IResult<WindowDesc> {
+    map(rule! {
+    (( IGNORE | RESPECT ) ~ NULLS)? ~ (OVER ~ #window_spec_ident)
+    }, |(opt_ignore_nulls, window)| WindowDesc {
+        ignore_nulls: opt_ignore_nulls.map(|key| key.0.kind == IGNORE),
+        window: window.1,
+    })(i)
+}
+
 pub fn window_clause(i: Input) -> IResult<WindowDefinition> {
     map(
         rule! {

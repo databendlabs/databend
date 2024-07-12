@@ -14,7 +14,7 @@
 
 use std::mem;
 
-use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::{Expr, WindowDesc};
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
@@ -56,7 +56,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             func_sig.name.clone(),
             vec![],
             func_sig.args_type,
-            None,
             None,
             None,
         )
@@ -362,7 +361,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         };
 
-        self.gen_func(name, params, args_type, None, None, None)
+        self.gen_func(name, params, args_type, None, None)
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
@@ -575,7 +574,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.gen_window()
         };
 
-        self.gen_func(name, params, args_type, None, window, None)
+        self.gen_func(name, params, args_type, window, None)
     }
 
     pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
@@ -590,12 +589,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     vec![]
                 };
-                self.gen_func(name.to_string(), vec![], args_type, None, window, None)
+                self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
             DataType::Number(NumberDataType::Float64) => {
                 let float = ["percent_rank", "cume_dist"];
                 let name = float[self.rng.gen_range(0..=1)].to_string();
-                self.gen_func(name, vec![], vec![], None, window, None)
+                self.gen_func(name, vec![], vec![], window, None)
             }
             _ => {
                 let name = [
@@ -615,13 +614,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     vec![ty]
                 };
-                let ignore_null = [Some(true), Some(false)];
-                let ignore_null = ignore_null[self.rng.gen_range(0..=1)];
                 self.gen_func(
                     name.to_string(),
                     vec![],
                     args_type,
-                    ignore_null,
                     window,
                     None,
                 )
@@ -629,7 +625,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    fn gen_window(&mut self) -> Option<Window> {
+    fn gen_window(&mut self) -> Option<WindowDesc> {
+        let ignore_nulls = Some(self.rng.gen_bool(0.2));
         if self.rng.gen_bool(0.2) && !self.windows_name.is_empty() {
             let len = self.windows_name.len();
             let name = if len == 1 {
@@ -637,12 +634,21 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             } else {
                 self.windows_name[self.rng.gen_range(0..=len - 1)].to_string()
             };
-            Some(Window::WindowReference(WindowRef {
-                window_name: Identifier::from_name(None, name),
-            }))
+
+            Some(WindowDesc {
+                ignore_nulls,
+                window: Window::WindowReference(WindowRef {
+                    window_name: Identifier::from_name(None, name),
+                })
+            }
+            )
         } else {
             let window_spec = self.gen_window_spec();
-            Some(Window::WindowSpec(window_spec))
+            Some(WindowDesc {
+                ignore_nulls,
+                window: Window::WindowSpec(window_spec)
+            }
+            )
         }
     }
 
@@ -728,7 +734,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         self.bound_columns = current_bound_columns;
         self.is_join = current_is_join;
 
-        self.gen_func(name, vec![], args_type, None, None, Some(lambda))
+        self.gen_func(name, vec![], args_type, None, Some(lambda))
     }
 
     fn gen_func(
@@ -736,8 +742,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         name: String,
         params: Vec<Literal>,
         args_type: Vec<DataType>,
-        window_ignore_null: Option<bool>,
-        window: Option<Window>,
+        window: Option<WindowDesc>,
         lambda: Option<Lambda>,
     ) -> Expr {
         let distinct = if name == *"count" {
@@ -783,7 +788,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 name,
                 args,
                 params,
-                window_ignore_null,
                 window,
                 lambda,
             },

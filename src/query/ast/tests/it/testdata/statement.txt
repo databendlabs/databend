@@ -594,7 +594,6 @@ Replace(
                                             },
                                         ],
                                         params: [],
-                                        window_ignore_null: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -843,7 +842,6 @@ Explain {
                                                 },
                                             ],
                                             params: [],
-                                            window_ignore_null: None,
                                             window: None,
                                             lambda: None,
                                         },
@@ -1233,7 +1231,6 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
-                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -1428,7 +1425,6 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
-                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -2341,7 +2337,6 @@ CreateTable(
                                             },
                                         ],
                                         params: [],
-                                        window_ignore_null: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -10099,7 +10094,6 @@ Query(
                                             },
                                         ],
                                         params: [],
-                                        window_ignore_null: None,
                                         window: None,
                                         lambda: None,
                                     },
@@ -10223,7 +10217,6 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -17297,7 +17290,6 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
-                                window_ignore_null: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -17398,7 +17390,6 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
-                                window_ignore_null: None,
                                 window: None,
                                 lambda: None,
                             },
@@ -18571,7 +18562,6 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
-                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -18799,7 +18789,6 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
-                                    window_ignore_null: None,
                                     window: None,
                                     lambda: None,
                                 },
@@ -19165,7 +19154,6 @@ CreateTask(
                             },
                         ],
                         params: [],
-                        window_ignore_null: None,
                         window: None,
                         lambda: None,
                     },
@@ -19666,7 +19654,6 @@ AlterTask(
                             },
                         ],
                         params: [],
-                        window_ignore_null: None,
                         window: None,
                         lambda: None,
                     },
@@ -20450,25 +20437,27 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: None,
                                 window: Some(
-                                    WindowSpec(
-                                        WindowSpec {
-                                            existing_window_name: Some(
-                                                Identifier {
-                                                    span: Some(
-                                                        20..21,
-                                                    ),
-                                                    name: "w",
-                                                    quote: None,
-                                                    is_hole: false,
-                                                },
-                                            ),
-                                            partition_by: [],
-                                            order_by: [],
-                                            window_frame: None,
-                                        },
-                                    ),
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            20..21,
+                                                        ),
+                                                        name: "w",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                partition_by: [],
+                                                order_by: [],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -20570,25 +20559,27 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: None,
                                 window: Some(
-                                    WindowSpec(
-                                        WindowSpec {
-                                            existing_window_name: Some(
-                                                Identifier {
-                                                    span: Some(
-                                                        28..29,
-                                                    ),
-                                                    name: "w",
-                                                    quote: None,
-                                                    is_hole: false,
-                                                },
-                                            ),
-                                            partition_by: [],
-                                            order_by: [],
-                                            window_frame: None,
-                                        },
-                                    ),
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            28..29,
+                                                        ),
+                                                        name: "w",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                partition_by: [],
+                                                order_by: [],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -20690,27 +20681,29 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: Some(
-                                    true,
-                                ),
                                 window: Some(
-                                    WindowSpec(
-                                        WindowSpec {
-                                            existing_window_name: Some(
-                                                Identifier {
-                                                    span: Some(
-                                                        41..42,
-                                                    ),
-                                                    name: "w",
-                                                    quote: None,
-                                                    is_hole: false,
-                                                },
-                                            ),
-                                            partition_by: [],
-                                            order_by: [],
-                                            window_frame: None,
-                                        },
-                                    ),
+                                    WindowDesc {
+                                        ignore_nulls: Some(
+                                            true,
+                                        ),
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            41..42,
+                                                        ),
+                                                        name: "w",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                partition_by: [],
+                                                order_by: [],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -20812,27 +20805,29 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: Some(
-                                    false,
-                                ),
                                 window: Some(
-                                    WindowSpec(
-                                        WindowSpec {
-                                            existing_window_name: Some(
-                                                Identifier {
-                                                    span: Some(
-                                                        42..43,
-                                                    ),
-                                                    name: "w",
-                                                    quote: None,
-                                                    is_hole: false,
-                                                },
-                                            ),
-                                            partition_by: [],
-                                            order_by: [],
-                                            window_frame: None,
-                                        },
-                                    ),
+                                    WindowDesc {
+                                        ignore_nulls: Some(
+                                            false,
+                                        ),
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            42..43,
+                                                        ),
+                                                        name: "w",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                partition_by: [],
+                                                order_by: [],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -20880,7 +20875,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) OVER ( w ) FROM e
+SELECT sum(d) IGNORE NULLS OVER ( w ) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -20934,25 +20929,29 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: None,
                                 window: Some(
-                                    WindowSpec(
-                                        WindowSpec {
-                                            existing_window_name: Some(
-                                                Identifier {
-                                                    span: Some(
-                                                        33..34,
-                                                    ),
-                                                    name: "w",
-                                                    quote: None,
-                                                    is_hole: false,
-                                                },
-                                            ),
-                                            partition_by: [],
-                                            order_by: [],
-                                            window_frame: None,
-                                        },
-                                    ),
+                                    WindowDesc {
+                                        ignore_nulls: Some(
+                                            true,
+                                        ),
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            33..34,
+                                                        ),
+                                                        name: "w",
+                                                        quote: None,
+                                                        is_hole: false,
+                                                    },
+                                                ),
+                                                partition_by: [],
+                                                order_by: [],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -21054,20 +21053,22 @@ Query(
                                     },
                                 ],
                                 params: [],
-                                window_ignore_null: None,
                                 window: Some(
-                                    WindowReference(
-                                        WindowRef {
-                                            window_name: Identifier {
-                                                span: Some(
-                                                    19..20,
-                                                ),
-                                                name: "w",
-                                                quote: None,
-                                                is_hole: false,
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowReference(
+                                            WindowRef {
+                                                window_name: Identifier {
+                                                    span: Some(
+                                                        19..20,
+                                                    ),
+                                                    name: "w",
+                                                    quote: None,
+                                                    is_hole: false,
+                                                },
                                             },
-                                        },
-                                    ),
+                                        ),
+                                    },
                                 ),
                                 lambda: None,
                             },
@@ -21372,7 +21373,6 @@ CreateUDF(
                             },
                         ],
                         params: [],
-                        window_ignore_null: None,
                         window: None,
                         lambda: None,
                     },
@@ -21454,7 +21454,6 @@ CreateUDF(
                             },
                         ],
                         params: [],
-                        window_ignore_null: None,
                         window: None,
                         lambda: None,
                     },
@@ -22104,56 +22103,16 @@ Query(
                                                     },
                                                     args: [],
                                                     params: [],
-                                                    window_ignore_null: None,
                                                     window: Some(
-                                                        WindowSpec(
-                                                            WindowSpec {
-                                                                existing_window_name: None,
-                                                                partition_by: [
-                                                                    ColumnRef {
-                                                                        span: Some(
-                                                                            195..198,
-                                                                        ),
-                                                                        column: ColumnRef {
-                                                                            database: None,
-                                                                            table: None,
-                                                                            column: Name(
-                                                                                Identifier {
-                                                                                    span: Some(
-                                                                                        195..198,
-                                                                                    ),
-                                                                                    name: "uid",
-                                                                                    quote: None,
-                                                                                    is_hole: false,
-                                                                                },
-                                                                            ),
-                                                                        },
-                                                                    },
-                                                                    ColumnRef {
-                                                                        span: Some(
-                                                                            199..202,
-                                                                        ),
-                                                                        column: ColumnRef {
-                                                                            database: None,
-                                                                            table: None,
-                                                                            column: Name(
-                                                                                Identifier {
-                                                                                    span: Some(
-                                                                                        199..202,
-                                                                                    ),
-                                                                                    name: "eid",
-                                                                                    quote: None,
-                                                                                    is_hole: false,
-                                                                                },
-                                                                            ),
-                                                                        },
-                                                                    },
-                                                                ],
-                                                                order_by: [
-                                                                    OrderByExpr {
-                                                                        expr: ColumnRef {
+                                                        WindowDesc {
+                                                            ignore_nulls: None,
+                                                            window: WindowSpec(
+                                                                WindowSpec {
+                                                                    existing_window_name: None,
+                                                                    partition_by: [
+                                                                        ColumnRef {
                                                                             span: Some(
-                                                                                212..222,
+                                                                                195..198,
                                                                             ),
                                                                             column: ColumnRef {
                                                                                 database: None,
@@ -22161,24 +22120,66 @@ Query(
                                                                                 column: Name(
                                                                                     Identifier {
                                                                                         span: Some(
-                                                                                            212..222,
+                                                                                            195..198,
                                                                                         ),
-                                                                                        name: "updated_at",
+                                                                                        name: "uid",
                                                                                         quote: None,
                                                                                         is_hole: false,
                                                                                     },
                                                                                 ),
                                                                             },
                                                                         },
-                                                                        asc: Some(
-                                                                            false,
-                                                                        ),
-                                                                        nulls_first: None,
-                                                                    },
-                                                                ],
-                                                                window_frame: None,
-                                                            },
-                                                        ),
+                                                                        ColumnRef {
+                                                                            span: Some(
+                                                                                199..202,
+                                                                            ),
+                                                                            column: ColumnRef {
+                                                                                database: None,
+                                                                                table: None,
+                                                                                column: Name(
+                                                                                    Identifier {
+                                                                                        span: Some(
+                                                                                            199..202,
+                                                                                        ),
+                                                                                        name: "eid",
+                                                                                        quote: None,
+                                                                                        is_hole: false,
+                                                                                    },
+                                                                                ),
+                                                                            },
+                                                                        },
+                                                                    ],
+                                                                    order_by: [
+                                                                        OrderByExpr {
+                                                                            expr: ColumnRef {
+                                                                                span: Some(
+                                                                                    212..222,
+                                                                                ),
+                                                                                column: ColumnRef {
+                                                                                    database: None,
+                                                                                    table: None,
+                                                                                    column: Name(
+                                                                                        Identifier {
+                                                                                            span: Some(
+                                                                                                212..222,
+                                                                                            ),
+                                                                                            name: "updated_at",
+                                                                                            quote: None,
+                                                                                            is_hole: false,
+                                                                                        },
+                                                                                    ),
+                                                                                },
+                                                                            },
+                                                                            asc: Some(
+                                                                                false,
+                                                                            ),
+                                                                            nulls_first: None,
+                                                                        },
+                                                                    ],
+                                                                    window_frame: None,
+                                                                },
+                                                            ),
+                                                        },
                                                     ),
                                                     lambda: None,
                                                 },

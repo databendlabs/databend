@@ -1880,7 +1880,6 @@ RunStatement {
                                             },
                                         ],
                                         params: [],
-                                        window_ignore_null: None,
                                         window: None,
                                         lambda: None,
                                     },
