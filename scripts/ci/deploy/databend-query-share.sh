@@ -12,6 +12,9 @@ killall databend-meta || true
 killall share-endpoint || true
 sleep 1
 
+echo "current env:"
+env
+
 echo "current directory:"
 pwd
 
