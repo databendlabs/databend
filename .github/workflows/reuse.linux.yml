@@ -242,9 +242,12 @@ jobs:
 
   test_share_integration:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
+        with:
+          repository: datafuselabs/share-endpoint
+          token: ${{ secrets.DATABEND_BOT_TOKEN }}
+          fetch-depth: 0
       - uses: ./.github/actions/test_share_integration
         if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
