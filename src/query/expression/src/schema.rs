@@ -1197,7 +1197,7 @@ impl From<&TableDataType> for DataType {
 impl TableDataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            TableDataType::Nullable(_) => self.clone(),
+            TableDataType::Null | TableDataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }

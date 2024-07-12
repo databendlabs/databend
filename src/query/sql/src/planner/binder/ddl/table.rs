@@ -64,6 +64,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
@@ -502,7 +503,7 @@ impl Binder {
                     .map(|column_binding| {
                         Ok(TableField::new(
                             &column_binding.column_name,
-                            infer_schema_type(&column_binding.data_type)?,
+                            infer_schema_type(&column_binding.data_type.wrap_nullable())?,
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
@@ -1493,6 +1494,12 @@ impl Binder {
             if !name_set.insert(field.name().clone()) {
                 return Err(ErrorCode::BadArguments(format!(
                     "Duplicated column name: {}",
+                    field.name()
+                )));
+            }
+            if field.data_type == TableDataType::Null {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Column `{}` have NULL type is not allowed",
                     field.name()
                 )));
             }
