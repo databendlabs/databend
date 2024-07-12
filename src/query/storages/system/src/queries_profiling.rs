@@ -75,6 +75,7 @@ impl SyncSystemTable for QueriesProfilingTable {
         let mut plan_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut parent_id: Vec<Option<u32>> = Vec::with_capacity(total_size);
         let mut plan_name: Vec<Option<String>> = Vec::with_capacity(total_size);
+        let mut errors = Vec::with_capacity(total_size);
         let mut statistics = Vec::with_capacity(total_size);
 
         for (query_id, query_profiles) in queries_profiles {
@@ -84,6 +85,7 @@ impl SyncSystemTable for QueriesProfilingTable {
                 plan_id.push(query_plan_profile.id);
                 parent_id.push(query_plan_profile.parent_id);
                 plan_name.push(query_plan_profile.name.clone());
+                errors.push(serde_json::to_vec(&query_plan_profile.errors).unwrap());
 
                 let mut statistics_map =
                     HashMap::with_capacity(query_plan_profile.statistics.len());
@@ -104,6 +106,7 @@ impl SyncSystemTable for QueriesProfilingTable {
                 plan_id.push(query_plan_profile.id);
                 parent_id.push(query_plan_profile.parent_id);
                 plan_name.push(query_plan_profile.name.clone());
+                errors.push(serde_json::to_vec(&query_plan_profile.errors).unwrap());
 
                 let mut statistics_map =
                     HashMap::with_capacity(query_plan_profile.statistics.len());
@@ -122,6 +125,7 @@ impl SyncSystemTable for QueriesProfilingTable {
             UInt32Type::from_opt_data(plan_id),
             UInt32Type::from_opt_data(parent_id),
             StringType::from_opt_data(plan_name),
+            VariantType::from_data(errors),
             VariantType::from_data(statistics),
         ]))
     }
@@ -144,6 +148,7 @@ impl QueriesProfilingTable {
                 "plan_name",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
+            TableField::new("errors", TableDataType::Variant),
             TableField::new("statistics", TableDataType::Variant),
         ]);
 

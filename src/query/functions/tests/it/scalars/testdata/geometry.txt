@@ -79,6 +79,42 @@ output domain  : {"LINESTRING(0.75 0.75,-10 20)"..="LINESTRING(0.75 0.75,-10 20)
 output         : 'LINESTRING(0.75 0.75,-10 20)'
 
 
+ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'))
+raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'))
+checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-1 0, 0 1, 1 0, -1 0))'))
+raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-1 0, 0 1, 1 0, -1 0))'))
+checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("POLYGON((-1 0, 0 1, 1 0, -1 0))"))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
+ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-1 1, 0 2, 1 1))'))
+raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-1 1, 0 2, 1 1))'))
+checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("LINESTRING(-1 1, 0 2, 1 1))"))
+optimized expr : false
+output type    : Boolean NULL
+output domain  : {FALSE}
+output         : false
+
+
+ast            : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-2 0, 0 0, 0 1))'))
+raw expr       : ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-2 0, 0 0, 0 1))'))
+checked expr   : st_contains<Geometry, Geometry>(to_geometry<String>("POLYGON((-2 0, 0 2, 2 0, -2 0))"), to_geometry<String>("LINESTRING(-2 0, 0 0, 0 1))"))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
+
+
 ast            : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
 raw expr       : st_endpoint(to_geometry('LINESTRING(1 1, 2 2, 3 3, 4 4)'))
 checked expr   : st_endpoint<Geometry>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"))
