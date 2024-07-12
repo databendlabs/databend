@@ -40,11 +40,10 @@ const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
 pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-    combine_group_hash_column::<true>(&cols[0], values);
-    if cols.len() > 1 {
-        for col in cols.slice(1..).iter() {
-            combine_group_hash_column::<false>(col, values);
-        }
+    let mut iter = cols.iter();
+    combine_group_hash_column::<true>(iter.next().unwrap(), values);
+    for col in iter {
+        combine_group_hash_column::<false>(col, values);
     }
 }
 

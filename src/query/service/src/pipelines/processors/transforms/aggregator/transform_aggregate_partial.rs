@@ -306,7 +306,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         (
                             vec![],
                             (num_columns - functions_count..num_columns).collect::<Vec<_>>(),
-                        );
+                        )
                     } else {
                         (
                             Self::aggregate_arguments(
