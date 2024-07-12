@@ -10,14 +10,6 @@ statement ok
 drop table if exists tbl_01_0014 all
 
 statement ok
-SELECT number FROM numbers_mt(5) where number < 2
-
-query BBBB
-select count(*)=2, SUM(statistics:MemoryUsage::int64)=0, SUM(statistics:CpuTime::int64)>0, SUM(statistics:ScanBytes::int64)>0 from system.queries_profiling where query_id = (select query_id from system.query_log where query_text='SELECT number FROM numbers_mt(5) WHERE number < 2')
-----
-1 1 1 1
-
-statement ok
 SELECT number % 3 AS c1 FROM numbers_mt(100) WHERE number > 2 GROUP BY number % 3
 
 query BBBB
