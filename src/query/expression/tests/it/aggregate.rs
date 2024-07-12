@@ -1,4 +1,3 @@
-use dashmap::iter;
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
 use databend_common_expression::InputColumns;
