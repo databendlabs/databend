@@ -609,11 +609,7 @@ fn test_st_ymin(file: &mut impl Write) {
 }
 
 fn test_st_npoints(file: &mut impl Write) {
-    run_ast(
-        file,
-        "st_npoints(to_geometry('POINT(66 12)'))",
-        &[],
-    );
+    run_ast(file, "st_npoints(to_geometry('POINT(66 12)'))", &[]);
     run_ast(
         file,
         "st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))",
@@ -644,15 +640,10 @@ fn test_st_npoints(file: &mut impl Write) {
         "st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))",
         &[],
     );
-
 }
 
 fn test_st_setsrid(file: &mut impl Write) {
-    run_ast(
-        file,
-        "st_setsrid(to_geometry('POINT(13 51)'), 4326)",
-        &[],
-    );
+    run_ast(file, "st_setsrid(to_geometry('POINT(13 51)'), 4326)", &[]);
 }
 
 // fn test_st_transform(file: &mut impl Write) {
