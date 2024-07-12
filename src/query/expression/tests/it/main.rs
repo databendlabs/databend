@@ -29,6 +29,7 @@ mod block;
 mod column;
 mod common;
 mod decimal;
+mod fill_field_default_value;
 mod group_by;
 mod kernel;
 mod meta_scalar;
@@ -36,6 +37,7 @@ mod row;
 mod schema;
 mod serde;
 mod sort;
+mod types;
 
 fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
     let types = get_all_test_data_types();
