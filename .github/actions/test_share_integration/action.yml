@@ -21,7 +21,7 @@ runs:
       with:
         repository: datafuselabs/share-endpoint
         fetch-depth: 0
-        token: ${{ inputs.secrets_token }}
+        token: ${{ inputs.github_token }}
 
     - name: Download artifact
       uses: ./.github/actions/artifact_download
