@@ -249,7 +249,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: datafuselabs/share-endpoint
-          token: ${{ secrets.DATABEND_BOT_TOKEN }}
       - uses: ./.github/actions/test_share_integration
         if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
