@@ -2075,7 +2075,7 @@ error:
   --> SQL:1:5
   |
 1 | bin(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `bin(to_int64(e))`
 
 
 
@@ -2183,7 +2183,7 @@ error:
   --> SQL:1:5
   |
 1 | oct(e)
-  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`
+  |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `to_int64(e)`, during run expr: `oct(to_int64(e))`
 
 
 
