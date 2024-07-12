@@ -26,6 +26,7 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
@@ -156,15 +157,13 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             .params
             .group_columns
             .iter()
-            .map(|&index| block.get_by_offset(index))
+            .map(|&index| {
+                let c = block.get_by_offset(index);
+                (c.value.as_column().unwrap().clone(), c.data_type.clone())
+            })
             .collect::<Vec<_>>();
 
-        let group_columns = group_columns
-            .iter()
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
-            .collect::<Vec<_>>();
-
-        unsafe {
+        {
             let rows_num = block.num_rows();
 
             match &mut self.hash_table {
@@ -172,23 +171,27 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 HashTable::HashTable(cell) => {
                     let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = cell.hashtable.insert_and_entry(key);
+                        unsafe {
+                            let _ = cell.hashtable.insert_and_entry(key);
+                        }
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
                     let state = self.method.build_keys_state(&group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
-                        let _ = cell.hashtable.insert_and_entry(key);
+                        unsafe {
+                            let _ = cell.hashtable.insert_and_entry(key);
+                        }
                     }
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let group_columns: Vec<Column> =
-                        group_columns.into_iter().map(|c| c.0).collect();
+                    let group_columns =
+                        InputColumns::new_block_proxy(&self.params.group_columns, &block);
                     let _ = hashtable.add_groups(
                         &mut self.probe_state,
-                        &group_columns,
-                        &[(&vec![]).into()],
-                        &[],
+                        group_columns,
+                        &[(&[]).into()],
+                        (&[]).into(),
                         rows_num,
                     )?;
                 }

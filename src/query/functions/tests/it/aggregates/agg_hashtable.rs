@@ -100,7 +100,13 @@ fn test_agg_hashtable() {
 
         let mut state = ProbeState::default();
         let _ = hashtable
-            .add_groups(&mut state, &group_columns, &params, &[], n)
+            .add_groups(
+                &mut state,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
             .unwrap();
 
         let mut hashtable2 = AggregateHashTable::new(
@@ -112,7 +118,13 @@ fn test_agg_hashtable() {
 
         let mut state2 = ProbeState::default();
         let _ = hashtable2
-            .add_groups(&mut state2, &group_columns, &params, &[], n)
+            .add_groups(
+                &mut state2,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
             .unwrap();
 
         let mut flush_state = PayloadFlushState::default();

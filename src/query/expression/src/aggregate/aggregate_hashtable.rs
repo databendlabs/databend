@@ -128,9 +128,9 @@ impl AggregateHashTable {
     pub fn add_groups(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
+        group_columns: InputColumns,
         params: &[InputColumns],
-        agg_states: &[Column],
+        agg_states: InputColumns,
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
@@ -156,9 +156,9 @@ impl AggregateHashTable {
 
                 new_count += self.add_groups_inner(
                     state,
-                    &step_group_columns,
+                    (&step_group_columns).into(),
                     &step_params,
-                    &agg_states,
+                    (&agg_states).into(),
                     end - start,
                 )?;
             }
@@ -170,9 +170,9 @@ impl AggregateHashTable {
     fn add_groups_inner(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
+        group_columns: InputColumns,
         params: &[InputColumns],
-        agg_states: &[Column],
+        agg_states: InputColumns,
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
@@ -244,7 +244,7 @@ impl AggregateHashTable {
     fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
-        group_columns: &[Column],
+        group_columns: InputColumns,
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
@@ -392,7 +392,7 @@ impl AggregateHashTable {
 
             let _ = self.probe_and_create(
                 &mut flush_state.probe_state,
-                &flush_state.group_columns,
+                (&flush_state.group_columns).into(),
                 row_count,
             );
 

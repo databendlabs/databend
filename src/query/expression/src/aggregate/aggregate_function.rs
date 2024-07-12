@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::fmt;
 use std::ops::Index;
 use std::ops::Range;
+use std::slice::SliceIndex;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -201,7 +202,8 @@ impl<'a> InputColumns<'a> {
         }
     }
 
-    pub fn slice(&self, index: Range<usize>) -> InputColumns<'_> {
+    pub fn slice<I>(&self, index: I) -> InputColumns<'_>
+    where I: SliceIndex<[usize], Output = [usize]> + SliceIndex<[Column], Output = [Column]> {
         match self {
             Self::Slice(s) => Self::Slice(&s[index]),
             Self::Block(BlockProxy { args, data }) => Self::Block(BlockProxy {

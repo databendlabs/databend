@@ -25,7 +25,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
@@ -250,90 +249,89 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
 
-        let rows_num = block.num_rows();
+        {
+            let rows_num = block.num_rows();
 
-        match &mut self.hash_table {
-            HashTable::MovedOut => unreachable!(),
-            HashTable::HashTable(hashtable) => {
-                let state = self.method.build_keys_state(&group_columns, rows_num)?;
-                let mut places = Vec::with_capacity(rows_num);
+            match &mut self.hash_table {
+                HashTable::MovedOut => unreachable!(),
+                HashTable::HashTable(hashtable) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let mut places = Vec::with_capacity(rows_num);
 
-                for key in self.method.build_keys_iter(&state)? {
-                    places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
-                        Err(entry) => Into::<StateAddr>::into(*entry.get()),
-                        Ok(mut entry) => {
-                            let place = self.params.alloc_layout(&mut hashtable.arena);
-                            *entry.get_mut() = place.addr();
-                            place
-                        }
-                    })
+                    for key in self.method.build_keys_iter(&state)? {
+                        places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
+                            Err(entry) => Into::<StateAddr>::into(*entry.get()),
+                            Ok(mut entry) => {
+                                let place = self.params.alloc_layout(&mut hashtable.arena);
+                                *entry.get_mut() = place.addr();
+                                place
+                            }
+                        })
+                    }
+
+                    if is_agg_index_block {
+                        self.execute_agg_index_block(&block, &places)
+                    } else {
+                        Self::execute(&self.params, &block, &places)
+                    }
                 }
+                HashTable::PartitionedHashTable(hashtable) => {
+                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let mut places = Vec::with_capacity(rows_num);
 
-                if is_agg_index_block {
-                    self.execute_agg_index_block(&block, &places)
-                } else {
-                    Self::execute(&self.params, &block, &places)
+                    for key in self.method.build_keys_iter(&state)? {
+                        places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
+                            Err(entry) => Into::<StateAddr>::into(*entry.get()),
+                            Ok(mut entry) => {
+                                let place = self.params.alloc_layout(&mut hashtable.arena);
+                                *entry.get_mut() = place.addr();
+                                place
+                            }
+                        })
+                    }
+
+                    if is_agg_index_block {
+                        self.execute_agg_index_block(&block, &places)
+                    } else {
+                        Self::execute(&self.params, &block, &places)
+                    }
                 }
-            }
-            HashTable::PartitionedHashTable(hashtable) => {
-                let state = self.method.build_keys_state(&group_columns, rows_num)?;
-                let mut places = Vec::with_capacity(rows_num);
+                HashTable::AggregateHashTable(hashtable) => {
+                    let group_columns =
+                        InputColumns::new_block_proxy(&self.params.group_columns, &block);
 
-                for key in self.method.build_keys_iter(&state)? {
-                    places.push(match unsafe { hashtable.hashtable.insert_and_entry(key) } {
-                        Err(entry) => Into::<StateAddr>::into(*entry.get()),
-                        Ok(mut entry) => {
-                            let place = self.params.alloc_layout(&mut hashtable.arena);
-                            *entry.get_mut() = place.addr();
-                            place
-                        }
-                    })
+                    let (params_columns, states_index) = if is_agg_index_block {
+                        let num_columns = block.num_columns();
+                        let functions_count = self.params.aggregate_functions.len();
+                        (
+                            vec![],
+                            (num_columns - functions_count..num_columns).collect::<Vec<_>>(),
+                        );
+                    } else {
+                        (
+                            Self::aggregate_arguments(
+                                &block,
+                                &self.params.aggregate_functions_arguments,
+                            ),
+                            vec![],
+                        )
+                    };
+
+                    let agg_states = if !states_index.is_empty() {
+                        InputColumns::new_block_proxy(&states_index, &block)
+                    } else {
+                        (&[]).into()
+                    };
+
+                    let _ = hashtable.add_groups(
+                        &mut self.probe_state,
+                        group_columns,
+                        &params_columns,
+                        agg_states,
+                        rows_num,
+                    )?;
+                    Ok(())
                 }
-
-                if is_agg_index_block {
-                    self.execute_agg_index_block(&block, &places)
-                } else {
-                    Self::execute(&self.params, &block, &places)
-                }
-            }
-            HashTable::AggregateHashTable(hashtable) => {
-                let group_columns: Vec<Column> = group_columns.into_iter().map(|c| c.0).collect();
-
-                let (params_columns, agg_states) = if is_agg_index_block {
-                    (
-                        vec![],
-                        (0..self.params.aggregate_functions.len())
-                            .map(|index| {
-                                block
-                                    .get_by_offset(
-                                        block.num_columns() - self.params.aggregate_functions.len()
-                                            + index,
-                                    )
-                                    .value
-                                    .as_column()
-                                    .cloned()
-                                    .unwrap()
-                            })
-                            .collect(),
-                    )
-                } else {
-                    (
-                        Self::aggregate_arguments(
-                            &block,
-                            &self.params.aggregate_functions_arguments,
-                        ),
-                        vec![],
-                    )
-                };
-
-                let _ = hashtable.add_groups(
-                    &mut self.probe_state,
-                    &group_columns,
-                    &params_columns,
-                    &agg_states,
-                    rows_num,
-                )?;
-                Ok(())
             }
         }
     }

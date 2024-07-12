@@ -33,15 +33,16 @@ use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 use crate::ScalarRef;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: &[Column], values: &mut [u64]) {
+pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
     combine_group_hash_column::<true>(&cols[0], values);
     if cols.len() > 1 {
-        for col in &cols[1..] {
+        for col in cols.slice(1..).iter() {
             combine_group_hash_column::<false>(col, values);
         }
     }
