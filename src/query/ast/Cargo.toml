@@ -1,6 +1,6 @@
 [package]
 name = "databend-common-ast"
-version = "0.0.1"
+version = "0.0.2"
 publish = true
 description = "SQL parser for Databend"
 authors = { workspace = true }

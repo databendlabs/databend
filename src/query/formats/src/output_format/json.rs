@@ -45,6 +45,7 @@ impl JSONOutputFormat {
             format_settings: FormatSettings {
                 timezone: options.timezone,
                 geometry_format: options.geometry_format,
+                enable_dst_hour_fix: options.enable_dst_hour_fix,
             },
         }
     }

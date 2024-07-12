@@ -31,6 +31,7 @@ fn test_geometry() {
     test_st_aswkb(file);
     test_st_asewkt(file);
     test_st_aswkt(file);
+    test_st_contains(file);
     test_st_endpoint(file);
     test_st_dimension(file);
     test_st_distance(file);
@@ -176,6 +177,29 @@ fn test_st_asgeojson(file: &mut impl Write) {
     run_ast(
         file,
         "st_asgeojson(st_geometryfromwkt('SRID=4326;LINESTRING(389866 5819003, 390000 5830000)'))",
+        &[],
+    );
+}
+
+fn test_st_contains(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('POLYGON((-1 0, 0 1, 1 0, -1 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-1 1, 0 2, 1 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CONTAINS(TO_GEOMETRY('POLYGON((-2 0, 0 2, 2 0, -2 0))'), TO_GEOMETRY('LINESTRING(-2 0, 0 0, 0 1))'))",
         &[],
     );
 }

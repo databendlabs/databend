@@ -164,6 +164,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'engine_full'                     | 'system'             | 'views_with_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'error_integration'               | 'system'             | 'tasks'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'error_message'                   | 'system'             | 'notification_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'errors'                          | 'system'             | 'queries_profiling'    | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'event_date'                      | 'system'             | 'query_log'            | 'Date'                | 'DATE'              | ''       | ''       | 'NO'     | ''       |
 | 'event_time'                      | 'system'             | 'query_log'            | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'example'                         | 'system'             | 'functions'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
