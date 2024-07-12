@@ -19,9 +19,10 @@ echo "current directory:"
 pwd
 
 echo "build share endpoint"
-git clone https://github.com/datafuselabs/share-endpoint.git
-cd share-endpoint
-cargo build --release
+ls 
+#git clone https://github.com/datafuselabs/share-endpoint.git
+#cd share-endpoint
+#cargo build --release
 
 
 echo "Start query node1 for sharding data"

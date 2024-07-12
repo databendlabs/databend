@@ -15,6 +15,13 @@ runs:
   using: "composite"
   steps:
     - uses: ./.github/actions/setup_bendsql
+
+    - name: Checkout share-endpoint
+      uses: actions/checkout@v4
+      with:
+        repository: datafuselabs/share-endpoint
+        ref: main
+
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
