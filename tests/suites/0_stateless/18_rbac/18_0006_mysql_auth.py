@@ -153,7 +153,7 @@ try:
     try:
         cursor.execute("select 123;")
     except mysql.connector.errors.DatabaseError as err:
-        print("can't execute with error: {} ".format(str(err)))
+        print("can't execute with error: {}".format(str(err)))
 
     cursor.execute("alter user user() identified by 'abc456';")
 except mysql.connector.errors.OperationalError:
