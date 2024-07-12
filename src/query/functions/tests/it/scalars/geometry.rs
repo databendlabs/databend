@@ -43,7 +43,9 @@ fn test_geometry() {
     test_st_makeline(file);
     test_st_makepoint(file);
     test_st_makepolygon(file);
+    test_st_npoints(file);
     test_st_pointn(file);
+    test_st_setsrid(file);
     test_st_srid(file);
     test_st_startpoint(file);
     test_st_x(file);
@@ -602,6 +604,53 @@ fn test_st_ymin(file: &mut impl Write) {
     run_ast(
         file,
         "st_ymin(to_geometry('MULTILINESTRING ((10 10, 20 20, 10 40), EMPTY)'))",
+        &[],
+    );
+}
+
+fn test_st_npoints(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_npoints(to_geometry('POINT(66 12)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('LINESTRING(40 60, 50 50, 60 40)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))",
+        &[],
+    );
+
+}
+
+fn test_st_setsrid(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_setsrid(to_geometry('POINT(13 51)'), 4326)",
         &[],
     );
 }
