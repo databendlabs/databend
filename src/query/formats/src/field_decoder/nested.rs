@@ -84,6 +84,7 @@ impl NestedValues {
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
         }
     }
@@ -245,7 +246,10 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().enable_dst_hour_fix,
+        )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
         column.push(days);
@@ -263,7 +267,11 @@ impl NestedValues {
         let ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
         } else {
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+            let t = buffer_readr.read_timestamp_text(
+                &self.common_settings().timezone,
+                false,
+                self.common_settings.enable_dst_hour_fix,
+            )?;
             match t {
                 DateTimeResType::Datetime(t) => {
                     if !buffer_readr.eof() {
