@@ -3,3 +3,4 @@ u1 wrong password 2 login fail
 u1 correct password locked out
 AuthenticateFailure: user u2 is disabled. Not allowed to login
 u3 is blocked by client ip
+can't execute with error: 1105 (HY000): PermissionDenied. Code: 1063, Text = Must change password before execute other operations.
