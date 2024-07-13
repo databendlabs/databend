@@ -100,6 +100,7 @@ pub enum AuthInfo {
     Password {
         hash_value: Vec<u8>,
         hash_method: PasswordHashMethod,
+        need_change: bool,
     },
     JWT,
 }
@@ -115,7 +116,11 @@ fn double_sha1(v: &[u8]) -> [u8; 20] {
 }
 
 impl AuthInfo {
-    pub fn new(auth_type: AuthType, auth_string: &Option<String>) -> Result<AuthInfo> {
+    pub fn new(
+        auth_type: AuthType,
+        auth_string: &Option<String>,
+        need_change: bool,
+    ) -> Result<AuthInfo> {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::JWT => Ok(AuthInfo::JWT),
@@ -125,6 +130,7 @@ impl AuthInfo {
                     Ok(AuthInfo::Password {
                         hash_value: method.hash(p.as_bytes()),
                         hash_method: method,
+                        need_change,
                     })
                 }
                 None => Err(ErrorCode::InvalidAuthInfo("need password".to_string())),
@@ -139,13 +145,17 @@ impl AuthInfo {
             .map(|s| AuthType::from_str(&s))
             .transpose()?
             .unwrap_or(default);
-        AuthInfo::new(auth_type, auth_string)
+        AuthInfo::new(auth_type, auth_string, false)
     }
 
-    pub fn create2(auth_type: &Option<AuthType>, auth_string: &Option<String>) -> Result<AuthInfo> {
+    pub fn create2(
+        auth_type: &Option<AuthType>,
+        auth_string: &Option<String>,
+        need_change: bool,
+    ) -> Result<AuthInfo> {
         let default = AuthType::DoubleSha1Password;
         let auth_type = auth_type.clone().unwrap_or(default);
-        AuthInfo::new(auth_type, auth_string)
+        AuthInfo::new(auth_type, auth_string, need_change)
     }
 
     pub fn alter(
@@ -159,31 +169,37 @@ impl AuthInfo {
             .map(|s| AuthType::from_str(&s))
             .transpose()?
             .unwrap_or(old_auth_type);
-        AuthInfo::new(new_auth_type, auth_string)
+        AuthInfo::new(new_auth_type, auth_string, false)
     }
 
     pub fn alter2(
         &self,
         auth_type: &Option<AuthType>,
         auth_string: &Option<String>,
+        need_change: bool,
     ) -> Result<AuthInfo> {
         let old_auth_type = self.get_type();
         let new_auth_type = auth_type.clone().unwrap_or(old_auth_type);
 
-        AuthInfo::new(new_auth_type, auth_string)
+        AuthInfo::new(new_auth_type, auth_string, need_change)
     }
 
     pub fn get_type(&self) -> AuthType {
         match self {
             AuthInfo::None => AuthType::NoPassword,
             AuthInfo::JWT => AuthType::JWT,
-            AuthInfo::Password {
-                hash_value: _,
-                hash_method: t,
-            } => match t {
+            AuthInfo::Password { hash_method: t, .. } => match t {
                 PasswordHashMethod::Sha256 => AuthType::Sha256Password,
                 PasswordHashMethod::DoubleSha1 => AuthType::DoubleSha1Password,
             },
+        }
+    }
+
+    pub fn get_need_change(&self) -> bool {
+        match self {
+            AuthInfo::None => false,
+            AuthInfo::JWT => false,
+            AuthInfo::Password { need_change, .. } => *need_change,
         }
     }
 
@@ -192,6 +208,7 @@ impl AuthInfo {
             AuthInfo::Password {
                 hash_value: p,
                 hash_method: t,
+                ..
             } => t.to_string(p),
             AuthInfo::None | AuthInfo::JWT => "".to_string(),
         }
@@ -202,6 +219,7 @@ impl AuthInfo {
             AuthInfo::Password {
                 hash_value: p,
                 hash_method: _,
+                ..
             } => Some(p.to_vec()),
             _ => None,
         }
@@ -212,6 +230,7 @@ impl AuthInfo {
             AuthInfo::Password {
                 hash_value: _,
                 hash_method: t,
+                ..
             } => Some(*t),
             _ => None,
         }
@@ -240,6 +259,7 @@ impl AuthInfo {
             AuthInfo::Password {
                 hash_value: p,
                 hash_method: t,
+                ..
             } => match t {
                 PasswordHashMethod::DoubleSha1 => {
                     let password_sha1 = AuthInfo::restore_sha1_mysql(salt, password_input, p)?;

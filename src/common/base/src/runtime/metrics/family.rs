@@ -107,6 +107,10 @@ impl<S: FamilyLabels, M: FamilyMetric> Family<S, M> {
         }
     }
 
+    pub fn get(&self, label_set: &S) -> Option<Arc<M>> {
+        self.metrics.read().get(label_set).cloned()
+    }
+
     pub fn remove(&self, label_set: &S) -> bool {
         ScopedRegistry::op(self.index, |m: &Self| {
             m.metrics.write().remove(label_set);

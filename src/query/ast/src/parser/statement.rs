@@ -3938,6 +3938,12 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetPasswordPolicy,
     );
+    let must_change_password = map(
+        rule! {
+            MUST_CHANGE_PASSWORD ~ ^"=" ~ ^#literal_bool
+        },
+        |(_, _, val)| UserOptionItem::MustChangePassword(val),
+    );
 
     rule!(
         #tenant_setting
@@ -3948,6 +3954,7 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #set_password_policy
         | #unset_password_policy
         | #set_disabled_option
+        | #must_change_password
     )(i)
 }
 

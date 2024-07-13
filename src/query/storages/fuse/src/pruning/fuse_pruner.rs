@@ -27,6 +27,9 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache_manager::BlockMetaCache;
+use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::InternalColumnPruner;
@@ -40,7 +43,9 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use log::info;
 use log::warn;
 use opendal::Operator;
 
@@ -188,6 +193,7 @@ pub struct FusePruner {
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
     pub deleted_segments: Vec<DeletedSegmentInfo>,
+    pub block_meta_cache: Option<BlockMetaCache>,
 }
 
 impl FusePruner {
@@ -236,6 +242,8 @@ impl FusePruner {
             v
         };
 
+        info!("max concurrency of pruning is set to {}", max_concurrency);
+
         let pruning_ctx = PruningContext::try_create(
             ctx,
             dal,
@@ -255,6 +263,7 @@ impl FusePruner {
             pruning_ctx,
             inverse_range_index: None,
             deleted_segments: vec![],
+            block_meta_cache: CacheManager::instance().get_block_meta_cache(),
         })
     }
 
@@ -320,45 +329,38 @@ impl FusePruner {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
                     if delete_pruning {
-                        // inverse prun
                         for (segment_location, compact_segment_info) in &pruned_segments {
-                            // for delete_prune
-                            match inverse_range_index.as_ref() {
-                                Some(range_index) => {
-                                    if !range_index
-                                        .should_keep(&compact_segment_info.summary.col_stats, None)
-                                    {
-                                        deleted_segments.push(DeletedSegmentInfo {
-                                            index: segment_location.segment_idx,
-                                            summary: compact_segment_info.summary.clone(),
-                                        })
-                                    } else {
-                                        res.extend(
-                                            block_pruner
-                                                .pruning(
-                                                    segment_location.clone(),
-                                                    compact_segment_info.block_metas()?,
-                                                )
-                                                .await?,
-                                        );
-                                    }
-                                }
-                                None => {
-                                    res.extend(
-                                        block_pruner
-                                            .pruning(
-                                                segment_location.clone(),
-                                                compact_segment_info.block_metas()?,
-                                            )
-                                            .await?,
-                                    );
-                                }
+                            if let Some(range_index) = &inverse_range_index {
+                                if !range_index
+                                    .should_keep(&compact_segment_info.summary.col_stats, None)
+                                {
+                                    deleted_segments.push(DeletedSegmentInfo {
+                                        index: segment_location.segment_idx,
+                                        summary: compact_segment_info.summary.clone(),
+                                    });
+                                    continue;
+                                };
                             }
+                            // do not populate the block meta cache for deletion operations,
+                            // since block metas touched by deletion are not likely to
+                            // be accessed soon.
+                            let populate_block_meta_cache = false;
+                            let block_metas = Self::extract_block_metas(
+                                &segment_location.location.0,
+                                compact_segment_info,
+                                populate_block_meta_cache,
+                            )?;
+                            res.extend(
+                                block_pruner
+                                    .pruning(segment_location.clone(), block_metas)
+                                    .await?,
+                            );
                         }
                     } else {
                         for (location, info) in pruned_segments {
-                            let block_metas = info.block_metas()?;
-                            res.extend(block_pruner.pruning(location, block_metas).await?);
+                            let block_metas =
+                                Self::extract_block_metas(&location.location.0, &info, true)?;
+                            res.extend(block_pruner.pruning(location.clone(), block_metas).await?);
                         }
                     }
                     Result::<_, ErrorCode>::Ok((res, deleted_segments))
@@ -387,6 +389,26 @@ impl FusePruner {
                     self.topn_pruning(metas)
                 }
             }
+        }
+    }
+
+    fn extract_block_metas(
+        segment_path: &str,
+        segment: &CompactSegmentInfo,
+        populate_cache: bool,
+    ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
+        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
+            if let Some(metas) = cache.get(segment_path) {
+                Ok(metas)
+            } else {
+                let block_metas = Arc::new(segment.block_metas()?);
+                if populate_cache {
+                    cache.put(segment_path.to_string(), block_metas.clone());
+                }
+                Ok(block_metas)
+            }
+        } else {
+            Ok(Arc::new(segment.block_metas()?))
         }
     }
 
@@ -419,7 +441,7 @@ impl FusePruner {
                                 location: ("".to_string(), 0),
                                 snapshot_loc: None,
                             },
-                            batch,
+                            Arc::new(batch),
                         )
                         .await?;
 

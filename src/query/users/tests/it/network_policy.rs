@@ -58,6 +58,7 @@ async fn test_network_policy() -> Result<()> {
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
         hash_method: PasswordHashMethod::Sha256,
+        need_change: false,
     };
 
     let mut user_info = UserInfo::new(username, hostname, auth_info.clone());
