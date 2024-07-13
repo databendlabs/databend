@@ -503,7 +503,7 @@ impl Binder {
                     .map(|column_binding| {
                         Ok(TableField::new(
                             &column_binding.column_name,
-                            infer_schema_type(&column_binding.data_type.wrap_nullable())?,
+                            infer_schema_type(&column_binding.data_type)?,
                         ))
                     })
                     .collect::<Result<Vec<_>>>()?;
