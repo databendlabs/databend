@@ -37,7 +37,7 @@ pub enum PhysicalJoinType {
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.left_conditions.is_empty()
+    if !join.equi_conditions.is_empty()
         && !matches!(
             join.join_type,
             JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof

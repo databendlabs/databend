@@ -249,21 +249,21 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        let mut partition_items: Vec<ScalarExpr> = Vec::with_capacity(join.right_conditions.len());
+        let mut partition_items: Vec<ScalarExpr> = Vec::with_capacity(join.equi_conditions.len());
         let mut other_args: Vec<ScalarExpr> = Vec::with_capacity(2);
 
-        for (right_exp, left_exp) in join
-            .right_conditions
-            .iter()
-            .zip(join.left_conditions.iter())
-        {
-            if matches!(right_exp, ScalarExpr::BoundColumnRef(_))
-                && matches!(left_exp, ScalarExpr::BoundColumnRef(_))
+        // for (right_exp, left_exp) in join
+        //     .right_conditions
+        //     .iter()
+        //     .zip(join.left_conditions.iter())
+        for condition in join.equi_conditions.iter() { 
+            if matches!(condition.right, ScalarExpr::BoundColumnRef(_))
+                && matches!(condition.left, ScalarExpr::BoundColumnRef(_))
             {
-                partition_items.push(right_exp.clone());
+                partition_items.push(condition.right.clone());
                 other_args.clear();
-                other_args.push(left_exp.clone());
-                other_args.push(right_exp.clone());
+                other_args.push(condition.left.clone());
+                other_args.push(condition.right.clone());
                 other_conditions.push(
                     FunctionCall {
                         span: range_conditions[0].span(),
