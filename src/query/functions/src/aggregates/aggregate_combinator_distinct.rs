@@ -83,24 +83,12 @@ where State: DistinctStateFunc
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<State>();
-        match columns {
-            InputColumns::Slice(s) => state.batch_add(s, validity, input_rows),
-            _ => {
-                let columns = columns.iter().cloned().collect::<Vec<_>>();
-                state.batch_add(columns.as_slice(), validity, input_rows)
-            }
-        }
+        state.batch_add(columns, validity, input_rows)
     }
 
     fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
-        match columns {
-            InputColumns::Slice(s) => state.add(s, row),
-            _ => {
-                let columns = columns.iter().cloned().collect::<Vec<_>>();
-                state.add(columns.as_slice(), row)
-            }
-        }
+        state.add(columns, row)
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {

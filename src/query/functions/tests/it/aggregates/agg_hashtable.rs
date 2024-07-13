@@ -88,6 +88,7 @@ fn test_agg_hashtable() {
         ];
 
         let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
+        let params = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
         let mut hashtable = AggregateHashTable::new(
@@ -99,7 +100,13 @@ fn test_agg_hashtable() {
 
         let mut state = ProbeState::default();
         let _ = hashtable
-            .add_groups(&mut state, &group_columns, &params, &[], n)
+            .add_groups(
+                &mut state,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
             .unwrap();
 
         let mut hashtable2 = AggregateHashTable::new(
@@ -111,7 +118,13 @@ fn test_agg_hashtable() {
 
         let mut state2 = ProbeState::default();
         let _ = hashtable2
-            .add_groups(&mut state2, &group_columns, &params, &[], n)
+            .add_groups(
+                &mut state2,
+                (&group_columns).into(),
+                &params,
+                (&[]).into(),
+                n,
+            )
             .unwrap();
 
         let mut flush_state = PayloadFlushState::default();
