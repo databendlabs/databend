@@ -251,12 +251,7 @@ impl PhysicalPlanBuilder {
 
         let mut partition_items: Vec<ScalarExpr> = Vec::with_capacity(join.equi_conditions.len());
         let mut other_args: Vec<ScalarExpr> = Vec::with_capacity(2);
-
-        // for (right_exp, left_exp) in join
-        //     .right_conditions
-        //     .iter()
-        //     .zip(join.left_conditions.iter())
-        for condition in join.equi_conditions.iter() { 
+        for condition in join.equi_conditions.iter() {
             if matches!(condition.right, ScalarExpr::BoundColumnRef(_))
                 && matches!(condition.left, ScalarExpr::BoundColumnRef(_))
             {
