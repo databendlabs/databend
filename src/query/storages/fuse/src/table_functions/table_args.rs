@@ -16,6 +16,7 @@ use std::cmp::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
 use crate::table_functions::TableArgs;
@@ -29,6 +30,10 @@ pub fn string_value(value: &Scalar) -> Result<String> {
 
 pub fn string_literal(val: &str) -> Scalar {
     Scalar::String(val.to_string())
+}
+
+pub fn u64_literal(val: u64) -> Scalar {
+    Scalar::Number(NumberScalar::UInt64(val))
 }
 
 pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {

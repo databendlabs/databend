@@ -79,6 +79,9 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
     "indexes",
 ];
 
+// table functions that need `Super` privilege
+const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["set_cache_capacity"];
+
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
@@ -261,7 +264,7 @@ impl PrivilegeAccess {
         match self.ctx.get_catalog(catalog_name).await {
             Ok(catalog) => {
                 if catalog.exists_table_function(table_name) {
-                    return Ok(());
+                    return self.validate_table_function_access(table_name).await;
                 }
                 // to keep compatibility with the legacy privileges which granted by table name,
                 // we'd both check the privileges by name and id.
@@ -518,6 +521,34 @@ impl PrivilegeAccess {
             .await?;
         }
         Ok(())
+    }
+
+    async fn validate_table_function_access(&self, table_func_name: &str) -> Result<()> {
+        if SYSTEM_TABLE_FUNCTIONS.iter().any(|x| x == &table_func_name) {
+            // need Super privilege to invoke system table functions
+            let privilege = UserPrivilegeType::Super;
+            let session = self.ctx.get_current_session();
+            let current_user = self.ctx.get_current_user()?;
+            session
+                .validate_privilege(&GrantObject::Global, privilege, true)
+                .await.map_err(|err | {
+
+                if err.code() != ErrorCode::PERMISSION_DENIED {
+                    err
+                } else {
+                    let role_name = session.get_current_role().map(|r|r.name).unwrap_or_default();
+                    ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege [{:?}] is required to invoke table function [{}] for user {} with roles [{}]",
+                        privilege,
+                        table_func_name,
+                        &current_user.identity().display(),
+                        role_name,
+                    ))
+                }
+            })
+        } else {
+            Ok(())
+        }
     }
 
     async fn convert_to_id(

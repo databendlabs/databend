@@ -22,6 +22,7 @@ pub use cache::CacheAccessor;
 pub use cache::CacheAccessorExt;
 pub use cache::Named;
 pub use cache::NamedCache;
+pub use cache::Unit;
 pub use databend_common_cache::CountableMeter;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
