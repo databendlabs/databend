@@ -222,15 +222,15 @@ fn join_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>
     op: &Join,
 ) -> FormatTreeNode {
     let build_keys = op
-        .right_conditions
+        .equi_conditions
         .iter()
-        .map(format_scalar)
+        .map(|condition| format_scalar(&condition.right))
         .collect::<Vec<String>>()
         .join(", ");
     let probe_keys = op
-        .left_conditions
+        .equi_conditions
         .iter()
-        .map(format_scalar)
+        .map(|condition| format_scalar(&condition.left))
         .collect::<Vec<String>>()
         .join(", ");
     let join_filters = op

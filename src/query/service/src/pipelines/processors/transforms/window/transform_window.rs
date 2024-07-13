@@ -395,6 +395,10 @@ impl<T: Number> TransformWindow<T> {
         if lhs == rhs {
             return true;
         }
+        if lhs.block < self.first_block {
+            return false;
+        }
+
         if self.frame_unit.is_rows() && for_computing_bound {
             // For ROWS frame, the row's peer is only the row itself.
             return false;
@@ -496,7 +500,7 @@ impl<T: Number> TransformWindow<T> {
             };
             let cols = agg.arg_columns(data);
             for row in start_row..end_row {
-                agg.accumulate_row(&cols, row)?;
+                agg.accumulate_row(cols, row)?;
             }
         }
 

@@ -129,6 +129,21 @@ impl UserInfo {
         }
     }
 
+    pub fn update_auth_need_change_password(&mut self) {
+        if let AuthInfo::Password {
+            hash_value,
+            hash_method,
+            ..
+        } = self.auth_info.clone()
+        {
+            self.auth_info = AuthInfo::Password {
+                hash_value,
+                hash_method,
+                need_change: true,
+            };
+        }
+    }
+
     pub fn update_user_time(&mut self) {
         self.update_on = Utc::now();
     }
@@ -173,6 +188,7 @@ pub struct UserOption {
     network_policy: Option<String>,
     password_policy: Option<String>,
     disabled: Option<bool>,
+    must_change_password: Option<bool>,
 }
 
 impl UserOption {
@@ -183,6 +199,7 @@ impl UserOption {
             network_policy: None,
             password_policy: None,
             disabled: None,
+            must_change_password: None,
         }
     }
 
@@ -215,6 +232,11 @@ impl UserOption {
         self
     }
 
+    pub fn with_must_change_password(mut self, must_change_password: Option<bool>) -> Self {
+        self.must_change_password = must_change_password;
+        self
+    }
+
     pub fn with_set_flag(mut self, flag: UserOptionFlag) -> Self {
         self.flags.insert(flag);
         self
@@ -240,6 +262,10 @@ impl UserOption {
         self.disabled.as_ref()
     }
 
+    pub fn must_change_password(&self) -> Option<&bool> {
+        self.must_change_password.as_ref()
+    }
+
     pub fn set_default_role(&mut self, default_role: Option<String>) {
         self.default_role = default_role;
     }
@@ -254,6 +280,10 @@ impl UserOption {
 
     pub fn set_disabled(&mut self, disabled: Option<bool>) {
         self.disabled = disabled;
+    }
+
+    pub fn set_must_change_password(&mut self, must_change_password: Option<bool>) {
+        self.must_change_password = must_change_password;
     }
 
     pub fn set_all_flag(&mut self) {
@@ -295,6 +325,7 @@ impl UserOption {
             UserOptionItem::SetPasswordPolicy(v) => self.password_policy = Some(v.clone()),
             UserOptionItem::UnsetPasswordPolicy => self.password_policy = None,
             UserOptionItem::Disabled(v) => self.disabled = Some(*v),
+            UserOptionItem::MustChangePassword(v) => self.must_change_password = Some(*v),
         }
     }
 }

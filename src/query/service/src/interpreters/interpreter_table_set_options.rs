@@ -22,6 +22,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_share::update_share_table_info;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -123,9 +124,19 @@ impl Interpreter for SetOptionsInterpreter {
             options: options_map,
         };
 
-        catalog
+        let resp = catalog
             .upsert_table_option(&self.ctx.get_tenant(), database, req)
             .await?;
+        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
+            update_share_table_info(
+                self.ctx.get_tenant().tenant_name(),
+                self.ctx.get_application_level_data_operator()?.operator(),
+                &share_name_vec,
+                db_id,
+                &share_table_info,
+            )
+            .await?;
+        }
         Ok(PipelineBuildResult::create())
     }
 }

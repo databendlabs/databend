@@ -129,6 +129,7 @@ fn test_statement() {
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
+        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
         r#"create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );"#,
         r#"create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');"#,
@@ -149,7 +150,7 @@ fn test_statement() {
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
-        r#"create database t FROM SHARE a.s;"#,
+        r#"create database t FROM SHARE a.s using b;"#,
         r#"CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';"#,
         r#"create or replace database a;"#,
         r#"drop database ctl.t;"#,
@@ -543,8 +544,8 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
-        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
-        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE OR REPLACE SHARE ENDPOINT t URL='http://127.0.0.1' CREDENTIAL=(TYPE='HMAC' KEY='hello') ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -768,6 +769,9 @@ fn test_statement() {
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE file format my_orc type = orc"#,
+        r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
+        r#"CREATE file format my_orc type = orc missing_field_as='field_default'"#,
         r#"CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');"#,
         r#"
             create or replace function addone(int)
@@ -844,7 +848,6 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
-        r#"create table a (b tuple("c-1" int, "c-2" uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
@@ -935,7 +938,6 @@ fn test_raw_insert_stmt() {
     let cases = &[
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into t (c1, c2) values (1, 2);"#,
-        r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
     ];
 

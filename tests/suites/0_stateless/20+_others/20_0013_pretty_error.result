@@ -9,7 +9,7 @@ Error: APIError: ResponseError with 1025: error:
   --> SQL:1:15
   |
 1 | select * from t
-  |               ^ Unknown table `default`.`t` in catalog 'default'
+  |               ^ Unknown table "default"."default".t .
 
 
 Error: APIError: ResponseError with 1008: error: 
@@ -30,12 +30,12 @@ has tried possible overloads:
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
-Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`
+Error: APIError: ResponseError with 1006: invalid digit found in string while evaluating function `to_uint64('a')` in expr `to_uint64('a')`, during run expr: `1 + to_uint64('a')`
 Error: APIError: ResponseError with 1025: error: 
   --> SQL:1:20
   |
 1 | select t1.a:z from t
-  |                    ^ Unknown table `default`.`t` in catalog 'default'
+  |                    ^ Unknown table "default"."default".t .
 
 
 Error: APIError: ResponseError with 1065: error: 

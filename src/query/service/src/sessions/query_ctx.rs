@@ -636,9 +636,11 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
+            enable_dst_hour_fix,
         };
         Ok(format)
     }
@@ -668,6 +670,7 @@ impl TableContext for QueryContext {
         let disable_variant_check = settings.get_disable_variant_check()?;
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
+        let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -688,6 +691,7 @@ impl TableContext for QueryContext {
             external_server_request_batch_rows,
             geometry_output_format,
             parse_datetime_ignore_remainder,
+            enable_dst_hour_fix,
         })
     }
 
@@ -1013,47 +1017,16 @@ impl TableContext for QueryContext {
         }
     }
 
-    fn add_query_profiles(&self, profiles: &[PlanProfile]) {
-        let mut merged_profiles = self.shared.query_profiles.write();
-
-        for query_profile in profiles {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
-        }
-    }
-
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        self.shared
-            .query_profiles
-            .read()
-            .values()
-            .cloned()
-            .collect::<Vec<_>>()
+        self.shared.get_query_profiles()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<Arc<Profile>>> {
-        let mut queries_profile = SessionManager::instance().get_queries_profile();
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles)
+    }
 
-        let exchange_profiles = DataExchangeManager::instance().get_queries_profile();
-
-        for (query_id, profiles) in exchange_profiles {
-            match queries_profile.entry(query_id) {
-                Entry::Vacant(v) => {
-                    v.insert(profiles);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().extend(profiles);
-                }
-            }
-        }
-
-        queries_profile
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        SessionManager::instance().get_queries_profiles()
     }
 
     fn set_merge_into_join(&self, join: MergeIntoJoin) {
@@ -1153,16 +1126,12 @@ impl TableContext for QueryContext {
         sp: &StorageParams,
     ) -> Result<(TableSchema, String)> {
         match kind {
-            "iceberg" => {
-                let dop = DataOperator::try_new(sp)?;
-                let table = IcebergTable::load_iceberg_table(dop).await?;
-                Ok((IcebergTable::get_schema(&table).await?, "".to_string()))
-            }
             "delta" => {
                 let table = DeltaTable::load(sp).await?;
                 DeltaTable::get_meta(&table).await
             }
-            _ => Err(ErrorCode::Internal("unknown datalake type {}")),
+            // TODO: iceberg doesn't support load from storage directly.
+            _ => Err(ErrorCode::Internal("unsupported datalake type {}")),
         }
     }
 

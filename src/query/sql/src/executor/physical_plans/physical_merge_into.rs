@@ -15,21 +15,24 @@
 use std::collections::HashMap;
 use std::u64::MAX;
 
+use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::ROW_ID_COL_NAME;
-use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use itertools::Itertools;
 
 use crate::binder::MergeIntoType;
@@ -39,7 +42,6 @@ use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MergeIntoManipulate;
 use crate::executor::physical_plans::MergeIntoOrganize;
-use crate::executor::physical_plans::MergeIntoSerialize;
 use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::physical_plans::RowFetch;
@@ -47,6 +49,8 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans;
+use crate::plans::BoundColumnRef;
+use crate::BindContext;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -64,13 +68,13 @@ pub struct MergeInto {
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
+    pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub merge_into_op: MergeIntoOp,
+    pub merge_type: MergeIntoType,
+    pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
-    pub change_join_order: bool,
     pub target_build_optimization: bool,
-    pub enable_right_broadcast: bool,
 }
 
 impl PhysicalPlanBuilder {
@@ -113,16 +117,32 @@ impl PhysicalPlanBuilder {
             field_index_map,
             merge_type,
             distributed,
-            change_join_order,
             row_id_index,
-            source_row_id_index,
+            change_join_order,
             can_try_update_column_only,
-            enable_right_broadcast,
             lazy_columns,
             ..
         } = merge_into;
 
-        let mut columns_set = if let Some(lazy_columns) = lazy_columns {
+        let settings = self.ctx.get_settings();
+        let mut lazy_columns = if matches!(
+            merge_type,
+            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
+        ) && settings.get_enable_merge_into_row_fetch()?
+        {
+            let mut lazy_columns = lazy_columns.clone();
+            lazy_columns.remove(row_id_index);
+            self.metadata.write().add_lazy_columns(lazy_columns.clone());
+            Some(lazy_columns)
+        } else if matches!(merge_type, MergeIntoType::InsertOnly) {
+            let mut lazy_columns = lazy_columns.clone();
+            lazy_columns.insert(*row_id_index);
+            Some(lazy_columns)
+        } else {
+            None
+        };
+
+        let mut columns_set = if let Some(lazy_columns) = &lazy_columns {
             columns_set
                 .difference(lazy_columns)
                 .cloned()
@@ -130,6 +150,10 @@ impl PhysicalPlanBuilder {
         } else {
             *columns_set.clone()
         };
+
+        if matches!(merge_type, MergeIntoType::InsertOnly) {
+            lazy_columns = None;
+        }
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
@@ -161,6 +185,70 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        let source_is_broadcast =
+            matches!(merge_type, MergeIntoType::MatchedOnly) && !change_join_order;
+        if *distributed && !is_insert_only && !source_is_broadcast {
+            let mut row_id_column = None;
+            for column_binding in bind_context.columns.iter() {
+                if BindContext::match_column_binding(
+                    Some(database.as_str()),
+                    Some(table_name.as_str()),
+                    ROW_ID_COL_NAME,
+                    column_binding,
+                ) {
+                    row_id_column = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: column_binding.clone(),
+                    }));
+                    break;
+                }
+            }
+            let row_id_column = row_id_column.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+            let row_id_expr = row_id_column
+                .type_check(join_output_schema.as_ref())?
+                .project_column_ref(|index| {
+                    join_output_schema.index_of(&index.to_string()).unwrap()
+                });
+
+            let expr = check_function(
+                None,
+                "bit_and",
+                &[],
+                &[
+                    check_function(
+                        None,
+                        "bit_shift_right",
+                        &[],
+                        &[row_id_expr, Expr::Constant {
+                            span: None,
+                            scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
+                            data_type: DataType::Number(NumberDataType::UInt64),
+                        }],
+                        &BUILTIN_FUNCTIONS,
+                    )?,
+                    Expr::Constant {
+                        span: None,
+                        scalar: Scalar::Number((((1 << NUM_BLOCK_ID_BITS) - 1) as u64).into()),
+                        data_type: DataType::Number(NumberDataType::UInt64),
+                    },
+                ],
+                &BUILTIN_FUNCTIONS,
+            )?;
+            // For distributed merge into, shuffle by block_id(computed by row_id)
+            // to avoid many nodes update the same physical block simultaneously,
+            // update data that belong to one physical block will shuffle to one node,
+            // insert data just keep in local node.
+            plan = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(plan),
+                kind: FragmentKind::Normal,
+                keys: vec![expr.as_remote_expr()],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            });
+        }
+
         if let Some(merge_into_split_idx) = merge_into_split_idx {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
@@ -169,9 +257,7 @@ impl PhysicalPlanBuilder {
             }));
         }
 
-        if let Some(lazy_columns) = lazy_columns
-            && !lazy_columns.is_empty()
-        {
+        if let Some(lazy_columns) = lazy_columns {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
@@ -226,28 +312,6 @@ impl PhysicalPlanBuilder {
         }
 
         let output_schema = plan.output_schema()?;
-
-        let mut source_row_id_idx = None;
-        let mut source_row_number_idx = None;
-        if *enable_right_broadcast {
-            if let Some(source_row_id_index) = source_row_id_index {
-                for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-                    if *data_field.name() == source_row_id_index.to_string() {
-                        source_row_id_idx = Some(idx);
-                        break;
-                    }
-                }
-            } else {
-                source_row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
-            }
-        };
-
-        if *enable_right_broadcast && source_row_number_idx.is_none() && source_row_id_idx.is_none()
-        {
-            return Err(ErrorCode::InvalidRowIdIndex(
-                "can't get internal row_number_idx or row_id_idx when running merge into",
-            ));
-        }
 
         let table = self.ctx.get_table(catalog, database, table_name).await?;
         let table_info = table.get_table_info();
@@ -369,26 +433,14 @@ impl PhysicalPlanBuilder {
             field_index_of_input_schema: field_index_of_input_schema.clone(),
             merge_type: merge_type.clone(),
             row_id_idx: row_id_offset,
-            source_row_id_idx,
-            source_row_number_idx,
-            enable_right_broadcast: *enable_right_broadcast,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: join_output_schema.clone(),
         }));
 
-        let merge_into_op = match (merge_type, distributed) {
-            (MergeIntoType::FullOperation, true) => MergeIntoOp::DistributedFullOperation,
-            (MergeIntoType::FullOperation, false) => MergeIntoOp::StandaloneFullOperation,
-            (MergeIntoType::MatchedOnly, true) => MergeIntoOp::DistributedMatchedOnly,
-            (MergeIntoType::MatchedOnly, false) => MergeIntoOp::StandaloneMatchedOnly,
-            (MergeIntoType::InsertOnly, true) => MergeIntoOp::DistributedInsertOnly,
-            (MergeIntoType::InsertOnly, false) => MergeIntoOp::StandaloneInsertOnly,
-        };
-
         plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
-            merge_into_op: merge_into_op.clone(),
+            merge_type: merge_type.clone(),
         }));
 
         let segments: Vec<_> = base_snapshot
@@ -398,79 +450,31 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
-        plan = PhysicalPlan::MergeIntoSerialize(Box::new(MergeIntoSerialize {
-            plan_id: 0,
-            input: Box::new(plan),
+        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(plan.clone()),
             table_info: table_info.clone(),
-            unmatched: unmatched.clone(),
+            unmatched,
             segments: segments.clone(),
             distributed: *distributed,
-            change_join_order: *change_join_order,
-            merge_into_op: merge_into_op.clone(),
+            output_schema: DataSchemaRef::default(),
+            merge_type: merge_type.clone(),
+            target_table_index: *target_table_index,
             need_match: !is_insert_only,
-            enable_right_broadcast: *enable_right_broadcast,
+            target_build_optimization: false,
+            plan_id: u32::MAX,
         }));
 
         let commit_input = if !distributed {
-            PhysicalPlan::MergeInto(Box::new(MergeInto {
-                input: Box::new(plan.clone()),
-                table_info: table_info.clone(),
-                unmatched,
-                distributed: false,
-                output_schema: DataSchemaRef::default(),
-                merge_into_op: merge_into_op.clone(),
-                need_match: !is_insert_only,
-                change_join_order: *change_join_order,
-                target_build_optimization: false,
-                plan_id: u32::MAX,
-                enable_right_broadcast: *enable_right_broadcast,
-            }))
+            merge_into
         } else {
-            let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
-                input: Box::new(plan.clone()),
-                table_info: table_info.clone(),
-                unmatched: unmatched.clone(),
-                distributed: true,
-                output_schema: if let Some(idx) = source_row_number_idx {
-                    DataSchemaRef::new(DataSchema::new(vec![output_schema.fields[idx].clone()]))
-                } else {
-                    DataSchemaRef::new(DataSchema::new(vec![DataField::new(
-                        ROW_ID_COL_NAME,
-                        DataType::Number(NumberDataType::UInt64),
-                    )]))
-                },
-                merge_into_op: merge_into_op.clone(),
-                need_match: !is_insert_only,
-                change_join_order: *change_join_order,
-                target_build_optimization: false, // we don't support for distributed mode for now.
-                plan_id: u32::MAX,
-                enable_right_broadcast: *enable_right_broadcast,
-            }));
-            // if change_join_order = true, it means the target is build side,
-            // in this way, we will do matched operation and not matched operation
-            // locally in every node, and the main node just receive row ids to apply.
-            let segments = if *change_join_order {
-                segments.clone()
-            } else {
-                vec![]
-            };
-            PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
-                input: Box::new(PhysicalPlan::Exchange(Exchange {
-                    plan_id: 0,
-                    input: Box::new(merge_append),
-                    kind: FragmentKind::Merge,
-                    keys: vec![],
-                    allow_adjust_parallelism: true,
-                    ignore_exchange: false,
-                })),
-                table_info: table_info.clone(),
-                unmatched: unmatched.clone(),
-                input_schema: join_output_schema.clone(),
-                merge_type: merge_type.clone(),
-                change_join_order: *change_join_order,
-                segments,
-                plan_id: u32::MAX,
-            }))
+            PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(merge_into),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            })
         };
 
         // build mutation_aggregate
@@ -482,7 +486,7 @@ impl PhysicalPlanBuilder {
             mutation_kind: MutationKind::Update,
             update_stream_meta: merge_into_build_info.update_stream_meta,
             merge_meta: false,
-            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
         }));
         physical_plan.adjust_plan_id(&mut 0);
@@ -503,64 +507,5 @@ impl PhysicalPlanBuilder {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoAppendNotMatched {
-    pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
-    pub table_info: TableInfo,
-    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
-    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
-    pub input_schema: DataSchemaRef,
-    pub merge_type: MergeIntoType,
-    pub change_join_order: bool,
-    pub segments: Vec<(usize, Location)>,
-}
-
-#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum MergeIntoOp {
-    StandaloneMatchedOnly,
-    StandaloneFullOperation,
-    StandaloneInsertOnly,
-    DistributedMatchedOnly,
-    DistributedFullOperation,
-    DistributedInsertOnly,
-}
-
-impl MergeIntoOp {
-    pub fn get_serialize_and_row_number_len(
-        &self,
-        output_len: usize,
-        enable_right_broadcast: bool,
-    ) -> (usize, usize) {
-        match self {
-            MergeIntoOp::StandaloneFullOperation
-            | MergeIntoOp::StandaloneMatchedOnly
-            | MergeIntoOp::DistributedMatchedOnly => (output_len - 1, 0), /* remove first row_id port */
-            MergeIntoOp::StandaloneInsertOnly => (output_len, 0),
-            MergeIntoOp::DistributedFullOperation => {
-                if enable_right_broadcast {
-                    // remove first row_id port and last row_number port
-                    (output_len - 2, 1)
-                } else {
-                    // remove first row_id port
-                    (output_len - 1, 0)
-                }
-            }
-            MergeIntoOp::DistributedInsertOnly => {
-                // only one row_number port/unmatched port, refer to `builder_merge_into_organize`
-                assert_eq!(output_len, 1);
-                if enable_right_broadcast {
-                    // only one row_number port
-                    // use (0, 0) instead of (0, 1) to avoid appending many dummy items
-                    (0, 0)
-                } else {
-                    // only one unmatched port
-                    (1, 0)
-                }
-            }
-        }
     }
 }

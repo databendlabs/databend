@@ -18,9 +18,9 @@ docs = ["pdoc"]
 test = ["pytest", "pandas", "polars"]
 
 [project.urls]
-Documentation = "https://databend.rs"
-Homepage =  "https://databend.rs"
-"Home-page" =  "https://databend.rs"
+Documentation = "https://databend.com"
+Homepage =  "https://databend.com"
+"Home-page" =  "https://databend.com"
 Repository = "https://github.com/datafuselabs/databend"
 
 [tool.maturin]

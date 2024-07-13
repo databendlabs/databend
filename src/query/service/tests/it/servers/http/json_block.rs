@@ -24,16 +24,8 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
-use databend_query::servers::http::v1::json_block::JsonBlock;
+use databend_query::servers::http::v1::string_block::StringBlock;
 use pretty_assertions::assert_eq;
-use serde::Serialize;
-use serde_json::to_value;
-use serde_json::Value as JsonValue;
-
-fn val<T>(v: T) -> JsonValue
-where T: Serialize {
-    to_value(v).unwrap()
-}
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
     let mut columns = vec![
@@ -59,12 +51,15 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     let block = DataBlock::new_from_columns(columns);
 
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
-    let expect = vec![
-        vec![val("1"), val("a"), val("1"), val("1.1"), val("1970-01-02")],
-        vec![val("2"), val("b"), val("1"), val("2.2"), val("1970-01-03")],
-        vec![val("3"), val("c"), val("0"), val("3.3"), val("1970-01-04")],
-    ];
+    let json_block = StringBlock::new(&block, &format)?;
+    let expect = [
+        vec!["1", "a", "1", "1.1", "1970-01-02"],
+        vec!["2", "b", "1", "2.2", "1970-01-03"],
+        vec!["3", "c", "0", "3.3", "1970-01-04"],
+    ]
+    .iter()
+    .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<_>>())
+    .collect::<Vec<_>>();
 
     assert_eq!(json_block.data().clone(), expect);
     Ok(())
@@ -84,7 +79,7 @@ fn test_data_block_not_nullable() -> Result<()> {
 fn test_empty_block() -> Result<()> {
     let block = DataBlock::empty();
     let format = FormatSettings::default();
-    let json_block = JsonBlock::new(&block, &format)?;
+    let json_block = StringBlock::new(&block, &format)?;
     assert!(json_block.is_empty());
     Ok(())
 }

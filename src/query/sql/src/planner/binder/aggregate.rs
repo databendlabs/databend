@@ -72,7 +72,7 @@ use crate::MetadataRef;
 ///
 /// In Databend, we do not really rewrite the plan to a `UNION` plan.
 /// We will add a new virtual column `_grouping_id` to the group by items,
-/// where `_grouping_id` is the result value of function [grouping](https://databend.rs/doc/sql-functions/other-functions/grouping).
+/// where `_grouping_id` is the result value of function [grouping](https://docs.databend.com/sql/sql-functions/other-functions/grouping).
 ///
 /// For example, we will rewrite the SQL above to:
 ///

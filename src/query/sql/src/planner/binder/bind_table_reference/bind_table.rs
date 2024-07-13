@@ -44,47 +44,41 @@ impl Binder {
         temporal: &Option<TemporalClause>,
         consume: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let (catalog, database, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let fully_table = self.fully_table_identifier(catalog, database, table);
+        let (catalog, database, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
         let table_alias_name = alias
             .as_ref()
             .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
-        let mut bind_cte = true;
-        if let Some(cte_name) = &bind_context.cte_name {
-            // If table name equals to cte name, then skip bind cte and find table from catalog
-            // Or will dead loop and stack overflow
-            if cte_name == &table_name {
-                bind_cte = false;
-            }
-        }
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();
         if let Some(cte_info) = ctes_map.get(&table_name) {
-            if bind_cte {
-                if self
-                    .metadata
-                    .read()
-                    .get_table_index(Some(&database), &table_name)
-                    .is_some()
-                {
-                    return Err(ErrorCode::SyntaxException(format!(
-                        "Table name `{}` is misleading, please distinguish it.",
-                        table_name
-                    ))
-                    .set_span(*span));
-                }
-                return if cte_info.materialized {
-                    self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                } else if cte_info.recursive {
-                    if self.bind_recursive_cte {
-                        self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
-                    } else {
-                        self.bind_r_cte(bind_context, cte_info, &table_name, alias)
-                    }
-                } else {
-                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                };
+            if self
+                .metadata
+                .read()
+                .get_table_index(Some(&database), &table_name)
+                .is_some()
+            {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Table name `{}` is misleading, please distinguish it.",
+                    table_name
+                ))
+                .set_span(*span));
             }
+            return if cte_info.materialized {
+                self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+            } else if cte_info.recursive {
+                if self.bind_recursive_cte {
+                    self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
+                } else {
+                    self.bind_r_cte(bind_context, cte_info, &table_name, alias)
+                }
+            } else {
+                self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+            };
         }
 
         let tenant = self.ctx.get_tenant();
@@ -118,20 +112,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                if e.code() == ErrorCode::UNKNOWN_DATABASE {
-                    return Err(ErrorCode::UnknownDatabase(format!(
-                        "Unknown database `{}` in catalog '{catalog}'",
-                        database
-                    ))
-                    .set_span(*span));
-                }
-                if e.code() == ErrorCode::UNKNOWN_TABLE {
-                    return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
-                    ))
-                    .set_span(*span));
-                }
-                return Err(e);
+                return Err(fully_table.not_found_suggest_error(e));
             }
         };
 

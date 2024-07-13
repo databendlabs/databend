@@ -61,9 +61,15 @@ impl Rule for RuleSemiToInnerJoin {
         }
 
         let conditions = if join.join_type == JoinType::LeftSemi {
-            join.right_conditions.clone()
+            join.equi_conditions
+                .iter()
+                .map(|condition| condition.right.clone())
+                .collect::<Vec<_>>()
         } else {
-            join.left_conditions.clone()
+            join.equi_conditions
+                .iter()
+                .map(|condition| condition.left.clone())
+                .collect::<Vec<_>>()
         };
 
         if conditions.is_empty() {
@@ -120,7 +126,6 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         RelOperator::Sort(_)
         | RelOperator::Limit(_)
         | RelOperator::Exchange(_)
-        | RelOperator::AddRowNumber(_)
         | RelOperator::UnionAll(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::ProjectSet(_)

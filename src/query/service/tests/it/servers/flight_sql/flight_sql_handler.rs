@@ -25,8 +25,9 @@ use arrow_schema::ArrowError;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::InnerConfig;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::test_kits::ConfigBuilder;
@@ -78,12 +79,15 @@ fn prepare_config() -> InnerConfig {
     let hash_method = PasswordHashMethod::DoubleSha1;
     let hash_value = hash_method.hash(TEST_PASSWORD.as_bytes());
 
-    let auth_info = AuthInfo::Password {
-        hash_value,
-        hash_method,
+    let user_config = UserConfig {
+        name: TEST_USER.to_string(),
+        auth: UserAuthConfig {
+            auth_type: "double_sha1_password".to_string(),
+            auth_string: Some(hex::encode(hash_value)),
+        },
     };
     ConfigBuilder::create()
-        .add_user(TEST_USER, auth_info)
+        .add_user(TEST_USER, user_config)
         .build()
 }
 

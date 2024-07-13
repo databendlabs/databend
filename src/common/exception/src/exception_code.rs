@@ -116,6 +116,7 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
+    NeedChangePasswordDenied(1066),
     UnknownException(1067),
     TokioError(1068),
     HttpNotFound(1072),
@@ -157,6 +158,7 @@ build_exceptions! {
     OutofSequenceRange(1124),
     WrongSequenceCount(1125),
     UnknownSequence(1126),
+    UnknownQuery(1127),
 
     // Data Related Errors
 
@@ -214,7 +216,9 @@ build_exceptions! {
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
-    TantivyQueryParserError(1903)
+    TantivyQueryParserError(1903),
+
+    ReqwestError(1910)
 }
 
 // Meta service errors [2001, 3000].
@@ -375,6 +379,9 @@ build_exceptions! {
 
     // sequence
     SequenceError(3101),
+
+    // Share error codes(continue).
+    ErrorShareEndpointCredential(3111),
 }
 
 // Storage errors [3001, 4000].

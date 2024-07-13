@@ -35,7 +35,6 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json::Value as JsonValue;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
@@ -46,7 +45,7 @@ use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
-use crate::servers::http::v1::JsonBlock;
+use crate::servers::http::v1::StringBlock;
 use crate::sessions::QueryAffect;
 
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
@@ -128,7 +127,7 @@ pub struct QueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<JsonValue>>,
+    pub data: Vec<Vec<String>>,
     pub affect: Option<QueryAffect>,
 
     pub stats: QueryStats,
@@ -148,11 +147,11 @@ impl QueryResponse {
     ) -> impl IntoResponse {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
-            (JsonBlock::empty(), None)
+            (StringBlock::empty(), None)
         } else {
             match state.state {
                 ExecuteStateKind::Running | ExecuteStateKind::Starting => match r.data {
-                    None => (JsonBlock::empty(), Some(make_state_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_state_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),
@@ -161,9 +160,9 @@ impl QueryResponse {
                         (d.page.data, uri)
                     }
                 },
-                ExecuteStateKind::Failed => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                ExecuteStateKind::Failed => (StringBlock::empty(), Some(make_final_uri(&id))),
                 ExecuteStateKind::Succeeded => match r.data {
-                    None => (JsonBlock::empty(), Some(make_final_uri(&id))),
+                    None => (StringBlock::empty(), Some(make_final_uri(&id))),
                     Some(d) => {
                         let uri = match d.next_page_no {
                             Some(n) => Some(make_page_uri(&id, n)),

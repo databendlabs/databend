@@ -77,20 +77,25 @@ impl<'a> Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let (catalog_name, database_name, table_name) = if let TableReference::Table {
+        let fully_table = if let TableReference::Table {
             catalog,
             database,
             table,
             ..
         } = table
         {
-            self.normalize_object_identifier_triple(catalog, database, table)
+            self.fully_table_identifier(catalog, database, table)
         } else {
             // we do not support USING clause yet
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
         };
+        let (catalog_name, database_name, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
 
         // Add table lock before execution.
         let lock_guard = self
@@ -102,7 +107,8 @@ impl<'a> Binder {
                 &table_name,
                 &LockTableOption::LockWithRetry,
             )
-            .await?;
+            .await
+            .map_err(|err| fully_table.not_found_suggest_error(err))?;
 
         let (table_expr, mut context) = self.bind_table_reference(bind_context, table)?;
 

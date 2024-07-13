@@ -24,9 +24,10 @@ use databend_common_exception::Result;
 use educe::Educe;
 use log::info;
 
-use super::distributed::MergeSourceOptimizer;
+use super::distributed::MergeOptimizer;
 use super::format::display_memo;
 use super::Memo;
+use crate::binder::target_table_position;
 use crate::binder::MergeIntoType;
 use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
@@ -437,16 +438,14 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
-    let old_left_conditions = Join::try_from(s_expr.child(0)?.plan().clone())?.left_conditions;
+    let original_target_table_position =
+        target_table_position(s_expr.child(0)?, plan.target_table_index)?;
     let mut join_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     if let &RelOperator::Exchange(_) = join_s_expr.plan() {
         join_s_expr = join_s_expr.child(0)?.clone();
     }
-    let left_conditions = Join::try_from(join_s_expr.plan().clone())?.left_conditions;
-    let mut change_join_order = false;
-    if old_left_conditions != left_conditions {
-        change_join_order = true;
-    }
+    let new_target_table_position = target_table_position(&join_s_expr, plan.target_table_index)?;
+    let join_order_changed = original_target_table_position != new_target_table_position;
     let join_op = Join::try_from(join_s_expr.plan().clone())?;
 
     // we just support left join to use MergeIntoBlockInfoHashTable, we
@@ -460,8 +459,8 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
             .table_ctx
             .get_settings()
             .get_enable_distributed_merge_into()?;
-    let mut new_columns_set = plan.columns_set.clone();
-    if change_join_order
+    let new_columns_set = plan.columns_set.clone();
+    if join_order_changed
         && matches!(plan.merge_type, MergeIntoType::FullOperation)
         && opt_ctx
             .table_ctx
@@ -481,32 +480,18 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         })
     }
 
-    plan.change_join_order = change_join_order;
-    if opt_ctx.enable_distributed_optimization {
-        let merge_source_optimizer = MergeSourceOptimizer::create();
-        // Inner join shouldn't add `RowNumber` node.
-        let mut enable_right_broadcast = false;
-
-        if matches!(join_op.join_type, JoinType::RightAnti | JoinType::Right)
-            && merge_source_optimizer
-                .merge_source_matcher
-                .matches(&join_s_expr)
+    plan.change_join_order = join_order_changed;
+    let distributed = !join_s_expr.has_merge_exchange();
+    if opt_ctx.enable_distributed_optimization && distributed {
+        let merge_optimizer = MergeOptimizer::create();
+        // Left join changes to shuffle.
+        if matches!(join_op.join_type, JoinType::Left | JoinType::LeftAnti)
+            && merge_optimizer.merge_matcher.matches(&join_s_expr)
         {
-            // If source is physical table, use row_id
-            let source_has_row_id = if let Some(source_row_id_index) = plan.source_row_id_index {
-                new_columns_set.insert(source_row_id_index);
-                true
-            } else {
-                false
-            };
-            // Todo(xudong): should consider the cost of shuffle and broadcast.
-            // Current behavior is to always use broadcast join.(source table is usually small)
-            join_s_expr = merge_source_optimizer.optimize(&join_s_expr, source_has_row_id)?;
-            enable_right_broadcast = true;
-        }
-        let distributed = !join_s_expr.has_merge_exchange();
-        plan.distributed = distributed;
-        plan.enable_right_broadcast = enable_right_broadcast;
+            join_s_expr = merge_optimizer.optimize(&join_s_expr)?;
+        };
+
+        plan.distributed = true;
         plan.columns_set = new_columns_set;
         Ok(Plan::MergeInto {
             schema: plan.schema(),
@@ -514,6 +499,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(RelOperator::MergeInto(plan)),
                 Arc::new(join_s_expr),
             )),
+            metadata: opt_ctx.metadata.clone(),
         })
     } else {
         plan.columns_set = new_columns_set;
@@ -523,6 +509,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 Arc::new(RelOperator::MergeInto(plan)),
                 Arc::new(join_s_expr),
             )),
+            metadata: opt_ctx.metadata.clone(),
         })
     }
 }

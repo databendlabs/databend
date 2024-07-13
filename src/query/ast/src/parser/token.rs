@@ -454,6 +454,8 @@ pub enum TokenKind {
     COPY,
     #[token("COUNT", ignore(ascii_case))]
     COUNT,
+    #[token("CREDENTIAL", ignore(ascii_case))]
+    CREDENTIAL,
     #[token("CREATE", ignore(ascii_case))]
     CREATE,
     #[token("CROSS", ignore(ascii_case))]
@@ -628,6 +630,8 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GET", ignore(ascii_case))]
+    GET,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GEOMETRY", ignore(ascii_case))]
@@ -777,6 +781,8 @@ pub enum TokenKind {
     MODIFY,
     #[token("MATERIALIZED", ignore(ascii_case))]
     MATERIALIZED,
+    #[token("MUST_CHANGE_PASSWORD", ignore(ascii_case))]
+    MUST_CHANGE_PASSWORD,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -879,6 +885,8 @@ pub enum TokenKind {
     PRIORITY,
     #[token("PURGE", ignore(ascii_case))]
     PURGE,
+    #[token("PUT", ignore(ascii_case))]
+    PUT,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]

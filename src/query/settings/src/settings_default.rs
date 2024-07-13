@@ -122,12 +122,6 @@ impl DefaultSettings {
             let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
-                ("enable_streaming_load", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables streaming load.",
-                    mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_clickhouse_handler", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables clickhouse handler.",
@@ -309,7 +303,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enable merge into row fetch optimization.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -452,6 +446,12 @@ impl DefaultSettings {
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("sort_spilling_batch_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(8 * 1024 * 1024),
+                    desc: "Sets the uncompressed size that merge sorter will spill to storage",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -692,7 +692,13 @@ impl DefaultSettings {
                 }),
                 ("parse_datetime_ignore_remainder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Ignore trailing chars when parse string to datetime(disable by default)",
+                    desc: "Ignore trailing chars when parse string to datetime",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_dst_hour_fix", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -775,6 +781,12 @@ impl DefaultSettings {
                     desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_loser_tree_merge_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 })
             ]);
 

@@ -113,6 +113,16 @@ impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Cou
         cache.size()
     }
 
+    fn capacity(&self) -> u64 {
+        let cache = self.read();
+        cache.capacity()
+    }
+
+    fn set_capacity(&self, capacity: u64) {
+        let mut cache = self.write();
+        cache.set_capacity(capacity)
+    }
+
     fn len(&self) -> usize {
         let cache = self.read();
         cache.len()
@@ -152,9 +162,15 @@ impl LruDiskCacheBuilder {
         path: &PathBuf,
         disk_cache_bytes_size: u64,
         disk_cache_reload_policy: DiskCacheKeyReloadPolicy,
+        sync_data: bool,
     ) -> Result<LruDiskCacheHolder> {
-        let external_cache = DiskCache::new(path, disk_cache_bytes_size, disk_cache_reload_policy)
-            .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
+        let external_cache = DiskCache::new(
+            path,
+            disk_cache_bytes_size,
+            disk_cache_reload_policy,
+            sync_data,
+        )
+        .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))
     }
 }

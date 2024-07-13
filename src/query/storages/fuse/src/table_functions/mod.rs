@@ -18,13 +18,22 @@ mod fuse_columns;
 mod fuse_encodings;
 mod fuse_segments;
 mod fuse_snapshots;
+
+mod cache_admin;
+
+mod function_template;
+mod fuse_amend;
 mod fuse_statistics;
 mod table_args;
 
+pub use cache_admin::SetCacheCapacity;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+pub use function_template::SimpleTableFunc;
+pub use function_template::TableFunctionTemplate;
+pub use fuse_amend::FuseAmendTable;
 pub use fuse_blocks::FuseBlock;
 pub use fuse_blocks::FuseBlockTable;
 pub use fuse_columns::FuseColumn;

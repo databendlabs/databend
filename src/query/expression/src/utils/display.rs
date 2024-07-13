@@ -19,6 +19,8 @@ use std::fmt::Formatter;
 use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
+use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::parser::Dialect;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use geozero::wkb::Ewkb;
@@ -757,6 +759,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
+        #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
                 Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
@@ -1067,4 +1070,9 @@ fn display_f64(num: f64) -> String {
             .to_string(),
         None => num.to_string(),
     }
+}
+
+/// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
+pub fn display_tuple_field_name(field_name: &str) -> String {
+    display_ident(field_name, true, Dialect::PostgreSQL)
 }

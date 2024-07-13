@@ -20,6 +20,7 @@ use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::attach_table::RealAttachTableHandler;
 use crate::background_service::RealBackgroundService;
 use crate::data_mask::RealDatamaskHandler;
+use crate::fail_safe::RealFailSafeHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::storage_encryption::RealStorageEncryptionHandler;
@@ -43,6 +44,7 @@ impl EnterpriseServices {
         RealAttachTableHandler::init()?;
         RealInvertedIndexHandler::init()?;
         RealStorageQuotaHandler::init(&cfg)?;
+        RealFailSafeHandler::init()?;
         Ok(())
     }
 }

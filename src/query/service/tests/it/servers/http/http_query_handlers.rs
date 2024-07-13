@@ -21,9 +21,10 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_config::UserAuthConfig;
+use databend_common_config::UserConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
@@ -63,7 +64,6 @@ use poem::Response;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use serde_json::json;
-use serde_json::Value;
 use tokio::time::sleep;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
@@ -199,7 +199,7 @@ impl TestHttpQueryFetchReply {
         self.resps.last().unwrap().clone()
     }
 
-    fn data(&self) -> Vec<Vec<Value>> {
+    fn data(&self) -> Vec<Vec<String>> {
         let mut result = vec![];
         for (_, resp) in &self.resps {
             result.extend(resp.data.clone());
@@ -701,7 +701,7 @@ async fn test_system_tables() -> Result<()> {
         .data
         .iter()
         .flatten()
-        .map(|j| j.as_str().unwrap().to_string())
+        .map(|j| j.to_string())
         .collect::<Vec<_>>();
 
     let skipped = [
@@ -795,7 +795,7 @@ async fn test_query_log() -> Result<()> {
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        result.data[0][1].to_string(),
         result_type_2.stats.running_time_ms.to_string(),
     );
 
@@ -805,30 +805,25 @@ async fn test_query_log() -> Result<()> {
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
         result.data[0][0]
-            .as_str()
-            .unwrap()
+            .to_string()
             .to_lowercase()
             .contains("create table"),
         "{:?}",
         result
     );
     assert!(
-        result.data[0][2]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("exist"),
+        result.data[0][2].to_lowercase().contains("exist"),
         "{:?}",
         result
     );
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        result.data[0][1],
         ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
     assert_eq!(
-        result.data[0][4].as_str().unwrap(),
+        result.data[0][4],
         result_type_3.stats.running_time_ms.to_string(),
         "{:?}",
         result
@@ -863,22 +858,14 @@ async fn test_query_log_killed() -> Result<()> {
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
+    assert!(result.data[0][0].contains("sleep"), "{:?}", result);
     assert!(
-        result.data[0][0].as_str().unwrap().contains("sleep"),
-        "{:?}",
-        result
-    );
-    assert!(
-        result.data[0][2]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("killed"),
+        result.data[0][2].to_lowercase().contains("killed"),
         "{:?}",
         result
     );
     assert_eq!(
-        result.data[0][1].as_str().unwrap(),
+        result.data[0][1],
         ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
@@ -1616,12 +1603,16 @@ async fn test_auth_configured_user() -> Result<()> {
     let hash_method = PasswordHashMethod::DoubleSha1;
     let hash_value = hash_method.hash(pass_word.as_bytes());
 
-    let auth_info = AuthInfo::Password {
-        hash_value,
-        hash_method,
+    let user_config = UserConfig {
+        name: user_name.to_string(),
+        auth: UserAuthConfig {
+            auth_type: "double_sha1_password".to_string(),
+            auth_string: Some(hex::encode(hash_value)),
+        },
     };
+
     let config = ConfigBuilder::create()
-        .add_user(user_name, auth_info)
+        .add_user(user_name, user_config)
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
@@ -1653,7 +1644,7 @@ async fn test_txn_error() -> Result<()> {
     {
         let mut session = session.clone();
         session.last_server_info = None;
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1671,7 +1662,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.id = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1686,7 +1677,7 @@ async fn test_txn_error() -> Result<()> {
         if let Some(s) = &mut session.last_server_info {
             s.start_time = "abc".to_string()
         }
-        let json = serde_json::json! ({
+        let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
@@ -1712,7 +1703,7 @@ async fn test_txn_timeout() -> Result<()> {
 
     let session = session.clone();
     let last_query_id = session.last_query_ids.first().unwrap().to_string();
-    let json = serde_json::json! ({
+    let json = serde_json::json!({
         "sql": "select 1",
         "session": session,
         "pagination": {"wait_time_secs": wait_time_secs}
@@ -1762,5 +1753,21 @@ async fn test_has_result_set() -> Result<()> {
         assert_eq!(reply.last().1.has_result_set, Some(has_result_set));
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_max_size_per_page() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sql = "select repeat('1', 1000) as a, repeat('2', 1000) from numbers(10000)";
+    let wait_time_secs = 5;
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    let (_, reply, body) = TestHttpQueryRequest::new(json).fetch_begin().await?;
+    assert!(reply.error.is_none(), "{:?}", reply.error);
+    let len = body.len() as i32;
+    let target = 10485760; // 10M
+    assert!(len < target);
+    assert!(len > target - 2000);
     Ok(())
 }

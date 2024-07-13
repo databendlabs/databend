@@ -54,9 +54,9 @@ use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::display::display_tuple_field_name;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
@@ -118,6 +118,7 @@ use crate::optimizer::SExpr;
 use crate::parse_lambda_expr;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::planner::semantic::lowering::TypeCheck;
+use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -137,6 +138,7 @@ use crate::plans::SubqueryType;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::UDFType;
+use crate::plans::Visitor as ScalarVisitor;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -773,7 +775,7 @@ impl<'a> TypeChecker<'a> {
                                 "no function matches the given name: '{func_name}', do you mean {}?",
                                 possible_funcs.join(", ")
                             ))
-                            .set_span(*span));
+                                .set_span(*span));
                         }
                     }
                 }
@@ -857,7 +859,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for aggregate function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -918,7 +920,7 @@ impl<'a> TypeChecker<'a> {
                                 ErrorCode::SemanticError(format!(
                                     "invalid parameter {param} for scalar function, expected constant",
                                 ))
-                                .set_span(*span)
+                                    .set_span(*span)
                             })?
                             .1;
                         new_params.push(constant);
@@ -1834,13 +1836,13 @@ impl<'a> TypeChecker<'a> {
                 "incorrect number of parameters in lambda function, {} expects 1 parameter, but got {}",
                 func_name, params.len()
             ))
-            .set_span(span));
+                .set_span(span));
         } else if func_name == "array_reduce" && params.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
                 "incorrect number of parameters in lambda function, {} expects 2 parameters, but got {}",
                 func_name, params.len()
             ))
-            .set_span(span));
+                .set_span(span));
         }
 
         if args.len() != 1 {
@@ -1878,8 +1880,12 @@ impl<'a> TypeChecker<'a> {
             .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
-        let box (lambda_expr, lambda_type) =
-            parse_lambda_expr(self.ctx.clone(), &columns, &lambda.expr)?;
+        let box (lambda_expr, lambda_type) = parse_lambda_expr(
+            self.ctx.clone(),
+            self.bind_context.clone(),
+            &columns,
+            &lambda.expr,
+        )?;
 
         let return_type = if func_name == "array_filter" {
             if lambda_type.remove_nullable() == DataType::Boolean {
@@ -1937,15 +1943,51 @@ impl<'a> TypeChecker<'a> {
                 DataType::EmptyArray,
             ),
             _ => {
-                // generate lambda expression
-                let lambda_schema = if inner_tys.len() == 1 {
-                    let lambda_field = DataField::new("0", inner_tys[0].clone());
-                    DataSchema::new(vec![lambda_field])
-                } else {
-                    let lambda_field0 = DataField::new("0", inner_tys[0].clone());
-                    let lambda_field1 = DataField::new("1", inner_tys[1].clone());
-                    DataSchema::new(vec![lambda_field0, lambda_field1])
+                struct LambdaVisitor<'a> {
+                    bind_context: &'a BindContext,
+                    args: Vec<ScalarExpr>,
+                    fields: Vec<DataField>,
+                }
+
+                impl<'a> ScalarVisitor<'a> for LambdaVisitor<'a> {
+                    fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
+                        let contains = self
+                            .bind_context
+                            .all_column_bindings()
+                            .iter()
+                            .map(|c| c.index)
+                            .contains(&col.column.index);
+                        // add outer scope columns first
+                        if contains {
+                            let arg = ScalarExpr::BoundColumnRef(col.clone());
+                            self.args.push(arg);
+                            let field = DataField::new(
+                                &format!("{}", col.column.index),
+                                *col.column.data_type.clone(),
+                            );
+                            self.fields.push(field);
+                        }
+                        Ok(())
+                    }
+                }
+
+                let mut lambda_visitor = LambdaVisitor {
+                    bind_context: self.bind_context,
+                    args: Vec::new(),
+                    fields: Vec::new(),
                 };
+                lambda_visitor.visit(&lambda_expr)?;
+
+                // add lambda columns at end
+                let mut fields = lambda_visitor.fields.clone();
+                let column_len = self.bind_context.all_column_bindings().len();
+                for (i, inner_ty) in inner_tys.into_iter().enumerate() {
+                    let lambda_field = DataField::new(&format!("{}", column_len + i), inner_ty);
+                    fields.push(lambda_field);
+                }
+                let lambda_schema = DataSchema::new(fields);
+                let mut args = lambda_visitor.args.clone();
+                args.push(arg);
 
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
@@ -1960,7 +2002,7 @@ impl<'a> TypeChecker<'a> {
                     LambdaFunc {
                         span,
                         func_name: func_name.to_string(),
-                        args: vec![arg],
+                        args,
                         lambda_expr: Box::new(remote_lambda_expr),
                         lambda_display,
                         return_type: Box::new(return_type.clone()),
@@ -2053,7 +2095,7 @@ impl<'a> TypeChecker<'a> {
                         "invalid arguments for search function, field must be a column or constant string, but got {}",
                         constant_expr.value
                     ))
-                    .set_span(constant_expr.span));
+                        .set_span(constant_expr.span));
                 };
 
                 // fields are separated by commas and boost is separated by ^
@@ -2066,7 +2108,7 @@ impl<'a> TypeChecker<'a> {
                             "invalid arguments for search function, field string must have only one boost, but got {}",
                             constant_field
                         ))
-                        .set_span(constant_expr.span));
+                            .set_span(constant_expr.span));
                     }
                     let column_expr = Expr::ColumnRef {
                         span: constant_expr.span,
@@ -2095,7 +2137,7 @@ impl<'a> TypeChecker<'a> {
                                     "invalid arguments for search function, boost must be a float value, but got {}",
                                     field_boosts[1]
                                 ))
-                                .set_span(constant_expr.span));
+                                    .set_span(constant_expr.span));
                             }
                         }
                     } else {
@@ -2109,7 +2151,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column or constant string".to_string(),
                 )
-                .set_span(span));
+                    .set_span(span));
             }
         };
 
@@ -2119,14 +2161,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
 
         // match function didn't support query syntax,
@@ -2182,14 +2224,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-            .set_span(query_scalar.span()));
+                .set_span(query_scalar.span()));
         };
 
         let field_strs: Vec<&str> = query_text.split(' ').collect();
@@ -2935,7 +2977,6 @@ impl<'a> TypeChecker<'a> {
                 // if(is_not_null(arg0), assume_not_null(arg0), is_not_null(arg1), assume_not_null(arg1), ..., argN)
                 // with constant Literal::Null arguments removed.
                 let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
-
                 for arg in args.iter() {
                     if let Expr::Literal {
                         span: _,
@@ -2950,6 +2991,13 @@ impl<'a> TypeChecker<'a> {
                         expr: Box::new((*arg).clone()),
                         not: true,
                     };
+                    if let Ok(res) = self.resolve(&is_not_null_expr) {
+                        if let ScalarExpr::ConstantExpr(c) = res.0 {
+                            if Scalar::Boolean(false) == c.value {
+                                continue;
+                            }
+                        }
+                    }
 
                     let assume_not_null_expr = Expr::FunctionCall {
                         span,
@@ -3279,9 +3327,9 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
-        let udf = databend_common_base::runtime::block_on(
-            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name),
-        )?;
+        let udf = databend_common_base::runtime::block_on({
+            UserApiProvider::instance().get_udf(&self.ctx.get_tenant(), udf_name)
+        })?;
 
         let Some(udf) = udf else {
             return Ok(None);
@@ -3309,23 +3357,7 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if !GlobalConfig::instance().query.enable_udf_server {
-            return Err(ErrorCode::Unimplemented(
-                "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
-            ));
-        }
-
-        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-        let address = &udf_definition.address;
-        if udf_server_allow_list
-            .iter()
-            .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-            )));
-        }
-
+        UDFValidator::is_udf_server_allowed(&udf_definition.address)?;
         if arguments.len() != udf_definition.arg_types.len() {
             return Err(ErrorCode::InvalidArgument(format!(
                 "Require {} parameters, but got: {}",
@@ -3355,7 +3387,7 @@ impl<'a> TypeChecker<'a> {
                 name,
                 func_name: udf_definition.handler,
                 display_name,
-                udf_type: UDFType::Server(address.clone()),
+                udf_type: UDFType::Server(udf_definition.address.clone()),
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),
                 arguments: args,
@@ -3679,14 +3711,10 @@ impl<'a> TypeChecker<'a> {
                                 fields_type.len()
                             )));
                         }
-                        table_data_type = fields_type.get(idx as usize - 1).unwrap().clone();
-                        idx as usize
+                        (idx - 1) as usize
                     }
                     Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
-                        Some(idx) => {
-                            table_data_type = fields_type.get(idx).unwrap().clone();
-                            idx + 1
-                        }
+                        Some(idx) => idx,
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
@@ -3696,10 +3724,11 @@ impl<'a> TypeChecker<'a> {
                     },
                     _ => unreachable!(),
                 };
+                table_data_type = fields_type.get(idx).unwrap().clone();
                 scalar = FunctionCall {
                     span: expr.span(),
                     func_name: "get".to_string(),
-                    params: vec![Scalar::Number(NumberScalar::Int64(idx as i64))],
+                    params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                     arguments: vec![scalar.clone()],
                 }
                 .into();
@@ -3739,7 +3768,7 @@ impl<'a> TypeChecker<'a> {
             } = table_data_type.remove_nullable()
             {
                 let (span, path) = paths.pop_front().unwrap();
-                match path {
+                let idx = match path {
                     Literal::UInt64(idx) => {
                         if idx == 0 {
                             return Err(ErrorCode::SemanticError(
@@ -3755,20 +3784,10 @@ impl<'a> TypeChecker<'a> {
                             ))
                             .set_span(span));
                         }
-                        let inner_name = fields_name.get(idx as usize - 1).unwrap();
-                        let inner_type = fields_type.get(idx as usize - 1).unwrap();
-                        names.push(inner_name.clone());
-                        index_with_types.push_back((idx as usize, inner_type.clone()));
-                        *table_data_type = inner_type.clone();
+                        idx as usize - 1
                     }
                     Literal::String(name) => match fields_name.iter().position(|k| k == &name) {
-                        Some(idx) => {
-                            let inner_name = fields_name.get(idx).unwrap();
-                            let inner_type = fields_type.get(idx).unwrap();
-                            names.push(inner_name.clone());
-                            index_with_types.push_back((idx + 1, inner_type.clone()));
-                            *table_data_type = inner_type.clone();
-                        }
+                        Some(idx) => idx,
                         None => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "tuple name `{}` does not exist, available names are: {:?}",
@@ -3778,7 +3797,13 @@ impl<'a> TypeChecker<'a> {
                         }
                     },
                     _ => unreachable!(),
-                }
+                };
+                let inner_field_name = fields_name.get(idx).unwrap();
+                let inner_name = display_tuple_field_name(inner_field_name);
+                names.push(inner_name);
+                let inner_type = fields_type.get(idx).unwrap();
+                index_with_types.push_back((idx + 1, inner_type.clone()));
+                *table_data_type = inner_type.clone();
             } else {
                 // other data types use `get` function.
                 break;
@@ -4132,7 +4157,16 @@ impl<'a> TypeChecker<'a> {
                             .collect::<Result<Vec<Expr>>>()?,
                         params: params.clone(),
                         window: window.clone(),
-                        lambda: lambda.clone(),
+                        lambda: if let Some(lambda) = lambda {
+                            Some(Lambda {
+                                params: lambda.params.clone(),
+                                expr: Box::new(
+                                    self.clone_expr_with_replacement(&lambda.expr, replacement_fn)?,
+                                ),
+                            })
+                        } else {
+                            None
+                        },
                     },
                 }),
                 Expr::Case {
@@ -4309,7 +4343,16 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
                 None => (0..fields_type.len())
                     .map(|i| (i + 1).to_string())
                     .collect(),
-                Some(names) => names.clone(),
+                Some(names) => names
+                    .iter()
+                    .map(|i| {
+                        if i.is_quoted() {
+                            i.name.clone()
+                        } else {
+                            i.name.to_lowercase()
+                        }
+                    })
+                    .collect(),
             },
             fields_type: fields_type
                 .iter()

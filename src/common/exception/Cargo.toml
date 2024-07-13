@@ -11,8 +11,8 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-arrow = { path = "../arrow" }
-databend-common-ast = { path = "../../query/ast" }
+databend-common-arrow = { workspace = true }
+databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
@@ -23,8 +23,9 @@ geozero = { workspace = true }
 http = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
-paste = "1.0.9"
+paste = { workspace = true }
 prost = { workspace = true }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tantivy = { workspace = true }

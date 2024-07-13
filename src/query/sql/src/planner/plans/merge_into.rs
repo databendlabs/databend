@@ -76,19 +76,17 @@ pub struct MergeInto {
     pub field_index_map: HashMap<FieldIndex, String>,
     pub merge_type: MergeIntoType,
     pub distributed: bool,
-    pub change_join_order: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
     pub row_id_index: IndexType,
-    pub source_row_id_index: Option<IndexType>,
+    pub change_join_order: bool,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
-    pub enable_right_broadcast: bool,
-    pub lazy_columns: Option<HashSet<usize>>,
+    pub lazy_columns: HashSet<usize>,
     pub lock_guard: Option<Arc<LockGuard>>,
 }
 

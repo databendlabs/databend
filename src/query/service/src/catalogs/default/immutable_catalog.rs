@@ -85,8 +85,6 @@ use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
-use databend_common_meta_app::schema::UpdateTableMetaReply;
-use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
@@ -371,18 +369,6 @@ impl Catalog for ImmutableCatalog {
     ) -> Result<UpsertTableOptionReply> {
         Err(ErrorCode::Unimplemented(format!(
             "upsert table option not allowed for system database {:?}",
-            req
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn update_table_meta(
-        &self,
-        _table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "update table meta not allowed for system database {:?}",
             req
         )))
     }

@@ -73,13 +73,15 @@ impl RangePruner for RangeIndex {
         stats: &StatisticsOfColumns,
         metas: Option<&HashMap<ColumnId, ColumnMeta>>,
     ) -> bool {
-        match self.apply(stats, |k| {
+        let apply = self.apply(stats, |k| {
             if let Some(metas) = metas {
                 metas.get(k).is_none()
             } else {
                 false
             }
-        }) {
+        });
+
+        match apply {
             Ok(r) => r,
             Err(e) => {
                 // swallow exceptions intentionally, corrupted index should not prevent execution

@@ -211,15 +211,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 10
+        timeout-minutes: 15
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    needs: [build, check, license]
     steps:
       - uses: actions/checkout@v4
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 10
+        env:
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+        timeout-minutes: 15
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -236,10 +242,16 @@ jobs:
 
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check]
+    needs: [build, check, license]
     steps:
       - uses: actions/checkout@v4
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_stateful_cluster_linux
+        env:
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         timeout-minutes: 15
       - name: Upload failure
         if: failure()
@@ -255,6 +267,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
+
+  test_stateful_iceberg_rest:
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_stateful_iceberg_rest_standalone
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-iceberg-rest-standalone
 
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -326,36 +351,6 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-ee-management-mode-linux
-
-  sqllogic_ee:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
-    needs: [build, check, license]
-    strategy:
-      fail-fast: false
-      matrix:
-        format:
-          - "parquet"
-          - "native"
-    steps:
-      - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
-      - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 15
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
-        with:
-          dirs: ee
-          handlers: mysql,http
-          storage-format: ${{ matrix.format }}
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-ee-sqllogic-standalone-ee-${{ matrix.format }}
 
   sqllogic:
     needs: [build, check]

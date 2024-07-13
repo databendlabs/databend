@@ -62,14 +62,14 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 share_on: Utc::now(),
             };
             let resp = meta_api.add_share_tenants(req).await?;
-
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                resp.spec_vec,
-                None,
-            )
-            .await?;
+            if let Some(share_spec) = resp.share_spec {
+                save_share_spec(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &[share_spec],
+                )
+                .await?;
+            }
         } else {
             let req = RemoveShareAccountsReq {
                 share_name: ShareNameIdent::new(&tenant, &self.plan.share),
@@ -77,14 +77,14 @@ impl Interpreter for AlterShareTenantsInterpreter {
                 accounts: self.plan.accounts.clone(),
             };
             let resp = meta_api.remove_share_tenants(req).await?;
-
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                resp.spec_vec,
-                None,
-            )
-            .await?;
+            if let Some(share_spec) = resp.share_spec {
+                save_share_spec(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    &[share_spec],
+                )
+                .await?;
+            }
         };
 
         Ok(PipelineBuildResult::create())

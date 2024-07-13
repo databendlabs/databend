@@ -44,7 +44,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
-use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
@@ -86,12 +85,11 @@ impl FastFieldDecoderValues {
                     NULL_BYTES_UPPER.as_bytes().to_vec(),
                     NAN_BYTES_LOWER.as_bytes().to_vec(),
                 ],
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
                 disable_variant_check: false,
                 binary_format: Default::default(),
                 is_rounding_mode,
+                enable_dst_hour_fix: format.enable_dst_hour_fix,
             },
         }
     }
@@ -284,7 +282,10 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().enable_dst_hour_fix,
+        )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
         column.push(days);
@@ -300,7 +301,11 @@ impl FastFieldDecoderValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+        let ts = buffer_readr.read_timestamp_text(
+            &self.common_settings().timezone,
+            false,
+            self.common_settings.enable_dst_hour_fix,
+        )?;
         match ts {
             DateTimeResType::Datetime(ts) => {
                 if !buffer_readr.eof() {

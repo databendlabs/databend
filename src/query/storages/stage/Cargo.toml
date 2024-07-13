@@ -32,16 +32,19 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
+databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 enum-as-inner = "0.6.0"
 futures = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parquet_rs = { workspace = true }
+parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
+
 uuid = { workspace = true }
 
 [build-dependencies]

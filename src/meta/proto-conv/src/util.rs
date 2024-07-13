@@ -124,6 +124,14 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (92, "2024-06-03: Add: user.proto/OrcFileFormatParams", ),
     (93, "2024-06-06: Add: null_if in user.proto/ParquetFileFormatParams"),
     (94, "2024-06-21: Remove: catalog in table meta"),
+    (95, "2024-07-01: Add: add credential into share endpoint meta"),
+    (96, "2024-07-02: Add: add using_share_endpoint field into DatabaseMeta"),
+    (97, "2024-07-04: Add: missing_field_as in user.proto/OrcFileFormatParams"),
+    (98, "2024-07-04: Add: add iceberg catalog option in catalog option"),
+    (99, "2024-07-08: Add: missing_field_as in user.proto/ParquetFileFormatParams"),
+    (100, "2024-06-21: Add: tenant.proto/TenantQuota"),
+    (101, "2024-07-06: Add: add from_share_db_id field into DatabaseMeta"),
+    (102, "2024-07-11: Add: UserOption add must_change_password, AuthInfo.Password add need_change"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

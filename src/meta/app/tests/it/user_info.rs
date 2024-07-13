@@ -37,6 +37,7 @@ fn test_user_info() -> Result<()> {
         auth_info: AuthInfo::Password {
             hash_value: Vec::from("pwd"),
             hash_method: PasswordHashMethod::Sha256,
+            need_change: false,
         },
     };
 
@@ -46,6 +47,7 @@ fn test_user_info() -> Result<()> {
     let mut expect = UserInfo::new("old-name", "old-host", AuthInfo::Password {
         hash_value: Vec::from("pwd"),
         hash_method: PasswordHashMethod::Sha256,
+        need_change: false,
     });
     expect.created_on = DateTime::<Utc>::default();
     expect.update_on = DateTime::<Utc>::default();

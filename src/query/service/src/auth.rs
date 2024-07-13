@@ -136,19 +136,23 @@ impl AuthMgr {
             } => {
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(n, "%");
-                let user = user_api
+                let mut user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
                     .await?;
                 // Check password policy for login
-                UserApiProvider::instance()
+                let need_change = UserApiProvider::instance()
                     .check_login_password(&tenant, identity.clone(), &user)
                     .await?;
+                if need_change {
+                    user.update_auth_need_change_password();
+                }
 
                 let authed = match &user.auth_info {
                     AuthInfo::None => Ok(()),
                     AuthInfo::Password {
                         hash_value: h,
                         hash_method: t,
+                        ..
                     } => match p {
                         None => Err(ErrorCode::AuthenticateFailure("password required")),
                         Some(p) => {

@@ -151,6 +151,14 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
         builder.push(item)
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        if n == 1 {
+            builder.push(item)
+        } else {
+            builder.resize(builder.len() + n, item)
+        }
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Num::default())
     }
@@ -1047,6 +1055,13 @@ impl DecimalColumnBuilder {
         })
     }
 
+    pub fn repeat_default(ty: &DecimalDataType, n: usize) -> Self {
+        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
+            DecimalDataType::DECIMAL_TYPE(size) =>
+                DecimalColumnBuilder::DECIMAL_TYPE(vec![0.into(); n], *size),
+        })
+    }
+
     pub fn len(&self) -> usize {
         crate::with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(col, _) => col.len(),
@@ -1061,13 +1076,21 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push(&mut self, item: DecimalScalar) {
+        self.push_repeat(item, 1)
+    }
+
+    pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
         crate::with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
             (
                 DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
                 DecimalScalar::DECIMAL_TYPE(value, value_size),
             ) => {
                 debug_assert_eq!(*builder_size, value_size);
-                builder.push(value)
+                if n == 1 {
+                    builder.push(value)
+                } else {
+                    builder.resize(builder.len() + n, value)
+                }
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })

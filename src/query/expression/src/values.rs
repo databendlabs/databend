@@ -1509,9 +1509,7 @@ impl ColumnBuilder {
         if !scalar.is_null() {
             if let DataType::Nullable(ty) = data_type {
                 let mut builder = ColumnBuilder::with_capacity(ty, 1);
-                for _ in 0..n {
-                    builder.push(scalar.clone());
-                }
+                builder.push_repeat(scalar, n);
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
                     validity: Bitmap::new_constant(true, n).make_mut(),
@@ -1522,14 +1520,10 @@ impl ColumnBuilder {
         match scalar {
             ScalarRef::Null => match data_type {
                 DataType::Null => ColumnBuilder::Null { len: n },
-                DataType::Nullable(ty) => {
-                    let mut builder = ColumnBuilder::with_capacity(ty, 1);
-                    for _ in 0..n {
-                        builder.push_default();
-                    }
+                DataType::Nullable(inner) => {
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
-                        builder,
-                        validity: Bitmap::new_constant(false, n).make_mut(),
+                        builder: Self::repeat_default(inner, n),
+                        validity: MutableBitmap::from_len_zeroed(n),
                     }))
                 }
                 _ => unreachable!(),
@@ -1742,6 +1736,60 @@ impl ColumnBuilder {
         }
     }
 
+    pub fn repeat_default(ty: &DataType, len: usize) -> ColumnBuilder {
+        match ty {
+            DataType::Null => ColumnBuilder::Null { len },
+            DataType::EmptyArray => ColumnBuilder::EmptyArray { len },
+            DataType::EmptyMap => ColumnBuilder::EmptyMap { len },
+
+            // bitmap
+            DataType::Nullable(inner) => ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
+                builder: Self::repeat_default(inner, len),
+                validity: MutableBitmap::from_len_zeroed(len),
+            })),
+            DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::from_len_zeroed(len)),
+
+            // number based
+            DataType::Number(num_ty) => {
+                ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
+            }
+            DataType::Decimal(decimal_ty) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(decimal_ty, len))
+            }
+            DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
+            DataType::Date => ColumnBuilder::Date(vec![0; len]),
+
+            // binary based
+            DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Bitmap => ColumnBuilder::Bitmap(BinaryColumnBuilder::repeat_default(len)),
+            DataType::String => ColumnBuilder::String(StringColumnBuilder::repeat_default(len)),
+            DataType::Variant => ColumnBuilder::Variant(BinaryColumnBuilder::repeat_default(len)),
+            DataType::Geometry => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat_default(len)),
+
+            DataType::Array(ty) => ColumnBuilder::Array(Box::new(ArrayColumnBuilder {
+                builder: Self::with_capacity(ty, 0),
+                offsets: vec![0; len + 1],
+            })),
+            DataType::Map(ty) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder {
+                builder: Self::with_capacity(ty, 0),
+                offsets: vec![0; len + 1],
+            })),
+            DataType::Tuple(fields) => {
+                assert!(!fields.is_empty());
+                ColumnBuilder::Tuple(
+                    fields
+                        .iter()
+                        .map(|field| Self::repeat_default(field, len))
+                        .collect(),
+                )
+            }
+
+            DataType::Generic(_) => {
+                unreachable!("unable to initialize column builder for generic type")
+            }
+        }
+    }
+
     pub fn push(&mut self, item: ScalarRef) {
         match (self, item) {
             (ColumnBuilder::Null { len }, ScalarRef::Null) => *len += 1,
@@ -1749,28 +1797,29 @@ impl ColumnBuilder {
             (ColumnBuilder::EmptyMap { len }, ScalarRef::EmptyMap) => *len += 1,
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => builder.push(value),
             (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => builder.push(value),
-            (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => builder.push(value),
+            (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => {
+                BooleanType::push_item(builder, value);
+            }
             (ColumnBuilder::Binary(builder), ScalarRef::Binary(value)) => {
-                builder.put_slice(value);
-                builder.commit_row();
+                BinaryType::push_item(builder, value);
             }
             (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
-                builder.put_str(value);
-                builder.commit_row();
+                StringType::push_item(builder, value)
             }
             (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
-                builder.push(value);
+                TimestampType::push_item(builder, value)
             }
-            (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => builder.push(value),
+            (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => {
+                DateType::push_item(builder, value)
+            }
             (ColumnBuilder::Array(builder), ScalarRef::Array(value)) => {
-                builder.push(value);
+                ArrayType::push_item(builder, value);
             }
             (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
-                builder.push(value);
+                ArrayType::push_item(builder, value);
             }
             (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
-                builder.put_slice(value);
-                builder.commit_row();
+                BitmapType::push_item(builder, value);
             }
             (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
                 builder.push_null();
@@ -1780,20 +1829,74 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
                 assert_eq!(fields.len(), value.len());
-                for (field, scalar) in fields.iter_mut().zip(value.iter()) {
-                    field.push(scalar.clone());
+                for (field, scalar) in fields.iter_mut().zip(value.into_iter()) {
+                    field.push(scalar);
                 }
             }
             (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
-                builder.put_slice(value);
-                builder.commit_row();
+                VariantType::push_item(builder, value);
             }
             (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
-                builder.put_slice(value);
-                builder.commit_row();
+                GeometryType::push_item(builder, value);
             }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         }
+    }
+
+    pub fn push_repeat(&mut self, item: &ScalarRef, n: usize) {
+        match (self, item) {
+            (ColumnBuilder::Null { len }, ScalarRef::Null)
+            | (ColumnBuilder::EmptyArray { len }, ScalarRef::EmptyArray)
+            | (ColumnBuilder::EmptyMap { len }, ScalarRef::EmptyMap) => *len += n,
+
+            (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => {
+                builder.push_repeat(*value, n)
+            }
+            (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => {
+                builder.push_repeat(*value, n)
+            }
+            (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => {
+                BooleanType::push_item_repeat(builder, *value, n);
+            }
+            (ColumnBuilder::Timestamp(builder), ScalarRef::Timestamp(value)) => {
+                TimestampType::push_item_repeat(builder, *value, n);
+            }
+            (ColumnBuilder::Date(builder), ScalarRef::Date(value)) => {
+                DateType::push_item_repeat(builder, *value, n);
+            }
+            (ColumnBuilder::Binary(builder), ScalarRef::Binary(value)) => {
+                BinaryType::push_item_repeat(builder, *value, n);
+            }
+            (ColumnBuilder::String(builder), ScalarRef::String(value)) => {
+                StringType::push_item_repeat(builder, *value, n);
+            }
+            (ColumnBuilder::Array(builder), ScalarRef::Array(value))
+            | (ColumnBuilder::Map(builder), ScalarRef::Map(value)) => {
+                builder.push_repeat(value, n);
+            }
+            (ColumnBuilder::Bitmap(builder), ScalarRef::Bitmap(value)) => {
+                BitmapType::push_item_repeat(builder, value, n);
+            }
+            (ColumnBuilder::Nullable(builder), ScalarRef::Null) => {
+                NullableType::push_item_repeat(builder, None, n);
+            }
+            (ColumnBuilder::Nullable(builder), value) => {
+                builder.push_repeat(value.clone(), n);
+            }
+            (ColumnBuilder::Tuple(fields), ScalarRef::Tuple(value)) => {
+                assert_eq!(fields.len(), value.len());
+                for (field, scalar) in fields.iter_mut().zip(value.iter()) {
+                    field.push_repeat(scalar, n)
+                }
+            }
+            (ColumnBuilder::Variant(builder), ScalarRef::Variant(value)) => {
+                VariantType::push_item_repeat(builder, value, n);
+            }
+            (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
+                GeometryType::push_item_repeat(builder, value, n);
+            }
+            (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
+        };
     }
 
     pub fn push_default(&mut self) {

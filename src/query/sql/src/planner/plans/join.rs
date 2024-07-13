@@ -14,6 +14,7 @@
 
 use std::cmp::max;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -165,14 +166,43 @@ pub struct HashJoinBuildCacheInfo {
     pub columns: Vec<usize>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct JoinEquiCondition {
+    pub left: ScalarExpr,
+    pub right: ScalarExpr,
+    // Used for "is (not) distinct from".
+    pub is_null_equal: bool,
+}
+
+impl JoinEquiCondition {
+    pub fn new(left: ScalarExpr, right: ScalarExpr, is_null_equal: bool) -> Self {
+        Self {
+            left,
+            right,
+            is_null_equal,
+        }
+    }
+
+    pub fn new_conditions(
+        left: Vec<ScalarExpr>,
+        right: Vec<ScalarExpr>,
+        is_null_equal: Vec<usize>,
+    ) -> Vec<JoinEquiCondition> {
+        left.into_iter()
+            .zip(right)
+            .enumerate()
+            .map(|(index, (l, r))| JoinEquiCondition::new(l, r, is_null_equal.contains(&index)))
+            .collect()
+    }
+}
+
 /// Join operator. We will choose hash join by default.
 /// In the case that using hash join, the right child
 /// is always the build side, and the left child is always
 /// the probe side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Join {
-    pub left_conditions: Vec<ScalarExpr>,
-    pub right_conditions: Vec<ScalarExpr>,
+    pub equi_conditions: Vec<JoinEquiCondition>,
     pub non_equi_conditions: Vec<ScalarExpr>,
     pub join_type: JoinType,
     // marker_index is for MarkJoin only.
@@ -187,15 +217,12 @@ pub struct Join {
     pub single_to_inner: Option<JoinType>,
     // Cache info for ExpressionScan.
     pub build_side_cache_info: Option<HashJoinBuildCacheInfo>,
-    // Used for "is (not) distinct from".
-    pub is_null_equal: Vec<usize>,
 }
 
 impl Default for Join {
     fn default() -> Self {
         Self {
-            left_conditions: Default::default(),
-            right_conditions: Default::default(),
+            equi_conditions: Default::default(),
             non_equi_conditions: Default::default(),
             join_type: JoinType::Cross,
             marker_index: Default::default(),
@@ -204,7 +231,6 @@ impl Default for Join {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
-            is_null_equal: Default::default(),
         }
     }
 }
@@ -212,13 +238,21 @@ impl Default for Join {
 impl Join {
     pub fn used_columns(&self) -> Result<ColumnSet> {
         let mut used_columns = ColumnSet::new();
-        for cond in self
-            .left_conditions
-            .iter()
-            .chain(self.right_conditions.iter())
-            .chain(self.non_equi_conditions.iter())
-        {
-            used_columns = used_columns.union(&cond.used_columns()).cloned().collect();
+        for condition in self.equi_conditions.iter() {
+            used_columns = used_columns
+                .union(&condition.left.used_columns())
+                .cloned()
+                .collect();
+            used_columns = used_columns
+                .union(&condition.right.used_columns())
+                .cloned()
+                .collect();
+        }
+        for condition in self.non_equi_conditions.iter() {
+            used_columns = used_columns
+                .union(&condition.used_columns())
+                .cloned()
+                .collect();
         }
         Ok(used_columns)
     }
@@ -234,11 +268,9 @@ impl Join {
         let mut join_card_updated = false;
         let mut left_column_index = 0;
         let mut right_column_index = 0;
-        for (left_condition, right_condition) in self
-            .left_conditions
-            .iter()
-            .zip(self.right_conditions.iter())
-        {
+        for condition in self.equi_conditions.iter() {
+            let left_condition = &condition.left;
+            let right_condition = &condition.right;
             if join_card == 0 as f64 {
                 break;
             }
@@ -387,6 +419,12 @@ impl Join {
 
         Ok(join_card)
     }
+
+    pub fn has_null_equi_condition(&self) -> bool {
+        self.equi_conditions
+            .iter()
+            .any(|condition| condition.is_null_equal)
+    }
 }
 
 impl Operator for Join {
@@ -417,12 +455,14 @@ impl Operator for Join {
             .union(&right_prop.outer_columns)
             .cloned()
             .collect();
-        for cond in self
-            .left_conditions
-            .iter()
-            .chain(self.right_conditions.iter())
-        {
-            let used_columns = cond.used_columns();
+
+        for condition in self.equi_conditions.iter() {
+            let left_used_columns = condition.left.used_columns();
+            let right_used_columns = condition.right.used_columns();
+            let used_columns: HashSet<usize> = left_used_columns
+                .union(&right_used_columns)
+                .cloned()
+                .collect();
             let outer = used_columns.difference(&output_columns).cloned().collect();
             outer_columns = outer_columns.union(&outer).cloned().collect();
         }
@@ -551,9 +591,7 @@ impl Operator for Join {
         // if join/probe side is Serial or this is a non-equi join, we use Serial distribution
         if probe_physical_prop.distribution == Distribution::Serial
             || build_physical_prop.distribution == Distribution::Serial
-            || (self.left_conditions.is_empty()
-                && self.right_conditions.is_empty()
-                && !self.non_equi_conditions.is_empty())
+            || (self.equi_conditions.is_empty() && !self.non_equi_conditions.is_empty())
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
@@ -593,9 +631,19 @@ impl Operator for Join {
 
         // Otherwise, use hash shuffle
         if child_index == 0 {
-            required.distribution = Distribution::Hash(self.left_conditions.clone());
+            let left_conditions = self
+                .equi_conditions
+                .iter()
+                .map(|condition| condition.left.clone())
+                .collect();
+            required.distribution = Distribution::Hash(left_conditions);
         } else {
-            required.distribution = Distribution::Hash(self.right_conditions.clone());
+            let right_conditions = self
+                .equi_conditions
+                .iter()
+                .map(|condition| condition.right.clone())
+                .collect();
+            required.distribution = Distribution::Hash(right_conditions);
         }
 
         Ok(required)
@@ -611,21 +659,16 @@ impl Operator for Join {
 
         if self.join_type != JoinType::Cross && !ctx.get_settings().get_enforce_broadcast_join()? {
             // (Hash, Hash)
-            children_required.extend(
-                self.left_conditions
-                    .iter()
-                    .zip(self.right_conditions.iter())
-                    .map(|(l, r)| {
-                        vec![
-                            RequiredProperty {
-                                distribution: Distribution::Hash(vec![l.clone()]),
-                            },
-                            RequiredProperty {
-                                distribution: Distribution::Hash(vec![r.clone()]),
-                            },
-                        ]
-                    }),
-            );
+            children_required.extend(self.equi_conditions.iter().map(|condition| {
+                vec![
+                    RequiredProperty {
+                        distribution: Distribution::Hash(vec![condition.left.clone()]),
+                    },
+                    RequiredProperty {
+                        distribution: Distribution::Hash(vec![condition.right.clone()]),
+                    },
+                ]
+            }));
         }
 
         if !matches!(

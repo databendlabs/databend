@@ -17,6 +17,7 @@ pub mod cluster;
 pub mod config;
 pub mod instance_status;
 pub mod processes;
+pub mod query_profiling;
 pub mod settings;
 pub mod stream_status;
 pub mod system;

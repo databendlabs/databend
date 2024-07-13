@@ -18,6 +18,7 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use chrono::Utc;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ParquetReadOptions;
@@ -34,43 +35,51 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_operator;
-use databend_common_storage::DataOperator;
 use databend_common_storages_parquet::ParquetFilesPart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::RangePrunerCreator;
-use icelake::catalog::Catalog;
-use opendal::Operator;
+use iceberg::spec::DataContentType;
+use iceberg::spec::ManifestContentType;
 use tokio::sync::OnceCell;
 
 use crate::partition::IcebergPartInfo;
 use crate::stats::get_stats_of_data_file;
 use crate::table_source::IcebergTableSource;
+use crate::IcebergCatalog;
 
 pub const ICEBERG_ENGINE: &str = "ICEBERG";
 
 /// accessor wrapper as a table
-///
-/// TODO: we should use icelake Table instead.
 pub struct IcebergTable {
     info: TableInfo,
-    table: OnceCell<icelake::Table>,
+    ctl: IcebergCatalog,
+    database_name: String,
+    table_name: String,
+
+    table: OnceCell<iceberg::table::Table>,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
+        let ctl = IcebergCatalog::try_create(info.catalog_info.clone())?;
+        let (db_name, table_name) = info.desc.as_str().split_once(',').ok_or_else(|| {
+            ErrorCode::BadArguments(format!("Iceberg table desc {} is invalid", &info.desc))
+        })?;
         Ok(Box::new(Self {
-            info,
+            info: info.clone(),
+            ctl,
+            database_name: db_name.to_string(),
+            table_name: table_name.to_string(),
             table: OnceCell::new(),
         }))
     }
@@ -92,83 +101,77 @@ impl IcebergTable {
         })
     }
 
-    pub async fn load_iceberg_table(dop: DataOperator) -> Result<icelake::Table> {
-        // FIXME: we should implement catalog for icelake.
-        let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-            OperatorCreatorWrapper(dop.clone()),
-        ));
-
-        let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-        icelake_catalog.load_table(&table_id).await.map_err(|err| {
-            ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-        })
+    pub async fn load_iceberg_table(
+        ctl: &IcebergCatalog,
+        database: &str,
+        table_name: &str,
+    ) -> Result<iceberg::table::Table> {
+        let db_ident = iceberg::NamespaceIdent::new(database.to_string());
+        let table = ctl
+            .iceberg_catalog()
+            .load_table(&iceberg::TableIdent::new(db_ident, table_name.to_string()))
+            .await
+            .map_err(|err| {
+                ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+            })?;
+        Ok(table)
     }
 
-    pub async fn get_schema(table: &icelake::Table) -> Result<TableSchema> {
-        let meta = table.current_table_metadata();
+    pub fn get_schema(table: &iceberg::table::Table) -> Result<TableSchema> {
+        let meta = table.metadata();
 
         // Build arrow schema from iceberg metadata.
-        let arrow_schema: ArrowSchema = meta
-            .schemas
-            .last()
-            .ok_or_else(|| {
-                ErrorCode::ReadTableDataError("Iceberg table schema is empty".to_string())
-            })?
-            .clone()
-            .try_into()
-            .map_err(|e| {
-                ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
-            })?;
+        let arrow_schema: ArrowSchema = meta.current_schema().as_ref().try_into().map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot convert table metadata: {e:?}"))
+        })?;
         TableSchema::try_from(&arrow_schema)
     }
 
     /// create a new table on the table directory
     #[async_backtrace::framed]
     pub async fn try_create_from_iceberg_catalog(
-        catalog_info: Arc<CatalogInfo>,
-        database: &str,
+        ctl: IcebergCatalog,
+        database_name: &str,
         table_name: &str,
-        dop: DataOperator,
     ) -> Result<IcebergTable> {
-        let table = Self::load_iceberg_table(dop.clone()).await?;
-        let table_schema = Self::get_schema(&table).await?;
+        let table = Self::load_iceberg_table(&ctl, database_name, table_name).await?;
+        let table_schema = Self::get_schema(&table)?;
 
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
-            desc: format!("{database}.{table_name}"),
+            desc: format!("{database_name}.{table_name}"),
             name: table_name.to_string(),
             meta: TableMeta {
                 schema: Arc::new(table_schema),
                 engine: "iceberg".to_string(),
                 created_on: Utc::now(),
-                storage_params: Some(dop.params()),
                 ..Default::default()
             },
-            catalog_info,
+            catalog_info: ctl.info(),
             ..Default::default()
         };
 
         Ok(Self {
             info,
+            ctl,
+            database_name: database_name.to_string(),
+            table_name: table_name.to_string(),
             table: OnceCell::new_with(Some(table)),
         })
     }
 
-    async fn table(&self) -> Result<&icelake::Table> {
+    async fn table(&self) -> Result<&iceberg::table::Table> {
         self.table
             .get_or_try_init(|| async {
-                let sp = self.get_storage_params()?;
-                let op = DataOperator::try_new(sp)?;
-                // FIXME: we should implement catalog for icelake.
-                let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
-                    OperatorCreatorWrapper(op),
-                ));
-
-                let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
-                let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
-                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
-                })?;
+                let table =
+                    Self::load_iceberg_table(&self.ctl, &self.database_name, &self.table_name)
+                        .await
+                        .map_err(|err| {
+                            ErrorCode::ReadTableDataError(format!(
+                                "Iceberg catalog load failed: {err:?}"
+                            ))
+                        })?;
 
                 Ok(table)
             })
@@ -215,7 +218,7 @@ impl IcebergTable {
         let sp = self.get_storage_params()?;
         let op = init_operator(sp)?;
         let mut builder =
-            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, &arrow_schema)?
+            ParquetRSReaderBuilder::create(ctx.clone(), op, table_schema, arrow_schema)?
                 .with_options(read_options)
                 .with_push_downs(plan.push_downs.as_ref())
                 .with_pruner(Some(pruner));
@@ -246,9 +249,37 @@ impl IcebergTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let table = self.table().await?;
 
-        let data_files = table.current_data_files().await.map_err(|e| {
-            ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
+        let metadata = table.metadata_ref();
+        let snapshot = metadata.current_snapshot().ok_or_else(|| {
+            ErrorCode::ReadTableDataError("Iceberg table doesn't have valid snapshot")
         })?;
+
+        let manifest_list = snapshot
+            .load_manifest_list(table.file_io(), &metadata)
+            .await
+            .map_err(|e| {
+                ErrorCode::ReadTableDataError(format!("Cannot load manifest list: {e:?}"))
+            })?;
+
+        let mut data_files = vec![];
+
+        for manifest_file in manifest_list
+            .entries()
+            .iter()
+            .filter(|v| v.content == ManifestContentType::Data)
+        {
+            let manifest = manifest_file
+                .load_manifest(table.file_io())
+                .await
+                .map_err(|e| {
+                    ErrorCode::ReadTableDataError(format!("Cannot load manifest file: {e:?}"))
+                })?;
+            manifest.entries().iter().for_each(|v| {
+                if v.content_type() == DataContentType::Data {
+                    data_files.push(v.data_file().clone());
+                }
+            });
+        }
 
         let filter = push_downs.as_ref().and_then(|extra| {
             extra
@@ -275,19 +306,17 @@ impl IcebergTable {
                     true
                 }
             })
-            .map(|v: icelake::types::DataFile| {
-                read_rows += v.record_count as usize;
-                read_bytes += v.file_size_in_bytes as usize;
-                match v.file_format {
-                    icelake::types::DataFileFormat::Parquet => {
-                        let location = table
-                            .rel_path(&v.file_path)
-                            .expect("file path must be rel to table");
+            .map(|v: iceberg::spec::DataFile| {
+                read_rows += v.record_count() as usize;
+                read_bytes += v.file_size_in_bytes() as usize;
+                match v.file_format() {
+                    iceberg::spec::DataFileFormat::Parquet => {
+                        let location = v.file_path().to_string();
                         Ok(Arc::new(
                             Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
                                 ParquetFilesPart {
-                                    files: vec![(location, v.file_size_in_bytes as u64)],
-                                    estimated_uncompressed_size: v.file_size_in_bytes as u64, // This field is not used here.
+                                    files: vec![(location, v.file_size_in_bytes())],
+                                    estimated_uncompressed_size: v.file_size_in_bytes(),
                                 },
                             ))) as Box<dyn PartInfo>,
                         ))
@@ -357,22 +386,5 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         true
-    }
-}
-
-struct OperatorCreatorWrapper(DataOperator);
-
-impl icelake::catalog::OperatorCreator for OperatorCreatorWrapper {
-    fn create(&self) -> icelake::Result<Operator> {
-        Ok(self.0.operator())
-    }
-
-    fn create_with_subdir(&self, path: &str) -> icelake::Result<Operator> {
-        let params = self.0.params().map_root(|v| format!("{}/{}", v, path));
-
-        // The operator used to be built successfully, change root should never returns error.
-        Ok(DataOperator::try_new(&params)
-            .expect("invalid params")
-            .operator())
     }
 }

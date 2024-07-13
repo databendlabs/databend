@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::Join;
+use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::ScalarExpr;
@@ -68,32 +69,25 @@ impl DeduplicateJoinConditionOptimizer {
         let left = self.deduplicate(s_expr.child(0)?)?;
         let right = self.deduplicate(s_expr.child(1)?)?;
         let mut join = join.clone();
-        let mut new_left_conditions = Vec::new();
-        let mut new_right_conditions = Vec::new();
-        let mut is_null_equal = Vec::new();
-        for (index, (left_condition, right_condition)) in join
-            .left_conditions
-            .iter()
-            .zip(join.right_conditions.iter())
-            .enumerate()
-        {
+        let mut new_equi_conditions = Vec::new();
+        for condition in join.equi_conditions.iter() {
+            let left_condition = &condition.left;
+            let right_condition = &condition.right;
             let left_index = self.get_scalar_expr_index(left_condition);
             let right_index = self.get_scalar_expr_index(right_condition);
             let left_parent_index = self.find(left_index);
             let right_parent_index = self.find(right_index);
             if left_parent_index != right_parent_index {
                 *self.parent.get_mut(&right_parent_index).unwrap() = left_parent_index;
-                new_left_conditions.push(left_condition.clone());
-                new_right_conditions.push(right_condition.clone());
-                if join.is_null_equal.contains(&index) {
-                    is_null_equal.push(new_left_conditions.len() - 1);
-                }
+                new_equi_conditions.push(JoinEquiCondition::new(
+                    left_condition.clone(),
+                    right_condition.clone(),
+                    condition.is_null_equal,
+                ));
             }
         }
-        if new_left_conditions.len() != join.left_conditions.len() {
-            join.left_conditions = new_left_conditions;
-            join.right_conditions = new_right_conditions;
-            join.is_null_equal = is_null_equal;
+        if new_equi_conditions.len() != join.equi_conditions.len() {
+            join.equi_conditions = new_equi_conditions;
         }
         let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
         Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))

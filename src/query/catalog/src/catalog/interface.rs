@@ -288,24 +288,54 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply>;
 
-    async fn update_table_meta(
-        &self,
-        table_info: &TableInfo,
-        req: UpdateTableMetaReq,
-    ) -> Result<UpdateTableMetaReply>;
-
-    // update stream metas, currently used by "copy into location form stream"
-    async fn update_stream_metas(&self, _update_stream_meta: &[UpdateStreamMetaReq]) -> Result<()> {
-        Ok(())
-    }
-
-    async fn update_multi_table_meta(
+    async fn retryable_update_multi_table_meta(
         &self,
         _req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         Err(ErrorCode::Unimplemented(
             "'update_multi_table_meta' not implemented",
         ))
+    }
+
+    async fn update_multi_table_meta(
+        &self,
+        req: UpdateMultiTableMetaReq,
+    ) -> Result<UpdateTableMetaReply> {
+        self.retryable_update_multi_table_meta(req)
+            .await?
+            .map_err(|e| {
+                ErrorCode::TableVersionMismatched(format!(
+                    "Fail to update table metas, conflict tables: {:?}",
+                    e.iter()
+                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
+                        .collect::<Vec<_>>()
+                ))
+            })
+    }
+
+    // update stream metas, currently used by "copy into location form stream"
+    async fn update_stream_metas(
+        &self,
+        update_stream_metas: Vec<UpdateStreamMetaReq>,
+    ) -> Result<()> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_stream_metas,
+            ..Default::default()
+        })
+        .await
+        .map(|_| ())
+    }
+
+    async fn update_single_table_meta(
+        &self,
+        req: UpdateTableMetaReq,
+        table_info: &TableInfo,
+    ) -> Result<UpdateTableMetaReply> {
+        self.update_multi_table_meta(UpdateMultiTableMetaReq {
+            update_table_metas: vec![(req, table_info.clone())],
+            ..Default::default()
+        })
+        .await
     }
 
     async fn set_table_column_mask_policy(

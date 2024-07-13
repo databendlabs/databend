@@ -21,7 +21,6 @@ from typing import List, Dict, Any, Tuple, Optional
 # https://github.com/datafuselabs/databend-udf
 from databend_udf import udf, UDFServer
 
-
 logging.basicConfig(level=logging.INFO)
 
 
@@ -321,6 +320,11 @@ def wait_concurrent(x):
     return x
 
 
+@udf(input_types=["VARCHAR"], result_type="VARCHAR")
+def ping(s: str) -> str:
+    return s
+
+
 if __name__ == "__main__":
     udf_server = UDFServer("0.0.0.0:8815")
     udf_server.add_function(add_signed)
@@ -347,4 +351,7 @@ if __name__ == "__main__":
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
+
+    # Built-in function
+    udf_server.add_function(ping)
     udf_server.serve()

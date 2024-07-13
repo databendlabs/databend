@@ -224,3 +224,91 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+# https://github.com/datafuselabs/databend/issues/15791
+
+statement ok
+CREATE TABLE t1 (id INT, name VARCHAR(255) );
+
+statement ok
+INSERT INTO t1 (id, name) VALUES (1, 'Row 1'), (2, 'Row 2'), (3, 'Row 3'), (4, 'Row 4'), (5, 'Row 5'), (6, 'Row 6'), (7, 'Row 7'), (8, 'Row 8'), (9, 'Row 9'), (10, 'Row 10');
+
+statement ok
+CREATE TABLE t2 (id INT, name VARCHAR(255) );
+
+statement ok
+INSERT INTO t2 (id, name) VALUES (1, 'Row 11'), (2, 'Row 12'), (3, 'Row 13'), (4, 'Row 14'), (5, 'Row 15'), (6, 'Row 16'), (7, 'Row 17'), (8, 'Row 18'), (9, 'Row 19'), (10, 'Row 20');
+
+statement ok
+UPDATE t1 SET name = 'test' WHERE name IS not NULL AND id in (select id from t2);
+
+query IT
+select * from t1 order by id;
+----
+1 test
+2 test
+3 test
+4 test
+5 test
+6 test
+7 test
+8 test
+9 test
+10 test
+
+statement ok
+UPDATE t1 SET name = 'test' WHERE id in (select id from t2);
+
+query IT
+select * from t1 order by id;
+----
+1 test
+2 test
+3 test
+4 test
+5 test
+6 test
+7 test
+8 test
+9 test
+10 test
+
+statement ok
+UPDATE t1 SET name = 'test' WHERE name IS not NULL;
+
+query IT
+select * from t1 order by id;
+----
+1 test
+2 test
+3 test
+4 test
+5 test
+6 test
+7 test
+8 test
+9 test
+10 test
+
+statement ok
+UPDATE t1 SET name = 'test' WHERE name IS not NULL and id = 1;
+
+query IT
+select * from t1 order by id;
+----
+1 test
+2 test
+3 test
+4 test
+5 test
+6 test
+7 test
+8 test
+9 test
+10 test
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

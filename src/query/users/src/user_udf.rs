@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::udf::UdfApiError;
 use databend_common_management::udf::UdfError;
@@ -32,6 +33,13 @@ impl UserApiProvider {
         info: UserDefinedFunction,
         create_option: &CreateOption,
     ) -> Result<()> {
+        if self.get_configured_udf(&info.name).is_some() {
+            return Err(ErrorCode::UdfAlreadyExists(format!(
+                "Built-in UDF `{}` already exists",
+                info.name
+            )));
+        }
+
         let udf_api = self.udf_api(tenant);
         udf_api.add_udf(info, create_option).await??;
         Ok(())
@@ -40,6 +48,13 @@ impl UserApiProvider {
     // Update a UDF.
     #[async_backtrace::framed]
     pub async fn update_udf(&self, tenant: &Tenant, info: UserDefinedFunction) -> Result<u64> {
+        if self.get_configured_udf(&info.name).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Built-in UDF `{}` cannot be updated",
+                info.name
+            )));
+        }
+
         let res = self
             .udf_api(tenant)
             .update_udf(info, MatchSeq::GE(1))
@@ -56,8 +71,12 @@ impl UserApiProvider {
         tenant: &Tenant,
         udf_name: &str,
     ) -> Result<Option<UserDefinedFunction>, UdfApiError> {
-        let seqv = self.udf_api(tenant).get_udf(udf_name).await?;
-        Ok(seqv.map(|x| x.data))
+        if let Some(udf) = self.get_configured_udf(udf_name) {
+            Ok(Some(udf))
+        } else {
+            let seqv = self.udf_api(tenant).get_udf(udf_name).await?;
+            Ok(seqv.map(|x| x.data))
+        }
     }
 
     #[async_backtrace::framed]
@@ -71,10 +90,13 @@ impl UserApiProvider {
     pub async fn list_udf(&self, tenant: &Tenant) -> Result<Vec<UserDefinedFunction>> {
         let udf_api = self.udf_api(tenant);
 
-        let udfs = udf_api
+        let mut udfs = udf_api
             .list_udf()
             .await
             .map_err(|e| e.add_message_back("while list UDFs"))?;
+
+        // Extend the existing `udfs` vector with built-in UDFs.
+        udfs.extend(self.get_configured_udfs().into_values());
 
         Ok(udfs)
     }
@@ -87,6 +109,14 @@ impl UserApiProvider {
         udf_name: &str,
         allow_no_change: bool,
     ) -> std::result::Result<std::result::Result<(), UdfError>, UdfApiError> {
+        if self.get_configured_udf(udf_name).is_some() {
+            return Ok(Err(UdfError::Exists {
+                tenant: tenant.tenant_name().to_string(),
+                name: udf_name.to_string(),
+                reason: "Built-in UDF cannot be dropped".to_string(),
+            }));
+        }
+
         let dropped = self
             .udf_api(tenant)
             .drop_udf(udf_name, MatchSeq::GE(1))

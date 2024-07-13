@@ -69,7 +69,7 @@ pub fn set_backoff(
 }
 
 pub fn column_parquet_metas(
-    file_meta: &parquet_rs::format::FileMetaData,
+    file_meta: &parquet::format::FileMetaData,
     schema: &TableSchemaRef,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
     // currently we use one group only

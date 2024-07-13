@@ -37,8 +37,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
-use databend_common_io::constants::INF_BYTES_LOWER;
-use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
@@ -82,12 +80,11 @@ impl SeparatedTextDecoder {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
-                nan_bytes: params.nan_display.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
                 is_rounding_mode: options_ext.is_rounding_mode,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -99,12 +96,11 @@ impl SeparatedTextDecoder {
                 null_if: vec![NULL_BYTES_ESCAPE.as_bytes().to_vec()],
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
+                enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -254,7 +250,10 @@ impl SeparatedTextDecoder {
 
     fn read_date(&self, column: &mut Vec<i32>, data: &[u8]) -> Result<()> {
         let mut buffer_readr = Cursor::new(&data);
-        let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
+        let date = buffer_readr.read_date_text(
+            &self.common_settings().timezone,
+            self.common_settings().enable_dst_hour_fix,
+        )?;
         let days = uniform_date(date);
         check_date(days as i64)?;
         column.push(days);
@@ -266,7 +265,11 @@ impl SeparatedTextDecoder {
             read_num_text_exact(data)?
         } else {
             let mut buffer_readr = Cursor::new(&data);
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().timezone, false)?;
+            let t = buffer_readr.read_timestamp_text(
+                &self.common_settings().timezone,
+                false,
+                self.common_settings.enable_dst_hour_fix,
+            )?;
             match t {
                 DateTimeResType::Datetime(t) => {
                     if !buffer_readr.eof() {

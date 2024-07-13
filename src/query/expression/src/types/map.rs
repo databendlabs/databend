@@ -147,6 +147,10 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.push_repeat(item, n)
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push_default();
     }
@@ -254,6 +258,11 @@ impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
     pub fn push(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>)) {
         K::push_item(&mut self.keys, k);
         V::push_item(&mut self.values, v);
+    }
+
+    pub fn push_repeat(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>), n: usize) {
+        K::push_item_repeat(&mut self.keys, k, n);
+        V::push_item_repeat(&mut self.values, v, n);
     }
 
     pub fn push_default(&mut self) {
@@ -414,6 +423,10 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
         <MapInternal<K, V> as ValueType>::push_item(builder, item)
+    }
+
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        <MapInternal<K, V> as ValueType>::push_item_repeat(builder, item, n)
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
