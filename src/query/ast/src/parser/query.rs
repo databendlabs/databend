@@ -623,9 +623,9 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
         value(JoinOperator::CrossJoin, rule! { CROSS }),
-        value(JoinOperator::LeftAsofJoin, rule! { ASOF ~ LEFT }),
-        value(JoinOperator::RightAsofJoin, rule! { ASOF ~ RIGHT }),
-        value(JoinOperator::AsofJoin, rule! { ASOF }),
+        value(JoinOperator::LeftAsof, rule! { ASOF ~ LEFT }),
+        value(JoinOperator::RightAsof, rule! { ASOF ~ RIGHT }),
+        value(JoinOperator::Asof, rule! { ASOF }),
     ))(i)
 }
 

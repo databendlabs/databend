@@ -16,6 +16,7 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -38,6 +39,7 @@ use parking_lot::RwLock;
 
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
+use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {
@@ -107,14 +109,34 @@ impl RangeJoinState {
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        right_table.push(block);
+        let mut right_block = block;
+        if matches!(self.join_type, JoinType::Left) {
+            let validity = Bitmap::new_constant(true, right_block.num_rows());
+            let nullable_right_columns = right_block
+                .columns()
+                .iter()
+                .map(|c| wrap_true_validity(c, right_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            right_block = DataBlock::new(nullable_right_columns, right_block.num_rows());
+        }
+        right_table.push(right_block);
         Ok(())
     }
 
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        left_table.push(block);
+        let mut left_block = block;
+        if matches!(self.join_type, JoinType::Right) {
+            let validity = Bitmap::new_constant(true, left_block.num_rows());
+            let nullable_left_columns = left_block
+                .columns()
+                .iter()
+                .map(|c| wrap_true_validity(c, left_block.num_rows(), &validity))
+                .collect::<Vec<_>>();
+            left_block = DataBlock::new(nullable_left_columns, left_block.num_rows());
+        }
+        left_table.push(left_block);
         Ok(())
     }
 

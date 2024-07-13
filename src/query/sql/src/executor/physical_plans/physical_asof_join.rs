@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
@@ -89,7 +90,7 @@ impl PhysicalPlanBuilder {
         if range_conditions.len() > 1 {
             return Err(ErrorCode::Internal("Multiple inequalities condition!"));
         }
-        let (window_func, right_column) =
+        let (window_func, right_column, left_type) =
             self.bind_window_func(join, s_expr, &range_conditions, &mut other_conditions)?;
         let window_plan = self.build_window_plan(&window_func, s_expr, &mut window_index)?;
         self.add_range_condition(
@@ -97,6 +98,7 @@ impl PhysicalPlanBuilder {
             window_index,
             &mut range_conditions,
             right_column,
+            left_type,
         )?;
         let mut ss_expr = s_expr.clone();
         ss_expr.children[0] = Arc::new(window_plan);
@@ -132,6 +134,7 @@ impl PhysicalPlanBuilder {
         window_index: usize,
         range_conditions: &mut Vec<ScalarExpr>,
         right_column: ScalarExpr,
+        left_type: DataType,
     ) -> Result<bool> {
         let mut folded_args: Vec<ScalarExpr> = Vec::with_capacity(2);
         let mut func_name = String::from("eq");
@@ -139,7 +142,7 @@ impl PhysicalPlanBuilder {
         let column = ColumnBindingBuilder::new(
             window_func.display_name.clone(),
             window_index,
-            Box::new(right_column.data_type()?.remove_nullable().clone()),
+            Box::new(left_type),
             Visibility::Visible,
         )
         .build();
@@ -188,7 +191,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         range_conditions: &[ScalarExpr],
         other_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<(WindowFunc, ScalarExpr), ErrorCode> {
+    ) -> Result<(WindowFunc, ScalarExpr, DataType), ErrorCode> {
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
@@ -299,7 +302,7 @@ impl PhysicalPlanBuilder {
                 ))),
             },
         };
-        Ok((window_func, right_column))
+        Ok((window_func, right_column, left_column.data_type()?.clone()))
     }
 
     fn build_window_plan(

@@ -44,7 +44,6 @@ use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::pipelines::processors::transforms::wrap_true_validity;
 
 pub struct IEJoinState {
     l1_data_type: DataType,
@@ -392,16 +391,6 @@ impl RangeJoinState {
         }
         let mut left_result_block =
             DataBlock::take_blocks(&left_table[left_idx..left_idx + 1], &indices, indices.len());
-        // For right join, wrap nullable for left block
-        // if !right_match.is_empty() {
-        //     let validity = Bitmap::new_constant(true, indices.len());
-        //     let nullable_left_columns = left_result_block
-        //         .columns()
-        //         .iter()
-        //         .map(|c| wrap_true_validity(c, indices.len(), &validity))
-        //         .collect::<Vec<_>>();
-        //     left_result_block = DataBlock::new(nullable_left_columns, indices.len());
-        // }
         indices.clear();
         for res in right_buffer.iter() {
             indices.push((0u32, *res as u32, 1usize));
@@ -409,22 +398,11 @@ impl RangeJoinState {
                 column_builder.push(NumberScalar::UInt64((*res + right_offset) as u64));
             }
         }
-        let mut right_result_block = DataBlock::take_blocks(
+        let right_result_block = DataBlock::take_blocks(
             &right_table[right_idx..right_idx + 1],
             &indices,
             indices.len(),
         );
-        // For left join, wrap nullable for right block
-        // if !left_match.is_empty() {
-        //     let validity = Bitmap::new_constant(true, indices.len());
-        //     let nullable_right_columns = right_result_block
-        //         .columns()
-        //         .iter()
-        //         .map(|c| wrap_true_validity(c, indices.len(), &validity))
-        //         .collect::<Vec<_>>();
-        //     right_result_block = DataBlock::new(nullable_right_columns, indices.len());
-        // }
-        // Merge left_result_block and right_result_block
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
         }
@@ -498,7 +476,7 @@ impl RangeJoinState {
             .iter()
             .map(|c| BlockEntry {
                 value: Value::Scalar(Scalar::Null),
-                data_type: c.data_type.clone(),
+                data_type: c.data_type.wrap_nullable(),
             })
             .collect::<Vec<_>>();
         let right_result_block = DataBlock::new(nullable_columns, indices.len());
@@ -545,7 +523,7 @@ impl RangeJoinState {
             .iter()
             .map(|c| BlockEntry {
                 value: Value::Scalar(Scalar::Null),
-                data_type: c.data_type.clone(),
+                data_type: c.data_type.wrap_nullable(),
             })
             .collect::<Vec<_>>();
         let mut left_result_block = DataBlock::new(nullable_columns, indices.len());
