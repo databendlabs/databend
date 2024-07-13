@@ -411,6 +411,69 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : st_npoints(to_geometry('POINT(66 12)'))
+raw expr       : st_npoints(to_geometry('POINT(66 12)'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("POINT(66 12)"))
+optimized expr : 1_u32
+output type    : UInt32 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))
+raw expr       : st_npoints(to_geometry('MULTIPOINT((45 21), (12 54))'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTIPOINT((45 21), (12 54))"))
+optimized expr : 2_u32
+output type    : UInt32 NULL
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : st_npoints(to_geometry('LINESTRING(40 60, 50 50, 60 40)'))
+raw expr       : st_npoints(to_geometry('LINESTRING(40 60, 50 50, 60 40)'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("LINESTRING(40 60, 50 50, 60 40)"))
+optimized expr : 3_u32
+output type    : UInt32 NULL
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : st_npoints(to_geometry('MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))'))
+raw expr       : st_npoints(to_geometry('MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTILINESTRING((1 1, 32 17), (33 12, 73 49, 87.1 6.1))"))
+optimized expr : 5_u32
+output type    : UInt32 NULL
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : st_npoints(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))
+raw expr       : st_npoints(to_geometry('POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("POLYGON((17 17, 17 30, 30 30, 30 17, 17 17))"))
+optimized expr : 5_u32
+output type    : UInt32 NULL
+output domain  : {5..=5}
+output         : 5
+
+
+ast            : st_npoints(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))
+raw expr       : st_npoints(to_geometry('MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))"))
+optimized expr : 8_u32
+output type    : UInt32 NULL
+output domain  : {8..=8}
+output         : 8
+
+
+ast            : st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))
+raw expr       : st_npoints(to_geometry('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))'))
+checked expr   : st_npoints<Geometry>(to_geometry<String>("GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))"))
+optimized expr : 8_u32
+output type    : UInt32 NULL
+output domain  : {8..=8}
+output         : 8
+
+
 ast            : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
 raw expr       : ST_POINTN(TO_GEOMETRY('LINESTRING(1 1, 2 2, 3 3, 4 4)'), 1)
 checked expr   : st_pointn<Geometry, Int32>(to_geometry<String>("LINESTRING(1 1, 2 2, 3 3, 4 4)"), to_int32<UInt8>(1_u8))
@@ -427,6 +490,15 @@ optimized expr : "POINT(3 3)"
 output type    : Geometry
 output domain  : Undefined
 output         : 'POINT(3 3)'
+
+
+ast            : st_setsrid(to_geometry('POINT(13 51)'), 4326)
+raw expr       : st_setsrid(to_geometry('POINT(13 51)'), 4326)
+checked expr   : st_setsrid<Geometry, Int32>(to_geometry<String>("POINT(13 51)"), to_int32<UInt16>(4326_u16))
+optimized expr : "SRID=4326;POINT(13 51)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'SRID=4326;POINT(13 51)'
 
 
 ast            : st_srid(to_geometry('POINT(-122.306100 37.554162)', 1234))

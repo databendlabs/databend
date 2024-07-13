@@ -20,6 +20,7 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -69,6 +70,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("st_makegeompoint", &["st_geom_point"]);
     registry.register_aliases("st_makepolygon", &["st_polygon"]);
     registry.register_aliases("st_makeline", &["st_make_line"]);
+    registry.register_aliases("st_npoints", &["st_numpoints"]);
     registry.register_aliases("st_geometryfromwkb", &[
         "st_geomfromwkb",
         "st_geometryfromewkb",
@@ -1031,6 +1033,26 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_combine_nullable_2_arg::<GeometryType, Int32Type, GeometryType, _, _>(
+        "st_setsrid",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<GeometryType, Int32Type, NullableType<GeometryType>>(
+            |geometry, srid, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let ewkb = Ewkb(geometry);
+                let mut ggeom = ewkb.to_geos().unwrap();
+                ggeom.set_srid(srid as usize);
+                let geo = ggeom.to_ewkb(ggeom.dims(), ggeom.srid()).unwrap();
+                output.push(&geo);
+            },
+        ),
+    );
+
     registry.register_combine_nullable_1_arg::<GeometryType, Int32Type, _, _>(
         "st_srid",
         |_, _| FunctionDomain::Full,
@@ -1123,6 +1145,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                     None => builder.push_null(),
                     Some(y_min) => builder.push(F64::from(AsPrimitive::<f64>::as_(y_min))),
                 };
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_1_arg::<GeometryType, UInt32Type, _, _>(
+        "st_npoints",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GeometryType, NullableType<UInt32Type>>(
+            |geometry, builder, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(builder.len()) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+                builder.push(count_points(&Ewkb(geometry).to_geo().unwrap()) as u32);
             },
         ),
     );
@@ -1821,5 +1859,39 @@ fn st_extreme(geometry: &geo_types::Geometry<f64>, axis: Axis, extremum: Extremu
             };
             Some(coord)
         }
+    }
+}
+
+fn count_points(geom: &geo_types::Geometry) -> usize {
+    match geom {
+        geo_types::Geometry::Point(_) => 1,
+        geo_types::Geometry::Line(_) => 2,
+        geo_types::Geometry::LineString(line_string) => line_string.0.len(),
+        geo_types::Geometry::Polygon(polygon) => {
+            polygon.exterior().0.len()
+                + polygon
+                    .interiors()
+                    .iter()
+                    .map(|line_string| line_string.0.len())
+                    .sum::<usize>()
+        }
+        geo_types::Geometry::MultiPoint(multi_point) => multi_point.0.len(),
+        geo_types::Geometry::MultiLineString(multi_line_string) => multi_line_string
+            .0
+            .iter()
+            .map(|line_string| line_string.0.len())
+            .sum::<usize>(),
+        geo_types::Geometry::MultiPolygon(multi_polygon) => multi_polygon
+            .0
+            .iter()
+            .map(|polygon| count_points(&geo_types::Geometry::Polygon(polygon.clone())))
+            .sum::<usize>(),
+        geo_types::Geometry::GeometryCollection(geometry_collection) => geometry_collection
+            .0
+            .iter()
+            .map(count_points)
+            .sum::<usize>(),
+        geo_types::Geometry::Rect(_) => 5,
+        geo_types::Geometry::Triangle(_) => 4,
     }
 }
