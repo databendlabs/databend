@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_txn::TxnManagerRef;
 
 use crate::operations::common::ConflictResolveContext;
 
@@ -38,6 +39,26 @@ pub trait SnapshotGenerator {
     }
 
     fn generate_new_snapshot(
+        &self,
+        schema: TableSchema,
+        cluster_key_meta: Option<ClusterKey>,
+        previous: Option<Arc<TableSnapshot>>,
+        prev_table_seq: Option<u64>,
+        txn_mgr: TxnManagerRef,
+        table_id: u64,
+    ) -> Result<TableSnapshot> {
+        let previous_of_previous = previous.as_ref().and_then(|prev| prev.prev_snapshot_id);
+        let mut snapshot =
+            self.do_generate_new_snapshot(schema, cluster_key_meta, previous, prev_table_seq)?;
+        let guard = txn_mgr.lock();
+        // If a table is updated multi times in a transaction, the previous snapshot is always the snapshot before the transaction.
+        if guard.is_active() && guard.get_table_from_buffer_by_id(table_id).is_some() {
+            snapshot.prev_snapshot_id = previous_of_previous;
+        }
+        Ok(snapshot)
+    }
+
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,

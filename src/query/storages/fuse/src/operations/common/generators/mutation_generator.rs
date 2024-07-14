@@ -56,7 +56,7 @@ impl SnapshotGenerator for MutationGenerator {
         self.conflict_resolve_ctx = ctx;
     }
 
-    fn generate_new_snapshot(
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,

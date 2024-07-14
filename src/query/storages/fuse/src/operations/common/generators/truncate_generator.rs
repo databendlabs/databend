@@ -54,7 +54,7 @@ impl SnapshotGenerator for TruncateGenerator {
         self
     }
 
-    fn generate_new_snapshot(
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
