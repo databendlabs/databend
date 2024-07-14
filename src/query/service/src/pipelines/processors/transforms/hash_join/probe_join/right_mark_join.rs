@@ -124,7 +124,6 @@ impl HashJoinProbeState {
             .iter()
             .map(|c| c.to_column(num_rows))
             .collect::<Vec<_>>();
-
         let markers = probe_state.markers.as_mut().unwrap();
         self.hash_join_state
             .init_markers((&cols).into(), input.num_rows(), markers);

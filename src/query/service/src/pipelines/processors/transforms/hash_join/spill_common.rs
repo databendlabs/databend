@@ -60,10 +60,14 @@ pub fn get_hashes(
     let columns = keys
         .iter()
         .map(|expr| {
-            Ok(evaluator
+            let column = evaluator
                 .run(expr)?
-                .convert_to_full_column(expr.data_type(), block.num_rows())
-                .remove_nullable())
+                .convert_to_full_column(expr.data_type(), block.num_rows());
+            if expr.data_type().is_nullable() {
+                Ok(column.remove_nullable())
+            } else {
+                Ok(column)
+            }
         })
         .collect::<Result<Vec<_>>>()?;
     let data_types = keys
