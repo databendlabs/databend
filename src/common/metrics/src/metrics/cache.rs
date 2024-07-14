@@ -40,6 +40,30 @@ static CACHE_POPULATION_PENDING_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
 static CACHE_POPULATION_OVERFLOW_COUNT: LazyLock<FamilyCounter<CacheLabels>> =
     LazyLock::new(|| register_counter_family("cache_population_overflow_count"));
 
+pub fn get_cache_access_count(cache_name: &str) -> u64 {
+    get_metric_count_by_name(&CACHE_ACCESS_COUNT, cache_name)
+}
+
+pub fn get_cache_hit_count(cache_name: &str) -> u64 {
+    get_metric_count_by_name(&CACHE_HIT_COUNT, cache_name)
+}
+
+pub fn get_cache_miss_count(cache_name: &str) -> u64 {
+    get_metric_count_by_name(&CACHE_MISS_COUNT, cache_name)
+}
+
+fn get_metric_count_by_name(
+    metric: &LazyLock<FamilyCounter<CacheLabels>>,
+    cache_name: &str,
+) -> u64 {
+    metric
+        .get(&CacheLabels {
+            cache_name: cache_name.to_string(),
+        })
+        .map(|v| v.get())
+        .unwrap_or_default()
+}
+
 pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
     CACHE_ACCESS_COUNT
         .get_or_create(&CacheLabels {

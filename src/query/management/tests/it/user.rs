@@ -76,6 +76,7 @@ fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
         hash_value: Vec::from("test_password"),
         hash_method: PasswordHashMethod::DoubleSha1,
+        need_change: false,
     }
 }
 
@@ -464,6 +465,7 @@ mod update {
             } else {
                 PasswordHashMethod::DoubleSha1
             },
+            need_change: false,
         }
     }
 

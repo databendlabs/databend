@@ -62,6 +62,7 @@ impl BuiltinUsers {
                         Ok(AuthInfo::Password {
                             hash_value: p,
                             hash_method: password_type,
+                            need_change: false,
                         })
                     }
                 }
@@ -146,6 +147,7 @@ mod tests {
             AuthInfo::Password {
                 hash_value,
                 hash_method,
+                ..
             } => {
                 assert_eq!(hash_method, &PasswordHashMethod::Sha256);
                 assert_eq!(
@@ -173,6 +175,7 @@ mod tests {
             AuthInfo::Password {
                 hash_value,
                 hash_method,
+                ..
             } => {
                 assert_eq!(hash_method, &PasswordHashMethod::DoubleSha1);
                 assert_eq!(

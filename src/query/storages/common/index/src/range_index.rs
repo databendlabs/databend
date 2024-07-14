@@ -77,7 +77,6 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace]
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
         let input_domains = self
@@ -122,7 +121,6 @@ impl RangeIndex {
                 Ok((name, domain))
             })
             .collect::<Result<_>>()?;
-
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
             &input_domains,

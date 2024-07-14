@@ -30,6 +30,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -41,6 +42,8 @@ use crate::cache_manager::CacheManager;
 pub type CompactSegmentInfoCache = NamedCache<
     InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>,
 >;
+
+pub type BlockMetaCache = NamedCache<InMemoryItemCacheHolder<Vec<Arc<BlockMeta>>>>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
@@ -106,6 +109,13 @@ impl CachedObject<TableSnapshot> for TableSnapshot {
     type Cache = TableSnapshotCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_snapshot_cache()
+    }
+}
+
+impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
+    type Cache = BlockMetaCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_block_meta_cache()
     }
 }
 

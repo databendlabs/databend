@@ -96,8 +96,8 @@ fn test_decode_v91_user() -> anyhow::Result<()> {
         quota: Default::default(),
         option: Default::default(),
         history_auth_infos: vec![
-            AuthInfo::create2(&None, &Some("1234".to_string())).unwrap(),
-            AuthInfo::create2(&None, &Some("abcd".to_string())).unwrap(),
+            AuthInfo::create2(&None, &Some("1234".to_string()), false).unwrap(),
+            AuthInfo::create2(&None, &Some("abcd".to_string()), false).unwrap(),
         ],
         password_fails: vec![
             Utc.with_ymd_and_hms(2023, 12, 25, 1, 0, 0).unwrap(),

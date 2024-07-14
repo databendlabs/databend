@@ -184,6 +184,7 @@ impl TestFixture {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
+            need_change: false,
         });
 
         user_info.grants.grant_privileges(
@@ -200,6 +201,7 @@ impl TestFixture {
         let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
+            need_change: false,
         });
 
         user_info.grants.grant_privileges(
