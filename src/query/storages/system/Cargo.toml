@@ -26,6 +26,7 @@ databend-common-functions = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }

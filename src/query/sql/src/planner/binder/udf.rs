@@ -19,10 +19,8 @@ use databend_common_ast::ast::AlterUDFStmt;
 use databend_common_ast::ast::CreateUDFStmt;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::UDFDefinition;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_exception::ToErrorCode;
 use databend_common_expression::types::DataType;
 use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_meta_app::principal::LambdaUDF;
@@ -82,30 +80,7 @@ impl Binder {
                 handler,
                 language,
             } => {
-                if !GlobalConfig::instance().query.enable_udf_server {
-                    return Err(ErrorCode::Unimplemented(
-                        "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
-                    ));
-                }
-                let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
-                let url_addr =
-                    url::Url::parse(address).map_err_to_code(ErrorCode::InvalidArgument, || {
-                        format!(
-                            "udf server address '{address}' is invalid, please check the address",
-                        )
-                    })?;
-
-                if udf_server_allow_list.iter().all(|allow_url| {
-                    if let Ok(allow_url) = url::Url::parse(allow_url) {
-                        allow_url.host_str() != url_addr.host_str()
-                    } else {
-                        true
-                    }
-                }) {
-                    return Err(ErrorCode::InvalidArgument(format!(
-                        "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
-                    )));
-                }
+                UDFValidator::is_udf_server_allowed(address.as_str())?;
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {

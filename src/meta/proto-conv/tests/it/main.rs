@@ -104,3 +104,5 @@ mod v097_orc_format_params;
 mod v098_catalog_option;
 mod v099_parquet_format_params;
 mod v100_tenant_quota;
+mod v101_database_meta;
+mod v102_user_must_change_password;

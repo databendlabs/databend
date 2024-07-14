@@ -45,6 +45,7 @@ fn test_decode_v96_database_meta() -> anyhow::Result<()> {
         shared_by: BTreeSet::new(),
         from_share: Some(ShareNameIdentRaw::new("tenant", "share")),
         using_share_endpoint: Some("endpoint".to_string()),
+        from_share_db_id: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

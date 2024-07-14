@@ -14,6 +14,7 @@
 
 use std::io::Cursor;
 
+use chrono::Offset;
 use chrono_tz::Tz;
 use databend_common_exception::Result;
 use databend_common_io::cursor_ext::*;
@@ -57,13 +58,45 @@ fn test_read_timestamp_text() -> Result<()> {
     ];
     let mut res = vec![];
     for _ in 0..expected.len() {
-        let time = reader.read_timestamp_text(&tz, false)?;
+        let time = reader.read_timestamp_text(&tz, false, false)?;
         if let DateTimeResType::Datetime(time) = time {
             res.push(format!("{:?}", time));
             reader.ignore_byte(b',');
         }
     }
     assert_eq!(res, expected);
+    Ok(())
+}
+
+#[test]
+fn test_read_dst_timestamp_text() -> Result<()> {
+    let mut reader = Cursor::new("1947-04-15 01:00:00,1990-09-16 01:00:00".as_bytes());
+    let tz = Tz::Asia__Shanghai;
+    let expected = vec![
+        "1947-04-15T01:00:00CDT,+09:00",
+        "1990-09-16T01:00:00CDT,+09:00",
+    ];
+    let mut res = vec![];
+    for _ in 0..expected.len() {
+        let time = reader.read_timestamp_text(&tz, false, true)?;
+        if let DateTimeResType::Datetime(time) = time {
+            res.push(format!("{:?},{}", time, time.offset().fix()));
+            reader.ignore_byte(b',');
+        }
+    }
+    assert_eq!(res, expected);
+
+    reader = Cursor::new("1990-09-16 01:00:00".as_bytes());
+    let expected2 = vec!["1990-09-16T01:00:00CST,+08:00"];
+    let mut res = vec![];
+    for _ in 0..expected2.len() {
+        let time = reader.read_timestamp_text(&tz, false, false)?;
+        if let DateTimeResType::Datetime(time) = time {
+            res.push(format!("{:?},{}", time, time.offset().fix()));
+            reader.ignore_byte(b',');
+        }
+    }
+    assert_eq!(res, expected2);
     Ok(())
 }
 
@@ -98,7 +131,7 @@ fn test_read_date_text() -> Result<()> {
 
     let mut res = vec![];
     for _ in 0..expected.len() {
-        let date = reader.read_date_text(&tz)?;
+        let date = reader.read_date_text(&tz, false)?;
         res.push(format!("{:?}", date));
         let _ = reader.ignore_byte(b',');
     }

@@ -164,6 +164,10 @@ impl ValueType for DateType {
         builder.push(item);
     }
 
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        builder.resize(builder.len() + n, item);
+    }
+
     fn push_default(builder: &mut Self::ColumnBuilder) {
         builder.push(Self::Scalar::default());
     }
@@ -248,9 +252,10 @@ impl ArgType for DateType {
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
     tz: Tz,
+    enable_dst_hour_fix: bool,
 ) -> databend_common_exception::Result<NaiveDate> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(&tz) {
+    match reader.read_date_text(&tz, enable_dst_hour_fix) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),

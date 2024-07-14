@@ -73,6 +73,14 @@ CREATE TABLE t0(c0INT INT16 NULL DEFAULT(-1), c1VARCHAR VARCHAR NULL, c2VARCHAR 
 statement ok
 INSERT INTO t0(c2varchar, c1varchar) VALUES ('diu7Pk', '')
 
+statement error 1065
+INSERT INTO t0(c2varchar) VALUES (max('1'))
+
+statement error 1065
+INSERT INTO t0(c2varchar) VALUES (max('1') partition by('1'))
+
+statement error 1065
+INSERT INTO t0(c2varchar) VALUES ('1' || max('2'));
 
 statement error 1065
 alter table t0 add column ts TIMESTAMP DEFAULT now()

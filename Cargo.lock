@@ -3117,7 +3117,7 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.0.0"
+version = "0.0.2"
 dependencies = [
  "criterion",
  "derive-visitor",
@@ -3344,8 +3344,6 @@ dependencies = [
  "arrow-schema",
  "backtrace",
  "bincode 2.0.0-rc.3",
- "color-backtrace",
- "ctor 0.2.8",
  "databend-common-arrow",
  "databend-common-ast",
  "geos",
@@ -4439,7 +4437,6 @@ name = "databend-common-storages-orc"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4456,6 +4453,7 @@ dependencies = [
  "databend-common-pipeline-sources",
  "databend-common-pipeline-transforms",
  "databend-common-storage",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
@@ -4472,7 +4470,6 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
- "arrow-cast",
  "arrow-schema",
  "async-backtrace",
  "async-trait-fn",
@@ -4491,6 +4488,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storage",
  "databend-storages-common-pruner",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "ethnum",
  "futures",
@@ -4562,6 +4560,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enumflags2",
  "goldenfile",
+ "log",
  "opendal",
  "serde",
  "serde_json",
@@ -4596,6 +4595,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "enum-as-inner 0.6.0",
  "futures",
@@ -4647,6 +4647,7 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
+ "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-sql",
@@ -4688,6 +4689,8 @@ dependencies = [
 name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
+ "color-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "defer",
@@ -4702,6 +4705,7 @@ dependencies = [
  "opentelemetry_sdk",
  "serde",
  "serde_json",
+ "strip-ansi-escapes",
  "tonic",
  "tracing-appender",
 ]
@@ -5346,6 +5350,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -5399,6 +5404,21 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "serde",
+ "typetag",
+]
+
+[[package]]
+name = "databend-storages-common-stage"
+version = "0.1.0"
+dependencies = [
+ "arrow-cast",
+ "arrow-schema",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
  "serde",
  "typetag",
 ]
@@ -10672,9 +10692,9 @@ dependencies = [
 
 [[package]]
 name = "nom-rule"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8dd3c6d80d1e61031aecc5fdfaf4b7d2324dbd94d575ac12f94e5d6856c2d4"
+checksum = "8f0f33cd048b8e0f5cd2fc6fd26f4feda8e33b4781673e59fe1406b137600e9d"
 dependencies = [
  "nom",
  "pratt 0.3.0",
@@ -14362,6 +14382,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8dad614e9c8a0773603982e0c1d3192f2bce1c0ee193caf0526b8ae3c6c3e38c"
 
 [[package]]
+name = "strip-ansi-escapes"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55ff8ef943b384c414f54aefa961dd2bd853add74ec75e7ac74cf91dba62bcfa"
+dependencies = [
+ "vte",
+]
+
+[[package]]
 name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15897,6 +15926,26 @@ name = "vsimd"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5c3082ca00d5a5ef149bb8b555a72ae84c9c59f7250f013ac822ac2e49b19c64"
+
+[[package]]
+name = "vte"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5022b5fbf9407086c180e9557be968742d839e68346af7792b8592489732197"
+dependencies = [
+ "utf8parse",
+ "vte_generate_state_changes",
+]
+
+[[package]]
+name = "vte_generate_state_changes"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e369bee1b05d510a7b4ed645f5faa90619e05437111783ea5848f28d97d3c2e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
 
 [[package]]
 name = "waker-fn"
