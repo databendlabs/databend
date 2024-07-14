@@ -56,29 +56,24 @@ pub fn get_hashes(
     }
 
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let columns: Vec<(_, _)> = keys
+    // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
+    let columns = keys
         .iter()
         .map(|expr| {
-            let return_type = expr.data_type();
-            // [TODO]
-            Ok((
-                evaluator
-                    .run(expr)?
-                    .convert_to_full_column(return_type, block.num_rows()),
-                return_type,
-            ))
+            Ok(evaluator
+                .run(expr)?
+                .convert_to_full_column(expr.data_type(), block.num_rows())
+                .remove_nullable())
         })
-        .collect::<Result<_>>()?;
-    // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
-    let (columns, data_types): (Vec<_>, Vec<_>) = columns
-        .into_iter()
-        .map(|(col, ty)| (col.remove_nullable(), ty.remove_nullable()))
-        .unzip();
-    let data_types = data_types.iter().collect::<Vec<_>>();
-
+        .collect::<Result<Vec<_>>>()?;
+    let data_types = keys
+        .iter()
+        .map(|expr| expr.data_type().remove_nullable())
+        .collect::<Vec<_>>();
+    let data_types = &data_types.iter().collect::<Vec<_>>();
     hash_by_method(
         method,
-        InputColumnsWithDataType::new(&columns, &data_types),
+        InputColumnsWithDataType::new(&columns, data_types),
         block.num_rows(),
         hashes,
     )?;

@@ -206,20 +206,13 @@ impl HashJoinProbeState {
         } else {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let mut probe_keys = self
-            .hash_join_state
-            .hash_join_desc
-            .probe_keys
+        let probe_keys = &self.hash_join_state.hash_join_desc.probe_keys;
+        let mut keys_columns = probe_keys
             .iter()
             .map(|expr| {
-                // [TODO]
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, input_num_rows),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), input_num_rows))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -230,13 +223,8 @@ impl HashJoinProbeState {
                 .other_predicate
                 .is_none()
         {
-            let keys = probe_keys
-                .iter()
-                .map(|(c, _)| c)
-                .cloned()
-                .collect::<Vec<_>>();
             self.hash_join_state.init_markers(
-                (&keys).into(),
+                (&keys_columns).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
@@ -247,15 +235,16 @@ impl HashJoinProbeState {
         if !Self::check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
             &self.hash_join_state.hash_join_desc.join_type,
-        ) && probe_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (index, (col, _)) in probe_keys.iter().enumerate() {
-                if is_null_equal[index] {
-                    continue;
-                }
-                let (is_all_null, tmp_valids) = col.validity();
+        ) && probe_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        }) {
+            for (is_all_null, tmp_valids) in keys_columns
+                .iter()
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
+            {
                 if is_all_null {
                     valids = Some(Bitmap::new_constant(false, input_num_rows));
                     break;
@@ -265,17 +254,22 @@ impl HashJoinProbeState {
             }
         }
 
-        for (index, (col, ty)) in probe_keys.iter_mut().enumerate() {
-            if !is_null_equal[index] {
-                *col = col.remove_nullable();
-                *ty = ty.remove_nullable();
-            }
-        }
-
-        let (col, data_types): (Vec<_>, Vec<_>) =
-            probe_keys.into_iter().map(|(c, t)| (c, t)).unzip();
-        let data_types = data_types.iter().collect::<Vec<_>>();
-        let probe_keys = InputColumnsWithDataType::new(&col, &data_types);
+        let keys_data_types = keys_columns
+            .iter_mut()
+            .zip(probe_keys.iter())
+            .zip(is_null_equal.iter().copied())
+            .map(|((col, expr), is_null_equal)| {
+                let ty = expr.data_type();
+                if is_null_equal {
+                    ty.to_owned()
+                } else {
+                    *col = col.remove_nullable();
+                    ty.remove_nullable()
+                }
+            })
+            .collect::<Vec<_>>();
+        let keys_data_types = &keys_data_types.iter().collect::<Vec<_>>();
+        let probe_keys = InputColumnsWithDataType::new(&keys_columns, keys_data_types);
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);

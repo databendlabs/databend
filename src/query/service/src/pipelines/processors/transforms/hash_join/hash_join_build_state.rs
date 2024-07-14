@@ -642,10 +642,9 @@ impl HashJoinBuildState {
         let mut keys_columns = build_keys
             .iter()
             .map(|expr| {
-                let return_type = expr.data_type();
                 Ok(evaluator
                     .run(expr)?
-                    .convert_to_full_column(return_type, chunk.num_rows()))
+                    .convert_to_full_column(expr.data_type(), chunk.num_rows()))
             })
             .collect::<Result<Vec<_>>>()?;
 
@@ -663,18 +662,20 @@ impl HashJoinBuildState {
         *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
-        let mut valids = None;
-
-        if build_keys.iter().any(|expr| {
+        let may_null = build_keys.iter().any(|expr| {
             let ty = expr.data_type();
             ty.is_nullable() || ty.is_null()
-        }) {
-            for (col, _) in keys_columns
+        });
+        let valids = if !may_null {
+            None
+        } else {
+            let mut valids = None;
+            for (is_all_null, tmp_valids) in keys_columns
                 .iter()
-                .zip(is_null_equal.iter())
-                .filter(|(_, is_null_equal)| !*is_null_equal)
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
             {
-                let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
                     break;
@@ -683,7 +684,7 @@ impl HashJoinBuildState {
                 }
             }
 
-            valids = match valids {
+            match valids {
                 Some(valids) => {
                     if valids.unset_bits() == valids.len() {
                         return Ok(());
@@ -695,8 +696,8 @@ impl HashJoinBuildState {
                     }
                 }
                 None => None,
-            };
-        }
+            }
+        };
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
@@ -729,10 +730,10 @@ impl HashJoinBuildState {
         let keys_data_types = keys_columns
             .iter_mut()
             .zip(build_keys.iter())
-            .zip(is_null_equal.iter())
+            .zip(is_null_equal.iter().copied())
             .map(|((col, expr), is_null_equal)| {
                 let ty = expr.data_type();
-                if *is_null_equal {
+                if is_null_equal {
                     ty.to_owned()
                 } else {
                     *col = col.remove_nullable();
@@ -740,8 +741,8 @@ impl HashJoinBuildState {
                 }
             })
             .collect::<Vec<_>>();
-        let keys_data_types = keys_data_types.iter().collect::<Vec<_>>();
-        let build_keys = InputColumnsWithDataType::new(&keys_columns, &keys_data_types);
+        let keys_data_types = &keys_data_types.iter().collect::<Vec<_>>();
+        let build_keys = InputColumnsWithDataType::new(&keys_columns, keys_data_types);
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -911,15 +912,15 @@ impl HashJoinBuildState {
             }
             let build_key_column = Column::concat_columns(columns.into_iter())?;
             // Generate bloom filter using build column
-            let data_type = build_key.data_type().clone();
+            let data_type = build_key.data_type();
             let num_rows = build_key_column.len();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut hashes = HashSet::with_capacity(num_rows);
-            let key_columns = [build_key_column];
-            let key_types = [&data_type];
+            let key_columns = &[build_key_column];
+            let key_types = &[data_type];
             hash_by_method(
                 &method,
-                InputColumnsWithDataType::new(&key_columns, &key_types),
+                InputColumnsWithDataType::new(key_columns, key_types),
                 num_rows,
                 &mut hashes,
             )?;
