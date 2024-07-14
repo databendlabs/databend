@@ -52,7 +52,7 @@ use crate::serde::check_and_upgrade_to_pb;
 use crate::serde::Quota;
 use crate::serialize_struct;
 
-static TXN_MAX_RETRY_TIMES: u32 = 5;
+static TXN_MAX_RETRY_TIMES: u32 = 60;
 
 static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
@@ -336,23 +336,23 @@ impl RoleApi for RoleMgr {
         object: &OwnershipObject,
         new_role: &str,
     ) -> databend_common_exception::Result<()> {
-        let old_role = self.get_ownership(object).await?.map(|o| o.role);
-        let grant_object = convert_to_grant_obj(object);
-
-        let owner_key = self.ownership_object_ident(object);
-
-        let owner_value = serialize_struct(
-            &OwnershipInfo {
-                object: object.clone(),
-                role: new_role.to_string(),
-            },
-            ErrorCode::IllegalUserInfoFormat,
-            || "",
-        )?;
-
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
+            let old_role = self.get_ownership(object).await?.map(|o| o.role);
+            let grant_object = convert_to_grant_obj(object);
+
+            let owner_key = self.ownership_object_ident(object);
+
+            let owner_value = serialize_struct(
+                &OwnershipInfo {
+                    object: object.clone(),
+                    role: new_role.to_string(),
+                },
+                ErrorCode::IllegalUserInfoFormat,
+                || "",
+            )?;
+
             let mut condition = vec![];
             let mut if_then = vec![txn_op_put(&owner_key, owner_value.clone())];
 
@@ -424,41 +424,51 @@ impl RoleApi for RoleMgr {
         &self,
         object: &OwnershipObject,
     ) -> databend_common_exception::Result<()> {
-        let role = self.get_ownership(object).await?.map(|o| o.role);
-
-        let owner_key = self.ownership_object_ident(object);
-
-        let mut if_then = vec![txn_op_del(&owner_key)];
-        let mut condition = vec![];
-
-        if let Some(role) = role {
-            if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
-                let old_key = self.role_ident(&role);
-                let grant_object = convert_to_grant_obj(object);
-                let old_seq = seqv.seq;
-                let mut old_role_info = seqv.data;
-                old_role_info.grants.revoke_privileges(
-                    &grant_object,
-                    make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
-                );
-                old_role_info.update_role_time();
-                condition.push(txn_cond_seq(&old_key, Eq, old_seq));
-                if_then.push(txn_op_put(
-                    &old_key,
-                    serialize_struct(&old_role_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                ));
-            }
-        }
-
-        let txn_req = TxnRequest {
-            condition: condition.clone(),
-            if_then: if_then.clone(),
-            else_then: vec![],
-        };
-
         let mut retry = 0;
         while retry < TXN_MAX_RETRY_TIMES {
             retry += 1;
+            let role = self.get_ownership(object).await?.map(|o| o.role);
+
+            let owner_key = self.ownership_object_ident(object);
+
+            let mut if_then = vec![txn_op_del(&owner_key)];
+            let mut condition = vec![];
+
+            if let Some(role) = role {
+                if let Ok(seqv) = self.get_role(&role.to_owned(), MatchSeq::GE(1)).await {
+                    let old_key = self.role_ident(&role);
+                    let grant_object = convert_to_grant_obj(object);
+                    let old_seq = seqv.seq;
+                    let mut old_role_info = seqv.data;
+                    // Old version store ownership in role, so verify_privilege first
+                    // If not exists in old_role, no need to revoke privilege
+                    if old_role_info
+                        .grants
+                        .verify_privilege(&grant_object, UserPrivilegeType::Ownership)
+                    {
+                        old_role_info.grants.revoke_privileges(
+                            &grant_object,
+                            make_bitflags!(UserPrivilegeType::{ Ownership }).into(),
+                        );
+                        old_role_info.update_role_time();
+                        condition.push(txn_cond_seq(&old_key, Eq, old_seq));
+                        if_then.push(txn_op_put(
+                            &old_key,
+                            serialize_struct(
+                                &old_role_info,
+                                ErrorCode::IllegalUserInfoFormat,
+                                || "",
+                            )?,
+                        ));
+                    }
+                }
+            }
+
+            let txn_req = TxnRequest {
+                condition: condition.clone(),
+                if_then: if_then.clone(),
+                else_then: vec![],
+            };
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
