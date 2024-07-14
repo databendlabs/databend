@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -231,28 +232,31 @@ impl HashJoinProbeState {
         }
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
-        let mut valids = None;
-        if !Self::check_for_eliminate_valids(
+        let valids = if !Self::check_for_eliminate_valids(
             self.hash_join_state.hash_join_desc.from_correlated_subquery,
             &self.hash_join_state.hash_join_desc.join_type,
         ) && probe_keys.iter().any(|expr| {
             let ty = expr.data_type();
             ty.is_nullable() || ty.is_null()
         }) {
-            for (is_all_null, tmp_valids) in keys_columns
+            let valids = keys_columns
                 .iter()
                 .zip(is_null_equal.iter().copied())
                 .filter(|(_, is_null_equal)| !is_null_equal)
                 .map(|(col, _)| col.validity())
-            {
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, input_num_rows));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
-                }
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, input_num_rows)))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
+            match valids {
+                ControlFlow::Continue(valids) | ControlFlow::Break(valids) => valids,
             }
-        }
+        } else {
+            None
+        };
 
         let keys_data_types = keys_columns
             .iter_mut()

@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
@@ -669,23 +670,20 @@ impl HashJoinBuildState {
         let valids = if !may_null {
             None
         } else {
-            let mut valids = None;
-            for (is_all_null, tmp_valids) in keys_columns
+            let valids = keys_columns
                 .iter()
                 .zip(is_null_equal.iter().copied())
                 .filter(|(_, is_null_equal)| !is_null_equal)
                 .map(|(col, _)| col.validity())
-            {
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
-                }
-            }
-
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, chunk.num_rows())))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
             match valids {
-                Some(valids) => {
+                ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
                     if valids.unset_bits() == valids.len() {
                         return Ok(());
                     }
@@ -695,7 +693,7 @@ impl HashJoinBuildState {
                         None
                     }
                 }
-                None => None,
+                _ => None,
             }
         };
 
