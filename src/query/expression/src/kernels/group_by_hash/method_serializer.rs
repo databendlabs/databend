@@ -21,6 +21,7 @@ use crate::types::DataType;
 use crate::BinaryKeyAccessor;
 use crate::Column;
 use crate::HashMethod;
+use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -38,18 +39,17 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(Column, DataType)],
+        group_columns: (InputColumns, &[DataType]),
         num_rows: usize,
     ) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
-        let mut serialize_size = 0;
-        let mut serialize_columns = Vec::with_capacity(group_columns.len());
-        for (column, _) in group_columns {
-            serialize_size += column.serialize_size();
-            serialize_columns.push(column.clone());
-        }
+        let serialize_size = group_columns
+            .0
+            .iter()
+            .map(|column| column.serialize_size())
+            .sum();
         Ok(KeysState::Column(Column::Binary(serialize_group_columns(
-            &serialize_columns,
+            group_columns.0,
             num_rows,
             serialize_size,
         ))))

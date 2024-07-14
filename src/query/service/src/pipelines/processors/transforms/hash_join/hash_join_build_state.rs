@@ -42,6 +42,7 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
+use databend_common_expression::InputColumns;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -450,7 +451,7 @@ impl HashJoinBuildState {
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let valid_num = match &$valids {
@@ -516,7 +517,7 @@ impl HashJoinBuildState {
 
         macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
@@ -637,6 +638,7 @@ impl HashJoinBuildState {
         } else {
             Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
         };
+        // [TODO]
         let mut build_keys: Vec<(Column, DataType)> = self
             .hash_join_state
             .hash_join_desc
@@ -701,9 +703,14 @@ impl HashJoinBuildState {
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
+                let keys = build_keys
+                    .iter()
+                    .map(|(c, _)| c)
+                    .cloned()
+                    .collect::<Vec<_>>();
                 let markers = &mut build_state.mark_scan_map[chunk_index];
                 self.hash_join_state
-                    .init_markers(&build_keys, chunk.num_rows(), markers);
+                    .init_markers((&keys).into(), chunk.num_rows(), markers);
             }
             JoinType::RightMark => {
                 if !_has_null && !build_keys.is_empty() {
@@ -724,12 +731,17 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        for (index, (col, ty)) in build_keys.iter_mut().enumerate() {
-            if !is_null_equal[index] {
-                *col = col.remove_nullable();
-                *ty = ty.remove_nullable();
-            }
+        for ((col, ty), _) in build_keys
+            .iter_mut()
+            .zip(is_null_equal.iter())
+            .filter(|(_, is_null_equal)| !*is_null_equal)
+        {
+            *col = col.remove_nullable();
+            *ty = ty.remove_nullable();
         }
+
+        let (columns, data_types): (Vec<_>, Vec<_>) = build_keys.into_iter().unzip();
+        let build_keys: (InputColumns, &[DataType]) = ((&columns).into(), &data_types);
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -905,7 +917,7 @@ impl HashJoinBuildState {
             let mut hashes = HashSet::with_capacity(num_rows);
             hash_by_method(
                 &method,
-                &[(build_key_column, data_type)],
+                ((&[build_key_column]).into(), &[data_type]),
                 num_rows,
                 &mut hashes,
             )?;

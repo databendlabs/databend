@@ -122,11 +122,12 @@ impl HashJoinProbeState {
         let cols = input
             .columns()
             .iter()
-            .map(|c| (c.to_column(num_rows), c.data_type.clone()))
+            .map(|c| c.to_column(num_rows))
             .collect::<Vec<_>>();
+
         let markers = probe_state.markers.as_mut().unwrap();
         self.hash_join_state
-            .init_markers(&cols, input.num_rows(), markers);
+            .init_markers((&cols).into(), input.num_rows(), markers);
 
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };

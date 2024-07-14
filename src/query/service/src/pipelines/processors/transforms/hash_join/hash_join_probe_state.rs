@@ -211,6 +211,7 @@ impl HashJoinProbeState {
             .probe_keys
             .iter()
             .map(|expr| {
+                // [TODO]
                 let return_type = expr.data_type();
                 Ok((
                     evaluator
@@ -228,8 +229,13 @@ impl HashJoinProbeState {
                 .other_predicate
                 .is_none()
         {
+            let keys = probe_keys
+                .iter()
+                .map(|(c, _)| c)
+                .cloned()
+                .collect::<Vec<_>>();
             self.hash_join_state.init_markers(
-                &probe_keys,
+                (&keys).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
@@ -264,6 +270,9 @@ impl HashJoinProbeState {
                 *ty = ty.remove_nullable();
             }
         }
+
+        let (col, data_types): (Vec<_>, Vec<_>) = probe_keys.into_iter().unzip();
+        let probe_keys = ((&col).into(), data_types.as_slice());
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);
@@ -308,7 +317,7 @@ impl HashJoinProbeState {
                 // Build `keys` and get the hashes of `keys`.
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input_num_rows)?;
+                    .build_keys_state(probe_keys, input_num_rows)?;
                 let keys = table
                     .hash_method
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;

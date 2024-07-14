@@ -111,7 +111,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
     let mut idx = 0;
     match method {
         HashMethodKind::Serializer(method) => {
-            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Binary(col)) => col.iter().for_each(|key| {
                     let hash = key.fast_hash();
@@ -124,7 +124,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::DictionarySerializer(method) => {
-            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Dictionary { dictionaries, .. } => dictionaries.iter().for_each(|key| {
                     let hash = key.fast_hash();
@@ -137,7 +137,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::SingleBinary(method) => {
-            let key_state = method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Binary(col))
                 | KeysState::Column(Column::Variant(col))
@@ -159,7 +159,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU8(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Number(NumberColumn::UInt8(c))) => {
                     c.iter().for_each(|key| {
@@ -174,7 +174,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU16(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Number(NumberColumn::UInt16(c))) => {
                     c.iter().for_each(|key| {
@@ -189,7 +189,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU32(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Number(NumberColumn::UInt32(c))) => {
                     c.iter().for_each(|key| {
@@ -204,7 +204,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU64(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 KeysState::Column(Column::Number(NumberColumn::UInt64(c))) => {
                     c.iter().for_each(|key| {
@@ -219,7 +219,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU128(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state = hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 U128(c) => c.iter().for_each(|key| {
                     let hash = key.fast_hash();
@@ -232,7 +232,8 @@ pub(crate) fn update_bitmap_with_bloom_filter(
             }
         }
         HashMethodKind::KeysU256(hash_method) => {
-            let key_state = hash_method.build_keys_state(&[(column, data_type)], num_rows)?;
+            let key_state =
+                hash_method.build_keys_state(((&[column]).into(), &[data_type]), num_rows)?;
             match key_state {
                 U256(c) => c.iter().for_each(|key| {
                     let hash = key.fast_hash();

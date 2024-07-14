@@ -38,6 +38,7 @@ use crate::HashMethodKeysU64;
 use crate::HashMethodKeysU8;
 use crate::HashMethodSerializer;
 use crate::HashMethodSingleBinary;
+use crate::InputColumns;
 
 #[derive(Debug)]
 pub enum KeysState {
@@ -73,7 +74,7 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 
     fn build_keys_state(
         &self,
-        group_columns: &[(Column, DataType)],
+        group_columns: (InputColumns, &[DataType]),
         rows: usize,
     ) -> Result<KeysState>;
 

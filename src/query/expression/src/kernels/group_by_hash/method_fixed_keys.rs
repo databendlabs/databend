@@ -43,6 +43,7 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::HashMethod;
+use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -70,17 +71,23 @@ where T: Number
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec(&self, group_columns: &[(Column, DataType)], rows: usize) -> Result<Vec<T>> {
+    fn build_keys_vec(
+        &self,
+        group_columns: (InputColumns, &[DataType]),
+        rows: usize,
+    ) -> Result<Vec<T>> {
+        let (columns, data_types) = group_columns;
+        debug_assert_eq!(columns.len(), data_types.len());
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
         let ptr = group_keys.as_mut_ptr() as *mut u8;
         let mut offsize = 0;
-        let mut null_offsize = group_columns
+        let mut null_offsize = data_types
             .iter()
-            .map(|(_, t)| t.remove_nullable().numeric_byte_size().unwrap())
+            .map(|t| t.remove_nullable().numeric_byte_size().unwrap())
             .sum::<usize>();
 
-        let mut group_columns = group_columns.to_vec();
+        let mut group_columns = columns.iter().zip(data_types.iter()).collect::<Vec<_>>();
         group_columns.sort_by(|a, b| {
             let ta = a.1.remove_nullable();
             let tb = b.1.remove_nullable();
@@ -234,26 +241,27 @@ macro_rules! impl_hash_method_fixed_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(Column, DataType)],
+                group_columns: (InputColumns, &[DataType]),
                 rows: usize,
             ) -> Result<KeysState> {
+                let (columns, data_types) = group_columns;
+                debug_assert_eq!(columns.len(), data_types.len());
                 // faster path for single fixed keys
-                if group_columns.len() == 1 {
-                    if group_columns[0].1.is_unsigned_numeric() {
-                        return Ok(KeysState::Column(group_columns[0].0.clone()));
+                if columns.len() == 1 {
+                    if data_types[0].is_unsigned_numeric() {
+                        return Ok(KeysState::Column(columns[0].clone()));
                     }
 
-                    if group_columns[0].1.is_signed_numeric() {
+                    if data_types[0].is_signed_numeric() {
                         let col =
-                            NumberType::<$signed_ty>::try_downcast_column(&group_columns[0].0)
-                                .unwrap();
+                            NumberType::<$signed_ty>::try_downcast_column(&columns[0]).unwrap();
                         let buffer =
                             unsafe { std::mem::transmute::<Buffer<$signed_ty>, Buffer<$ty>>(col) };
                         return Ok(KeysState::Column(NumberType::<$ty>::upcast_column(buffer)));
                     }
                 }
 
-                let keys = self.build_keys_vec(group_columns, rows)?;
+                let keys = self.build_keys_vec((columns, data_types), rows)?;
                 let col = Buffer::<$ty>::from(keys);
                 Ok(KeysState::Column(NumberType::<$ty>::upcast_column(col)))
             }
@@ -306,13 +314,14 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: &[(Column, DataType)],
+                group_columns: (InputColumns, &[DataType]),
                 rows: usize,
             ) -> Result<KeysState> {
+                let (columns, data_types) = group_columns;
                 // faster path for single fixed decimal keys
-                if group_columns.len() == 1 {
-                    if group_columns[0].1.is_decimal() {
-                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &group_columns[0].0 {
+                if columns.len() == 1 {
+                    if data_types[0].is_decimal() {
+                        with_decimal_mapped_type!(|DECIMAL_TYPE| match &columns[0] {
                             Column::Decimal(DecimalColumn::DECIMAL_TYPE(c, _)) => {
                                 let buffer = unsafe {
                                     std::mem::transmute::<Buffer<DECIMAL_TYPE>, Buffer<$ty>>(
@@ -326,7 +335,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
                     }
                 }
 
-                let keys = self.build_keys_vec(group_columns, rows)?;
+                let keys = self.build_keys_vec((columns, data_types), rows)?;
                 Ok(KeysState::$name(keys.into()))
             }
 

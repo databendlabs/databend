@@ -46,17 +46,17 @@ fn test_group_by_hash() -> Result<()> {
     let hash = HashMethodKeysU32::default();
     let columns = vec!["a", "b", "c"];
 
-    let mut group_columns = Vec::with_capacity(columns.len());
-    {
-        for col in columns {
+    let (group_columns, data_types): (Vec<_>, Vec<_>) = columns
+        .iter()
+        .map(|col| {
             let index = schema.index_of(col).unwrap();
             let entry = block.get_by_offset(index);
             let col = entry.value.as_column().unwrap();
-            group_columns.push((col.clone(), entry.data_type.clone()));
-        }
-    }
+            (col.clone(), entry.data_type.clone())
+        })
+        .unzip();
 
-    let state = hash.build_keys_state(group_columns.as_slice(), block.num_rows())?;
+    let state = hash.build_keys_state(((&group_columns).into(), &data_types), block.num_rows())?;
     let keys_iter = hash.build_keys_iter(&state)?;
     let keys: Vec<u32> = keys_iter.copied().collect();
     assert_eq!(keys, vec![
