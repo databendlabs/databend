@@ -80,7 +80,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
 ];
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["set_cache_capacity"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["set_cache_capacity", "fuse_amend"];
 
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {

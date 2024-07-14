@@ -1,2 +1,4 @@
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required to invoke table function [set_cache_capacity] for user 'test'@'%' with roles [public]
 Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required to invoke table function [set_cache_capacity] for user 'test'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required to invoke table function [fuse_amend] for user 'test'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required to invoke table function [fuse_amend] for user 'test'@'%' with roles [public]
