@@ -26,6 +26,11 @@ fn test_input_columns() {
     assert!(proxy[1].as_string().is_some());
     assert!(proxy[2].as_number().is_some());
 
+    let data_types = proxy.as_block().unwrap().data_types();
+    assert!(data_types[0].is_boolean());
+    assert!(data_types[1].is_string());
+    assert!(data_types[2].is_numeric());
+
     assert_eq!(proxy.iter().count(), 3);
 
     let mut iter = proxy.iter();

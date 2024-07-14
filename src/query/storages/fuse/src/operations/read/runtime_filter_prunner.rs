@@ -109,9 +109,9 @@ pub(crate) fn update_bitmap_with_bloom_filter(
     let data_type = column.data_type();
     let num_rows = column.len();
     let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
-    let columns = [column];
-    let data_types = [&data_type];
-    let group_columns = InputColumnsWithDataType::new(&columns, &data_types);
+    let columns = &[column];
+    let data_types = &[&data_type];
+    let group_columns = InputColumnsWithDataType::new(columns, data_types);
     let mut idx = 0;
     match method {
         HashMethodKind::Serializer(method) => {
