@@ -576,7 +576,7 @@ impl<T: Number> TransformWindow<T> {
                         n -= 1;
                     }
                     if cur != self.frame_end {
-                        self.find_nth_non_null_value(cur, func.arg, func.ignore_null, true)
+                        self.get_nth_value_by_ignoring_nulls(cur, func.arg, func.ignore_null, true)
                     } else {
                         // No such row
                         Scalar::Null
@@ -585,7 +585,7 @@ impl<T: Number> TransformWindow<T> {
                     // last_value
                     let cur = self.goback_row(self.frame_end);
                     debug_assert!(self.frame_start <= cur);
-                    self.find_nth_non_null_value(cur, func.arg, func.ignore_null, false)
+                    self.get_nth_value_by_ignoring_nulls(cur, func.arg, func.ignore_null, false)
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
@@ -649,7 +649,7 @@ impl<T: Number> TransformWindow<T> {
     }
 
     #[inline]
-    fn find_nth_non_null_value(
+    fn get_nth_value_by_ignoring_nulls(
         &self,
         mut cur: RowPtr,
         arg_index: usize,
