@@ -279,7 +279,7 @@ impl PhysicalPlanBuilder {
             arg: Box::new(left_column.clone()),
             offset: 1,
             default: Some(Box::new(constant_default.into())),
-            return_type: Box::new(left_column.data_type()?.remove_nullable().clone()),
+            return_type: Box::new(left_column.data_type()?.clone()),
         });
         let window_func = WindowFunc {
             span: range_conditions[0].span(),
