@@ -43,7 +43,7 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::HashMethod;
-use crate::InputColumns;
+use crate::InputColumnsWithDataType;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -73,10 +73,13 @@ where T: Clone + Default
 {
     fn build_keys_vec(
         &self,
-        group_columns: (InputColumns, &[DataType]),
+        group_columns: InputColumnsWithDataType,
         rows: usize,
     ) -> Result<Vec<T>> {
-        let (columns, data_types) = group_columns;
+        let InputColumnsWithDataType {
+            columns,
+            data_types,
+        } = group_columns;
         debug_assert_eq!(columns.len(), data_types.len());
         let step = std::mem::size_of::<T>();
         let mut group_keys: Vec<T> = vec![T::default(); rows];
@@ -87,7 +90,10 @@ where T: Clone + Default
             .map(|t| t.remove_nullable().numeric_byte_size().unwrap())
             .sum::<usize>();
 
-        let mut group_columns = columns.iter().zip(data_types.iter()).collect::<Vec<_>>();
+        let mut group_columns = columns
+            .iter()
+            .zip(data_types.iter().copied())
+            .collect::<Vec<_>>();
         group_columns.sort_by(|a, b| {
             let ta = a.1.remove_nullable();
             let tb = b.1.remove_nullable();
@@ -97,7 +103,7 @@ where T: Clone + Default
                 .cmp(&ta.numeric_byte_size().unwrap())
         });
 
-        for (col, ty) in group_columns.iter() {
+        for (col, ty) in group_columns.into_iter() {
             build(&mut offsize, &mut null_offsize, col, ty, ptr, step)?;
         }
 
@@ -241,10 +247,13 @@ macro_rules! impl_hash_method_fixed_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: (InputColumns, &[DataType]),
+                group_columns: InputColumnsWithDataType,
                 rows: usize,
             ) -> Result<KeysState> {
-                let (columns, data_types) = group_columns;
+                let InputColumnsWithDataType {
+                    columns,
+                    data_types,
+                } = group_columns;
                 debug_assert_eq!(columns.len(), data_types.len());
                 // faster path for single fixed keys
                 if columns.len() == 1 {
@@ -261,7 +270,7 @@ macro_rules! impl_hash_method_fixed_keys {
                     }
                 }
 
-                let keys = self.build_keys_vec((columns, data_types), rows)?;
+                let keys = self.build_keys_vec(group_columns, rows)?;
                 let col = Buffer::<$ty>::from(keys);
                 Ok(KeysState::Column(NumberType::<$ty>::upcast_column(col)))
             }
@@ -314,10 +323,13 @@ macro_rules! impl_hash_method_fixed_large_keys {
 
             fn build_keys_state(
                 &self,
-                group_columns: (InputColumns, &[DataType]),
+                group_columns: InputColumnsWithDataType,
                 rows: usize,
             ) -> Result<KeysState> {
-                let (columns, data_types) = group_columns;
+                let InputColumnsWithDataType {
+                    columns,
+                    data_types,
+                } = group_columns;
                 // faster path for single fixed decimal keys
                 if columns.len() == 1 {
                     if data_types[0].is_decimal() {
@@ -335,7 +347,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
                     }
                 }
 
-                let keys = self.build_keys_vec((columns, data_types), rows)?;
+                let keys = self.build_keys_vec(group_columns, rows)?;
                 Ok(KeysState::$name(keys.into()))
             }
 

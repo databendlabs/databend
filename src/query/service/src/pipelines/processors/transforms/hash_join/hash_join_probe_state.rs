@@ -34,6 +34,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -271,8 +272,10 @@ impl HashJoinProbeState {
             }
         }
 
-        let (col, data_types): (Vec<_>, Vec<_>) = probe_keys.into_iter().unzip();
-        let probe_keys = ((&col).into(), data_types.as_slice());
+        let (col, data_types): (Vec<_>, Vec<_>) =
+            probe_keys.into_iter().map(|(c, t)| (c, t)).unzip();
+        let data_types = data_types.iter().collect::<Vec<_>>();
+        let probe_keys = InputColumnsWithDataType::new(&col, &data_types);
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);

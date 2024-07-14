@@ -52,11 +52,14 @@ fn test_group_by_hash() -> Result<()> {
             let index = schema.index_of(col).unwrap();
             let entry = block.get_by_offset(index);
             let col = entry.value.as_column().unwrap();
-            (col.clone(), entry.data_type.clone())
+            (col.clone(), &entry.data_type)
         })
         .unzip();
 
-    let state = hash.build_keys_state(((&group_columns).into(), &data_types), block.num_rows())?;
+    let state = hash.build_keys_state(
+        InputColumnsWithDataType::new(&group_columns, &data_types),
+        block.num_rows(),
+    )?;
     let keys_iter = hash.build_keys_iter(&state)?;
     let keys: Vec<u32> = keys_iter.copied().collect();
     assert_eq!(keys, vec![

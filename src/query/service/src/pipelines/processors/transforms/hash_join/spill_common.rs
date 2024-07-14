@@ -16,13 +16,12 @@
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
+use databend_common_expression::InputColumnsWithDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::JoinType;
 
@@ -57,7 +56,7 @@ pub fn get_hashes(
     }
 
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let columns: Vec<(Column, DataType)> = keys
+    let columns: Vec<(_, _)> = keys
         .iter()
         .map(|expr| {
             let return_type = expr.data_type();
@@ -66,7 +65,7 @@ pub fn get_hashes(
                 evaluator
                     .run(expr)?
                     .convert_to_full_column(return_type, block.num_rows()),
-                return_type.clone(),
+                return_type,
             ))
         })
         .collect::<Result<_>>()?;
@@ -75,10 +74,11 @@ pub fn get_hashes(
         .into_iter()
         .map(|(col, ty)| (col.remove_nullable(), ty.remove_nullable()))
         .unzip();
+    let data_types = data_types.iter().collect::<Vec<_>>();
 
     hash_by_method(
         method,
-        ((&columns).into(), &data_types),
+        InputColumnsWithDataType::new(&columns, &data_types),
         block.num_rows(),
         hashes,
     )?;

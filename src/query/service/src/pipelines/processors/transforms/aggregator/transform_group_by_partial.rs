@@ -26,6 +26,7 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
+use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
@@ -153,15 +154,6 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         let block = block.convert_to_full();
         let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
-        let data_types = self
-            .params
-            .group_columns
-            .iter()
-            .map(|&index| {
-                let c = block.get_by_offset(index);
-                c.data_type.clone()
-            })
-            .collect::<Vec<_>>();
 
         {
             let rows_num = block.num_rows();
@@ -169,9 +161,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
-                    let state = self
-                        .method
-                        .build_keys_state((group_columns, &data_types), rows_num)?;
+                    let data_types = group_columns.as_block().unwrap().data_types();
+                    let state = self.method.build_keys_state(
+                        InputColumnsWithDataType::new(group_columns, &data_types),
+                        rows_num,
+                    )?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);
@@ -179,9 +173,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
-                    let state = self
-                        .method
-                        .build_keys_state((group_columns, &data_types), rows_num)?;
+                    let data_types = group_columns.as_block().unwrap().data_types();
+                    let state = self.method.build_keys_state(
+                        InputColumnsWithDataType::new(group_columns, &data_types),
+                        rows_num,
+                    )?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);

@@ -148,6 +148,7 @@ impl<'a> BlockProxy<'a> {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct InputColumnsWithDataType<'a> {
     pub columns: InputColumns<'a>,
     pub data_types: &'a [&'a DataType],

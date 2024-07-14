@@ -17,10 +17,9 @@ use databend_common_exception::Result;
 use databend_common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::binary::BinaryIterator;
-use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
+use crate::InputColumnsWithDataType;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -38,10 +37,10 @@ impl HashMethod for HashMethodSingleBinary {
 
     fn build_keys_state(
         &self,
-        group_columns: (InputColumns, &[DataType]),
+        group_columns: InputColumnsWithDataType,
         _rows: usize,
     ) -> Result<KeysState> {
-        Ok(KeysState::Column(group_columns.0[0].clone()))
+        Ok(KeysState::Column(group_columns.columns[0].clone()))
     }
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {

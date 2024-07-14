@@ -19,10 +19,9 @@ use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
 
 use super::utils::serialize_group_columns;
-use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
+use crate::InputColumnsWithDataType;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -41,14 +40,14 @@ impl HashMethod for HashMethodDictionarySerializer {
 
     fn build_keys_state(
         &self,
-        group_columns: (InputColumns, &[DataType]),
+        group_columns: InputColumnsWithDataType,
         num_rows: usize,
     ) -> Result<KeysState> {
-        debug_assert_eq!(group_columns.0.len(), group_columns.1.len());
         // fixed type serialize one column to dictionary
-        let mut dictionary_columns = Vec::with_capacity(group_columns.0.len());
+        let InputColumnsWithDataType { columns, .. } = group_columns;
+        let mut dictionary_columns = Vec::with_capacity(columns.len());
         let mut serialize_columns = Vec::new();
-        for group_column in group_columns.0.iter() {
+        for group_column in columns.iter() {
             match group_column {
                 Column::Binary(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);

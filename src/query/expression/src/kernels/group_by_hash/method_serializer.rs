@@ -17,11 +17,10 @@ use databend_common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_group_columns;
 use crate::types::binary::BinaryIterator;
-use crate::types::DataType;
 use crate::BinaryKeyAccessor;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
+use crate::InputColumnsWithDataType;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -39,17 +38,14 @@ impl HashMethod for HashMethodSerializer {
 
     fn build_keys_state(
         &self,
-        group_columns: (InputColumns, &[DataType]),
+        group_columns: InputColumnsWithDataType,
         num_rows: usize,
     ) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
-        let serialize_size = group_columns
-            .0
-            .iter()
-            .map(|column| column.serialize_size())
-            .sum();
+        let InputColumnsWithDataType { columns, .. } = group_columns;
+        let serialize_size = columns.iter().map(|column| column.serialize_size()).sum();
         Ok(KeysState::Column(Column::Binary(serialize_group_columns(
-            group_columns.0,
+            columns,
             num_rows,
             serialize_size,
         ))))

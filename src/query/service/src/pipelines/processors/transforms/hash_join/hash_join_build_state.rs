@@ -42,7 +42,7 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_expression::InputColumns;
+use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -638,22 +638,16 @@ impl HashJoinBuildState {
         } else {
             Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        // [TODO]
-        let mut build_keys: Vec<(Column, DataType)> = self
-            .hash_join_state
-            .hash_join_desc
-            .build_keys
+        let build_keys = &self.hash_join_state.hash_join_desc.build_keys;
+        let mut keys_columns = build_keys
             .iter()
             .map(|expr| {
                 let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, chunk.num_rows()),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(return_type, chunk.num_rows()))
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let column_nums = chunk.num_columns();
         let mut block_entries = Vec::with_capacity(self.build_projections.len());
@@ -670,14 +664,16 @@ impl HashJoinBuildState {
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
         let mut valids = None;
-        if build_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (index, (col, _)) in build_keys.iter().enumerate() {
-                if is_null_equal[index] {
-                    continue;
-                }
+
+        if build_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        }) {
+            for (col, _) in keys_columns
+                .iter()
+                .zip(is_null_equal.iter())
+                .filter(|(_, is_null_equal)| !*is_null_equal)
+            {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
                     valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
@@ -686,35 +682,34 @@ impl HashJoinBuildState {
                     valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
-        }
 
-        valids = match valids {
-            Some(valids) => {
-                if valids.unset_bits() == valids.len() {
-                    return Ok(());
-                } else if valids.unset_bits() == 0 {
-                    None
-                } else {
-                    Some(valids)
+            valids = match valids {
+                Some(valids) => {
+                    if valids.unset_bits() == valids.len() {
+                        return Ok(());
+                    }
+                    if valids.unset_bits() != 0 {
+                        Some(valids)
+                    } else {
+                        None
+                    }
                 }
-            }
-            None => None,
-        };
+                None => None,
+            };
+        }
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
-                let keys = build_keys
-                    .iter()
-                    .map(|(c, _)| c)
-                    .cloned()
-                    .collect::<Vec<_>>();
                 let markers = &mut build_state.mark_scan_map[chunk_index];
-                self.hash_join_state
-                    .init_markers((&keys).into(), chunk.num_rows(), markers);
+                self.hash_join_state.init_markers(
+                    (&keys_columns).into(),
+                    chunk.num_rows(),
+                    markers,
+                );
             }
             JoinType::RightMark => {
-                if !_has_null && !build_keys.is_empty() {
-                    if let Some(validity) = build_keys[0].0.validity().1 {
+                if !_has_null && !keys_columns.is_empty() {
+                    if let Some(validity) = keys_columns[0].validity().1 {
                         if validity.unset_bits() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
@@ -731,17 +726,22 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        for ((col, ty), _) in build_keys
+        let keys_data_types = keys_columns
             .iter_mut()
+            .zip(build_keys.iter())
             .zip(is_null_equal.iter())
-            .filter(|(_, is_null_equal)| !*is_null_equal)
-        {
-            *col = col.remove_nullable();
-            *ty = ty.remove_nullable();
-        }
-
-        let (columns, data_types): (Vec<_>, Vec<_>) = build_keys.into_iter().unzip();
-        let build_keys: (InputColumns, &[DataType]) = ((&columns).into(), &data_types);
+            .map(|((col, expr), is_null_equal)| {
+                let ty = expr.data_type();
+                if *is_null_equal {
+                    ty.to_owned()
+                } else {
+                    *col = col.remove_nullable();
+                    ty.remove_nullable()
+                }
+            })
+            .collect::<Vec<_>>();
+        let keys_data_types = keys_data_types.iter().collect::<Vec<_>>();
+        let build_keys = InputColumnsWithDataType::new(&keys_columns, &keys_data_types);
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -915,9 +915,11 @@ impl HashJoinBuildState {
             let num_rows = build_key_column.len();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut hashes = HashSet::with_capacity(num_rows);
+            let key_columns = [build_key_column];
+            let key_types = [&data_type];
             hash_by_method(
                 &method,
-                ((&[build_key_column]).into(), &[data_type]),
+                InputColumnsWithDataType::new(&key_columns, &key_types),
                 num_rows,
                 &mut hashes,
             )?;
