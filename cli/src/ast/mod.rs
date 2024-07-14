@@ -24,7 +24,10 @@ pub fn format_query(query: &str) -> String {
     if kind == QueryKind::Put || kind == QueryKind::Get {
         return query.to_owned();
     }
-    let tokens = databend_common_ast::parser::tokenize_sql(query).unwrap();
-    let (stmt, _) = parse_sql(&tokens, Dialect::Experimental).unwrap();
-    pretty_statement(stmt, 80).unwrap()
+    if let Ok(tokens) = databend_common_ast::parser::tokenize_sql(query) {
+        if let Ok((stmt, _)) = parse_sql(&tokens, Dialect::Experimental) {
+            return pretty_statement(stmt, 80).unwrap();
+        }
+    }
+    query.to_string()
 }
