@@ -133,20 +133,20 @@ impl PipelineBuilder {
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
-                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, false)
                 }
             }
             Some(false) => {
                 // Build for each cluster node.
                 // We build the full sort pipeline for it.
                 // Don't remove the order column at last.
-                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+                builder.build_full_sort_pipeline(&mut self.main_pipeline, false)
             }
             None => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
                 builder = builder.remove_order_col_at_last();
-                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+                builder.build_full_sort_pipeline(&mut self.main_pipeline, false)
             }
         }
     }
@@ -193,14 +193,14 @@ impl PipelineBuilder {
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
-                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, true)
                 }
             }
             _ => {
                 // Build for each single node mode.
                 // We build the full sort pipeline for it.
                 builder = builder.remove_order_col_at_last();
-                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+                builder.build_full_sort_pipeline(&mut self.main_pipeline, true)
             }
         }
     }
@@ -253,11 +253,15 @@ impl SortPipelineBuilder {
         self
     }
 
-    pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_full_sort_pipeline(
+        self,
+        pipeline: &mut Pipeline,
+        is_window_sort: bool,
+    ) -> Result<()> {
         // Partial sort
         pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
 
-        self.build_merge_sort_pipeline(pipeline, false)
+        self.build_merge_sort_pipeline(pipeline, false, is_window_sort)
     }
 
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
@@ -298,10 +302,15 @@ impl SortPipelineBuilder {
         self,
         pipeline: &mut Pipeline,
         order_col_generated: bool,
+        is_window_sort: bool,
     ) -> Result<()> {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
-        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
+        let output_order_col = if is_window_sort {
+            false
+        } else {
+            need_multi_merge || !self.remove_order_col_at_last
+        };
         debug_assert!(if order_col_generated {
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
             !output_order_col
@@ -363,7 +372,8 @@ impl SortPipelineBuilder {
             })?;
         }
 
-        if need_multi_merge {
+        if need_multi_merge && !is_window_sort {
+            // if need_multi_merge {
             // Multi-pipelines merge sort
             try_add_multi_sort_merge(
                 pipeline,
