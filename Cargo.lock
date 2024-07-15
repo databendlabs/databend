@@ -4919,6 +4919,7 @@ dependencies = [
  "opendal",
  "tantivy",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

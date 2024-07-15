@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -26,24 +27,22 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::get_license_manager;
-use databend_enterprise_fail_safe::get_fail_safe_handler;
-use databend_enterprise_fail_safe::FailSafeHandlerWrapper;
+use databend_common_storages_fuse::table_functions::parse_db_tb_args;
+use databend_common_storages_fuse::table_functions::string_literal;
+use databend_common_storages_fuse::table_functions::SimpleTableFunc;
+use databend_common_storages_fuse::FuseTable;
+use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_args;
-use crate::table_functions::string_literal;
-use crate::table_functions::SimpleTableFunc;
-use crate::table_functions::TableArgs;
-use crate::FuseTable;
-
-const FUSE_AMEND_ENGINE_NAME: &str = "fuse_failsafe_amend_table";
-struct AmendTableArgs {
+const FUSE_VACUUM2_ENGINE_NAME: &str = "fuse_vacuum2_table";
+struct Vacuum2TableArgs {
     arg_database_name: String,
     arg_table_name: String,
 }
 
-impl From<&AmendTableArgs> for TableArgs {
-    fn from(value: &AmendTableArgs) -> Self {
+impl From<&Vacuum2TableArgs> for TableArgs {
+    fn from(value: &Vacuum2TableArgs) -> Self {
         TableArgs::new_positioned(vec![
             string_literal(value.arg_database_name.as_str()),
             string_literal(value.arg_table_name.as_str()),
@@ -51,13 +50,13 @@ impl From<&AmendTableArgs> for TableArgs {
     }
 }
 
-pub struct FuseAmendTable {
-    args: AmendTableArgs,
-    fail_safe_handler: Arc<FailSafeHandlerWrapper>,
+pub struct FuseVacuum2Table {
+    args: Vacuum2TableArgs,
+    handler: Arc<VacuumHandlerWrapper>,
 }
 
 #[async_trait::async_trait]
-impl SimpleTableFunc for FuseAmendTable {
+impl SimpleTableFunc for FuseVacuum2Table {
     fn table_args(&self) -> Option<TableArgs> {
         Some((&self.args).into())
     }
@@ -70,7 +69,7 @@ impl SimpleTableFunc for FuseAmendTable {
         let license_manager = get_license_manager();
         license_manager
             .manager
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::AmendTable)?;
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::Vacuum)?;
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(CATALOG_DEFAULT)
@@ -86,9 +85,7 @@ impl SimpleTableFunc for FuseAmendTable {
             ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
         })?;
 
-        self.fail_safe_handler
-            .recover(tbl.table_info.clone())
-            .await?;
+        self.handler.do_vacuum2(tbl, ctx.clone()).await?;
 
         let col: Vec<String> = vec!["Ok".to_owned()];
 
@@ -99,15 +96,14 @@ impl SimpleTableFunc for FuseAmendTable {
 
     fn create(table_args: TableArgs) -> Result<Self>
     where Self: Sized {
-        let fail_safe_handler = get_fail_safe_handler();
         let (arg_database_name, arg_table_name) =
-            parse_db_tb_args(&table_args, FUSE_AMEND_ENGINE_NAME)?;
+            parse_db_tb_args(&table_args, FUSE_VACUUM2_ENGINE_NAME)?;
         Ok(Self {
-            args: AmendTableArgs {
+            args: Vacuum2TableArgs {
                 arg_database_name,
                 arg_table_name,
             },
-            fail_safe_handler,
+            handler: get_vacuum_handler(),
         })
     }
 }

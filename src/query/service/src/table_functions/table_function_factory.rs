@@ -43,6 +43,7 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
 use crate::table_functions::cloud::TaskHistoryTable;
+use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -52,7 +53,6 @@ use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
 use crate::table_functions::TableFunction;
-
 type TableFunctionCreators = RwLock<HashMap<String, (MetaId, Arc<dyn TableFunctionCreator>)>>;
 
 pub trait TableFunctionCreator: Send + Sync {
@@ -136,6 +136,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum2".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuum2Table>::create),
             ),
         );
 
