@@ -117,7 +117,7 @@ impl SnapshotGenerator for AppendGenerator {
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
+        previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
@@ -133,7 +133,7 @@ impl SnapshotGenerator for AppendGenerator {
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
-        if let Some(snapshot) = &previous {
+        if let Some(snapshot) = previous {
             prev_timestamp = snapshot.timestamp;
             prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
             table_statistics_location = snapshot.table_statistics_location.clone();
