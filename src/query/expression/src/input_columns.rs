@@ -159,7 +159,7 @@ impl<'a> InputColumnsWithDataType<'a> {
         let columns: InputColumns = columns.into();
         debug_assert_eq!(columns.len(), data_types.len());
         for (col, ty) in columns.iter().zip(data_types.iter()) {
-            debug_assert!(col.data_type() == ty)
+            debug_assert!(col.data_type() == **ty)
         }
         Self {
             columns,
