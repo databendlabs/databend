@@ -24,6 +24,7 @@ use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_txn::TxnManager;
 
 #[test]
 /// base snapshot contains segments 1, 2, 3,
@@ -62,6 +63,8 @@ fn test_unresolvable_delete_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
     );
     assert!(result.is_err());
 }
@@ -151,6 +154,8 @@ fn test_resolvable_delete_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -255,6 +260,8 @@ fn test_resolvable_replace_conflict() {
         None,
         Some(Arc::new(latest_snapshot)),
         None,
+        TxnManager::init(),
+        0,
     );
     let snapshot = result.unwrap();
     let expected = vec![

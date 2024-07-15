@@ -116,6 +116,7 @@ build_exceptions! {
     PermissionDenied(1063),
     UnmarshalError(1064),
     SemanticError(1065),
+    NeedChangePasswordDenied(1066),
     UnknownException(1067),
     TokioError(1068),
     HttpNotFound(1072),

@@ -80,7 +80,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
 ];
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["set_cache_capacity"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["set_cache_capacity", "fuse_amend"];
 
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
@@ -597,6 +597,24 @@ impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
+        if let Plan::AlterUser(plan) = plan {
+            // Alter current user's password do not need to check privileges.
+            if plan.user.username == user.name && plan.user_option.is_none() {
+                return Ok(());
+            }
+        }
+        // User need to change password first in two casese:
+        // 1. set `MUST_CHANGE_PASSWORD` when create user or alter user password,
+        //    and the user login first time.
+        // 2. The password has not been changed within the maximum period
+        //    specified in the password policy `MAX_AGE_DAYS`.
+        let need_change = user.auth_info.get_need_change();
+        if need_change {
+            // If current user need change password, other operation is not allowed.
+            return Err(ErrorCode::NeedChangePasswordDenied(
+                "Must change password before execute other operations".to_string(),
+            ));
+        }
         let (identity, grant_set) = (user.identity().display().to_string(), user.grants);
 
         let enable_experimental_rbac_check = self
@@ -1104,22 +1122,14 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }
-            Plan::AlterUser(plan) => {
-                let current_user = self.ctx.get_current_user()?;
-                // Only alter current user's password do not need to check privileges.
-                if plan.user.username == current_user.name && plan.user_option.is_none() {
-                    return Ok(());
-                }
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
-                    .await?;
-            }
 
             Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::AlterUDF(_)
             | Plan::AlterShareTenants(_)
             | Plan::RefreshIndex(_)
-            | Plan::RefreshTableIndex(_) => {
+            | Plan::RefreshTableIndex(_)
+            | Plan::AlterUser(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Alter, false)
                     .await?;
             }

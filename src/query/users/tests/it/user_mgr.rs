@@ -43,6 +43,7 @@ async fn test_user_manager() -> Result<()> {
     let auth_info = AuthInfo::Password {
         hash_value: Vec::from(pwd),
         hash_method: PasswordHashMethod::Sha256,
+        need_change: false,
     };
 
     // add user hostname.
@@ -182,6 +183,7 @@ async fn test_user_manager() -> Result<()> {
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(pwd),
             hash_method: PasswordHashMethod::Sha256,
+            need_change: false,
         };
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr
@@ -196,6 +198,7 @@ async fn test_user_manager() -> Result<()> {
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(new_pwd),
             hash_method: PasswordHashMethod::Sha256,
+            need_change: false,
         };
         user_mgr
             .update_user(&tenant, user_info.identity(), Some(auth_info), None)
@@ -215,6 +218,7 @@ async fn test_user_manager() -> Result<()> {
         let auth_info = AuthInfo::Password {
             hash_value: Vec::from(new_new_pwd),
             hash_method: PasswordHashMethod::Sha256,
+            need_change: false,
         };
         user_mgr
             .update_user(&tenant, user_info.identity(), Some(auth_info.clone()), None)

@@ -29,9 +29,14 @@ def get_profile(query_id):
 
 def judge(profile):
     print(len(profile["profiles"]))
-    error_count = 0
+    memory_usage, error_count, cpu_time = 0, 0, 0
     for item in profile["profiles"]:
         error_count += len(item["errors"])
+        memory_usage += item["statistics"][16]
+        cpu_time += item["statistics"][0]
+
+    print(memory_usage)
+    print(cpu_time>0)
     print(error_count)
 
 
@@ -48,3 +53,6 @@ if __name__ == "__main__":
     test(
         "SELECT max(number) FROM numbers_mt (10) WHERE number > 99999999998 GROUP BY number % 3"
     )
+    send_sql("drop table if exists tbl_01_0014 all")
+    send_sql("CREATE TABLE tbl_01_0014 (test VARCHAR)")
+    test("select test from tbl_01_0014")

@@ -54,11 +54,11 @@ impl SnapshotGenerator for TruncateGenerator {
         self
     }
 
-    fn generate_new_snapshot(
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
+        previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let (prev_timestamp, prev_snapshot_id) = if let Some(prev_snapshot) = previous {
