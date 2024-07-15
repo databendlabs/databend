@@ -18,6 +18,7 @@ use bytes::Buf;
 use bytes::Bytes;
 use databend_common_auth::RefreshableToken;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::headers::HEADER_TENANT;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -39,8 +40,6 @@ use log::debug;
 use log::error;
 use opendal::raw::HttpClient;
 use opendal::Buffer;
-
-use crate::signer::TENANT_HEADER;
 
 #[derive(Debug)]
 struct EndpointConfig {
@@ -161,7 +160,7 @@ impl ShareEndpointManager {
             .uri(&url)
             .header(AUTHORIZATION, auth)
             .header(CONTENT_LENGTH, bs.len())
-            .header(TENANT_HEADER, requester)
+            .header(HEADER_TENANT, requester)
             .body(Buffer::from(bs))?;
         let resp = self.client.send(req).await;
         match resp {
@@ -246,7 +245,7 @@ impl ShareEndpointManager {
                 .uri(&url)
                 .header(AUTHORIZATION, auth)
                 .header(CONTENT_LENGTH, bs.len())
-                .header(TENANT_HEADER, requester)
+                .header(HEADER_TENANT, requester)
                 .body(Buffer::from(bs))?;
             let resp = self.client.send(req).await;
 
