@@ -285,6 +285,9 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, aws]
     steps:
       - uses: actions/checkout@v4
+      
+      - name: checkout share endpoint
+        uses: actions/checkout@v4
         with:
           repository: datafuselabs/share-endpoint
           token: ${{ secrets.DATABEND_BOT_TOKEN }}
@@ -295,7 +298,7 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-integration-sharing-linux
-          
+
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
   #   needs: [build, check]
