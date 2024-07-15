@@ -27,15 +27,18 @@ Sort
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
         ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
         ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.test_explain_window.empsalary
-            ├── output columns: [depname (#0), empno (#1), salary (#2)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+        └── LocalShuffle
+            ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
+            ├── shuffle by: [depname]
+            └── TableScan
+                ├── table: default.test_explain_window.empsalary
+                ├── output columns: [depname (#0), empno (#1), salary (#2)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 statement ok
 set max_threads=4;
@@ -51,14 +54,15 @@ CompoundBlockOperator(Project) × 1
   Merge to MultiSortMerge × 1
     TransformSortMerge × 4
       SortPartialTransform × 4
-        Merge to Resize × 4
-          Transform Window × 1
-            Merge to MultiSortMerge × 1
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+        Transform Window × 4
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                LocalShuffleTransform × 1
+                  Resize × 1
+                    Duplicate × 1
+                      DeserializeDataTransform × 1
+                        SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
@@ -73,15 +77,16 @@ CompoundBlockOperator(Project) × 1
     TransformSortSpill × 4
       TransformSortMerge × 4
         SortPartialTransform × 4
-          Merge to Resize × 4
-            Transform Window × 1
-              Merge to MultiSortMerge × 1
-                TransformSortSpill × 4
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
-                        DeserializeDataTransform × 1
-                          SyncReadParquetDataSource × 1
+          Transform Window × 4
+            TransformSortSpill × 4
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    LocalShuffleTransform × 1
+                      Resize × 1
+                        Duplicate × 1
+                          DeserializeDataTransform × 1
+                            SyncReadParquetDataSource × 1
 
 
 statement ok
@@ -108,35 +113,38 @@ Filter
         ├── output columns: [test.k (#0), test.v (#1)]
         ├── sort keys: [k ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── UnionAll
+        └── LocalShuffle
             ├── output columns: [test.k (#0), test.v (#1)]
-            ├── estimated rows: 0.00
-            ├── Filter
-            │   ├── output columns: [test.k (#0), test.v (#1)]
-            │   ├── filters: [is_true(test.k (#0) = 12)]
-            │   ├── estimated rows: 0.00
-            │   └── TableScan
-            │       ├── table: default.test_explain_window.test
-            │       ├── output columns: [k (#0), v (#1)]
-            │       ├── read rows: 0
-            │       ├── read size: 0
-            │       ├── partitions total: 0
-            │       ├── partitions scanned: 0
-            │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
-            │       └── estimated rows: 0.00
-            └── Filter
-                ├── output columns: [test.k (#2), test.v (#3)]
-                ├── filters: [is_true(test.k (#2) = 12)]
+            ├── shuffle by: [k]
+            └── UnionAll
+                ├── output columns: [test.k (#0), test.v (#1)]
                 ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.test_explain_window.test
-                    ├── output columns: [k (#2), v (#3)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
-                    └── estimated rows: 0.00
+                ├── Filter
+                │   ├── output columns: [test.k (#0), test.v (#1)]
+                │   ├── filters: [is_true(test.k (#0) = 12)]
+                │   ├── estimated rows: 0.00
+                │   └── TableScan
+                │       ├── table: default.test_explain_window.test
+                │       ├── output columns: [k (#0), v (#1)]
+                │       ├── read rows: 0
+                │       ├── read size: 0
+                │       ├── partitions total: 0
+                │       ├── partitions scanned: 0
+                │       ├── push downs: [filters: [is_true(test.k (#0) = 12)], limit: NONE]
+                │       └── estimated rows: 0.00
+                └── Filter
+                    ├── output columns: [test.k (#2), test.v (#3)]
+                    ├── filters: [is_true(test.k (#2) = 12)]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.test_explain_window.test
+                        ├── output columns: [k (#2), v (#3)]
+                        ├── read rows: 0
+                        ├── read size: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [is_true(test.k (#2) = 12)], limit: NONE]
+                        └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -156,27 +164,30 @@ Filter
         ├── output columns: [test.k (#0), test.v (#1)]
         ├── sort keys: [v ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── UnionAll
+        └── LocalShuffle
             ├── output columns: [test.k (#0), test.v (#1)]
-            ├── estimated rows: 0.00
-            ├── TableScan
-            │   ├── table: default.test_explain_window.test
-            │   ├── output columns: [k (#0), v (#1)]
-            │   ├── read rows: 0
-            │   ├── read size: 0
-            │   ├── partitions total: 0
-            │   ├── partitions scanned: 0
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_explain_window.test
-                ├── output columns: [k (#2), v (#3)]
-                ├── read rows: 0
-                ├── read size: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 0.00
+            ├── shuffle by: [v]
+            └── UnionAll
+                ├── output columns: [test.k (#0), test.v (#1)]
+                ├── estimated rows: 0.00
+                ├── TableScan
+                │   ├── table: default.test_explain_window.test
+                │   ├── output columns: [k (#0), v (#1)]
+                │   ├── read rows: 0
+                │   ├── read size: 0
+                │   ├── partitions total: 0
+                │   ├── partitions scanned: 0
+                │   ├── push downs: [filters: [], limit: NONE]
+                │   └── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_explain_window.test
+                    ├── output columns: [k (#2), v (#3)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 0.00
 
 # cannot push down filter in window function
 query T
@@ -241,15 +252,18 @@ Filter
         ├── output columns: [t.a (#0)]
         ├── sort keys: [a ASC NULLS LAST]
         ├── estimated rows: 0.00
-        └── TableScan
-            ├── table: default.test_explain_window.t
-            ├── output columns: [a (#0)]
-            ├── read rows: 0
-            ├── read size: 0
-            ├── partitions total: 0
-            ├── partitions scanned: 0
-            ├── push downs: [filters: [], limit: NONE]
-            └── estimated rows: 0.00
+        └── LocalShuffle
+            ├── output columns: [t.a (#0)]
+            ├── shuffle by: [a]
+            └── TableScan
+                ├── table: default.test_explain_window.t
+                ├── output columns: [a (#0)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 ## example from: https://community.snowflake.com/s/article/Pushdown-or-Not-Pushdown
 statement ok
@@ -363,13 +377,16 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      Transform Window × 4
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+              LocalShuffleTransform × 1
+                Resize × 1
+                  Duplicate × 1
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 # Enable sort spilling
 statement ok
@@ -381,14 +398,17 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      Transform Window × 4
         TransformSortSpill × 4
           TransformSortMerge × 4
             SortPartialTransform × 4
               Merge to Resize × 4
-                DeserializeDataTransform × 1
-                  SyncReadParquetDataSource × 1
+                LocalShuffleTransform × 1
+                  Resize × 1
+                    Duplicate × 1
+                      DeserializeDataTransform × 1
+                        SyncReadParquetDataSource × 1
 
 
 # Disable sort spilling
@@ -401,13 +421,16 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      Transform Window × 4
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+              LocalShuffleTransform × 1
+                Resize × 1
+                  Duplicate × 1
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 # rows frame single window (can push down limit)
 query T
@@ -415,13 +438,16 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      Transform Window × 4
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+              LocalShuffleTransform × 1
+                Resize × 1
+                  Duplicate × 1
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 # rows frame single window (can not push down limit)
 query T
@@ -429,13 +455,16 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Transform Window × 1
-      Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      Transform Window × 4
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              DeserializeDataTransform × 1
-                SyncReadParquetDataSource × 1
+              LocalShuffleTransform × 1
+                Resize × 1
+                  Duplicate × 1
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
@@ -448,14 +477,15 @@ CompoundBlockOperator(Project) × 1
       Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
-            Merge to Resize × 4
-              Transform Window × 1
-                Merge to MultiSortMerge × 1
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
-                        DeserializeDataTransform × 1
-                          SyncReadParquetDataSource × 1
+            Transform Window × 4
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    LocalShuffleTransform × 1
+                      Resize × 1
+                        Duplicate × 1
+                          DeserializeDataTransform × 1
+                            SyncReadParquetDataSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
@@ -467,16 +497,17 @@ CompoundBlockOperator(Project) × 1
       Merge to MultiSortMerge × 1
         TransformSortMergeLimit × 4
           SortPartialTransform × 4
-            Merge to Resize × 4
-              Transform Window × 1
-                Merge to MultiSortMerge × 1
-                  TransformSortMerge × 4
-                    SortPartialTransform × 4
-                      Merge to Resize × 4
-                        TransformFilter × 1
-                          AddInternalColumnsTransform × 1
-                            DeserializeDataTransform × 1
-                              SyncReadParquetDataSource × 1
+            Transform Window × 4
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    LocalShuffleTransform × 1
+                      Resize × 1
+                        Duplicate × 1
+                          TransformFilter × 1
+                            AddInternalColumnsTransform × 1
+                              DeserializeDataTransform × 1
+                                SyncReadParquetDataSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -505,19 +536,22 @@ RowFetch
                 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
                 ├── sort keys: [a ASC NULLS LAST, a DESC NULLS LAST]
                 ├── estimated rows: 0.00
-                └── Filter
+                └── LocalShuffle
                     ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
-                    ├── filters: [is_true(t.a (#0) > 1)]
-                    ├── estimated rows: 0.00
-                    └── TableScan
-                        ├── table: default.test_explain_window.t
-                        ├── output columns: [a (#0), b (#1), _row_id (#7)]
-                        ├── read rows: 0
-                        ├── read size: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
-                        └── estimated rows: 0.00
+                    ├── shuffle by: [a]
+                    └── Filter
+                        ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
+                        ├── filters: [is_true(t.a (#0) > 1)]
+                        ├── estimated rows: 0.00
+                        └── TableScan
+                            ├── table: default.test_explain_window.t
+                            ├── output columns: [a (#0), b (#1), _row_id (#7)]
+                            ├── read rows: 0
+                            ├── read size: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [is_true(t.a (#0) > 1)], limit: NONE]
+                            └── estimated rows: 0.00
 
 statement ok
 drop table if exists table43764_orc
@@ -531,14 +565,17 @@ explain pipeline select time, rowkey from (select *, row_number() over(partition
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    TransformFilter × 1
-      Transform Window × 1
-        Merge to MultiSortMerge × 1
+    Merge to Resize × 1
+      TransformFilter × 4
+        Transform Window × 4
           TransformSortMerge × 4
             SortPartialTransform × 4
               Merge to Resize × 4
-                DeserializeDataTransform × 1
-                  SyncReadParquetDataSource × 1
+                LocalShuffleTransform × 1
+                  Resize × 1
+                    Duplicate × 1
+                      DeserializeDataTransform × 1
+                        SyncReadParquetDataSource × 1
 
 # same order multi window
 query T
@@ -561,16 +598,18 @@ CompoundBlockOperator(Project) × 1
 query T
 explain pipeline select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), lead(number,2, 0) over (partition by number % 3 order by number + 1) from numbers(50);
 ----
-CompoundBlockOperator(Project) × 1
-  Transform Window × 1
-    CompoundBlockOperator(Map) × 1
-      Transform Window × 1
-        Merge to MultiSortMerge × 1
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                CompoundBlockOperator(Map) × 1
-                  NumbersSourceTransform × 1
+CompoundBlockOperator(Project) × 4
+  Transform Window × 4
+    CompoundBlockOperator(Map) × 4
+      Transform Window × 4
+        TransformSortMerge × 4
+          SortPartialTransform × 4
+            Merge to Resize × 4
+              LocalShuffleTransform × 1
+                Resize × 1
+                  Duplicate × 1
+                    CompoundBlockOperator(Map) × 1
+                      NumbersSourceTransform × 1
 
 
 statement ok

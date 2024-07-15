@@ -1066,7 +1066,7 @@ fn local_shuffle_to_format_tree(
     prof_span_set: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     let shuffle_by = plan
-        .shuffle_by
+        .column_index
         .iter()
         .map(|&index| {
             let name = metadata.column(index).name();

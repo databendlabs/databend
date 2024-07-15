@@ -56,7 +56,9 @@ impl Transform for TransformLocalShuffle {
     const NAME: &'static str = "LocalShuffleTransform";
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
+        let block = block.convert_to_full();
         let num_rows = block.num_rows();
+
         let mut hashes = vec![0u64; num_rows];
         let hash_cols = InputColumns::new_block_proxy(&self.hash_key, &block);
         group_hash_columns(hash_cols, &mut hashes);

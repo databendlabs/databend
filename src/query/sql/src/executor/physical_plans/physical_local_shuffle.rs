@@ -23,6 +23,8 @@ pub struct LocalShuffle {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub shuffle_by: Vec<IndexType>,
+    // For explain
+    pub column_index: Vec<IndexType>,
 }
 
 impl LocalShuffle {

@@ -321,6 +321,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             shuffle_by: plan.shuffle_by.clone(),
+            column_index: plan.column_index.clone(),
         }))
     }
 

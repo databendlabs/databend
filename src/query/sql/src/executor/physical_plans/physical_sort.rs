@@ -122,12 +122,18 @@ impl PhysicalPlanBuilder {
         };
 
         let input_plan = self.build(s_expr.child(0)?, required).await?;
+        let output_schema = input_plan.output_schema()?;
 
-        let window_partition = sort
+        let (window_partition, column_index): (Vec<_>, Vec<_>) = sort
             .window_partition
             .iter()
-            .map(|v| v.index)
-            .collect::<Vec<_>>();
+            .map(|s| {
+                (
+                    output_schema.index_of(&s.index.to_string()).unwrap(),
+                    s.index,
+                )
+            })
+            .unzip();
 
         // Add LocalShuffle for parallel sort in window.
         let input_plan = if !window_partition.is_empty() && sort.after_exchange != Some(true) {
@@ -135,6 +141,7 @@ impl PhysicalPlanBuilder {
                 plan_id: 0,
                 input: Box::new(input_plan),
                 shuffle_by: window_partition.clone(),
+                column_index,
             })
         } else {
             input_plan
