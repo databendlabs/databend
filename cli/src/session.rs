@@ -85,7 +85,7 @@ impl Session {
                     );
                 }
             }
-            let version = conn.version().await?;
+            let version = conn.version().await.unwrap_or_default();
             println!("Connected to {}", version);
             println!();
 
@@ -163,7 +163,7 @@ impl Session {
 
         // server version
         {
-            let version = self.conn.version().await?;
+            let version = self.conn.version().await.unwrap_or_default();
             println!("Server version: {}", version);
         }
 
@@ -540,7 +540,7 @@ impl Session {
                 "reconnecting to {}:{} as user {}.",
                 info.host, info.port, info.user
             );
-            let version = self.conn.version().await?;
+            let version = self.conn.version().await.unwrap_or_default();
             eprintln!("connected to {}", version);
             eprintln!();
         }
