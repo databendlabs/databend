@@ -28,7 +28,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::KeysState;
 use databend_common_expression::KeysState::U128;
 use databend_common_expression::KeysState::U256;
@@ -110,8 +109,7 @@ pub(crate) fn update_bitmap_with_bloom_filter(
     let num_rows = column.len();
     let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
     let columns = &[column];
-    let data_types = &[&data_type];
-    let group_columns = InputColumnsWithDataType::new(columns, data_types);
+    let group_columns = columns.into();
     let mut idx = 0;
     match method {
         HashMethodKind::Serializer(method) => {

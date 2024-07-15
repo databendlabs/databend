@@ -28,7 +28,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::StateAddr;
@@ -242,17 +241,13 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
         let block = block.convert_to_full();
         let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
-        let data_types = group_columns.as_block().unwrap().data_types();
-        let group_columns_with_type = InputColumnsWithDataType::new(group_columns, &data_types);
         let rows_num = block.num_rows();
 
         {
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(hashtable) => {
-                    let state = self
-                        .method
-                        .build_keys_state(group_columns_with_type, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
@@ -273,9 +268,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
-                    let state = self
-                        .method
-                        .build_keys_state(group_columns_with_type, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {

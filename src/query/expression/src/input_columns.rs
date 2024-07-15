@@ -147,23 +147,3 @@ impl<'a> BlockProxy<'a> {
             .collect::<Vec<_>>()
     }
 }
-
-#[derive(Copy, Clone)]
-pub struct InputColumnsWithDataType<'a> {
-    pub columns: InputColumns<'a>,
-    pub data_types: &'a [&'a DataType],
-}
-
-impl<'a> InputColumnsWithDataType<'a> {
-    pub fn new(columns: impl Into<InputColumns<'a>>, data_types: &'a [&'a DataType]) -> Self {
-        let columns: InputColumns = columns.into();
-        debug_assert_eq!(columns.len(), data_types.len());
-        for (col, ty) in columns.iter().zip(data_types.iter()) {
-            debug_assert!(col.data_type() == **ty)
-        }
-        Self {
-            columns,
-            data_types,
-        }
-    }
-}

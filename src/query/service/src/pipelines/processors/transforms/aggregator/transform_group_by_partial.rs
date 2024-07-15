@@ -26,7 +26,6 @@ use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::InputColumns;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_hashtable::HashtableLike;
@@ -161,11 +160,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(cell) => {
-                    let data_types = group_columns.as_block().unwrap().data_types();
-                    let state = self.method.build_keys_state(
-                        InputColumnsWithDataType::new(group_columns, &data_types),
-                        rows_num,
-                    )?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);
@@ -173,11 +168,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                     }
                 }
                 HashTable::PartitionedHashTable(cell) => {
-                    let data_types = group_columns.as_block().unwrap().data_types();
-                    let state = self.method.build_keys_state(
-                        InputColumnsWithDataType::new(group_columns, &data_types),
-                        rows_num,
-                    )?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     for key in self.method.build_keys_iter(&state)? {
                         unsafe {
                             let _ = cell.hashtable.insert_and_entry(key);

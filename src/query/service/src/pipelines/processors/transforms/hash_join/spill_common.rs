@@ -21,7 +21,6 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::plans::JoinType;
 
@@ -70,17 +69,7 @@ pub fn get_hashes(
             }
         })
         .collect::<Result<Vec<_>>>()?;
-    let data_types = keys
-        .iter()
-        .map(|expr| expr.data_type().remove_nullable())
-        .collect::<Vec<_>>();
-    let data_types = &data_types.iter().collect::<Vec<_>>();
-    hash_by_method(
-        method,
-        InputColumnsWithDataType::new(&columns, data_types),
-        block.num_rows(),
-        hashes,
-    )?;
+    hash_by_method(method, (&columns).into(), block.num_rows(), hashes)?;
     Ok(())
 }
 

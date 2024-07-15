@@ -35,7 +35,6 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -258,22 +257,14 @@ impl HashJoinProbeState {
             None
         };
 
-        let keys_data_types = keys_columns
+        keys_columns
             .iter_mut()
-            .zip(probe_keys.iter())
             .zip(is_null_equal.iter().copied())
-            .map(|((col, expr), is_null_equal)| {
-                let ty = expr.data_type();
-                if is_null_equal {
-                    ty.to_owned()
-                } else {
-                    *col = col.remove_nullable();
-                    ty.remove_nullable()
-                }
-            })
-            .collect::<Vec<_>>();
-        let keys_data_types = &keys_data_types.iter().collect::<Vec<_>>();
-        let probe_keys = InputColumnsWithDataType::new(&keys_columns, keys_data_types);
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| {
+                *col = col.remove_nullable();
+            });
+        let probe_keys = (&keys_columns).into();
 
         if self.hash_join_state.hash_join_desc.join_type != JoinType::LeftMark {
             input = input.project(&self.probe_projections);

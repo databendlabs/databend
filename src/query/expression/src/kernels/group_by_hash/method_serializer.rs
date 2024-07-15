@@ -20,7 +20,7 @@ use crate::types::binary::BinaryIterator;
 use crate::BinaryKeyAccessor;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumnsWithDataType;
+use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -36,16 +36,14 @@ impl HashMethod for HashMethodSerializer {
         "Serializer".to_string()
     }
 
-    fn build_keys_state(
-        &self,
-        group_columns: InputColumnsWithDataType,
-        num_rows: usize,
-    ) -> Result<KeysState> {
+    fn build_keys_state(&self, group_columns: InputColumns, num_rows: usize) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
-        let InputColumnsWithDataType { columns, .. } = group_columns;
-        let serialize_size = columns.iter().map(|column| column.serialize_size()).sum();
+        let serialize_size = group_columns
+            .iter()
+            .map(|column| column.serialize_size())
+            .sum();
         Ok(KeysState::Column(Column::Binary(serialize_group_columns(
-            columns,
+            group_columns,
             num_rows,
             serialize_size,
         ))))

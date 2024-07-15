@@ -43,7 +43,6 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_expression::InputColumnsWithDataType;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -725,22 +724,12 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        let keys_data_types = keys_columns
+        keys_columns
             .iter_mut()
-            .zip(build_keys.iter())
             .zip(is_null_equal.iter().copied())
-            .map(|((col, expr), is_null_equal)| {
-                let ty = expr.data_type();
-                if is_null_equal {
-                    ty.to_owned()
-                } else {
-                    *col = col.remove_nullable();
-                    ty.remove_nullable()
-                }
-            })
-            .collect::<Vec<_>>();
-        let keys_data_types = &keys_data_types.iter().collect::<Vec<_>>();
-        let build_keys = InputColumnsWithDataType::new(&keys_columns, keys_data_types);
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| *col = col.remove_nullable());
+        let build_keys = (&keys_columns).into();
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -915,13 +904,7 @@ impl HashJoinBuildState {
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut hashes = HashSet::with_capacity(num_rows);
             let key_columns = &[build_key_column];
-            let key_types = &[data_type];
-            hash_by_method(
-                &method,
-                InputColumnsWithDataType::new(key_columns, key_types),
-                num_rows,
-                &mut hashes,
-            )?;
+            hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
             let mut hashes_vec = Vec::with_capacity(num_rows);
             hashes.into_iter().for_each(|hash| {
                 hashes_vec.push(hash);

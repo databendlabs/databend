@@ -48,13 +48,9 @@ fn test_group_by_hash() -> Result<()> {
         .map(|col| schema.index_of(col).unwrap())
         .collect::<Vec<_>>();
     let group_columns = InputColumns::new_block_proxy(&args, &block);
-    let data_types = &group_columns.as_block().unwrap().data_types();
 
     let hash = HashMethodKeysU32::default();
-    let state = hash.build_keys_state(
-        InputColumnsWithDataType::new(group_columns, data_types),
-        block.num_rows(),
-    )?;
+    let state = hash.build_keys_state(group_columns, block.num_rows())?;
     let keys_iter = hash.build_keys_iter(&state)?;
     let keys: Vec<u32> = keys_iter.copied().collect();
     assert_eq!(keys, vec![

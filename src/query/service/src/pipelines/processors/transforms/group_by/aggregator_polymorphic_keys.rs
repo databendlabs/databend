@@ -29,7 +29,7 @@ use databend_common_expression::HashMethodKeysU128;
 use databend_common_expression::HashMethodKeysU256;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
-use databend_common_expression::InputColumnsWithDataType;
+use databend_common_expression::InputColumns;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::KeysState;
 use databend_common_hashtable::DictionaryKeys;
@@ -607,11 +607,7 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
         format!("Partitioned{}", self.method.name())
     }
 
-    fn build_keys_state(
-        &self,
-        group_columns: InputColumnsWithDataType,
-        rows: usize,
-    ) -> Result<KeysState> {
+    fn build_keys_state(&self, group_columns: InputColumns, rows: usize) -> Result<KeysState> {
         self.method.build_keys_state(group_columns, rows)
     }
 

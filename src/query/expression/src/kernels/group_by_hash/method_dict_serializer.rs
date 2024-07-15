@@ -21,7 +21,7 @@ use databend_common_hashtable::FastHash;
 use super::utils::serialize_group_columns;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumnsWithDataType;
+use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
 
@@ -38,16 +38,11 @@ impl HashMethod for HashMethodDictionarySerializer {
         "DictionarySerializer".to_string()
     }
 
-    fn build_keys_state(
-        &self,
-        group_columns: InputColumnsWithDataType,
-        num_rows: usize,
-    ) -> Result<KeysState> {
+    fn build_keys_state(&self, group_columns: InputColumns, num_rows: usize) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
-        let InputColumnsWithDataType { columns, .. } = group_columns;
-        let mut dictionary_columns = Vec::with_capacity(columns.len());
+        let mut dictionary_columns = Vec::with_capacity(group_columns.len());
         let mut serialize_columns = Vec::new();
-        for group_column in columns.iter() {
+        for group_column in group_columns.iter() {
             match group_column {
                 Column::Binary(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);

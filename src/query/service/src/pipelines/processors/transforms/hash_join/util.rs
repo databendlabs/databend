@@ -25,7 +25,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::InputColumnsWithDataType;
+use databend_common_expression::InputColumns;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
@@ -147,7 +147,7 @@ pub(crate) fn dedup_build_key_column(
 // Get row hash by HashMethod
 pub fn hash_by_method<T>(
     method: &HashMethodKind,
-    columns: InputColumnsWithDataType,
+    columns: InputColumns,
     num_rows: usize,
     hashes: &mut T,
 ) -> Result<()>
