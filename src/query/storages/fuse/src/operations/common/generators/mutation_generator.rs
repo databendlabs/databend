@@ -56,27 +56,33 @@ impl SnapshotGenerator for MutationGenerator {
         self.conflict_resolve_ctx = ctx;
     }
 
-    fn generate_new_snapshot(
+    fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
+        previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
 
-        let previous = previous.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                schema.clone(),
-                prev_table_seq,
-            ))
-        });
+        let empty_snapshot;
+        let previous = match previous {
+            Some(prev) => prev,
+            None => {
+                empty_snapshot = Arc::new(TableSnapshot::new_empty_snapshot(
+                    schema.clone(),
+                    prev_table_seq,
+                ));
+                &empty_snapshot
+            }
+        };
+
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =
                     ConflictResolveContext::is_modified_segments_exists_in_latest(
                         &self.base_snapshot,
-                        &previous,
+                        previous,
                         &ctx.replaced_segments,
                         &ctx.removed_segment_indexes,
                     )
