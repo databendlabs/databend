@@ -47,6 +47,7 @@ databend-storages-common-index = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-storages-common-txn = { workspace = true }
 enum-as-inner = "0.5"
 futures = { workspace = true }
 futures-util = { workspace = true }
