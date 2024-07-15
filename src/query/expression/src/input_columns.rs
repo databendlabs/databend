@@ -143,7 +143,7 @@ impl<'a> BlockProxy<'a> {
     pub fn data_types(&self) -> Vec<&'a DataType> {
         let Self { args, data } = self;
         args.iter()
-            .map(|i| &data.get_by_offset(args[*i]).data_type)
+            .map(|&i| &data.get_by_offset(i).data_type)
             .collect::<Vec<_>>()
     }
 }
