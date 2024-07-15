@@ -295,9 +295,18 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 })
                 .append(RcDoc::text(")"))
                 .append(if let Some(window) = window {
-                    RcDoc::text(" OVER (")
-                        .append(RcDoc::text(window.to_string()))
-                        .append(")")
+                    if let Some(ignore_null) = window.ignore_nulls {
+                        if ignore_null {
+                            RcDoc::text(" IGNORE NULLS ")
+                        } else {
+                            RcDoc::text(" RESPECT NULLS ")
+                        }
+                        .append("OVER (")
+                    } else {
+                        RcDoc::text(" OVER (")
+                    }
+                    .append(RcDoc::text(window.window.to_string()))
+                    .append(")")
                 } else {
                     RcDoc::nil()
                 })

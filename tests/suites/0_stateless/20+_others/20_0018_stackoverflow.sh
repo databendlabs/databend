@@ -16,4 +16,15 @@ SQL="$SQL)"
 
 echo "$SQL"|$BENDSQL_CLIENT_CONNECT
 
+
+SQL="a > 0 "
+
+for i in `seq 1 100`;do
+  SQL="$SQL OR (a > ${i})"
+done 
+
+SQL="$SQL OR (a / 0 > 0)"
+
+echo "SELECT $SQL from numbers(1) t(a)" | $BENDSQL_CLIENT_CONNECT
+
 echo "DROP TABLE IF EXISTS t1"|$BENDSQL_CLIENT_CONNECT

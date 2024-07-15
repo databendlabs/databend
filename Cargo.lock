@@ -4291,6 +4291,7 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "futures",
  "futures-util",
@@ -4647,6 +4648,7 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-types",
+ "databend-common-metrics",
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-common-sql",
@@ -5349,6 +5351,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
+ "parking_lot 0.12.1",
 ]
 
 [[package]]

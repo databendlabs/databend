@@ -791,7 +791,7 @@ error:
   --> SQL:1:14
   |
 1 | h3_to_string('8d11aa6a38826ff')
-  |              ^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('8d11aa6a38826ff')` in expr `to_uint64('8d11aa6a38826ff')`
+  |              ^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('8d11aa6a38826ff')` in expr `to_uint64('8d11aa6a38826ff')`, during run expr: `h3_to_string(to_uint64('8d11aa6a38826ff'))`
 
 
 

@@ -261,6 +261,7 @@ pub enum UserOptionItem {
     UnsetNetworkPolicy,
     SetPasswordPolicy(String),
     UnsetPasswordPolicy,
+    MustChangePassword(bool),
 }
 
 impl Display for UserOptionItem {
@@ -274,6 +275,7 @@ impl Display for UserOptionItem {
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
             UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
+            UserOptionItem::MustChangePassword(v) => write!(f, "MUST_CHANGE_PASSWORD = {}", v),
         }
     }
 }

@@ -835,7 +835,7 @@ pub struct FunctionCall {
     pub name: Identifier,
     pub args: Vec<Expr>,
     pub params: Vec<Expr>,
-    pub window: Option<Window>,
+    pub window: Option<WindowDesc>,
     pub lambda: Option<Lambda>,
 }
 
@@ -866,7 +866,14 @@ impl Display for FunctionCall {
         write!(f, ")")?;
 
         if let Some(window) = window {
-            write!(f, " OVER {window}")?;
+            if let Some(ignore_null) = window.ignore_nulls {
+                if ignore_null {
+                    write!(f, " IGNORE NULLS")?;
+                } else {
+                    write!(f, " RESPECT NULLS")?;
+                }
+            }
+            write!(f, " OVER {}", window.window)?;
         }
         Ok(())
     }
@@ -1061,6 +1068,12 @@ impl Display for TrimWhere {
             TrimWhere::Trailing => "TRAILING",
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct WindowDesc {
+    pub ignore_nulls: Option<bool>,
+    pub window: Window,
 }
 
 #[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut)]

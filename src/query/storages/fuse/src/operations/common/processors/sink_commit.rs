@@ -286,6 +286,8 @@ where F: SnapshotGenerator + Send + 'static
                     cluster_key_meta,
                     previous,
                     Some(table_info.ident.seq),
+                    self.ctx.txn_mgr(),
+                    table_info.ident.table_id,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {

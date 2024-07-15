@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::fmt;
 use std::ops::Index;
 use std::ops::Range;
+use std::slice::SliceIndex;
 use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -201,7 +202,8 @@ impl<'a> InputColumns<'a> {
         }
     }
 
-    pub fn slice(&self, index: Range<usize>) -> InputColumns<'_> {
+    pub fn slice<I>(&self, index: I) -> InputColumns<'_>
+    where I: SliceIndex<[usize], Output = [usize]> + SliceIndex<[Column], Output = [Column]> {
         match self {
             Self::Slice(s) => Self::Slice(&s[index]),
             Self::Block(BlockProxy { args, data }) => Self::Block(BlockProxy {
@@ -234,11 +236,31 @@ pub struct InputColumnsIter<'a> {
     this: &'a InputColumns<'a>,
 }
 
+unsafe impl<'a> std::iter::TrustedLen for InputColumnsIter<'a> {}
+
 impl<'a> Iterator for InputColumnsIter<'a> {
     type Item = &'a Column;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|index| self.this.index(index))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+
+    fn count(self) -> usize
+    where Self: Sized {
+        self.iter.count()
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.iter.nth(n).map(|index| self.this.index(index))
+    }
+
+    fn last(self) -> Option<Self::Item>
+    where Self: Sized {
+        self.iter.last().map(|index| self.this.index(index))
     }
 }
 

@@ -415,21 +415,25 @@ pub fn unwrap_local_time(
 ) -> Result<DateTime<Tz>> {
     match tz.from_local_datetime(naive_datetime) {
         LocalResult::Single(t) => Ok(t),
-        LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
-            "Ambiguous Local Time: The local time is ambiguous {}, {} with timezone {}",
-            t1, t2, tz
-        ))),
+        LocalResult::Ambiguous(t1, t2) => {
+            // The local time is _ambiguous_ because there is a _fold_ in the local time.
+            // This variant contains the two possible results, in the order `(earliest, latest)`
+            // e.g.
+            // naive_datetime 1990-09-16T01:00:00 in Aisa/Shanghai
+            // t1.offset.fix = +09:00, t2.offset.fix = +08:00
+            // t1: 1990-09-16T01:00:00CDT, t2: 1990-09-16T01:00:00CST
+            // So if enable_dst_hour_fix = true return t1.
+            if enable_dst_hour_fix {
+                return Ok(t1);
+            }
+            Ok(t2)
+        }
         LocalResult::None => {
             if enable_dst_hour_fix {
                 if let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600)) {
                     return match tz.from_local_datetime(&res2) {
                         MappedLocalTime::Single(t) => Ok(t),
-                        MappedLocalTime::Ambiguous(t1, t2) => {
-                            Err(ErrorCode::BadArguments(format!(
-                                "Ambiguous Local Time: The local time is ambiguous {}, {} with timezone {}",
-                                t1, t2, tz
-                            )))
-                        }
+                        MappedLocalTime::Ambiguous(t1, _) => Ok(t1),
                         MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
                             "Local Time Error: The local time {}, {} can not map to a single unique result with timezone {}",
                             naive_datetime, res2, tz

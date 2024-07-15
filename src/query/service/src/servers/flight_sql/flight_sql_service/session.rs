@@ -100,15 +100,19 @@ impl FlightSqlServiceImpl {
         let tenant = session.get_current_tenant();
 
         let identity = UserIdentity::new(&user, "%");
-        let user = UserApiProvider::instance()
+        let mut user = UserApiProvider::instance()
             .get_user_with_client_ip(&tenant, identity.clone(), client_ip)
             .await
             .map_err(|e| status!("get_user fail {}", e))?;
         // Check password policy for login
-        UserApiProvider::instance()
+        let need_change = UserApiProvider::instance()
             .check_login_password(&tenant, identity.clone(), &user)
             .await
             .map_err(|e| status!("not compliant with password policy {}", e))?;
+
+        if need_change {
+            user.update_auth_need_change_password();
+        }
 
         let password = password.as_bytes().to_vec();
         let password = (!password.is_empty()).then_some(password);
@@ -118,6 +122,7 @@ impl FlightSqlServiceImpl {
             AuthInfo::Password {
                 hash_value: h,
                 hash_method: t,
+                ..
             } => match password {
                 None => Err(Status::unauthenticated("password required")),
                 Some(p) => {

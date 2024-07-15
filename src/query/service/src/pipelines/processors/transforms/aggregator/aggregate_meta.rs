@@ -27,6 +27,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
+use databend_common_expression::InputColumns;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
@@ -76,29 +77,19 @@ impl SerializedPayload {
             need_init_entry,
         );
 
-        let agg_states = (0..agg_len)
-            .map(|i| {
-                self.data_block
-                    .get_by_offset(i)
-                    .value
-                    .as_column()
-                    .unwrap()
-                    .clone()
-            })
-            .collect::<Vec<_>>();
-        let group_columns = (agg_len..(agg_len + group_len))
-            .map(|i| {
-                self.data_block
-                    .get_by_offset(i)
-                    .value
-                    .as_column()
-                    .unwrap()
-                    .clone()
-            })
-            .collect::<Vec<_>>();
+        let states_index: Vec<usize> = (0..agg_len).collect();
+        let agg_states = InputColumns::new_block_proxy(&states_index, &self.data_block);
 
-        let _ =
-            hashtable.add_groups(&mut state, &group_columns, &[vec![]], &agg_states, rows_num)?;
+        let group_index: Vec<usize> = (agg_len..(agg_len + group_len)).collect();
+        let group_columns = InputColumns::new_block_proxy(&group_index, &self.data_block);
+
+        let _ = hashtable.add_groups(
+            &mut state,
+            group_columns,
+            &[(&[]).into()],
+            agg_states,
+            rows_num,
+        )?;
 
         hashtable.payload.mark_min_cardinality();
         Ok(hashtable)

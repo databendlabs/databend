@@ -227,7 +227,7 @@ pub trait Visitor<'ast>: Sized {
         _name: &'ast Identifier,
         args: &'ast [Expr],
         params: &'ast [Expr],
-        over: &'ast Option<Window>,
+        over: &'ast Option<WindowDesc>,
         lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
@@ -238,7 +238,7 @@ pub trait Visitor<'ast>: Sized {
         }
 
         if let Some(over) = over {
-            self.visit_window(over);
+            self.visit_window(&over.window);
         }
         if let Some(lambda) = lambda {
             walk_expr(self, &lambda.expr)
