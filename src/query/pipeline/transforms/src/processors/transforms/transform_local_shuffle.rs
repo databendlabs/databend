@@ -18,6 +18,7 @@ use std::vec;
 use databend_common_exception::Result;
 use databend_common_expression::group_hash_columns;
 use databend_common_expression::DataBlock;
+use databend_common_expression::InputColumns;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -56,13 +57,9 @@ impl Transform for TransformLocalShuffle {
 
     fn transform(&mut self, block: DataBlock) -> Result<DataBlock> {
         let num_rows = block.num_rows();
-        let mut hash_cols = Vec::with_capacity(self.hash_key.capacity());
         let mut hashes = vec![0u64; num_rows];
-
-        for offset in &self.hash_key {
-            hash_cols.push(block.get_by_offset(*offset).to_column(num_rows));
-        }
-        group_hash_columns(&hash_cols, &mut hashes);
+        let hash_cols = InputColumns::new_block_proxy(&self.hash_key, &block);
+        group_hash_columns(hash_cols, &mut hashes);
 
         let indices = hashes
             .iter()
