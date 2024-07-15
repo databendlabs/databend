@@ -21,6 +21,7 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
+use databend_common_base::headers::HEADER_FUNCTION;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_exception::ErrorCode;
@@ -29,6 +30,7 @@ use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use tonic::metadata::KeyAndValueRef;
+use tonic::metadata::MetadataKey;
 use tonic::metadata::MetadataMap;
 use tonic::metadata::MetadataValue;
 use tonic::transport::channel::Channel;
@@ -90,21 +92,40 @@ impl UDFFlightClient {
 
     /// Set tenant for the UDF client.
     pub fn with_tenant(mut self, tenant: &str) -> Result<Self> {
-        self.headers.insert(
-            HEADER_TENANT,
-            MetadataValue::from_str(tenant)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
-        );
+        let key = HEADER_TENANT.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("parse tenant header key error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(tenant).map_err(|err| {
+            ErrorCode::UDFDataError(format!("parse tenant header value error: {err}"))
+        })?;
+        self.headers.insert(key, value);
+        Ok(self)
+    }
+
+    /// Set function name for the UDF client.
+    pub fn with_func_name(mut self, func_name: &str) -> Result<Self> {
+        let key = HEADER_FUNCTION.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Set function name header error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(func_name).map_err(|err| {
+            ErrorCode::UDFDataError(format!("Set function name header error: {err}"))
+        })?;
+        self.headers.insert(key, value);
         Ok(self)
     }
 
     /// Set query id for the UDF client.
     pub fn with_query_id(mut self, query_id: &str) -> Result<Self> {
-        self.headers.insert(
-            HEADER_QUERY_ID,
-            MetadataValue::from_str(query_id)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Set query id error: {err}")))?,
-        );
+        let key = HEADER_QUERY_ID.to_lowercase();
+        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
+            ErrorCode::UDFDataError(format!("parse query id header key error: {err}"))
+        })?;
+        let value = MetadataValue::from_str(query_id).map_err(|err| {
+            ErrorCode::UDFDataError(format!("parse query id header value error: {err}"))
+        })?;
+        self.headers.insert(key, value);
         Ok(self)
     }
 
