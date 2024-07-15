@@ -29,7 +29,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: Read + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V4(_) => TableSnapshot::from_read(reader)?,
+            SnapshotVersion::V5(_) => TableSnapshot::from_read(reader)?,
+            SnapshotVersion::V4(_) => TableSnapshot::from_read(reader)?.into(),
             SnapshotVersion::V3(_) => TableSnapshotV3::from_reader(reader)?.into(),
             SnapshotVersion::V2(v) => {
                 let mut ts: TableSnapshotV2 = load_json(reader, v)?;
