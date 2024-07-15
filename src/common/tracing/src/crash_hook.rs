@@ -353,8 +353,6 @@ mod tests {
                 //      261 >     fn test_crash() {
                 //      262 │         unsafe {
                 //      263 │             set_crash_hook(String::from("1.2.111"));
-                // 13: core::ops::function::FnOnce::call_once::hae286949ac787db2
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/core/src/ops/function.rs:250
                 // 14: core::ops::function::FnOnce::call_once::h31eb0fafb294dd12
                 //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/core/src/ops/function.rs:250
                 // 15: test::__rust_begin_short_backtrace::h6fac42d75080a771
