@@ -35,14 +35,20 @@ pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: ConflictResolveContext,
     mutation_kind: MutationKind,
+    transaction_time_limit_in_hours: u64,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>, mutation_kind: MutationKind) -> Self {
+    pub fn new(
+        base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
+        transaction_time_limit_in_hours: u64,
+    ) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: ConflictResolveContext::None,
             mutation_kind,
+            transaction_time_limit_in_hours,
         }
     }
 }
@@ -106,12 +112,13 @@ impl SnapshotGenerator for MutationGenerator {
                         prev_table_seq,
                         &previous.timestamp,
                         Some((previous.snapshot_id, previous.format_version)),
-                        &previous.as_ref().map(|v| v.least_base_snapshot_timestamp),
+                        &previous.least_base_snapshot_timestamp,
                         schema,
                         new_summary,
                         new_segments,
                         cluster_key_meta,
                         previous.table_statistics_location.clone(),
+                        self.transaction_time_limit_in_hours,
                     );
 
                     if matches!(self.mutation_kind, MutationKind::Compact) {

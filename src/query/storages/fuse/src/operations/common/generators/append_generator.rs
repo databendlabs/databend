@@ -231,11 +231,17 @@ impl SnapshotGenerator for AppendGenerator {
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
+            &previous
+                .as_ref()
+                .and_then(|v| v.least_base_snapshot_timestamp),
             schema,
             new_summary,
             new_segments,
             cluster_key_meta,
             table_statistics_location,
+            self.ctx
+                .get_settings()
+                .get_auto_compaction_imperfect_blocks_threshold()?,
         ))
     }
 }

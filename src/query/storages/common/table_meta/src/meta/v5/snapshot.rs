@@ -14,7 +14,6 @@
 
 use std::io::Cursor;
 use std::io::Read;
-use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Duration;
@@ -32,8 +31,7 @@ use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::trim_timestamp_to_micro_second;
-use crate::meta::v2;
-use crate::meta::v3;
+use crate::meta::v4;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -242,9 +240,11 @@ impl TableSnapshot {
     }
 }
 
-// use the chain of converters, for versions before v3
-impl From<v2::TableSnapshot> for TableSnapshot {
-    fn from(s: v2::TableSnapshot) -> Self {
+impl<T> From<T> for TableSnapshot
+where T: Into<v4::TableSnapshot>
+{
+    fn from(s: T) -> Self {
+        let s: v4::TableSnapshot = s.into();
         Self {
             // NOTE: it is important to let the format_version return from here
             // carries the format_version of snapshot being converted.
@@ -255,29 +255,6 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema,
             summary: s.summary,
-            segments: s.segments,
-            cluster_key_meta: s.cluster_key_meta,
-            table_statistics_location: s.table_statistics_location,
-            least_base_snapshot_timestamp: None,
-        }
-    }
-}
-
-impl<T> From<T> for TableSnapshot
-where T: Into<v3::TableSnapshot>
-{
-    fn from(s: T) -> Self {
-        let s: v3::TableSnapshot = s.into();
-        Self {
-            // NOTE: it is important to let the format_version return from here
-            // carries the format_version of snapshot being converted.
-            format_version: s.format_version,
-            snapshot_id: s.snapshot_id,
-            timestamp: s.timestamp,
-            prev_table_seq: None,
-            prev_snapshot_id: s.prev_snapshot_id,
-            schema: s.schema.into(),
-            summary: s.summary.into(),
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,

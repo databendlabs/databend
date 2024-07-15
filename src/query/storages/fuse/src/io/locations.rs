@@ -212,6 +212,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V2(_) => "_v2.json".to_string(),
             SnapshotVersion::V3(_) => "_v3.bincode".to_string(),
             SnapshotVersion::V4(_) => "_v4.mpk".to_string(),
+            SnapshotVersion::V5(_) => "_v5.mpk".to_string(),
         }
     }
 }

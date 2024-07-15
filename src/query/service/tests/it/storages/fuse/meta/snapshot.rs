@@ -84,11 +84,13 @@ fn snapshot_timestamp_time_skew_tolerance() {
         None,
         &prev.timestamp,
         prev.prev_snapshot_id,
+        &None,
         schema,
         Default::default(),
         vec![],
         None,
         None,
+        24,
     );
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();

@@ -26,7 +26,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManager;
 
-#[test]
 /// base snapshot contains segments 1, 2, 3,
 ///
 /// a delete operation wants to remove segment 2,
@@ -36,6 +35,7 @@ use databend_storages_common_txn::TxnManager;
 /// i.e. in this test, segment 2 and 3 are compacted into segment 4
 ///
 /// so the delete operation cannot be applied
+#[test]
 fn test_unresolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default(), None);
     base_snapshot.segments = vec![
@@ -55,7 +55,7 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete, 24);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -146,7 +146,7 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete, 24);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -252,7 +252,7 @@ fn test_resolvable_replace_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace);
+    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace, 24);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(

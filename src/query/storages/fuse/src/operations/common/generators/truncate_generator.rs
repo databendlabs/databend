@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -36,11 +37,12 @@ pub enum TruncateMode {
 #[derive(Clone)]
 pub struct TruncateGenerator {
     mode: TruncateMode,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl TruncateGenerator {
-    pub fn new(mode: TruncateMode) -> Self {
-        TruncateGenerator { mode }
+    pub fn new(mode: TruncateMode, ctx: Arc<dyn TableContext>) -> Self {
+        TruncateGenerator { mode, ctx }
     }
 
     pub fn mode(&self) -> &TruncateMode {
@@ -75,11 +77,17 @@ impl SnapshotGenerator for TruncateGenerator {
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
+            &previous
+                .as_ref()
+                .and_then(|v| v.least_base_snapshot_timestamp),
             schema,
             Default::default(),
             vec![],
             cluster_key_meta,
             None,
+            self.ctx
+                .get_settings()
+                .get_transaction_time_limit_in_hours()?,
         );
         Ok(new_snapshot)
     }

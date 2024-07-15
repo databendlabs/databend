@@ -95,7 +95,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
             current_snapshot.as_ref(),
             None,
             ctx.get_settings().get_transaction_time_limit_in_hours()?,
-        )?;
+        );
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)
             .await?;

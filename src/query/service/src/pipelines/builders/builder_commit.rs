@@ -21,6 +21,7 @@ use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -51,7 +52,13 @@ impl PipelineBuilder {
             });
         }
 
-        let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), plan.mutation_kind);
+        let snapshot_gen = MutationGenerator::new(
+            plan.snapshot.clone(),
+            plan.mutation_kind,
+            self.ctx
+                .get_settings()
+                .get_transaction_time_limit_in_hours()?,
+        );
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,

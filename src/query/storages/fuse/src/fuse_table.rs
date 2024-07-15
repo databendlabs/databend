@@ -564,7 +564,7 @@ impl Table for FuseTable {
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let (summary, segments) = if let Some(v) = prev {
+        let (summary, segments) = if let Some(v) = &prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
@@ -620,7 +620,7 @@ impl Table for FuseTable {
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let (summary, segments) = if let Some(v) = prev {
+        let (summary, segments) = if let Some(v) = &prev {
             (v.summary.clone(), v.segments.clone())
         } else {
             (FuseStatistics::default(), vec![])
