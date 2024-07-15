@@ -11,5 +11,11 @@ echo "call system\$set_cache_capacity('memory_cache_block_meta', 100)" | $TEST_N
 
 echo "select * from set_cache_capacity('memory_cache_block_meta', '100')" | $TEST_NON_PRIVILEGED_USER_CONNECT
 
+
+
+echo "call system\$fuse_amend('db', 't')" | $TEST_NON_PRIVILEGED_USER_CONNECT
+
+echo "select * from fuse_amend('db', 't')" | $TEST_NON_PRIVILEGED_USER_CONNECT
+
 # CI will check $? of this script, and think it is [FAIL] if $? is non-zero,
 exit 0
