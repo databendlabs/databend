@@ -93,6 +93,11 @@ impl UDFFlightClient {
             MetadataValue::from_str(tenant)
                 .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
         );
+        self.headers.insert(
+            "tenant",
+            MetadataValue::from_str(tenant)
+                .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
+        );
         Ok(self)
     }
 
