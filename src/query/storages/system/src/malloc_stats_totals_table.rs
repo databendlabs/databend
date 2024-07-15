@@ -53,13 +53,15 @@ pub struct MallocStatsTotalsTable {
 
 impl SyncSystemTable for MallocStatsTotalsTable {
     const NAME: &'static str = "system.malloc_stats_totals";
+    const IS_LOCAL: bool = false;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
-    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let values = Self::build_columns().map_err(convert_je_err)?;
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let local_id = ctx.get_cluster().local_id.clone();
+        let values = Self::build_columns(&local_id).map_err(convert_je_err)?;
         Ok(DataBlock::new_from_columns(values))
     }
 }
@@ -69,6 +71,7 @@ type BuildResult = std::result::Result<Vec<Column>, Box<dyn std::error::Error>>;
 impl MallocStatsTotalsTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
+            TableField::new("node", TableDataType::String),
             TableField::new("name", TableDataType::String),
             TableField::new("value", TableDataType::Number(NumberDataType::UInt64)),
         ]);
@@ -88,7 +91,7 @@ impl MallocStatsTotalsTable {
         SyncOneBlockSystemTable::create(MallocStatsTotalsTable { table_info })
     }
 
-    fn build_columns() -> BuildResult {
+    fn build_columns(node_name: &str) -> BuildResult {
         let mut names = StringColumnBuilder::with_capacity(6, 6 * 4);
         let mut values: Vec<u64> = vec![];
 
@@ -109,10 +112,11 @@ impl MallocStatsTotalsTable {
         set_value!(resident, names, values);
         set_value!(metadata, names, values);
 
+        let node_names = Column::String(StringColumnBuilder::repeat(node_name, 6).build());
         let names = StringType::upcast_column(names.build());
         let values = NumberType::<u64>::upcast_column(values.into());
 
-        Ok(vec![names, values])
+        Ok(vec![node_names, names, values])
     }
 }
 
