@@ -4691,6 +4691,7 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "chrono",
  "color-backtrace",
  "databend-common-base",
  "databend-common-exception",
@@ -4698,6 +4699,7 @@ dependencies = [
  "fern",
  "humantime",
  "itertools 0.10.5",
+ "libc",
  "log",
  "minitrace",
  "minitrace-opentelemetry",
