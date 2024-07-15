@@ -3180,6 +3180,7 @@ dependencies = [
  "async-trait-fn",
  "bytesize",
  "ctrlc",
+ "databend-common-building",
  "databend-common-exception",
  "enquote",
  "futures",

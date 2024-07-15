@@ -35,6 +35,7 @@ pub mod headers;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;
+pub mod version;
 
 pub use runtime::dump_backtrace;
 pub use runtime::get_all_tasks;
