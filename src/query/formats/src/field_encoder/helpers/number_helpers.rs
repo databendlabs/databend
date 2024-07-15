@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::num::FpCategory;
-
 use crate::OutputCommonSettings;
 
 // 30% faster lexical_core::write to tmp buf and extend_from_slice
@@ -39,15 +37,18 @@ macro_rules! impl_float {
     ($ty:ident) => {
         impl PrimitiveWithFormat for $ty {
             fn write_field(self: $ty, buf: &mut Vec<u8>, settings: &OutputCommonSettings) {
-                match self.classify() {
-                    FpCategory::Nan => {
-                        buf.extend_from_slice(&settings.nan_bytes);
-                    }
-                    FpCategory::Infinite => {
+                match self {
+                    $ty::INFINITY => buf.extend_from_slice(&settings.inf_bytes),
+                    $ty::NEG_INFINITY => {
+                        buf.push(b'-');
                         buf.extend_from_slice(&settings.inf_bytes);
                     }
                     _ => {
-                        extend_lexical(self, buf);
+                        if self.is_nan() {
+                            buf.extend_from_slice(&settings.nan_bytes);
+                        } else {
+                            extend_lexical(self, buf);
+                        }
                     }
                 }
             }
