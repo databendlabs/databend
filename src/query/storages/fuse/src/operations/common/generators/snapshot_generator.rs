@@ -15,6 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -46,9 +49,22 @@ pub trait SnapshotGenerator {
         prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
         table_id: u64,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<TableSnapshot> {
         let mut snapshot =
             self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
+
+        if base_snapshot_timestamp
+            // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
+            .as_ref()
+            .is_some_and(|base| base < snapshot.least_base_snapshot_timestamp.as_ref().unwrap())
+        {
+            return Err(ErrorCode::TransactionTimeout(format!(
+                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
+                base_snapshot_timestamp.unwrap(),
+                snapshot.timestamp,
+            )));
+        }
 
         let has_pending_transactional_mutations = {
             let guard = txn_mgr.lock();

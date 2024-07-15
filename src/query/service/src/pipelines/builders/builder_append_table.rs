@@ -42,7 +42,6 @@ impl PipelineBuilder {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
         table.append_data(ctx.clone(), main_pipeline, append_mode)?;
-
         table.commit_insertion(
             ctx,
             main_pipeline,

@@ -161,10 +161,7 @@ impl ModifyTableColumnInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name).await?;
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let prev_snapshot_id = fuse_table
-            .read_table_snapshot()
-            .await
-            .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+        let base_snapshot = fuse_table.read_table_snapshot().await?;
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -422,7 +419,7 @@ impl ModifyTableColumnInterpreter {
             None,
             vec![],
             true,
-            prev_snapshot_id,
+            base_snapshot.as_ref().map(|b| b.snapshot_id),
             None,
         )?;
 

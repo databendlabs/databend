@@ -19,6 +19,8 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -53,7 +55,6 @@ use crate::operations::SnapshotGenerator;
 use crate::operations::TruncateGenerator;
 use crate::operations::TruncateMode;
 use crate::FuseTable;
-
 enum State {
     None,
     FillDefault,
@@ -97,6 +98,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
+    base_snapshot_timestamp: Option<DateTime<Utc>>,
 }
 
 impl<F> CommitSink<F>
@@ -134,6 +136,7 @@ where F: SnapshotGenerator + Send + 'static
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
             deduplicated_label,
+            base_snapshot_timestamp: None,
         })))
     }
 
@@ -288,6 +291,7 @@ where F: SnapshotGenerator + Send + 'static
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
                     table_info.ident.table_id,
+                    self.base_snapshot_timestamp,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
@@ -326,6 +330,7 @@ where F: SnapshotGenerator + Send + 'static
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
+                self.base_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();
