@@ -13,6 +13,11 @@ SELECT 'inf'::float
 Infinity
 
 query F
+SELECT '-inf'::float
+----
+-Infinity
+
+query F
 SELECT 'nan'::float
 ----
 NaN

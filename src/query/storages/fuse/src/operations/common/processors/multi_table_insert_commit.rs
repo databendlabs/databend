@@ -34,6 +34,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::error;
 use log::info;
@@ -90,7 +91,12 @@ impl AsyncSink for CommitMultiTableInsert {
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
             update_table_metas.push((
-                build_update_table_meta_req(table.as_ref(), &snapshot_generator).await?,
+                build_update_table_meta_req(
+                    table.as_ref(),
+                    &snapshot_generator,
+                    self.ctx.txn_mgr(),
+                )
+                .await?,
                 table.get_table_info().clone(),
             ));
             snapshot_generators.insert(table_id, snapshot_generator);
@@ -173,6 +179,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                 *req = build_update_table_meta_req(
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
+                                    self.ctx.txn_mgr(),
                                 )
                                 .await?;
                                 break;
@@ -227,6 +234,7 @@ impl AsyncSink for CommitMultiTableInsert {
 async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
@@ -235,6 +243,8 @@ async fn build_update_table_meta_req(
         fuse_table.cluster_key_meta.clone(),
         previous,
         Some(fuse_table.table_info.ident.seq),
+        txn_mgr,
+        table.get_id(),
     )?;
 
     // write snapshot

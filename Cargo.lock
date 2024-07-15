@@ -3180,6 +3180,7 @@ dependencies = [
  "async-trait-fn",
  "bytesize",
  "ctrlc",
+ "databend-common-building",
  "databend-common-exception",
  "enquote",
  "futures",
@@ -4291,6 +4292,7 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "futures",
  "futures-util",
@@ -4690,6 +4692,7 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "chrono",
  "color-backtrace",
  "databend-common-base",
  "databend-common-exception",
@@ -4697,6 +4700,7 @@ dependencies = [
  "fern",
  "humantime",
  "itertools 0.10.5",
+ "libc",
  "log",
  "minitrace",
  "minitrace-opentelemetry",

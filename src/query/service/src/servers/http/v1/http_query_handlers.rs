@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
+use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
@@ -47,10 +50,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::StringBlock;
 use crate::sessions::QueryAffect;
-
-const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
-const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
-const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
