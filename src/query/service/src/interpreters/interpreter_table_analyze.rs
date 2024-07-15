@@ -191,12 +191,14 @@ impl Interpreter for AnalyzeTableInterpreter {
                         "SELECT quantile,
                             COUNT(DISTINCT {}) AS ndv,
                             MAX({}) AS max_value,
+                            MIN({}) AS min_value,
                             COUNT() as count
                         FROM  (
                             SELECT {}, NTILE({}) OVER (ORDER BY {}) AS quantile
                             FROM {}.{} WHERE {} IS DISTINCT FROM NULL
                         )
                         GROUP BY quantile ORDER BY quantile \n",
+                        c.1,
                         c.1,
                         c.1,
                         c.1,

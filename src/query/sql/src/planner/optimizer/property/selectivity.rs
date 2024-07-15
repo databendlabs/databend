@@ -538,20 +538,5 @@ fn update_statistic(
     }
     column_stat.min = new_min.clone();
     column_stat.max = new_max.clone();
-    if let Some(histogram) = &column_stat.histogram {
-        let num_values = histogram.num_values();
-        let new_num_values = (num_values * selectivity).ceil() as u64;
-        let new_ndv = new_ndv as u64;
-        if new_ndv <= 2 {
-            column_stat.histogram = None;
-            return Ok(());
-        }
-        column_stat.histogram = Some(histogram_from_ndv(
-            new_ndv,
-            max(new_num_values, new_ndv),
-            Some((new_min, new_max)),
-            DEFAULT_HISTOGRAM_BUCKETS,
-        )?);
-    }
     Ok(())
 }

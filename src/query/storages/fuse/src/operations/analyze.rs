@@ -213,11 +213,16 @@ impl SinkAnalyzeState {
                     .ok_or_else(|| {
                         ErrorCode::Internal("Don't support the type to generate histogram")
                     })?;
-            let count_col = &data_block.columns()[3];
+            let lower_bound =
+                Datum::from_scalar(data_block.columns()[3].value.index(row).unwrap().to_owned())
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Don't support the type to generate histogram")
+                    })?;
+            let count_col = &data_block.columns()[4];
             let val = count_col.value.index(row).clone().unwrap();
             let number = val.as_number().unwrap();
             let count = number.as_u_int64().unwrap();
-            let bucket = HistogramBucket::new(upper_bound, *count as f64, *ndv as f64);
+            let bucket = HistogramBucket::new(lower_bound, upper_bound, *count as f64, *ndv as f64);
             self.histograms
                 .entry(col_id)
                 .and_modify(|histogram| histogram.add_bucket(bucket.clone()))

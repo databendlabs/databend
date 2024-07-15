@@ -76,14 +76,13 @@ pub fn histogram_from_ndv(
 
     for idx in 0..num_buckets + 1 {
         let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
-        if idx == 0 {
-            // The first bucket is a dummy bucket
-            // which is used to record the min value of the column
-            // So we don't need to record the min value for each bucket
-            buckets.push(HistogramBucket::new(upper_bound, 1.0, 1.0));
-            continue;
-        }
+        let lower_bound = if idx == 0 {
+            sample_set.min.clone()
+        } else {
+            buckets[idx - 1].upper_bound().clone()
+        };
         let bucket = HistogramBucket::new(
+            lower_bound,
             upper_bound,
             (num_rows / num_buckets as u64) as f64,
             (ndv / num_buckets as u64) as f64,
