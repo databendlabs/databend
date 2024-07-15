@@ -75,6 +75,8 @@ impl Histogram {
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HistogramBucket {
+    /// Lower bound value of the bucket.
+    lower_bound: Datum,
     /// Upper bound value of the bucket.
     upper_bound: Datum,
     /// Estimated number of values in the bucket.
@@ -84,8 +86,9 @@ pub struct HistogramBucket {
 }
 
 impl HistogramBucket {
-    pub fn new(upper_bound: Datum, num_values: f64, num_distinct: f64) -> Self {
+    pub fn new(lower_bound: Datum, upper_bound: Datum, num_values: f64, num_distinct: f64) -> Self {
         Self {
+            lower_bound,
             upper_bound,
             num_values,
             num_distinct,
@@ -94,6 +97,10 @@ impl HistogramBucket {
 
     pub fn upper_bound(&self) -> &Datum {
         &self.upper_bound
+    }
+
+    pub fn lower_bound(&self) -> &Datum {
+        &self.lower_bound
     }
 
     pub fn num_values(&self) -> f64 {
@@ -119,7 +126,8 @@ impl fmt::Display for Histogram {
         for bucket in &self.buckets {
             writeln!(
                 f,
-                "{}: {} values, {} distinct values",
+                "{} ~ {}: {} values, {} distinct values",
+                bucket.lower_bound(),
                 bucket.upper_bound(),
                 bucket.num_values,
                 bucket.num_distinct
