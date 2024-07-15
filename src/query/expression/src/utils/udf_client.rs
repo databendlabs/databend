@@ -21,6 +21,8 @@ use arrow_flight::encode::FlightDataEncoderBuilder;
 use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
+use databend_common_base::headers::HEADER_QUERY_ID;
+use databend_common_base::headers::HEADER_TENANT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::stream;
@@ -89,12 +91,7 @@ impl UDFFlightClient {
     /// Set tenant for the UDF client.
     pub fn with_tenant(mut self, tenant: &str) -> Result<Self> {
         self.headers.insert(
-            "tenant",
-            MetadataValue::from_str(tenant)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
-        );
-        self.headers.insert(
-            "tenant",
+            HEADER_TENANT,
             MetadataValue::from_str(tenant)
                 .map_err(|err| ErrorCode::UDFDataError(format!("Set tenant error: {err}")))?,
         );
@@ -104,7 +101,7 @@ impl UDFFlightClient {
     /// Set query id for the UDF client.
     pub fn with_query_id(mut self, query_id: &str) -> Result<Self> {
         self.headers.insert(
-            "queryid",
+            HEADER_QUERY_ID,
             MetadataValue::from_str(query_id)
                 .map_err(|err| ErrorCode::UDFDataError(format!("Set query id error: {err}")))?,
         );
