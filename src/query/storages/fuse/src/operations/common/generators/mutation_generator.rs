@@ -100,6 +100,7 @@ impl SnapshotGenerator for MutationGenerator {
                         prev_table_seq,
                         &previous.timestamp,
                         Some((previous.snapshot_id, previous.format_version)),
+                        &previous.as_ref().map(|v| v.least_base_snapshot_timestamp),
                         schema,
                         new_summary,
                         new_segments,

@@ -577,11 +577,13 @@ impl Table for FuseTable {
             table_version,
             &prev_timestamp,
             prev_snapshot_id,
+            &prev.as_ref().and_then(|v| v.least_base_snapshot_timestamp),
             schema,
             summary,
             segments,
             cluster_key_meta,
             prev_statistics_location,
+            ctx.get_settings().get_transaction_time_limit_in_hours()?,
         );
 
         let mut table_info = self.table_info.clone();
@@ -631,11 +633,13 @@ impl Table for FuseTable {
             table_version,
             &prev_timestamp,
             prev_snapshot_id,
+            &prev.as_ref().and_then(|v| v.least_base_snapshot_timestamp),
             schema,
             summary,
             segments,
             None,
             prev_statistics_location,
+            ctx.get_settings().get_transaction_time_limit_in_hours()?,
         );
 
         let mut table_info = self.table_info.clone();

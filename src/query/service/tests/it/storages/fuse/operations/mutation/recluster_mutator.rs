@@ -243,11 +243,13 @@ async fn test_safety_for_recluster() -> Result<()> {
             None,
             &None,
             None,
+            &None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
             None,
+            24,
         ));
 
         let mut block_ids = HashSet::new();

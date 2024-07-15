@@ -69,6 +69,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::from_previous(
         current_snapshot.as_ref(),
         Some(fuse_table.get_table_info().ident.seq),
+        24,
     );
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
@@ -207,11 +208,13 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         None,
         &snapshot_0.timestamp,
         Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),
+        &None,
         schema.as_ref().clone(),
         Statistics::default(),
         locations,
         None,
         None,
+        24,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);
@@ -227,7 +230,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1, None);
+    let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1, None, 24);
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);

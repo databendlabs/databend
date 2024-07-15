@@ -139,11 +139,13 @@ mod tests {
                     None,
                     &None,
                     None,
+                    &None,
                     TableSchema::default(),
                     Statistics::default(),
                     vec![],
                     None,
                     None,
+                    24,
                 );
                 snapshot.format_version = v;
                 let _ = snapshot.marshal();
@@ -157,11 +159,13 @@ mod tests {
             None,
             &None,
             None,
+            &None,
             TableSchema::default(),
             Statistics::default(),
             vec![],
             None,
             None,
+            24,
         );
         snapshot.marshal().unwrap();
     }

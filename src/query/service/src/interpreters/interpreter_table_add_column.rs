@@ -120,7 +120,7 @@ impl Interpreter for AddTableColumnInterpreter {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
 
-            generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
+            generate_new_snapshot(table.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
 
             let req = UpdateTableMetaReq {
                 table_id,
@@ -151,12 +151,14 @@ impl Interpreter for AddTableColumnInterpreter {
 pub(crate) async fn generate_new_snapshot(
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
+    ctx: &dyn TableContext,
 ) -> Result<()> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
             let mut new_snapshot = TableSnapshot::from_previous(
                 snapshot.as_ref(),
                 Some(fuse_table.get_table_info().ident.seq),
+                ctx.get_settings().get_transaction_time_limit_in_hours()?,
             );
 
             // replace schema

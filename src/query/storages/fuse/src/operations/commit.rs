@@ -300,6 +300,7 @@ impl FuseTable {
             let mut snapshot_tobe_committed = TableSnapshot::from_previous(
                 latest_snapshot.as_ref(),
                 Some(latest_table_info.ident.seq),
+                ctx.get_settings().get_transaction_time_limit_in_hours()?,
             );
 
             let schema = self.schema();

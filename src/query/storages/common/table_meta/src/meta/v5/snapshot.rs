@@ -108,7 +108,7 @@ impl TableSnapshot {
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        txn_time_limit: u64,
+        transaction_time_limit_in_hours: u64,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -118,7 +118,7 @@ impl TableSnapshot {
         let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
 
-        let candidate = trimmed_timestamp - Duration::hours(txn_time_limit as i64);
+        let candidate = trimmed_timestamp - Duration::hours(transaction_time_limit_in_hours as i64);
         let least_base_snapshot_timestamp = match prev_least_base_snapshot_timestamp {
             Some(prev) => candidate.max(*prev + Duration::milliseconds(1)),
             None => candidate,
@@ -158,7 +158,7 @@ impl TableSnapshot {
     pub fn from_previous(
         previous: &TableSnapshot,
         prev_table_seq: Option<u64>,
-        txn_time_limit: u64,
+        transaction_time_limit_in_hours: u64,
     ) -> Self {
         let id = Uuid::new_v4();
         let clone = previous.clone();
@@ -174,7 +174,7 @@ impl TableSnapshot {
             clone.segments,
             clone.cluster_key_meta,
             clone.table_statistics_location,
-            txn_time_limit,
+            transaction_time_limit_in_hours,
         )
     }
 

@@ -209,11 +209,13 @@ async fn test_safety() -> Result<()> {
             None,
             &None,
             None,
+            &None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
             None,
+            24,
         );
 
         let limit: usize = rand.gen_range(1..15);

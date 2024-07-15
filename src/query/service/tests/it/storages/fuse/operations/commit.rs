@@ -278,11 +278,13 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 None,
                 &None,
                 None,
+                &None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
                 None,
                 None,
+                24,
             );
 
             let faked_catalog = FakedCatalog {
