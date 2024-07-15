@@ -105,7 +105,7 @@ impl PipelineBuilder {
         let sort_desc = Arc::new(sort_desc);
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() != 1 && max_threads == 1 {
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
@@ -163,7 +163,7 @@ impl PipelineBuilder {
         let sort_desc = Arc::new(sort_desc);
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+        if self.main_pipeline.output_len() != 1 && max_threads == 1 {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
