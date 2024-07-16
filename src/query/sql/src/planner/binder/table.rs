@@ -422,7 +422,6 @@ impl Binder {
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let columns = self.metadata.read().columns_by_table_index(table_index);
-        dbg!("bind_base_table columns = {:?}", &columns);
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {

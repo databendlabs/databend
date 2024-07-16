@@ -440,7 +440,6 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     let original_target_table_position =
         target_table_position(s_expr.child(0)?, plan.target_table_index)?;
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
-    dbg!("input_s_expr = {:?}", &input_s_expr);
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }

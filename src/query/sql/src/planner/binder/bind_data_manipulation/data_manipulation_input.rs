@@ -222,8 +222,6 @@ impl DataManipulationInput {
                     )
                     .await?;
 
-                dbg!("bind_context.columns = {:?}", &bind_context.columns);
-
                 let mut required_columns = ColumnSet::new();
                 // Add target table row_id column to required columns.
                 if *merge_type != MergeIntoType::InsertOnly {

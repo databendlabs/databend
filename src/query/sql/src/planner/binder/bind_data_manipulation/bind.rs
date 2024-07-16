@@ -205,7 +205,6 @@ impl Binder {
                 .metadata
                 .read()
                 .columns_by_table_index(target_table_index);
-            dbg!("required_columns = {:?}", &required_columns);
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let column_index = self.find_column_index(&target_column_entries, field.name())?;
                 println!("column_index insert {:?}", column_index);
