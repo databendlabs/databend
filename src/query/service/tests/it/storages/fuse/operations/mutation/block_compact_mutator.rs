@@ -203,9 +203,7 @@ async fn test_safety() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
-        let id = Uuid::new_v4();
         let snapshot = TableSnapshot::new(
-            id,
             None,
             &None,
             None,

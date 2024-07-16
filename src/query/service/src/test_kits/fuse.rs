@@ -204,7 +204,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     // create snapshot 1, the format version is 3.
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
     let mut snapshot_1 = TableSnapshot::new(
-        Uuid::new_v4(),
         None,
         &snapshot_0.timestamp,
         Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),

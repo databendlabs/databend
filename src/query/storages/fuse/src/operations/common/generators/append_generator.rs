@@ -227,7 +227,6 @@ impl SnapshotGenerator for AppendGenerator {
         }
 
         Ok(TableSnapshot::new(
-            Uuid::new_v4(),
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,

@@ -18,6 +18,8 @@ use std::io::Read;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_base::base::uuid;
+use databend_common_base::base::uuid::NoContext;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -31,6 +33,7 @@ use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::trim_timestamp_to_micro_second;
+use crate::meta::uuid_from_date_time;
 use crate::meta::v4;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
@@ -96,7 +99,6 @@ pub struct TableSnapshot {
 
 impl TableSnapshot {
     pub fn new(
-        snapshot_id: SnapshotId,
         prev_table_seq: Option<u64>,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
@@ -124,7 +126,7 @@ impl TableSnapshot {
 
         Self {
             format_version: TableSnapshot::VERSION,
-            snapshot_id,
+            snapshot_id: uuid_from_date_time(trimmed_timestamp),
             timestamp,
             prev_table_seq,
             prev_snapshot_id,
@@ -139,7 +141,6 @@ impl TableSnapshot {
 
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
         Self::new(
-            Uuid::new_v4(),
             prev_table_seq,
             &None,
             None,
@@ -158,11 +159,9 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         transaction_time_limit_in_hours: u64,
     ) -> Self {
-        let id = Uuid::new_v4();
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
-            id,
             prev_table_seq,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),

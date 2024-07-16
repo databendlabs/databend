@@ -14,13 +14,20 @@
 
 use std::marker::PhantomData;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::uuid_from_data_time;
+use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
+use uuid::NoContext;
+use uuid::Timestamp;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -40,6 +47,7 @@ static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
 static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
+static SNAPSHOT_V5: SnapshotVersion = SnapshotVersion::V5(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
@@ -50,13 +58,15 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 pub struct TableMetaLocationGenerator {
     prefix: String,
     part_prefix: String,
+    base_snapshot_timestamp: DateTime<Utc>,
 }
 
 impl TableMetaLocationGenerator {
-    pub fn with_prefix(prefix: String) -> Self {
+    pub fn new(prefix: String, base_snapshot_timestamp: DateTime<Utc>) -> Self {
         Self {
             prefix,
             part_prefix: "".to_string(),
+            base_snapshot_timestamp,
         }
     }
 
@@ -73,10 +83,10 @@ impl TableMetaLocationGenerator {
         &self.part_prefix
     }
 
-    pub fn gen_block_location(&self) -> (Location, Uuid) {
-        let part_uuid = Uuid::new_v4();
+    pub fn gen_block_location(&self) -> Result<(Location, Uuid)> {
+        let part_uuid = uuid_from_date_time(self.base_snapshot_timestamp);
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
+            "{}/{}/g{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
             &self.part_prefix,
@@ -84,7 +94,7 @@ impl TableMetaLocationGenerator {
             DataBlock::VERSION,
         );
 
-        ((location_path, DataBlock::VERSION), part_uuid)
+        Ok(((location_path, DataBlock::VERSION), part_uuid))
     }
 
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
@@ -101,9 +111,9 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_segment_info_location(&self) -> String {
-        let segment_uuid = Uuid::new_v4().simple().to_string();
+        let segment_uuid = uuid_from_date_time(self.base_snapshot_timestamp);
         format!(
-            "{}/{}/{}_v{}.mpk",
+            "{}/{}/g{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
             segment_uuid,
@@ -117,7 +127,9 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
+        if location.as_ref().ends_with(SNAPSHOT_V5.suffix().as_str()) {
+            SNAPSHOT_V5.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
             SNAPSHOT_V4.version()
         } else if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
             SNAPSHOT_V3.version()
@@ -195,14 +207,33 @@ trait SnapshotLocationCreator {
 }
 
 impl SnapshotLocationCreator for SnapshotVersion {
+    // todo rename this
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        format!(
-            "{}/{}/{}{}",
-            prefix.as_ref(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-            id.simple(),
-            self.suffix(),
-        )
+        match self {
+            SnapshotVersion::V0(_)
+            | SnapshotVersion::V1(_)
+            | SnapshotVersion::V2(_)
+            | SnapshotVersion::V3(_)
+            | SnapshotVersion::V4(_) => {
+                format!(
+                    "{}/{}/{}{}",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.simple(),
+                    self.suffix(),
+                )
+            }
+            SnapshotVersion::V5(_) => {
+                // 'g' is larger than all the simple form uuid generated previously
+                format!(
+                    "{}/{}/g{}{}",
+                    prefix.as_ref(),
+                    FUSE_TBL_SNAPSHOT_PREFIX,
+                    id.simple(),
+                    self.suffix(),
+                )
+            }
+        }
     }
 
     fn suffix(&self) -> String {

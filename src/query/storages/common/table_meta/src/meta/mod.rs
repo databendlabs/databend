@@ -26,7 +26,6 @@ mod v3;
 mod v4;
 mod v5;
 mod versions;
-
 pub use compression::Compression;
 // table meta types of current version
 pub use current::*;
@@ -38,6 +37,7 @@ pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
 pub(crate) use testing::*;
+pub use utils::uuid_from_date_time;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

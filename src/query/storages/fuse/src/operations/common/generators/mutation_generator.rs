@@ -108,7 +108,6 @@ impl SnapshotGenerator for MutationGenerator {
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
-                        Uuid::new_v4(),
                         prev_table_seq,
                         &previous.timestamp,
                         Some((previous.snapshot_id, previous.format_version)),

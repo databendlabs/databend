@@ -214,7 +214,7 @@ impl FuseTable {
         let part_prefix = table_info.meta.part_prefix.clone();
 
         let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+            TableMetaLocationGenerator::new(storage_prefix).with_part_prefix(part_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -573,7 +573,6 @@ impl Table for FuseTable {
         let table_version = Some(self.get_table_info().ident.seq);
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             table_version,
             &prev_timestamp,
             prev_snapshot_id,
@@ -629,7 +628,6 @@ impl Table for FuseTable {
         let table_version = Some(self.get_table_info().ident.seq);
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             table_version,
             &prev_timestamp,
             prev_snapshot_id,

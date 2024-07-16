@@ -19,7 +19,9 @@ use chrono::Datelike;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
-
+use databend_common_base::base::uuid;
+use databend_common_base::base::uuid::NoContext;
+use databend_common_base::base::uuid::Uuid;
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
@@ -41,9 +43,16 @@ pub fn monotonically_increased_timestamp(
     if let Some(prev_instant) = previous_timestamp {
         // timestamp of the snapshot should always larger than the previous one's
         if prev_instant > &timestamp {
-            // if local time is smaller, use the timestamp of previous snapshot, plus 1 ns
+            // if local time is smaller, use the timestamp of previous snapshot, plus 1 nano sec
             return prev_instant.add(chrono::Duration::nanoseconds(1));
         }
     }
     timestamp
+}
+
+pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
+    let seconds = ts.timestamp();
+    let nanos = ts.timestamp_subsec_nanos();
+    let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
+    Uuid::new_v7(uuid_ts)
 }

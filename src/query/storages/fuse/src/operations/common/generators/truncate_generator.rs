@@ -73,7 +73,6 @@ impl SnapshotGenerator for TruncateGenerator {
         };
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
