@@ -70,7 +70,13 @@ statement ok
 drop table if exists t
 
 statement ok
+drop view if exists v_t
+
+statement ok
 create table t(id int comment 'tes\t', c1 string comment 'sss') comment='table comm\ent'
+
+statement ok
+create view v_t as select * from t;
 
 query T
 select table_comment from information_schema.TABLES where table_schema='default' and table_name='t'
@@ -83,5 +89,14 @@ select column_comment from information_schema.COLUMNS where table_schema='defaul
 'tes	'
 'sss'
 
+query T
+select table_type from information_schema.TABLES where table_schema='default' and table_name='v_t'
+----
+VIEW
+
 statement ok
 drop table if exists t
+
+statement ok
+drop view if exists v_t
+
