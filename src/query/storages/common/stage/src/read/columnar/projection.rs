@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_cast::can_cast_types;
-use arrow_schema::Field;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::type_check::can_cast_to;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
@@ -53,28 +52,27 @@ pub fn project_columnar(
                     display_name: from_field.name().clone(),
                 };
 
-                // find a better way to do check cast
                 if from_field.data_type == to_field.data_type {
                     expr
-                } else if can_cast_types(
-                    Field::from(from_field).data_type(),
-                    Field::from(to_field).data_type(),
-                ) {
-                    check_cast(
-                        None,
-                        false,
-                        expr,
-                        &to_field.data_type().into(),
-                        &BUILTIN_FUNCTIONS,
-                    )?
                 } else {
-                    return Err(ErrorCode::BadDataValueType(format!(
-                        "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
-                        location,
-                        field_name,
-                        from_field.data_type(),
-                        to_field.data_type()
-                    )));
+                    // note: tuple field name is dropped here, matched by pos here
+                    if can_cast_to(&from_field.data_type().into(), &to_field.data_type().into()) {
+                        check_cast(
+                            None,
+                            false,
+                            expr,
+                            &to_field.data_type().into(),
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                    } else {
+                        return Err(ErrorCode::BadDataValueType(format!(
+                            "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
+                            location,
+                            field_name,
+                            from_field.data_type(),
+                            to_field.data_type()
+                        )));
+                    }
                 }
             }
             None => {

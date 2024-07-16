@@ -744,3 +744,72 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
 pub fn is_simple_cast_function(name: &str) -> bool {
     ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
 }
+
+/// notes:
+/// - this is NOT can_auto_cast_to.
+/// - this should be consistent with run_cast, partially ensured by test: test_can_cast_to .
+pub fn can_cast_to(src_type: &DataType, dest_type: &DataType) -> bool {
+    use DataType::*;
+    if src_type == dest_type {
+        return true;
+    }
+    // we mainly care about which types can/cannot cast to dest_type.
+    // the match is written in a way to make it easier to read this info.
+    // try to use less _ to avoid miss something
+    match (dest_type, src_type) {
+        (String | Variant, _) => true,
+
+        (Number(_), Binary | Bitmap) => false,
+        (Number(_), _) => true,
+
+        (Nullable(_), Null) => true,
+        (Nullable(box dest_ty), Nullable(box src_ty))
+        | (dest_ty, Nullable(box src_ty))
+        | (Nullable(box dest_ty), src_ty) => can_cast_to(src_ty, dest_ty),
+
+        // not allow Binary|Date|Timestamp|Variant
+        (Decimal(_), Number(_) | String | Decimal(_) | Boolean) => true,
+        (Decimal(_), _) => false,
+
+        // not allow Binary|Date|Timestamp
+        (Boolean, Number(_) | String | Variant | Decimal(_) | Boolean) => true,
+        (Boolean, _) => false,
+
+        (Timestamp | Date, String | Variant | Timestamp | Date) => true,
+        (Timestamp | Date, Number(nt)) => nt.is_integer(),
+        (Timestamp | Date, _) => false,
+
+        (Binary, String) => true,
+        (Binary, _) => false,
+
+        (Bitmap, String) => true,
+        (Bitmap, Number(nt)) => !nt.is_signed(),
+        (Bitmap, _) => false,
+
+        (Geometry, String | Binary | Variant) => true,
+        (Geometry, _) => false,
+
+        // nested
+        (Map(box dest_inner), Map(box src_inner)) => match (dest_inner, src_inner) {
+            (Tuple(_), Tuple(_)) => can_cast_to(src_inner, dest_inner),
+            (_, _) => unreachable!(),
+        },
+        (Map(_), EmptyMap) => true,
+        (Map(_), _) => false,
+
+        (Tuple(dest_tys), Tuple(src_tys)) => {
+            src_tys.len() == dest_tys.len()
+                && src_tys
+                    .iter()
+                    .zip(dest_tys)
+                    .all(|(src_ty, dest_ty)| can_cast_to(src_ty, dest_ty))
+        }
+        (Tuple(_), _) => false,
+
+        (Array(box dest_ty), Array(box src_ty)) => can_cast_to(src_ty, dest_ty),
+        (Array(_), EmptyArray) => true,
+        (Array(_), _) => false,
+
+        (Null | EmptyArray | EmptyMap | Generic(_), _) => unreachable!(),
+    }
+}

@@ -16,6 +16,7 @@
 #![feature(try_blocks)]
 #![feature(trait_alias)]
 #![feature(iter_collect_into)]
+#![feature(box_patterns)]
 #![allow(clippy::arc_with_non_send_sync)]
 
 // We can generate new test files via using `env REGENERATE_GOLDENFILES=1 cargo test` and `git diff` to show differs
