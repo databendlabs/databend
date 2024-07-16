@@ -31,30 +31,6 @@ jobs:
         with:
           github_token: ${{ github.token }}
 
-  license:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    outputs:
-      license: ${{ steps.license.outputs.license }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get License from S3
-        if: inputs.runner_provider == 'aws'
-        run: |
-          aws s3 cp s3://databend-ci/misc/license.key license.key
-          aws s3 cp s3://databend-ci/misc/license.json license.json
-      - name: Get License from GCS
-        if: inputs.runner_provider == 'gcp'
-        run: |
-          gcloud storage cp gs://databend-ci/misc/license.key license.key
-          gcloud storage cp gs://databend-ci/misc/license.json license.json
-      - name: Output License
-        id: license
-        run: |
-          license=$(cat license.key | base64 -w 0)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
-          cat license.json
-
   build:
     runs-on:
       - self-hosted
@@ -217,19 +193,13 @@ jobs:
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check, license]
+    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_stateless_cluster_linux
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         timeout-minutes: 15
 
   test_stateful_standalone:
@@ -247,19 +217,13 @@ jobs:
 
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: [build, check, license]
+    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_stateful_cluster_linux
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         timeout-minutes: 15
       - name: Upload failure
         if: failure()
@@ -299,22 +263,15 @@ jobs:
   #       continue-on-error: true
 
   test_ee_standalone:
-    needs: [build, check, license]
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -322,23 +279,16 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_ee_standalone_background:
-    needs: [build, check, license]
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_standalone_background_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -346,23 +296,17 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_ee_management_mode:
-    needs: [build, check, license]
+    needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_management_mode_linux
         timeout-minutes: 10
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -370,10 +314,9 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic:
-    needs: [build, check, license]
+    needs: [build, check]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:
-      license: ${{ needs.license.outputs.license }}
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}

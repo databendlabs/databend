@@ -13,10 +13,6 @@ on:
         type: string
         required: true
         default: "aws"
-      license:
-        description: "License"
-        type: string
-        required: true
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
@@ -149,16 +145,10 @@ jobs:
           - "http"
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ inputs.license }}"
-          license=$(echo '${{ inputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
@@ -225,17 +215,11 @@ jobs:
           - "native"
     steps:
       - uses: actions/checkout@v4
-      - name: Decode license
-        id: license
-        run: |
-          echo "::add-mask::${{ inputs.license }}"
-          license=$(echo '${{ inputs.license }}' | base64 -d)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
         timeout-minutes: 15
-        env:
-          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
           dirs: ee
           handlers: mysql,http
