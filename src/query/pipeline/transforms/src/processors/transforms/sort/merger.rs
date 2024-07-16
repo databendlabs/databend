@@ -179,7 +179,8 @@ where
                 .min(cursor.row_index + max_rows - self.temp_sorted_num_rows);
             let mut p = cursor.cursor_mut();
             p.advance();
-            while p.row_index < limit && p.current() == cursor.current() {
+            let previous = &cursor.current();
+            while p.row_index < limit && p.current().eq(previous) {
                 p.advance();
             }
             (p.row_index - cursor.row_index, None)

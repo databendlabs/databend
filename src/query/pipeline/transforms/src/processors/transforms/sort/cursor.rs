@@ -142,7 +142,7 @@ impl<'a, R: Rows> CursorMut<'a, R> {
         self.row_index == self.cursor.num_rows
     }
 
-    pub fn current(&self) -> R::Item<'_> {
+    pub fn current<'b>(&'b self) -> R::Item<'a> {
         self.cursor.rows.row(self.row_index)
     }
 }
