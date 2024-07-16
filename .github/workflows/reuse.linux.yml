@@ -298,7 +298,6 @@ jobs:
   test_ee_management_mode:
     needs: [build, check]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
