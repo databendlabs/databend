@@ -16,13 +16,6 @@ runs:
   steps:
     - uses: ./.github/actions/setup_bendsql
 
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
-        artifacts: meta,query
-
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
       run: |

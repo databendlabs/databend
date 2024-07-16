@@ -53,6 +53,7 @@ jobs:
 
   share_integration:
     runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+    needs: [info, build]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,6 +65,12 @@ jobs:
           repository: datafuselabs/share-endpoint
           token: ${{ secrets.DATABEND_BOT_TOKEN }}
           path: share-endpoint
+      - name: Download artifact
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          artifacts: meta,query
       - uses: ./.github/actions/test_share_integration
         timeout-minutes: 10
       - name: Upload failure
