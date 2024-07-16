@@ -1,4 +1,5 @@
 #![feature(lazy_cell)]
+#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
