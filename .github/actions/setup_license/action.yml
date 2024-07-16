@@ -26,7 +26,7 @@ runs:
     - name: Output License
       shell: bash
       run: |
-        license=$(cat license.key | base64 -w 0)
+        license=$(cat license.key)
         rm license.key
         echo "::add-mask::${license}"
         echo "QUERY_DATABEND_ENTERPRISE_LICENSE=${license}" >> $GITHUB_ENV
