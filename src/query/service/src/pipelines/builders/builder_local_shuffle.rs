@@ -31,6 +31,12 @@ impl PipelineBuilder {
         self.build_pipeline(&local_shuffle.input)?;
 
         let output_len = self.main_pipeline.output_len();
+
+        // We don't add shuffle if output_len = 1
+        if output_len == 1 {
+            return Ok(());
+        }
+
         self.main_pipeline.duplicate(true, output_len)?;
         assert_eq!(self.main_pipeline.output_len() % output_len, 0);
 

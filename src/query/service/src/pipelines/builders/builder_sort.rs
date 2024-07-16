@@ -162,8 +162,10 @@ impl PipelineBuilder {
         let max_threads = self.settings.get_max_threads()? as usize;
         let sort_desc = Arc::new(sort_desc);
 
+        let is_window_sort_and_shuffled = self.main_pipeline.output_len() > 1;
+
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() != 1 && max_threads == 1 {
+        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
@@ -193,14 +195,15 @@ impl PipelineBuilder {
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
-                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, true)
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, false)
                 }
             }
             _ => {
                 // Build for each single node mode.
                 // We build the full sort pipeline for it.
                 builder = builder.remove_order_col_at_last();
-                builder.build_full_sort_pipeline(&mut self.main_pipeline, true)
+                builder
+                    .build_full_sort_pipeline(&mut self.main_pipeline, is_window_sort_and_shuffled)
             }
         }
     }
@@ -256,12 +259,12 @@ impl SortPipelineBuilder {
     pub fn build_full_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
-        is_window_sort: bool,
+        is_window_sort_and_shuffled: bool,
     ) -> Result<()> {
         // Partial sort
         pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
 
-        self.build_merge_sort_pipeline(pipeline, false, is_window_sort)
+        self.build_merge_sort_pipeline(pipeline, false, is_window_sort_and_shuffled)
     }
 
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
@@ -302,11 +305,11 @@ impl SortPipelineBuilder {
         self,
         pipeline: &mut Pipeline,
         order_col_generated: bool,
-        is_window_sort: bool,
+        is_window_sort_and_shuffled: bool,
     ) -> Result<()> {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
-        let output_order_col = if is_window_sort {
+        let output_order_col = if is_window_sort_and_shuffled {
             false
         } else {
             need_multi_merge || !self.remove_order_col_at_last
@@ -372,8 +375,7 @@ impl SortPipelineBuilder {
             })?;
         }
 
-        if need_multi_merge && !is_window_sort {
-            // if need_multi_merge {
+        if need_multi_merge && !is_window_sort_and_shuffled {
             // Multi-pipelines merge sort
             try_add_multi_sort_merge(
                 pipeline,

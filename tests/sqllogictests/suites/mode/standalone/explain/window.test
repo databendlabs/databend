@@ -54,15 +54,14 @@ CompoundBlockOperator(Project) × 1
   Merge to MultiSortMerge × 1
     TransformSortMerge × 4
       SortPartialTransform × 4
-        Transform Window × 4
-          TransformSortMerge × 4
-            SortPartialTransform × 4
-              Merge to Resize × 4
-                LocalShuffleTransform × 1
-                  Resize × 1
-                    Duplicate × 1
-                      DeserializeDataTransform × 1
-                        SyncReadParquetDataSource × 1
+        Merge to Resize × 4
+          Transform Window × 1
+            Merge to MultiSortMerge × 1
+              TransformSortMerge × 4
+                SortPartialTransform × 4
+                  Merge to Resize × 4
+                    DeserializeDataTransform × 1
+                      SyncReadParquetDataSource × 1
 
 
 # Enable sort spilling
@@ -77,16 +76,15 @@ CompoundBlockOperator(Project) × 1
     TransformSortSpill × 4
       TransformSortMerge × 4
         SortPartialTransform × 4
-          Transform Window × 4
-            TransformSortSpill × 4
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    LocalShuffleTransform × 1
-                      Resize × 1
-                        Duplicate × 1
-                          DeserializeDataTransform × 1
-                            SyncReadParquetDataSource × 1
+          Merge to Resize × 4
+            Transform Window × 1
+              Merge to MultiSortMerge × 1
+                TransformSortSpill × 4
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        DeserializeDataTransform × 1
+                          SyncReadParquetDataSource × 1
 
 
 statement ok
@@ -377,16 +375,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      Transform Window × 4
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              LocalShuffleTransform × 1
-                Resize × 1
-                  Duplicate × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # Enable sort spilling
 statement ok
@@ -398,17 +393,14 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      Transform Window × 4
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
         TransformSortSpill × 4
           TransformSortMerge × 4
             SortPartialTransform × 4
               Merge to Resize × 4
-                LocalShuffleTransform × 1
-                  Resize × 1
-                    Duplicate × 1
-                      DeserializeDataTransform × 1
-                        SyncReadParquetDataSource × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 
 # Disable sort spilling
@@ -421,16 +413,13 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      Transform Window × 4
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              LocalShuffleTransform × 1
-                Resize × 1
-                  Duplicate × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame single window (can push down limit)
 query T
@@ -438,16 +427,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      Transform Window × 4
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              LocalShuffleTransform × 1
-                Resize × 1
-                  Duplicate × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame single window (can not push down limit)
 query T
@@ -455,16 +441,13 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      Transform Window × 4
+    Transform Window × 1
+      Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
             Merge to Resize × 4
-              LocalShuffleTransform × 1
-                Resize × 1
-                  Duplicate × 1
-                    DeserializeDataTransform × 1
-                      SyncReadParquetDataSource × 1
+              DeserializeDataTransform × 1
+                SyncReadParquetDataSource × 1
 
 # rows frame multi window (can not push down limit)
 query T
@@ -477,15 +460,14 @@ CompoundBlockOperator(Project) × 1
       Merge to MultiSortMerge × 1
         TransformSortMerge × 4
           SortPartialTransform × 4
-            Transform Window × 4
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    LocalShuffleTransform × 1
-                      Resize × 1
-                        Duplicate × 1
-                          DeserializeDataTransform × 1
-                            SyncReadParquetDataSource × 1
+            Merge to Resize × 4
+              Transform Window × 1
+                Merge to MultiSortMerge × 1
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        DeserializeDataTransform × 1
+                          SyncReadParquetDataSource × 1
 
 # row fetch with window function(pipeline explain)
 query T
@@ -497,17 +479,16 @@ CompoundBlockOperator(Project) × 1
       Merge to MultiSortMerge × 1
         TransformSortMergeLimit × 4
           SortPartialTransform × 4
-            Transform Window × 4
-              TransformSortMerge × 4
-                SortPartialTransform × 4
-                  Merge to Resize × 4
-                    LocalShuffleTransform × 1
-                      Resize × 1
-                        Duplicate × 1
-                          TransformFilter × 1
-                            AddInternalColumnsTransform × 1
-                              DeserializeDataTransform × 1
-                                SyncReadParquetDataSource × 1
+            Merge to Resize × 4
+              Transform Window × 1
+                Merge to MultiSortMerge × 1
+                  TransformSortMerge × 4
+                    SortPartialTransform × 4
+                      Merge to Resize × 4
+                        TransformFilter × 1
+                          AddInternalColumnsTransform × 1
+                            DeserializeDataTransform × 1
+                              SyncReadParquetDataSource × 1
 
 # row fetch with window function(plan explain)
 query T
@@ -565,17 +546,14 @@ explain pipeline select time, rowkey from (select *, row_number() over(partition
 ----
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
-    Merge to Resize × 1
-      TransformFilter × 4
-        Transform Window × 4
+    TransformFilter × 1
+      Transform Window × 1
+        Merge to MultiSortMerge × 1
           TransformSortMerge × 4
             SortPartialTransform × 4
               Merge to Resize × 4
-                LocalShuffleTransform × 1
-                  Resize × 1
-                    Duplicate × 1
-                      DeserializeDataTransform × 1
-                        SyncReadParquetDataSource × 1
+                DeserializeDataTransform × 1
+                  SyncReadParquetDataSource × 1
 
 # same order multi window
 query T
@@ -598,18 +576,16 @@ CompoundBlockOperator(Project) × 1
 query T
 explain pipeline select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), lead(number,2, 0) over (partition by number % 3 order by number + 1) from numbers(50);
 ----
-CompoundBlockOperator(Project) × 4
-  Transform Window × 4
-    CompoundBlockOperator(Map) × 4
-      Transform Window × 4
-        TransformSortMerge × 4
-          SortPartialTransform × 4
-            Merge to Resize × 4
-              LocalShuffleTransform × 1
-                Resize × 1
-                  Duplicate × 1
-                    CompoundBlockOperator(Map) × 1
-                      NumbersSourceTransform × 1
+CompoundBlockOperator(Project) × 1
+  Transform Window × 1
+    CompoundBlockOperator(Map) × 1
+      Transform Window × 1
+        Merge to MultiSortMerge × 1
+          TransformSortMerge × 4
+            SortPartialTransform × 4
+              Merge to Resize × 4
+                CompoundBlockOperator(Map) × 1
+                  NumbersSourceTransform × 1
 
 
 statement ok

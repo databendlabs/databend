@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod build_local_shuffle;
 mod builder_aggregate;
 mod builder_append_table;
 mod builder_async_function;
@@ -28,6 +27,7 @@ mod builder_filter;
 mod builder_insert_multi_table;
 mod builder_join;
 mod builder_limit;
+mod builder_local_shuffle;
 mod builder_merge_into;
 mod builder_merge_into_manipulate;
 mod builder_merge_into_organize;
