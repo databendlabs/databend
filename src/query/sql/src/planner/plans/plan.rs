@@ -113,7 +113,6 @@ use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::PresignPlan;
-use crate::plans::ReclusterTablePlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
@@ -214,7 +213,10 @@ pub enum Plan {
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
-    ReclusterTable(Box<ReclusterTablePlan>),
+    ReclusterTable {
+        s_expr: Box<SExpr>,
+        is_final: bool,
+    },
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),

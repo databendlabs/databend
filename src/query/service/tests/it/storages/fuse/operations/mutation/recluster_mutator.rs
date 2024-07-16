@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
+use databend_common_catalog::plan::ReclusterParts;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -30,7 +31,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMutator;
-use databend_common_storages_fuse::operations::ReclusterTasks;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -139,9 +139,9 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     )
     .await?;
 
-    let mut mutator = ReclusterMutator::new(
+    let column_ids = snapshot.schema.to_leaf_column_id_set();
+    let mutator = ReclusterMutator::new(
         ctx,
-        Arc::new(snapshot),
         schema,
         vec![DataType::Number(NumberDataType::Int64)],
         1.0,
@@ -149,10 +149,12 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         cluster_key_id,
         1,
         1000,
+        column_ids,
     );
-    let need_recluster = mutator.target_select(compact_segments).await?;
+    let (_, parts) = mutator.target_select(compact_segments).await?;
+    let need_recluster = !parts.is_empty();
     assert!(need_recluster);
-    let ReclusterTasks::Recluster { tasks, .. } = mutator.tasks else {
+    let ReclusterParts::Recluster { tasks, .. } = parts else {
         return Err(ErrorCode::Internal("Logical error, it's a bug"));
     };
     assert_eq!(tasks.len(), 1);
@@ -268,10 +270,10 @@ async fn test_safety_for_recluster() -> Result<()> {
         )
         .await?;
 
-        let mut need_recluster = false;
+        let column_ids = snapshot.schema.to_leaf_column_id_set();
+        let mut parts = ReclusterParts::new_recluster_parts();
         let mut mutator = ReclusterMutator::new(
             ctx.clone(),
-            snapshot,
             schema.clone(),
             vec![DataType::Number(NumberDataType::Int32)],
             1.0,
@@ -279,38 +281,35 @@ async fn test_safety_for_recluster() -> Result<()> {
             cluster_key_id,
             max_tasks,
             block_per_seg,
+            column_ids,
         );
         let selected_segs = mutator.select_segments(&compact_segments, 8)?;
+        // select the blocks with the highest depth.
         if selected_segs.is_empty() {
-            for compact_segment in compact_segments.into_iter() {
-                if !mutator.segment_can_recluster(&compact_segment.1.summary) {
-                    continue;
-                }
-
-                if mutator.target_select(vec![compact_segment]).await? {
-                    need_recluster = true;
-                    break;
-                }
+            let result = FuseTable::generate_recluster_parts(&mutator, compact_segments).await?;
+            if let Some((_, _, recluster_parts)) = result {
+                parts = recluster_parts;
             }
         } else {
-            let mut selected_segments = Vec::with_capacity(selected_segs.len());
-            selected_segs.into_iter().for_each(|i| {
-                selected_segments.push(compact_segments[i].clone());
-            });
-            need_recluster = mutator.target_select(selected_segments).await?;
+            let selected_segments = selected_segs
+                .into_iter()
+                .map(|i| compact_segments[i].clone())
+                .collect();
+            (_, parts) = mutator.target_select(selected_segments).await?;
         }
 
-        eprintln!("need_recluster: {}", need_recluster);
-        if need_recluster {
-            match mutator.tasks {
-                ReclusterTasks::Recluster {
+        if !parts.is_empty() {
+            eprintln!("need_recluster");
+            match parts {
+                ReclusterParts::Recluster {
                     tasks,
                     remained_blocks,
                     removed_segment_indexes,
                     ..
                 } => {
                     assert!(unclustered_segment_indices.is_empty());
-                    assert!(tasks.len() <= max_tasks && !tasks.is_empty());
+                    assert!(tasks.len() <= max_tasks);
+                    assert!(!tasks.is_empty() || !remained_blocks.is_empty());
                     eprintln!("tasks_num: {}, max_tasks: {}", tasks.len(), max_tasks);
                     let mut blocks = Vec::new();
                     for task in tasks.into_iter() {
@@ -342,7 +341,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                     }
                     assert_eq!(block_ids_after_target, origin_blocks_ids);
                 }
-                ReclusterTasks::Compact(parts) => {
+                ReclusterParts::Compact(parts) => {
                     assert!(unclustered);
                     assert!(!unclustered_segment_indices.is_empty());
                     verify_compact_tasks(

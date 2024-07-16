@@ -37,15 +37,21 @@ impl PipelineBuilder {
                 .add_accumulating_transformer(|| TransformMergeCommitMeta::create(cluster_key_id));
         } else {
             self.main_pipeline.add_async_accumulating_transformer(|| {
-                let base_segments = if matches!(plan.mutation_kind, MutationKind::Compact) {
+                let base_segments = if matches!(
+                    plan.mutation_kind,
+                    MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
+                ) {
                     vec![]
                 } else {
                     plan.snapshot.segments.clone()
                 };
-                TableMutationAggregator::new(
+                TableMutationAggregator::create(
                     table,
                     self.ctx.clone(),
                     base_segments,
+                    plan.merged_blocks.clone(),
+                    plan.removed_segment_indexes.clone(),
+                    plan.removed_statistics.clone(),
                     plan.mutation_kind,
                 )
             });

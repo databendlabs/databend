@@ -400,6 +400,9 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     TransactionTimeout(4003),
     InvalidSessionState(4004),
+
+    // recluster error codes
+    NoNeedToRecluster(4011),
 }
 
 // Service errors [5001,6000].

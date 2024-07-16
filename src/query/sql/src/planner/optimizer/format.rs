@@ -74,6 +74,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
         RelOperator::MergeInto(_) => "MergeInto".to_string(),
+        RelOperator::Recluster(_) => "Recluster".to_string(),
     }
 }
 

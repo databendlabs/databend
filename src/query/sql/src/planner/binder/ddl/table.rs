@@ -55,11 +55,14 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
@@ -92,6 +95,8 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::executor::cast_expr_to_non_null_boolean;
+use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -113,7 +118,8 @@ use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
-use crate::plans::ReclusterTablePlan;
+use crate::plans::Recluster;
+use crate::plans::RelOperator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
@@ -986,23 +992,44 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-
+                    scalar_binder.forbid_udf();
                     let (scalar, _) = scalar_binder.bind(expr)?;
-                    Some(scalar)
+
+                    // prepare the filter expression
+                    let filter = cast_expr_to_non_null_boolean(
+                        scalar
+                            .as_expr()?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )?;
+                    // prepare the inverse filter expression
+                    let inverted_filter =
+                        check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+                    let filters = Filters {
+                        filter: filter.as_remote_expr(),
+                        inverted_filter: inverted_filter.as_remote_expr(),
+                    };
+
+                    Some(PushDownInfo {
+                        filters: Some(filters),
+                        ..PushDownInfo::default()
+                    })
                 } else {
                     None
                 };
 
-                Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant,
+                let recluster = RelOperator::Recluster(Recluster {
                     catalog,
                     database,
                     table,
-                    is_final: *is_final,
-                    metadata: self.metadata.clone(),
                     push_downs,
                     limit: limit.map(|v| v as usize),
-                })))
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                Ok(Plan::ReclusterTable {
+                    s_expr: Box::new(s_expr),
+                    is_final: *is_final,
+                })
             }
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;

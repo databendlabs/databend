@@ -57,6 +57,7 @@ use databend_common_sql::Visibility;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::debug;
@@ -330,6 +331,9 @@ impl DeleteInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
+            merged_blocks: vec![],
+            removed_segment_indexes: vec![],
+            removed_statistics: Statistics::default(),
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)
