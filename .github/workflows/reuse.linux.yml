@@ -281,28 +281,6 @@ jobs:
         with:
           name: test-stateful-iceberg-rest-standalone
 
-  share_integration:
-    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: "refs/pull/${{ github.event.number }}/merge"
-
-      - name: checkout share endpoint
-        uses: actions/checkout@v4
-        with:
-          repository: datafuselabs/share-endpoint
-          token: ${{ secrets.DATABEND_BOT_TOKEN }}
-          path: share-endpoint
-      - uses: ./.github/actions/test_share_integration
-        timeout-minutes: 10
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-integration-sharing-linux
-
   # test_fuzz_standalone:
   #   runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
   #   needs: [build, check]

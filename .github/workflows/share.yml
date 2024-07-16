@@ -1,0 +1,73 @@
+name: Cloud
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: aws
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      target: ${{ steps.sha.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Get SHA
+        shell: bash
+        id: sha
+        run: |
+          echo "sha=$(git rev-parse --verify HEAD)" > $GITHUB_OUTPUT
+
+  build:
+    needs: info
+    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 16c32g, aws]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, runner: X64 }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        timeout-minutes: 60
+        with:
+          sha: ${{ needs.info.outputs.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-gnu
+          artifacts: meta,query
+
+  share_integration:
+    runs-on: [self-hosted, X64, Linux, 4c8g, aws]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: checkout share endpoint
+        uses: actions/checkout@v4
+        with:
+          repository: datafuselabs/share-endpoint
+          token: ${{ secrets.DATABEND_BOT_TOKEN }}
+          path: share-endpoint
+      - uses: ./.github/actions/test_share_integration
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-integration-sharing-linux
