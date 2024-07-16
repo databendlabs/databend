@@ -20,12 +20,8 @@ runs:
         export AWS_SECRET_ACCESS_KEY=minioadmin
         export AWS_EC2_METADATA_DISABLED=true
 
-        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
-        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/admin/data --recursive --no-progress
-        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.csv s3://testbucket/admin/data/ontime_200_v1.csv --no-progress
-        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.parquet s3://testbucket/admin/data/ontime_200_v1.parquet --no-progress
-        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/iceberg s3://testbucket --recursive --no-progress
-
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://provider-bucket
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://consumer-bucket
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
       run: |

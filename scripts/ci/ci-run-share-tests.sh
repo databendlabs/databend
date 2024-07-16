@@ -27,4 +27,4 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../tests" || exit
 
-#./databend-test $1 --mode 'standalone' --run-dir 3_stateful_sharing --print-time --timeout 120
+./databend-test $1 --mode 'standalone' --run-dir 3_share_integration --print-time --timeout 120
