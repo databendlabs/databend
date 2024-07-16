@@ -1,16 +1,5 @@
 name: "Test Stateful Sharing"
 description: "Running stateful with sharing in standalone mode"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
-  secrets_token:
-    description: "secrets token"
-    required: true
-  github_token:
-    description: "GitHub Token"
-    required: true
 runs:
   using: "composite"
   steps:
