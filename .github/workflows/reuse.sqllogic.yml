@@ -13,36 +13,16 @@ on:
         type: string
         required: true
         default: "aws"
+      license:
+        description: "License"
+        type: string
+        required: true
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
   RUNNER_PROVIDER: ${{ inputs.runner_provider }}
 
 jobs:
-  license:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    outputs:
-      license: ${{ steps.license.outputs.license }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Get License from S3
-        if: inputs.runner_provider == 'aws'
-        run: |
-          aws s3 cp s3://databend-ci/misc/license.key license.key
-          aws s3 cp s3://databend-ci/misc/license.json license.json
-      - name: Get License from GCS
-        if: inputs.runner_provider == 'gcp'
-        run: |
-          gcloud storage cp gs://databend-ci/misc/license.key license.key
-          gcloud storage cp gs://databend-ci/misc/license.json license.json
-      - name: Output License
-        id: license
-        run: |
-          license=$(cat license.key | base64 -w 0)
-          echo "::add-mask::${license}"
-          echo "license=${license}" >> $GITHUB_OUTPUT
-          cat license.json
-
   management_mode:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
@@ -152,7 +132,6 @@ jobs:
 
   cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: license
     strategy:
       fail-fast: false
       matrix:
@@ -173,8 +152,8 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${{ inputs.license }}"
+          license=$(echo '${{ inputs.license }}' | base64 -d)
           echo "::add-mask::${license}"
           echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_sqllogic_cluster_linux
@@ -238,7 +217,6 @@ jobs:
 
   ee:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: license
     strategy:
       fail-fast: false
       matrix:
@@ -250,8 +228,8 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "::add-mask::${{ needs.license.outputs.license }}"
-          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${{ inputs.license }}"
+          license=$(echo '${{ inputs.license }}' | base64 -d)
           echo "::add-mask::${license}"
           echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux

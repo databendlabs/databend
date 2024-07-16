@@ -370,9 +370,10 @@ jobs:
           name: test-ee-management-mode-linux
 
   sqllogic:
-    needs: [build, check]
+    needs: [build, check, license]
     uses: ./.github/workflows/reuse.sqllogic.yml
     secrets: inherit
     with:
+      license: ${{ needs.license.outputs.license }}
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
