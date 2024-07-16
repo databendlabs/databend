@@ -791,7 +791,6 @@ impl Table for FuseTable {
             let stats = &snapshot.summary.col_stats;
             let table_statistics = self.read_table_snapshot_statistics(Some(&snapshot)).await?;
             if let Some(table_statistics) = table_statistics {
-                dbg!(table_statistics.histograms.is_empty());
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
                     table_statistics.histograms.clone(),

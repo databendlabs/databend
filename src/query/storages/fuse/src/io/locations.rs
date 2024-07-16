@@ -239,7 +239,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
             TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
-            TableSnapshotStatisticsVersion::V3(_) => "_ts_v2.json".to_string(),
+            TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
         }
     }
 }
