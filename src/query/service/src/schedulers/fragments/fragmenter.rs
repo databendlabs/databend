@@ -295,12 +295,10 @@ impl PhysicalPlanReplacer for Fragmenter {
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,
-            State::DeleteLeaf => FragmentType::DeleteLeaf,
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
-            State::Update => FragmentType::Update,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;

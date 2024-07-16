@@ -14,16 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_users::UserApiProvider;
-
-use crate::sql::executor::cast_expr_to_non_null_boolean;
-use crate::sql::ScalarExpr;
 
 /// Checks if a duplicate label exists in the meta store.
 ///
