@@ -50,7 +50,9 @@ jobs:
       - name: Output License
         id: license
         run: |
-          echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
+          license=$(cat license.key | base64 -w 0)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
           cat license.json
 
   build:
@@ -221,7 +223,10 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+          echo "::add-mask::${{ needs.license.outputs.license }}"
+          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_stateless_cluster_linux
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
@@ -248,7 +253,10 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+          echo "::add-mask::${{ needs.license.outputs.license }}"
+          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_stateful_cluster_linux
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
@@ -299,7 +307,10 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+          echo "::add-mask::${{ needs.license.outputs.license }}"
+          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
         env:
@@ -320,7 +331,10 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+          echo "::add-mask::${{ needs.license.outputs.license }}"
+          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_standalone_background_linux
         timeout-minutes: 10
         env:
@@ -341,7 +355,10 @@ jobs:
       - name: Decode license
         id: license
         run: |
-          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
+          echo "::add-mask::${{ needs.license.outputs.license }}"
+          license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)
+          echo "::add-mask::${license}"
+          echo "license=${license}" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_management_mode_linux
         timeout-minutes: 10
         env:
