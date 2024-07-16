@@ -44,18 +44,7 @@ fn should_backtrace() -> bool {
 }
 
 pub fn log_panic(panic: &PanicInfo) {
-    let backtrace_str = if should_backtrace() {
-        let backtrace = Backtrace::new();
-        let printer = BacktracePrinter::new()
-            .message("")
-            .lib_verbosity(color_backtrace::Verbosity::Full);
-        let colored = printer
-            .format_trace_to_string(&backtrace)
-            .unwrap_or_default();
-        String::from_utf8_lossy(&strip_ansi_escapes::strip(colored)).into_owned()
-    } else {
-        String::new()
-    };
+    let backtrace_str = backtrace();
 
     eprintln!("{}", panic);
     eprintln!("{}", backtrace_str);
@@ -70,5 +59,20 @@ pub fn log_panic(panic: &PanicInfo) {
         );
     } else {
         error!(backtrace = backtrace_str; "{}", panic);
+    }
+}
+
+pub fn backtrace() -> String {
+    if should_backtrace() {
+        let backtrace = Backtrace::new();
+        let printer = BacktracePrinter::new()
+            .message("")
+            .lib_verbosity(color_backtrace::Verbosity::Full);
+        let colored = printer
+            .format_trace_to_string(&backtrace)
+            .unwrap_or_default();
+        String::from_utf8_lossy(&strip_ansi_escapes::strip(colored)).into_owned()
+    } else {
+        String::new()
     }
 }

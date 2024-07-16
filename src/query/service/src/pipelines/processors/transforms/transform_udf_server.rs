@@ -116,6 +116,7 @@ impl AsyncTransform for TransformUdfServer {
             )
             .await?
             .with_tenant(self.ctx.get_tenant().tenant_name())?
+            .with_func_name(&func.func_name)?
             .with_query_id(&self.ctx.get_id())?;
 
             let result_batch = client.do_exchange(&func.func_name, input_batch).await?;

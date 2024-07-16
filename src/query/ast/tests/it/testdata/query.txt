@@ -5970,18 +5970,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                19..20,
-                                            ),
-                                            name: "w",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    19..20,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6167,18 +6170,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                22..23,
-                                            ),
-                                            name: "w",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    22..23,
+                                                ),
+                                                name: "w",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6223,18 +6229,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                37..39,
-                                            ),
-                                            name: "w1",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    37..39,
+                                                ),
+                                                name: "w1",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },
@@ -6279,18 +6288,21 @@ Query {
                             ],
                             params: [],
                             window: Some(
-                                WindowReference(
-                                    WindowRef {
-                                        window_name: Identifier {
-                                            span: Some(
-                                                53..55,
-                                            ),
-                                            name: "w2",
-                                            quote: None,
-                                            is_hole: false,
+                                WindowDesc {
+                                    ignore_nulls: None,
+                                    window: WindowReference(
+                                        WindowRef {
+                                            window_name: Identifier {
+                                                span: Some(
+                                                    53..55,
+                                                ),
+                                                name: "w2",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
                                         },
-                                    },
-                                ),
+                                    ),
+                                },
                             ),
                             lambda: None,
                         },

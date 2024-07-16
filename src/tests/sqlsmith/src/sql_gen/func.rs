@@ -21,6 +21,7 @@ use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
@@ -619,7 +620,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    fn gen_window(&mut self) -> Option<Window> {
+    fn gen_window(&mut self) -> Option<WindowDesc> {
+        let ignore_nulls = Some(self.rng.gen_bool(0.2));
         if self.rng.gen_bool(0.2) && !self.windows_name.is_empty() {
             let len = self.windows_name.len();
             let name = if len == 1 {
@@ -627,12 +629,19 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             } else {
                 self.windows_name[self.rng.gen_range(0..=len - 1)].to_string()
             };
-            Some(Window::WindowReference(WindowRef {
-                window_name: Identifier::from_name(None, name),
-            }))
+
+            Some(WindowDesc {
+                ignore_nulls,
+                window: Window::WindowReference(WindowRef {
+                    window_name: Identifier::from_name(None, name),
+                }),
+            })
         } else {
             let window_spec = self.gen_window_spec();
-            Some(Window::WindowSpec(window_spec))
+            Some(WindowDesc {
+                ignore_nulls,
+                window: Window::WindowSpec(window_spec),
+            })
         }
     }
 
@@ -726,7 +735,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         name: String,
         params: Vec<Literal>,
         args_type: Vec<DataType>,
-        window: Option<Window>,
+        window: Option<WindowDesc>,
         lambda: Option<Lambda>,
     ) -> Expr {
         let distinct = if name == *"count" {

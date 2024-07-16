@@ -30,9 +30,6 @@ use opendal::raw::PresignedRequest;
 
 use crate::ShareEndpointClient;
 
-pub(crate) const TENANT_HEADER: &str = "X-DATABEND-TENANT";
-pub(crate) const SIGNATURE_HEADER: &str = "X-DATABEND-SIGNATURE";
-pub(crate) const AUTH_METHOD_HEADER: &str = "X-DATABEND-AUTH-METHOD";
 pub(crate) const HMAC_AUTH_METHOD: &str = "HMAC";
 
 /// SharedSigner is used to track presign request, and it's response.

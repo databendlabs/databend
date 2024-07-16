@@ -587,8 +587,28 @@ select to_date('1947-04-15')
 statement error 1006
 select to_date('1947-04-15 00:00:00')
 
+query T
+select to_timestamp('1990-09-16 01:00:00');
+----
+1990-09-16 01:00:00.000000
+
+query T
+select to_timestamp('1990-09-16 01:00:00', '%Y-%m-%d %H:%M:%S');
+----
+1990-09-16 01:00:00.000000
+
 statement ok
 set enable_dst_hour_fix = 1;
+
+query T
+select to_timestamp('1990-09-16 01:00:00');
+----
+1990-09-16 01:00:00.000000
+
+query T
+select to_timestamp('1990-09-16 01:00:00', '%Y-%m-%d %H:%M:%S');
+----
+1990-09-16 01:00:00.000000
 
 query T
 select to_datetime('1947-04-15 00:00:00')

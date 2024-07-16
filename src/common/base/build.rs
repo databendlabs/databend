@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod dummy_share_database;
-mod share_database;
-
-pub use share_database::ShareDatabase;
+fn main() {
+    databend_common_building::setup();
+}

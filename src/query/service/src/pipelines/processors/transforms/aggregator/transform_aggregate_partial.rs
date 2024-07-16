@@ -240,22 +240,14 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .unwrap_or_default();
 
         let block = block.convert_to_full();
-
-        let group_columns = self
-            .params
-            .group_columns
-            .iter()
-            .map(|&index| block.get_by_offset(index))
-            .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
-            .collect::<Vec<_>>();
+        let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
+        let rows_num = block.num_rows();
 
         {
-            let rows_num = block.num_rows();
-
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
                 HashTable::HashTable(hashtable) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
@@ -276,7 +268,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
-                    let state = self.method.build_keys_state(&group_columns, rows_num)?;
+                    let state = self.method.build_keys_state(group_columns, rows_num)?;
                     let mut places = Vec::with_capacity(rows_num);
 
                     for key in self.method.build_keys_iter(&state)? {
@@ -297,9 +289,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
                 }
                 HashTable::AggregateHashTable(hashtable) => {
-                    let group_columns =
-                        InputColumns::new_block_proxy(&self.params.group_columns, &block);
-
                     let (params_columns, states_index) = if is_agg_index_block {
                         let num_columns = block.num_columns();
                         let functions_count = self.params.aggregate_functions.len();

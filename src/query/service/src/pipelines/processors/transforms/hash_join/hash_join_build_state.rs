@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::ops::ControlFlow;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
@@ -450,7 +451,7 @@ impl HashJoinBuildState {
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty,) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let valid_num = match &$valids {
@@ -516,7 +517,7 @@ impl HashJoinBuildState {
 
         macro_rules! insert_binary_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, ) => {{
-                let keys_state = $method.build_keys_state(&$build_keys, $chunk.num_rows())?;
+                let keys_state = $method.build_keys_state($build_keys, $chunk.num_rows())?;
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
@@ -637,21 +638,15 @@ impl HashJoinBuildState {
         } else {
             Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
         };
-        let mut build_keys: Vec<(Column, DataType)> = self
-            .hash_join_state
-            .hash_join_desc
-            .build_keys
+        let build_keys = &self.hash_join_state.hash_join_desc.build_keys;
+        let mut keys_columns = build_keys
             .iter()
             .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, chunk.num_rows()),
-                    return_type.clone(),
-                ))
+                Ok(evaluator
+                    .run(expr)?
+                    .convert_to_full_column(expr.data_type(), chunk.num_rows()))
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<Vec<_>>>()?;
 
         let column_nums = chunk.num_columns();
         let mut block_entries = Vec::with_capacity(self.build_projections.len());
@@ -667,47 +662,52 @@ impl HashJoinBuildState {
         *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
         let is_null_equal = &self.hash_join_state.hash_join_desc.is_null_equal;
-        let mut valids = None;
-        if build_keys
-            .iter()
-            .any(|(_, ty)| ty.is_nullable() || ty.is_null())
-        {
-            for (index, (col, _)) in build_keys.iter().enumerate() {
-                if is_null_equal[index] {
-                    continue;
+        let may_null = build_keys.iter().any(|expr| {
+            let ty = expr.data_type();
+            ty.is_nullable() || ty.is_null()
+        });
+        let valids = if !may_null {
+            None
+        } else {
+            let valids = keys_columns
+                .iter()
+                .zip(is_null_equal.iter().copied())
+                .filter(|(_, is_null_equal)| !is_null_equal)
+                .map(|(col, _)| col.validity())
+                .try_fold(None, |valids, (is_all_null, tmp_valids)| {
+                    if is_all_null {
+                        ControlFlow::Break(Some(Bitmap::new_constant(false, chunk.num_rows())))
+                    } else {
+                        ControlFlow::Continue(and_validities(valids, tmp_valids.cloned()))
+                    }
+                });
+            match valids {
+                ControlFlow::Continue(Some(valids)) | ControlFlow::Break(Some(valids)) => {
+                    if valids.unset_bits() == valids.len() {
+                        return Ok(());
+                    }
+                    if valids.unset_bits() != 0 {
+                        Some(valids)
+                    } else {
+                        None
+                    }
                 }
-                let (is_all_null, tmp_valids) = col.validity();
-                if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, chunk.num_rows()));
-                    break;
-                } else {
-                    valids = and_validities(valids, tmp_valids.cloned());
-                }
+                _ => None,
             }
-        }
-
-        valids = match valids {
-            Some(valids) => {
-                if valids.unset_bits() == valids.len() {
-                    return Ok(());
-                } else if valids.unset_bits() == 0 {
-                    None
-                } else {
-                    Some(valids)
-                }
-            }
-            None => None,
         };
 
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::LeftMark => {
                 let markers = &mut build_state.mark_scan_map[chunk_index];
-                self.hash_join_state
-                    .init_markers(&build_keys, chunk.num_rows(), markers);
+                self.hash_join_state.init_markers(
+                    (&keys_columns).into(),
+                    chunk.num_rows(),
+                    markers,
+                );
             }
             JoinType::RightMark => {
-                if !_has_null && !build_keys.is_empty() {
-                    if let Some(validity) = build_keys[0].0.validity().1 {
+                if !_has_null && !keys_columns.is_empty() {
+                    if let Some(validity) = keys_columns[0].validity().1 {
                         if validity.unset_bits() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
@@ -724,12 +724,12 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        for (index, (col, ty)) in build_keys.iter_mut().enumerate() {
-            if !is_null_equal[index] {
-                *col = col.remove_nullable();
-                *ty = ty.remove_nullable();
-            }
-        }
+        keys_columns
+            .iter_mut()
+            .zip(is_null_equal.iter().copied())
+            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
+            .for_each(|(col, _)| *col = col.remove_nullable());
+        let build_keys = (&keys_columns).into();
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {
@@ -899,16 +899,12 @@ impl HashJoinBuildState {
             }
             let build_key_column = Column::concat_columns(columns.into_iter())?;
             // Generate bloom filter using build column
-            let data_type = build_key.data_type().clone();
+            let data_type = build_key.data_type();
             let num_rows = build_key_column.len();
             let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()], false)?;
             let mut hashes = HashSet::with_capacity(num_rows);
-            hash_by_method(
-                &method,
-                &[(build_key_column, data_type)],
-                num_rows,
-                &mut hashes,
-            )?;
+            let key_columns = &[build_key_column];
+            hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
             let mut hashes_vec = Vec::with_capacity(num_rows);
             hashes.into_iter().for_each(|hash| {
                 hashes_vec.push(hash);

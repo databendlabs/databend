@@ -241,7 +241,7 @@ pub trait VisitorMut: Sized {
         _name: &mut Identifier,
         args: &mut Vec<Expr>,
         params: &mut Vec<Expr>,
-        over: &mut Option<Window>,
+        over: &mut Option<WindowDesc>,
         lambda: &mut Option<Lambda>,
     ) {
         for arg in args.iter_mut() {
@@ -252,7 +252,7 @@ pub trait VisitorMut: Sized {
         }
 
         if let Some(over) = over {
-            match over {
+            match &mut over.window {
                 Window::WindowReference(reference) => {
                     self.visit_identifier(&mut reference.window_name);
                 }
