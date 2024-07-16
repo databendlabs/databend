@@ -78,25 +78,23 @@ impl<R: Rows> Cursor<R> {
             cursor: self,
         }
     }
-
-    fn same_index(&self, other: &Self) -> bool {
-        self.input_index == other.input_index && self.row_index == other.row_index
-    }
 }
 
 impl<R: Rows> Ord for Cursor<R> {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.same_index(other) {
-            Ordering::Equal
-        } else {
-            self.current().cmp(&other.current())
+        if self.input_index == other.input_index {
+            return self.row_index.cmp(&other.row_index);
         }
+        self.current()
+            .cmp(&other.current())
+            .then_with(|| self.input_index.cmp(&other.input_index))
     }
 }
 
 impl<R: Rows> PartialEq for Cursor<R> {
     fn eq(&self, other: &Self) -> bool {
-        self.same_index(other) || self.current() == other.current()
+        (self.input_index == other.input_index && self.row_index == other.row_index)
+            || self.current() == other.current()
     }
 }
 
@@ -110,16 +108,19 @@ impl<R: Rows> PartialOrd for Cursor<R> {
 
 impl<'a, R: Rows> PartialEq<Cursor<R>> for CursorMut<'a, R> {
     fn eq(&self, other: &Cursor<R>) -> bool {
-        self.same_index(other) || self.current() == other.current()
+        (self.cursor.input_index == other.input_index && self.row_index == other.row_index)
+            || self.current() == other.current()
     }
 }
 
 impl<'a, R: Rows> PartialOrd<Cursor<R>> for CursorMut<'a, R> {
     fn partial_cmp(&self, other: &Cursor<R>) -> Option<Ordering> {
-        Some(if self.same_index(other) {
-            Ordering::Equal
+        Some(if self.cursor.input_index == other.input_index {
+            self.row_index.cmp(&other.row_index)
         } else {
-            self.current().cmp(&other.current())
+            self.current()
+                .cmp(&other.current())
+                .then_with(|| self.cursor.input_index.cmp(&other.input_index))
         })
     }
 }
@@ -143,9 +144,5 @@ impl<'a, R: Rows> CursorMut<'a, R> {
 
     pub fn current<'b>(&'b self) -> R::Item<'a> {
         self.cursor.rows.row(self.row_index)
-    }
-
-    fn same_index(&self, other: &Cursor<R>) -> bool {
-        self.cursor.input_index == other.input_index && self.row_index == other.row_index
     }
 }
