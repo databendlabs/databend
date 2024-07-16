@@ -25,8 +25,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::plans::DeletePlan;
-use databend_common_sql::plans::UpdatePlan;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentWriter;
@@ -51,7 +49,6 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
-use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
@@ -278,16 +275,6 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
         fixture.default_table_name()
     );
     fixture.execute_command(&query).await
-}
-
-// TODO(dousir9): fix test
-pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
-    Ok(())
-}
-
-// TODO(dousir9): fix test
-pub async fn do_update(ctx: Arc<QueryContext>, plan: UpdatePlan) -> Result<()> {
-    Ok(())
 }
 
 pub async fn append_sample_data_overwrite(

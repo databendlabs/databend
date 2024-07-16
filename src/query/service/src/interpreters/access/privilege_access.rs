@@ -1003,52 +1003,6 @@ impl AccessChecker for PrivilegeAccess {
                     self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
                 }
             }
-            Plan::Delete(plan) => {
-                if enable_experimental_rbac_check {
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    for subquery in &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Unable to access necessary user-defined functions for executing the DELETE operation"));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Delete, false).await?
-            }
-            Plan::Update(plan) => {
-                if enable_experimental_rbac_check {
-                    for scalar in plan.update_list.values() {
-                        let udf = get_udf_names(scalar)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    for subquery in &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Failed to retrieve necessary user-defined functions for executing the UPDATE operation."));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Update, false).await?;
-            }
             Plan::CreateView(plan) => {
                 let mut planner = Planner::new(self.ctx.clone());
                 let (plan, _) = planner.plan_sql(&plan.subquery).await?;

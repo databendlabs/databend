@@ -71,7 +71,6 @@ use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
-use crate::interpreters::UpdateInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 

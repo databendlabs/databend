@@ -20,19 +20,14 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::DataManipulation;
-use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
@@ -54,17 +49,7 @@ use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BoundColumnRef;
-use crate::sql::plans::DeletePlan;
-use crate::sql::plans::EvalScalar;
-use crate::sql::plans::Filter;
 use crate::sql::plans::Plan;
-use crate::sql::plans::RelOperator;
-use crate::sql::plans::ScalarItem;
-use crate::sql::plans::Scan;
-use crate::sql::ColumnBindingBuilder;
-use crate::sql::ScalarExpr;
-use crate::sql::Visibility;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
@@ -145,7 +130,6 @@ impl Interpreter for ExplainInterpreter {
                     let plan = interpreter.build_physical_plan(&merge_into).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
-                Plan::Delete(plan) => self.explain_delete(plan).await?,
                 _ => self.explain_plan(&self.plan)?,
             },
 
@@ -449,114 +433,6 @@ impl ExplainInterpreter {
         let plan = builder.build(s_expr, bind_context.column_set()).await?;
         self.explain_physical_plan(&plan, metadata, formatted_ast)
             .await
-    }
-
-    #[async_backtrace::framed]
-    async fn explain_delete(&self, delete: &DeletePlan) -> Result<Vec<DataBlock>> {
-        let table_index = delete
-            .metadata
-            .read()
-            .get_table_index(
-                Some(delete.database_name.as_str()),
-                delete.table_name.as_str(),
-            )
-            .unwrap();
-
-        let mut result = vec![];
-        // Explain subquery.
-        if let Some(subquery_desc) = &delete.subquery_desc {
-            let row_id_column_binding = ColumnBindingBuilder::new(
-                ROW_ID_COL_NAME.to_string(),
-                subquery_desc.index,
-                Box::new(DataType::Number(NumberDataType::UInt64)),
-                Visibility::InVisible,
-            )
-            .database_name(Some(delete.database_name.clone()))
-            .table_name(Some(delete.table_name.clone()))
-            .table_index(Some(table_index))
-            .build();
-            let mut bind_context = delete.bind_context.clone();
-            bind_context.columns.clear();
-            bind_context.columns.push(row_id_column_binding.clone());
-
-            let s_expr = SExpr::create_unary(
-                Arc::new(RelOperator::EvalScalar(EvalScalar {
-                    items: vec![ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: row_id_column_binding,
-                        }),
-                        index: 0,
-                    }],
-                })),
-                Arc::new(subquery_desc.input_expr.clone()),
-            );
-
-            let formatted_plan = StringType::from_data(vec!["DeletePlan (subquery):"]);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-            let input = self
-                .explain_query(&s_expr, &delete.metadata, &bind_context, &None)
-                .await?;
-            result.extend(input);
-        }
-
-        // Explain selection.
-        if let Some(selection) = &delete.selection
-            && !matches!(selection, ScalarExpr::SubqueryExpr(_))
-        {
-            let selection = if let ScalarExpr::FunctionCall(FunctionCall {
-                func_name,
-                arguments,
-                ..
-            }) = selection
-                && func_name == "and"
-            {
-                arguments[1].clone()
-            } else {
-                selection.clone()
-            };
-
-            let scan = RelOperator::Scan(Scan {
-                table_index,
-                columns: delete.bind_context.column_set(),
-                push_down_predicates: None,
-                limit: None,
-                order_by: None,
-                prewhere: None,
-                agg_index: None,
-                change_type: None,
-                inverted_index: None,
-                statistics: Default::default(),
-                update_stream_columns: false,
-                is_lazy_table: false,
-            });
-            let scan_expr = SExpr::create_leaf(Arc::new(scan));
-            let filter = RelOperator::Filter(Filter {
-                predicates: vec![selection],
-            });
-            let s_expr = SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr));
-
-            let formatted_plan = StringType::from_data(vec!["DeletePlan (selection):"]);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-            let input = self
-                .explain_query(&s_expr, &delete.metadata, &delete.bind_context, &None)
-                .await?;
-            result.extend(input);
-        }
-
-        if result.is_empty() {
-            let table_name = format!(
-                "{}.{}.{}",
-                delete.catalog_name, delete.database_name, delete.table_name
-            );
-            let children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
-            let formatted_plan = FormatTreeNode::with_children("DeletePlan:".to_string(), children)
-                .format_pretty()?;
-            let line_split_result: Vec<&str> = formatted_plan.lines().collect();
-            let formatted_plan = StringType::from_data(line_split_result);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-        }
-        Ok(vec![DataBlock::concat(&result)?])
     }
 
     async fn explain_merge_fragments(

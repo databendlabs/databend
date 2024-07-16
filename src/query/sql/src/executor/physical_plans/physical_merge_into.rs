@@ -53,7 +53,6 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
-use crate::plans;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::BindContext;

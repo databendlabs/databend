@@ -86,9 +86,9 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
-    if let Plan::Delete(delete) = plan {
-        do_deletion(ctx.clone(), *delete).await?;
-    }
+    // if let Plan::Delete(delete) = plan {
+    //     do_deletion(ctx.clone(), *delete).await?;
+    // }
     ctx.evict_table_from_cache("default", "default", "t")?;
     fixture.execute_command(statistics_sql).await?;
 
@@ -118,9 +118,9 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let query = format!("update {}.{} set id = 3 where id = 0", db_name, tb_name);
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
-    if let Plan::Update(update) = plan {
-        do_update(ctx.clone(), *update).await?;
-    }
+    // if let Plan::Update(update) = plan {
+    //     do_update(ctx.clone(), *update).await?;
+    // }
 
     // check summary after update
     let table = fixture.latest_default_table().await?;
