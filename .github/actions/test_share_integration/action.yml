@@ -26,11 +26,6 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/ontime_200.parquet s3://testbucket/admin/data/ontime_200_v1.parquet --no-progress
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data/iceberg s3://testbucket --recursive --no-progress
 
-    - name: Setup Build Tool
-      uses: ./.github/actions/setup_build_tool
-      with:
-        bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
-
     - name: Run integration Share database Tests with Standalone mode
       shell: bash
       run: |
