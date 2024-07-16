@@ -57,7 +57,7 @@ pub fn project_columnar(
                     expr
                 } else {
                     // note: tuple field name is dropped here, matched by pos here
-                    if can_auto_cast_to(
+                    if can_auto_cast_to::<true>(
                         &from_field.data_type().into(),
                         &to_field.data_type().into(),
                         cast_rules,

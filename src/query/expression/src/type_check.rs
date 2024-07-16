@@ -503,7 +503,7 @@ pub fn unify(
             "source type {src_ty} must not contain generic type".to_string(),
         )),
         (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules) => {
+        (src_ty, dest_ty) if can_auto_cast_to::<false>(src_ty, dest_ty, auto_cast_rules) => {
             Ok(Substitution::empty())
         }
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
@@ -541,7 +541,7 @@ pub fn unify(
     }
 }
 
-pub fn can_auto_cast_to(
+pub fn can_auto_cast_to<const REMOVE_NULLABLE: bool>(
     src_ty: &DataType,
     dest_ty: &DataType,
     auto_cast_rules: AutoCastRules,
@@ -559,24 +559,32 @@ pub fn can_auto_cast_to(
         (DataType::EmptyArray, DataType::Array(_)) => true,
         (DataType::EmptyMap, DataType::Map(_)) => true,
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
-            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
         }
-        (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty, auto_cast_rules),
+        (src_ty, DataType::Nullable(dest_ty)) => {
+            can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
+        }
+        (DataType::Nullable(src_ty), dest_ty) => {
+            if REMOVE_NULLABLE {
+                can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
+            } else {
+                false
+            }
+        }
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
-            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
         }
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
             (DataType::Tuple(_), DataType::Tuple(_)) => {
-                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+                can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
             }
             (_, _) => unreachable!(),
         },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
             src_tys.len() == dest_tys.len()
-                && src_tys
-                    .iter()
-                    .zip(dest_tys)
-                    .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
+                && src_tys.iter().zip(dest_tys).all(|(src_ty, dest_ty)| {
+                    can_auto_cast_to::<REMOVE_NULLABLE>(src_ty, dest_ty, auto_cast_rules)
+                })
         }
         (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => {
@@ -601,8 +609,8 @@ pub fn common_super_type(
     auto_cast_rules: AutoCastRules,
 ) -> Option<DataType> {
     match (ty1, ty2) {
-        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
-        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
+        (ty1, ty2) if can_auto_cast_to::<false>(&ty1, &ty2, auto_cast_rules) => Some(ty2),
+        (ty1, ty2) if can_auto_cast_to::<false>(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
