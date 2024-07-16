@@ -26,18 +26,26 @@ query T
 explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 ----
 Fragment 0:
-  DataExchange: Merge
-    ExchangeSink
-    ├── output columns: []
-    ├── destination fragment: [1]
-    └── UpdateSource
-(empty)
-(empty)
-Fragment 1:
     CommitSink
-    └── ExchangeSource
-        ├── output columns: []
-        └── source fragment: [0]
+    └── DataManipulation
+        ├── target table: [catalog: default] [database: db1] [table: t1]
+        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
+        └── RowFetch
+            ├── output columns: [t1.b (#1), t1._row_id (#2), t1.a (#0)]
+            ├── columns to fetch: [a]
+            └── Filter
+                ├── output columns: [t1.b (#1), t1._row_id (#2)]
+                ├── filters: [is_true(t1.b (#1) > '2022-12-31')]
+                ├── estimated rows: 0.40
+                └── TableScan
+                    ├── table: default.db1.t1
+                    ├── output columns: [b (#1), _row_id (#2)]
+                    ├── read rows: 2
+                    ├── read size: 1.10 KiB
+                    ├── partitions total: 2
+                    ├── partitions scanned: 2
+                    ├── push downs: [filters: [is_true(t1.b (#1) > '2022-12-31')], limit: NONE]
+                    └── estimated rows: 2.00
 (empty)
 
 query IT
@@ -49,4 +57,25 @@ SELECT * FROM t1 ORDER BY b
 query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
-Nothing to update
+Fragment 0:
+    CommitSink
+    └── DataManipulation
+        ├── target table: [catalog: default] [database: db1] [table: t1]
+        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
+        └── RowFetch
+            ├── output columns: [t1._row_id (#2), t1.a (#0), t1.b (#1)]
+            ├── columns to fetch: [a, b]
+            └── Filter
+                ├── output columns: [t1._row_id (#2)]
+                ├── filters: [false]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.db1.t1
+                    ├── output columns: [_row_id (#2)]
+                    ├── read rows: 0
+                    ├── read size: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [false], limit: NONE]
+                    └── estimated rows: 2.00
+(empty)
