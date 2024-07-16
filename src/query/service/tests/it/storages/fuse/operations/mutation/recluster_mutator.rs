@@ -56,7 +56,7 @@ use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 async fn test_recluster_mutator_block_select() -> Result<()> {
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);

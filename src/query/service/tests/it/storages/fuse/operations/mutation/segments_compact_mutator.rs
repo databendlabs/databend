@@ -639,7 +639,7 @@ pub struct CompactSegmentTestFixture {
 
 impl CompactSegmentTestFixture {
     fn try_new(ctx: &Arc<QueryContext>, block_per_seg: u64) -> Result<Self> {
-        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
+        let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_application_level_data_operator()?;
         Ok(Self {
             ctx: ctx.clone(),
@@ -707,7 +707,7 @@ impl CompactSegmentTestFixture {
         block_per_seg: usize,
         unclustered: bool,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
-        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
+        let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_application_level_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
@@ -966,7 +966,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
+    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
 

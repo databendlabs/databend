@@ -214,7 +214,7 @@ impl FuseTable {
         let part_prefix = table_info.meta.part_prefix.clone();
 
         let meta_location_generator =
-            TableMetaLocationGenerator::new(storage_prefix).with_part_prefix(part_prefix);
+            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,

@@ -54,9 +54,11 @@ pub trait SnapshotGenerator {
         let mut snapshot =
             self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
 
+        // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
+        // both of them are allowed to be committed here. 
         if base_snapshot_timestamp
-            // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
             .as_ref()
+            // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
             .is_some_and(|base| base < snapshot.least_base_snapshot_timestamp.as_ref().unwrap())
         {
             return Err(ErrorCode::TransactionTimeout(format!(

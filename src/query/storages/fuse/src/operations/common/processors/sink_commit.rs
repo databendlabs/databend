@@ -115,6 +115,7 @@ where F: SnapshotGenerator + Send + 'static
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<ProcessorPtr> {
         let purge = Self::do_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
@@ -136,7 +137,7 @@ where F: SnapshotGenerator + Send + 'static
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
             deduplicated_label,
-            base_snapshot_timestamp: None,
+            base_snapshot_timestamp,
         })))
     }
 
@@ -330,7 +331,6 @@ where F: SnapshotGenerator + Send + 'static
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
-                self.base_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();

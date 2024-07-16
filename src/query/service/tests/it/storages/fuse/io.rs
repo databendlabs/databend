@@ -25,7 +25,7 @@ use uuid::Uuid;
 #[test]
 fn test_meta_locations() -> Result<()> {
     let test_prefix = "test_pref";
-    let locs = TableMetaLocationGenerator::new(test_prefix.to_owned());
+    let locs = TableMetaLocationGenerator::with_prefix(test_prefix.to_owned());
     let ((path, _ver), _id) = locs.gen_block_location();
     assert!(path.starts_with(test_prefix));
     let seg_loc = locs.gen_segment_info_location();

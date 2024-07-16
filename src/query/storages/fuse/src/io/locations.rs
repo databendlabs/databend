@@ -18,7 +18,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_storages_common_table_meta::meta::uuid_from_data_time;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -58,15 +57,13 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 pub struct TableMetaLocationGenerator {
     prefix: String,
     part_prefix: String,
-    base_snapshot_timestamp: DateTime<Utc>,
 }
 
 impl TableMetaLocationGenerator {
-    pub fn new(prefix: String, base_snapshot_timestamp: DateTime<Utc>) -> Self {
+    pub fn with_prefix(prefix: String) -> Self {
         Self {
             prefix,
             part_prefix: "".to_string(),
-            base_snapshot_timestamp,
         }
     }
 
@@ -83,8 +80,11 @@ impl TableMetaLocationGenerator {
         &self.part_prefix
     }
 
-    pub fn gen_block_location(&self) -> Result<(Location, Uuid)> {
-        let part_uuid = uuid_from_date_time(self.base_snapshot_timestamp);
+    pub fn gen_block_location(
+        &self,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
+    ) -> (Location, Uuid) {
+        let part_uuid = uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::MIN_UTC));
         let location_path = format!(
             "{}/{}/g{}{}_v{}.parquet",
             &self.prefix,
@@ -94,7 +94,7 @@ impl TableMetaLocationGenerator {
             DataBlock::VERSION,
         );
 
-        Ok(((location_path, DataBlock::VERSION), part_uuid))
+        ((location_path, DataBlock::VERSION), part_uuid)
     }
 
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
@@ -110,8 +110,12 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn gen_segment_info_location(&self) -> String {
-        let segment_uuid = uuid_from_date_time(self.base_snapshot_timestamp);
+    pub fn gen_segment_info_location(
+        &self,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
+    ) -> String {
+        let segment_uuid =
+            uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::MIN_UTC));
         format!(
             "{}/{}/g{}_v{}.mpk",
             &self.prefix,

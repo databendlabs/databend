@@ -67,6 +67,7 @@ impl CommitMultiTableInsert {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
         catalog: Arc<dyn Catalog>,
+        base_snapshot_timestamps: HashMap<u64, Option<DateTime<Utc>>>,
     ) -> Self {
         Self {
             commit_metas: Default::default(),
@@ -76,7 +77,7 @@ impl CommitMultiTableInsert {
             update_stream_meta,
             deduplicated_label,
             catalog,
-            base_snapshot_timestamps: Default::default(),
+            base_snapshot_timestamps,
         }
     }
 }
@@ -99,8 +100,10 @@ impl AsyncSink for CommitMultiTableInsert {
                     table.as_ref(),
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
-                    true,
-                    &mut self.base_snapshot_timestamps,
+                    self.base_snapshot_timestamps
+                        .get(&table.get_id())
+                        .unwrap()
+                        .clone(),
                 )
                 .await?,
                 table.get_table_info().clone(),
@@ -186,8 +189,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
-                                    false,
-                                    &mut self.base_snapshot_timestamps,
+                                    self.base_snapshot_timestamps.get(&tid).unwrap().clone(),
                                 )
                                 .await?;
                                 break;
@@ -243,17 +245,10 @@ async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
-    is_first_time: bool,
-    base_snapshot_timestamps: &mut HashMap<u64, Option<DateTime<Utc>>>,
+    base_snapshot_timestamp: Option<DateTime<Utc>>,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
-    if is_first_time {
-        base_snapshot_timestamps.insert(
-            fuse_table.get_id(),
-            previous.as_ref().and_then(|p| p.timestamp),
-        );
-    }
     let snapshot = snapshot_generator.generate_new_snapshot(
         table.schema().as_ref().clone(),
         fuse_table.cluster_key_meta.clone(),
@@ -261,7 +256,7 @@ async fn build_update_table_meta_req(
         Some(fuse_table.table_info.ident.seq),
         txn_mgr,
         table.get_id(),
-        *base_snapshot_timestamps.get(&fuse_table.get_id()).unwrap(),
+        base_snapshot_timestamp,
     )?;
 
     // write snapshot

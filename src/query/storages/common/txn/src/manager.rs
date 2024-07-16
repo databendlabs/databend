@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -58,6 +61,9 @@ pub struct TxnBuffer {
     stream_tables: HashMap<u64, StreamSnapshot>,
 
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
+
+    /// The key is the table_id, the value is the timestamp of the snapshot
+    pub base_snapshot_timestamps: HashMap<u64, Option<DateTime<Utc>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +80,7 @@ impl TxnBuffer {
         self.update_stream_meta.clear();
         self.deduplicated_labels.clear();
         self.stream_tables.clear();
+        self.base_snapshot_timestamps.clear();
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
@@ -280,5 +287,24 @@ impl TxnManager {
 
     pub fn need_purge_files(&mut self) -> Vec<(StageInfo, Vec<String>)> {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
+    }
+
+    pub fn get_base_snapshot_timestamp(
+        &mut self,
+        table_id: u64,
+        timestamp: Option<DateTime<Utc>>,
+    ) -> Option<DateTime<Utc>> {
+        if !self.is_active() {
+            return timestamp;
+        }
+
+        let entry = self.txn_buffer.base_snapshot_timestamps.entry(table_id);
+        match entry {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                e.insert(timestamp);
+                timestamp
+            }
+        }
     }
 }

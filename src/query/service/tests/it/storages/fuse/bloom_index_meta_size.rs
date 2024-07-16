@@ -125,7 +125,7 @@ use uuid::Uuid;
 #[ignore]
 async fn test_random_location_memory_size() -> databend_common_exception::Result<()> {
     // generate random location of Type Location
-    let location_gen = TableMetaLocationGenerator::new("/root".to_string());
+    let location_gen = TableMetaLocationGenerator::with_prefix("/root".to_string());
 
     let num_segments = 5_000_000;
     let sys = System::new_all();
@@ -324,7 +324,7 @@ fn build_test_segment_info(
     }
     assert_eq!(num_number_columns + num_string_columns, col_stats.len());
 
-    let location_gen = TableMetaLocationGenerator::new("/root/12345/67890".to_owned());
+    let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
 
     let (block_location, block_uuid) = location_gen.gen_block_location();
     let block_meta = BlockMeta {
@@ -390,7 +390,7 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
 
     let block = DataBlock::new_from_columns(columns);
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
     let block_writer = BlockWriter::new(&operator, &loc_generator);
     let (_block_meta, thrift_file_meta) = block_writer
