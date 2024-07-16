@@ -20,7 +20,6 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
@@ -168,15 +167,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         })))
     }
 
-    fn replace_update_source(
-        &mut self,
-        plan: &databend_common_sql::executor::physical_plans::UpdateSource,
-    ) -> Result<PhysicalPlan> {
-        self.state = State::Update;
-
-        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
-    }
-
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
@@ -214,12 +204,6 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::Compact;
 
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
-    }
-
-    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
-        self.state = State::DeleteLeaf;
-
-        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {

@@ -176,9 +176,6 @@ impl PipelineBuilder {
             PhysicalPlan::CopyIntoTable(copy) => self.build_copy_into_table(copy),
             PhysicalPlan::CopyIntoLocation(copy) => self.build_copy_into_location(copy),
 
-            // Delete.
-            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
-
             // Replace.
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => {
                 self.build_async_sourcer(async_sourcer)
@@ -211,9 +208,6 @@ impl PipelineBuilder {
             PhysicalPlan::ReclusterSink(recluster_sink) => {
                 self.build_recluster_sink(recluster_sink)
             }
-
-            // Update.
-            PhysicalPlan::UpdateSource(update) => self.build_update_source(update),
 
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),

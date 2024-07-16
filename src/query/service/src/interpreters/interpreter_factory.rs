@@ -344,16 +344,6 @@ impl InterpreterFactory {
                 MergeIntoInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
             )),
 
-            Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
-                ctx,
-                *delete.clone(),
-            )?)),
-
-            Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
-                ctx,
-                *update.clone(),
-            )?)),
-
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,

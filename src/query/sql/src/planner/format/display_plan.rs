@@ -12,31 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
-use crate::binder::ColumnBindingBuilder;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
-use crate::plans::BoundColumnRef;
 use crate::plans::CreateTablePlan;
 use crate::plans::DataManipulation;
-use crate::plans::DeletePlan;
-use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
-use crate::plans::Scan;
-use crate::ScalarExpr;
-use crate::Visibility;
 
 impl Plan {
     pub fn format_indent(&self, verbose: bool) -> Result<String> {
@@ -126,8 +111,6 @@ impl Plan {
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
             Plan::MergeInto { s_expr, .. } => format_merge_into(s_expr),
-            Plan::Delete(delete) => format_delete(delete),
-            Plan::Update(_) => Ok("Update".to_string()),
 
             // Stages
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),
@@ -228,66 +211,6 @@ impl Plan {
             Plan::System(_) => Ok("System".to_string()),
         }
     }
-}
-
-fn format_delete(delete: &DeletePlan) -> Result<String> {
-    let table_index = delete
-        .metadata
-        .read()
-        .get_table_index(
-            Some(delete.database_name.as_str()),
-            delete.table_name.as_str(),
-        )
-        .unwrap();
-    let s_expr = if let Some(subquery_desc) = &delete.subquery_desc {
-        let row_id_column_binding = ColumnBindingBuilder::new(
-            ROW_ID_COL_NAME.to_string(),
-            subquery_desc.index,
-            Box::new(DataType::Number(NumberDataType::UInt64)),
-            Visibility::InVisible,
-        )
-        .database_name(Some(delete.database_name.clone()))
-        .table_name(Some(delete.table_name.clone()))
-        .table_index(Some(table_index))
-        .build();
-        SExpr::create_unary(
-            Arc::new(RelOperator::EvalScalar(EvalScalar {
-                items: vec![ScalarItem {
-                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: row_id_column_binding,
-                    }),
-                    index: 0,
-                }],
-            })),
-            Arc::new(subquery_desc.input_expr.clone()),
-        )
-    } else {
-        let scan = RelOperator::Scan(Scan {
-            table_index,
-            columns: Default::default(),
-            push_down_predicates: None,
-            limit: None,
-            order_by: None,
-            prewhere: None,
-            agg_index: None,
-            change_type: None,
-            inverted_index: None,
-            statistics: Default::default(),
-            update_stream_columns: false,
-            is_lazy_table: false,
-        });
-        let scan_expr = SExpr::create_leaf(Arc::new(scan));
-        let mut predicates = vec![];
-        if let Some(selection) = &delete.selection {
-            predicates.push(selection.clone());
-        }
-        let filter = RelOperator::Filter(Filter { predicates });
-        SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
-    };
-    let metadata = &*delete.metadata.read();
-    let res = s_expr.to_format_tree(metadata, false)?.format_pretty()?;
-    Ok(format!("DeletePlan:\n{res}"))
 }
 
 fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {

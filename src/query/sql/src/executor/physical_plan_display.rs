@@ -33,7 +33,6 @@ use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
@@ -57,7 +56,6 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 use crate::plans::CacheSource;
 use crate::plans::JoinType;
@@ -95,7 +93,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::CompactSource(compact) => write!(f, "{}", compact)?,
-            PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
@@ -124,7 +121,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
             PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
@@ -455,12 +451,6 @@ impl Display for CompactSource {
     }
 }
 
-impl Display for DeleteSource {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DeleteSource")
-    }
-}
-
 impl Display for CommitSink {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CommitSink")
@@ -545,12 +535,6 @@ impl Display for ReclusterSource {
 impl Display for ReclusterSink {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ReclusterSink")
-    }
-}
-
-impl Display for UpdateSource {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "UpdateSource")
     }
 }
 

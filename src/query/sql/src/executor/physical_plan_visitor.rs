@@ -38,7 +38,6 @@ use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
@@ -63,7 +62,6 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
 pub trait PhysicalPlanReplacer {
@@ -89,7 +87,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
-            PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
@@ -107,7 +104,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
             PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
-            PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
@@ -437,14 +433,6 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
-    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
-    }
-
-    fn replace_update_source(&mut self, plan: &UpdateSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::UpdateSource(Box::new(plan.clone())))
-    }
-
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
@@ -638,9 +626,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ReclusterSource(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::DeleteSource(_)
-                | PhysicalPlan::AsyncFunction(_)
-                | PhysicalPlan::UpdateSource(_) => {}
+                | PhysicalPlan::AsyncFunction(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

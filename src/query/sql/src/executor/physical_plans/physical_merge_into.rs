@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::u64::MAX;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
@@ -23,11 +25,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
@@ -35,6 +39,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use itertools::Itertools;
 
+use crate::binder::wrap_cast;
 use crate::binder::MergeIntoType;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
@@ -50,11 +55,14 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans;
 use crate::plans::BoundColumnRef;
+use crate::plans::FunctionCall;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
+use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
@@ -348,7 +356,7 @@ impl PhysicalPlanBuilder {
                     None => (Some(database.as_str()), table_name.clone()),
                     Some(alias) => (None, alias.name.to_string().to_lowercase()),
                 };
-                let update_list = plans::generate_update_list(
+                let update_list = generate_update_list(
                     self.ctx.clone(),
                     bind_context,
                     update_list,
@@ -481,4 +489,88 @@ impl PhysicalPlanBuilder {
         );
         Ok(filer.as_remote_expr())
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn generate_update_list(
+    ctx: Arc<dyn TableContext>,
+    bind_context: &BindContext,
+    update_list: &HashMap<FieldIndex, ScalarExpr>,
+    schema: DataSchema,
+    col_indices: Vec<usize>,
+    use_column_name_index: Option<usize>,
+    database: Option<&str>,
+    table: &str,
+) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
+    let column = ColumnBindingBuilder::new(
+        PREDICATE_COLUMN_NAME.to_string(),
+        use_column_name_index.unwrap_or_else(|| schema.num_fields()),
+        Box::new(DataType::Boolean),
+        Visibility::Visible,
+    )
+    .build();
+    let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+
+    update_list.iter().try_fold(
+        Vec::with_capacity(update_list.len()),
+        |mut acc, (index, scalar)| {
+            let field = schema.field(*index);
+            let data_type = scalar.data_type()?;
+            let target_type = field.data_type();
+            let left = if data_type != *target_type {
+                wrap_cast(scalar, target_type)
+            } else {
+                scalar.clone()
+            };
+
+            let scalar = if col_indices.is_empty() {
+                // The condition is always true.
+                // Replace column to the result of the following expression:
+                // CAST(expression, type)
+                left
+            } else {
+                // Replace column to the result of the following expression:
+                // if(condition, CAST(expression, type), column)
+                let mut right = None;
+                for column_binding in bind_context.columns.iter() {
+                    if BindContext::match_column_binding(
+                        database,
+                        Some(table),
+                        field.name(),
+                        column_binding,
+                    ) {
+                        right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: column_binding.clone(),
+                        }));
+                        break;
+                    }
+                }
+
+                let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+                // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
+                // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
+                // see `cast_data_type_for_merge()`.
+
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "if".to_string(),
+                    params: vec![],
+                    arguments: vec![predicate.clone(), left, right],
+                })
+            };
+            let expr = scalar.as_expr()?.project_column_ref(|col| {
+                if use_column_name_index.is_none() {
+                    col.column_name.clone()
+                } else {
+                    col.index.to_string()
+                }
+            });
+            let (expr, _) =
+                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            acc.push((*index, expr.as_remote_expr()));
+            Ok::<_, ErrorCode>(acc)
+        },
+    )
 }

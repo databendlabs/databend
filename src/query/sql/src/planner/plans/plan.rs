@@ -66,7 +66,6 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
-use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -148,7 +147,6 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
-use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
@@ -229,8 +227,6 @@ pub enum Plan {
     Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
-    Delete(Box<DeletePlan>),
-    Update(Box<UpdatePlan>),
     MergeInto {
         s_expr: Box<SExpr>,
         schema: DataSchemaRef,
@@ -419,11 +415,7 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
-            Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::MergeInto { .. }
-            | Plan::OptimizeTable(_)
-            | Plan::Update(_) => QueryKind::Update,
+            Plan::Replace(_) | Plan::MergeInto { .. } | Plan::OptimizeTable(_) => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }

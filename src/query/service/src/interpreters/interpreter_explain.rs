@@ -41,7 +41,6 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use super::UpdateInterpreter;
 use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -231,7 +230,6 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }
-                Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
@@ -371,25 +369,6 @@ impl ExplainInterpreter {
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
-        let line_split_result = display_string.lines().collect::<Vec<_>>();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
-    #[async_backtrace::framed]
-    async fn explain_update_fragments(&self, update: &UpdatePlan) -> Result<Vec<DataBlock>> {
-        let interpreter = UpdateInterpreter::try_create(self.ctx.clone(), update.clone())?;
-        let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
-            let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
-
-            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
-            root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
-
-            let ident = fragments_actions.display_indent(&update.metadata);
-            ident.to_string()
-        } else {
-            "Nothing to update".to_string()
-        };
         let line_split_result = display_string.lines().collect::<Vec<_>>();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])

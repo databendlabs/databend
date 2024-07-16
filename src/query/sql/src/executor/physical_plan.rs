@@ -44,7 +44,6 @@ use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
 use crate::executor::physical_plans::CteScan;
-use crate::executor::physical_plans::DeleteSource;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
@@ -71,7 +70,6 @@ use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
 use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
@@ -107,9 +105,6 @@ pub enum PhysicalPlan {
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
 
-    /// Delete
-    DeleteSource(Box<DeleteSource>),
-
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
     CopyIntoLocation(Box<CopyIntoLocation>),
@@ -134,9 +129,6 @@ pub enum PhysicalPlan {
     /// Recluster
     ReclusterSource(Box<ReclusterSource>),
     ReclusterSink(Box<ReclusterSink>),
-
-    /// Update
-    UpdateSource(Box<UpdateSource>),
 
     /// Multi table insert
     Duplicate(Box<Duplicate>),
@@ -296,10 +288,6 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::DeleteSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
             PhysicalPlan::ReplaceInto(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -351,10 +339,6 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::UpdateSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
             }
             PhysicalPlan::Duplicate(plan) => {
                 plan.plan_id = *next_id;
@@ -432,7 +416,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
-            PhysicalPlan::DeleteSource(v) => v.plan_id,
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
             PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
@@ -446,7 +429,6 @@ impl PhysicalPlan {
             PhysicalPlan::CompactSource(v) => v.plan_id,
             PhysicalPlan::ReclusterSource(v) => v.plan_id,
             PhysicalPlan::ReclusterSink(v) => v.plan_id,
-            PhysicalPlan::UpdateSource(v) => v.plan_id,
             PhysicalPlan::Duplicate(v) => v.plan_id,
             PhysicalPlan::Shuffle(v) => v.plan_id,
             PhysicalPlan::ChunkFilter(v) => v.plan_id,
@@ -499,10 +481,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
-            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::ReclusterSink(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
@@ -542,7 +522,6 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
-            PhysicalPlan::DeleteSource(_) => "DeleteSource".to_string(),
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
@@ -562,7 +541,6 @@ impl PhysicalPlan {
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
             PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
             PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
-            PhysicalPlan::UpdateSource(_) => "UpdateSource".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
@@ -584,12 +562,10 @@ impl PhysicalPlan {
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::AsyncFunction(_)
-            | PhysicalPlan::UpdateSource(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -672,7 +648,6 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
             | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
@@ -689,7 +664,6 @@ impl PhysicalPlan {
             | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_)
-            | PhysicalPlan::UpdateSource(_)
             | PhysicalPlan::Duplicate(_)
             | PhysicalPlan::Shuffle(_)
             | PhysicalPlan::ChunkFilter(_)
