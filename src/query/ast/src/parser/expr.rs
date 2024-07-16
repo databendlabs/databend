@@ -1003,7 +1003,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             #function_name
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ (OVER ~ #window_spec_ident)
+            ~ #window_function
         },
         |(name, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1011,7 +1011,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
-                window: Some(window.1),
+                window: Some(window),
                 lambda: None,
             },
         },

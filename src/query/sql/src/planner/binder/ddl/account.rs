@@ -263,12 +263,19 @@ impl Binder {
             )
             .await?;
 
+        // if `must_change_password` is set, user need to change password first
+        let need_change = user_option
+            .must_change_password()
+            .cloned()
+            .unwrap_or_default();
+
         let plan = CreateUserPlan {
             create_option: create_option.clone().into(),
             user: user.clone().into(),
             auth_info: AuthInfo::create2(
                 &auth_option.auth_type.clone().map(Into::into),
                 &auth_option.password,
+                need_change,
             )?,
             user_option,
             password_update_on: Some(Utc::now()),
@@ -302,9 +309,20 @@ impl Binder {
 
         // None means no change to make
         let new_auth_info = if let Some(auth_option) = &auth_option {
+            // if `must_change_password` is set, user need to change password first,
+            // unless user is changing self password
+            let need_change = if user.is_none() {
+                false
+            } else {
+                user_option
+                    .must_change_password()
+                    .cloned()
+                    .unwrap_or_default()
+            };
             let auth_info = user_info.auth_info.alter2(
                 &auth_option.auth_type.clone().map(Into::into),
                 &auth_option.password,
+                need_change,
             )?;
             // verify the password if changed
             UserApiProvider::instance()

@@ -86,6 +86,7 @@ fn test_decode_v67_password_policy() -> anyhow::Result<()> {
             ]
             .to_vec(),
             hash_method: databend_common_meta_app::principal::PasswordHashMethod::DoubleSha1,
+            need_change: false,
         },
         grants: databend_common_meta_app::principal::UserGrantSet::new(
             vec![databend_common_meta_app::principal::GrantEntry::new(

@@ -24,10 +24,11 @@ use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
+use crate::InputColumns;
 
 /// The serialize_size is equal to the number of bytes required by serialization.
 pub fn serialize_group_columns(
-    columns: &[Column],
+    columns: InputColumns,
     num_rows: usize,
     serialize_size: usize,
 ) -> BinaryColumn {

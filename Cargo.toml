@@ -354,6 +354,7 @@ lto = "thin"
 overflow-checks = false
 incremental = false
 opt-level = "s"
+
 # codegen-units = 1 # Reduce number of codegen units to increase optimizations.
 
 # [profile.release.package]

@@ -62,5 +62,8 @@ anyerror = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
 
+[build-dependencies]
+databend-common-building = { workspace = true }
+
 [lints]
 workspace = true

@@ -49,6 +49,7 @@ use databend_common_meta_app::share::ShareEndpointMeta;
 use databend_common_sharing::ShareEndpointClient;
 use log::error;
 
+use crate::databases::share::dummy_share_database::DummyShareDatabase;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 
@@ -65,6 +66,13 @@ pub struct ShareDatabase {
 impl ShareDatabase {
     pub const NAME: &'static str = "SHARE";
     pub fn try_create(ctx: DatabaseContext, db_info: DatabaseInfo) -> Result<Box<dyn Database>> {
+        // old share db SQL schema is `create database from <share_name>`,
+        // and new share db schema is `create database from <share_name> using <share_endpoint>`
+        // for back compatibility, when `using_share_endpoint` is none, return `DummyShareDatabase` instead,
+        // which cannot do anything.
+        if db_info.meta.using_share_endpoint.is_none() || db_info.meta.from_share_db_id.is_none() {
+            return DummyShareDatabase::try_create(ctx, db_info);
+        }
         debug_assert!(
             db_info.meta.from_share.is_some()
                 && db_info.meta.using_share_endpoint.is_some()

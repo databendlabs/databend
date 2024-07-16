@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::panic::PanicInfo;
 use std::sync::atomic::Ordering;
 
+use backtrace::Backtrace;
+use color_backtrace::BacktracePrinter;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 use log::error;
@@ -43,12 +44,7 @@ fn should_backtrace() -> bool {
 }
 
 pub fn log_panic(panic: &PanicInfo) {
-    let backtrace_str = if should_backtrace() {
-        let backtrace = Backtrace::force_capture();
-        format!("{:?}", backtrace)
-    } else {
-        String::new()
-    };
+    let backtrace_str = backtrace();
 
     eprintln!("{}", panic);
     eprintln!("{}", backtrace_str);
@@ -63,5 +59,20 @@ pub fn log_panic(panic: &PanicInfo) {
         );
     } else {
         error!(backtrace = backtrace_str; "{}", panic);
+    }
+}
+
+pub fn backtrace() -> String {
+    if should_backtrace() {
+        let backtrace = Backtrace::new();
+        let printer = BacktracePrinter::new()
+            .message("")
+            .lib_verbosity(color_backtrace::Verbosity::Full);
+        let colored = printer
+            .format_trace_to_string(&backtrace)
+            .unwrap_or_default();
+        String::from_utf8_lossy(&strip_ansi_escapes::strip(colored)).into_owned()
+    } else {
+        String::new()
     }
 }

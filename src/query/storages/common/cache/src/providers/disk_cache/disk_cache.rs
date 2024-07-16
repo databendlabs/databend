@@ -97,6 +97,18 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         self.cache.capacity()
     }
 
+    pub fn set_capacity(&mut self, capacity: u64) {
+        if capacity <= self.cache.capacity() {
+            info!(
+                "shrinking disk cache capacity: current {}, new capacity {}, ignored",
+                capacity,
+                self.cache.capacity()
+            );
+        } else {
+            self.cache.set_capacity(capacity)
+        }
+    }
+
     /// Return the path in which the cache is stored.
     pub fn path(&self) -> &Path {
         self.root.as_path()

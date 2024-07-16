@@ -759,6 +759,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             }
         }
 
+        #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
                 Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),

@@ -28,8 +28,3 @@ pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_into::SerializedError;
 pub use with_context::ErrorWithContext;
 pub use with_context::WithContext;
-
-#[ctor::ctor]
-fn init_color_backtrace() {
-    color_backtrace::install();
-}

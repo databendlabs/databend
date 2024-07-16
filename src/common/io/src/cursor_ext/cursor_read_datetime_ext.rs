@@ -20,7 +20,9 @@ use chrono::Datelike;
 use chrono::Duration;
 use chrono::FixedOffset;
 use chrono::LocalResult;
+use chrono::MappedLocalTime;
 use chrono::NaiveDate;
+use chrono::NaiveDateTime;
 use chrono::Offset;
 use chrono::TimeZone;
 use chrono_tz::Tz;
@@ -36,8 +38,13 @@ pub enum DateTimeResType {
 }
 
 pub trait BufferReadDateTimeExt {
-    fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate>;
-    fn read_timestamp_text(&mut self, tz: &Tz, only_date_text: bool) -> Result<DateTimeResType>;
+    fn read_date_text(&mut self, tz: &Tz, enable_dst_hour_fix: bool) -> Result<NaiveDate>;
+    fn read_timestamp_text(
+        &mut self,
+        tz: &Tz,
+        only_date_text: bool,
+        enable_dst_hour_fix: bool,
+    ) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
         tz: &Tz,
@@ -65,15 +72,22 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 impl<T> BufferReadDateTimeExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_date_text(&mut self, tz: &Tz) -> Result<NaiveDate> {
+    fn read_date_text(&mut self, tz: &Tz, enable_dst_hour_fix: bool) -> Result<NaiveDate> {
         // TODO support YYYYMMDD format
-        self.read_timestamp_text(tz, true).map(|dt| match dt {
-            DateTimeResType::Datetime(dt) => dt.naive_local().date(),
-            DateTimeResType::Date(nd) => nd,
-        })
+        // Also need to consider enable_dst_hour_fix, to_date('1947-04-15 00:00:00')
+        self.read_timestamp_text(tz, true, enable_dst_hour_fix)
+            .map(|dt| match dt {
+                DateTimeResType::Datetime(dt) => dt.naive_local().date(),
+                DateTimeResType::Date(nd) => nd,
+            })
     }
 
-    fn read_timestamp_text(&mut self, tz: &Tz, only_date_text: bool) -> Result<DateTimeResType> {
+    fn read_timestamp_text(
+        &mut self,
+        tz: &Tz,
+        only_date_text: bool,
+        enable_dst_hour_fix: bool,
+    ) -> Result<DateTimeResType> {
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
@@ -136,11 +150,11 @@ where T: AsRef<[u8]>
             // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
             if times.len() < 3 {
                 times.resize(3, 0);
-                let dt = unwrap_local_time(tz, &d, &mut times)?;
+                let dt = get_local_time(tz, &d, &mut times, enable_dst_hour_fix)?;
                 return Ok(DateTimeResType::Datetime(less_1000(dt)));
             }
 
-            let dt = unwrap_local_time(tz, &d, &mut times)?;
+            let dt = get_local_time(tz, &d, &mut times, enable_dst_hour_fix)?;
 
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
@@ -230,24 +244,33 @@ where T: AsRef<[u8]>
                     ),
                 ))
             } else {
-                match tz.from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap()) {
+                let res = tz.from_local_datetime(&d.and_hms_opt(0, 0, 0).unwrap());
+                match res {
+                    LocalResult::Single(t) => Ok(DateTimeResType::Datetime(t)),
+                    LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
+                        "Ambiguous Local Time: The local time is ambiguous, with possible times ranging from {:?} to {:?}",
+                        t1, t2
+                    ))),
                     LocalResult::None => {
                         // like to_date('1941-03-15') => 1941-03-15 00:00:00 in Asia/Shanghai is not exists
                         // but if just convert to Date, it should can return NaiveDate
                         if only_date_text {
                             Ok(DateTimeResType::Date(d))
                         } else {
+                            // Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
+                            if let Some(naive_datetime) = &d.and_hms_opt(1, 0, 0) {
+                                return Ok(DateTimeResType::Datetime(unwrap_local_time(
+                                    tz,
+                                    enable_dst_hour_fix,
+                                    naive_datetime,
+                                )?));
+                            }
                             Err(ErrorCode::BadBytes(format!(
                                 "Local Time Error: No valid local time found for timezone '{:?}' with date '{}'",
                                 tz, d
                             )))
                         }
                     }
-                    LocalResult::Single(t) => Ok(DateTimeResType::Datetime(t)),
-                    LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
-                        "Ambiguous Local Time: The local time is ambiguous, with possible times ranging from {:?} to {:?}",
-                        t1, t2
-                    ))),
                 }
             }
         }
@@ -371,25 +394,57 @@ where T: AsRef<[u8]>
 // -- if unwrap() will cause session panic.
 // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
 // select to_date(to_timestamp('2021-03-28 01:00:00'));
-fn unwrap_local_time(tz: &Tz, d: &NaiveDate, times: &mut Vec<u32>) -> Result<DateTime<Tz>> {
-    match d.and_hms_opt(times[0], times[1], times[2]) {
-        Some(naive_datetime) => {
-            // Handling different cases for the timezone conversion
-            match tz.from_local_datetime(&naive_datetime) {
-                LocalResult::Single(t) => Ok(t),
-                LocalResult::None => Err(ErrorCode::BadBytes(format!(
-                    "Timezone conversion resulted in no valid time for tz: `{:?}`, date: {:?}, times: {:?}",
-                    tz, d, times
-                ))),
-                LocalResult::Ambiguous(t1, t2) => Err(ErrorCode::BadBytes(format!(
-                    "Ambiguous local time, ranging from {:?} to {:?}",
-                    t1, t2
-                ))),
+// Now add a setting enable_dst_hour_fix to control this behavior. If true, try to add a hour.
+fn get_local_time(
+    tz: &Tz,
+    d: &NaiveDate,
+    times: &mut Vec<u32>,
+    enable_dst_hour_fix: bool,
+) -> Result<DateTime<Tz>> {
+    d.and_hms_opt(times[0], times[1], times[2])
+        .map(|naive_datetime| unwrap_local_time(tz, enable_dst_hour_fix, &naive_datetime))
+        .transpose()?
+        .ok_or_else(|| ErrorCode::BadBytes(format!("Invalid time provided in times: {:?}", times)))
+}
+
+#[inline]
+pub fn unwrap_local_time(
+    tz: &Tz,
+    enable_dst_hour_fix: bool,
+    naive_datetime: &NaiveDateTime,
+) -> Result<DateTime<Tz>> {
+    match tz.from_local_datetime(naive_datetime) {
+        LocalResult::Single(t) => Ok(t),
+        LocalResult::Ambiguous(t1, t2) => {
+            // The local time is _ambiguous_ because there is a _fold_ in the local time.
+            // This variant contains the two possible results, in the order `(earliest, latest)`
+            // e.g.
+            // naive_datetime 1990-09-16T01:00:00 in Aisa/Shanghai
+            // t1.offset.fix = +09:00, t2.offset.fix = +08:00
+            // t1: 1990-09-16T01:00:00CDT, t2: 1990-09-16T01:00:00CST
+            // So if enable_dst_hour_fix = true return t1.
+            if enable_dst_hour_fix {
+                return Ok(t1);
             }
+            Ok(t2)
         }
-        None => Err(ErrorCode::BadBytes(format!(
-            "Invalid time provided in times: {:?}",
-            times
-        ))),
+        LocalResult::None => {
+            if enable_dst_hour_fix {
+                if let Some(res2) = naive_datetime.checked_add_signed(Duration::seconds(3600)) {
+                    return match tz.from_local_datetime(&res2) {
+                        MappedLocalTime::Single(t) => Ok(t),
+                        MappedLocalTime::Ambiguous(t1, _) => Ok(t1),
+                        MappedLocalTime::None => Err(ErrorCode::BadArguments(format!(
+                            "Local Time Error: The local time {}, {} can not map to a single unique result with timezone {}",
+                            naive_datetime, res2, tz
+                        ))),
+                    };
+                }
+            }
+            Err(ErrorCode::BadArguments(format!(
+                "The time {} can not map to a single unique result with timezone {}",
+                naive_datetime, tz
+            )))
+        }
     }
 }

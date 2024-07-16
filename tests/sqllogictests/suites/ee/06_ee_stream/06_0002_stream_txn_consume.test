@@ -54,29 +54,89 @@ select a from s_append_only;
 2
 3
 
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_append_only');
+----
+1
+
 statement ok
 BEGIN;
 
 statement ok
 INSERT INTO t_append_only VALUES(4), (5);
 
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_append_only');
+----
+2
+
 statement ok
 INSERT INTO t_consume_append_only_1 SELECT a FROM s_append_only;
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_1');
+----
+1
 
 statement ok
 INSERT INTO t_consume_append_only_2 SELECT a FROM s_append_only;
 
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_2');
+----
+1
+
 statement ok
 INSERT INTO t_append_only VALUES(6), (7);
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_append_only');
+----
+2
 
 statement ok
 INSERT INTO t_consume_append_only_3 SELECT a FROM s_append_only;
 
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_3');
+----
+1
+
 statement ok
 INSERT INTO t_consume_append_only_4 SELECT a FROM s_append_only_1;
 
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_4');
+----
+1
+
 statement ok
 COMMIT;
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_append_only');
+----
+2
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_1');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_2');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_3');
+----
+1
+
+query I
+select count(*) from fuse_snapshot('test_txn_stream','t_consume_append_only_4');
+----
+1
 
 statement ok
 INSERT INTO t_consume_append_only_5 SELECT a FROM s_append_only;
@@ -473,4 +533,3 @@ select str from target_2 order by str;
 
 statement ok
 drop database test_txn_stream;
-

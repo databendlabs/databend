@@ -55,6 +55,7 @@ fn test_user_info() -> mt::principal::UserInfo {
             ]
             .to_vec(),
             hash_method: mt::principal::PasswordHashMethod::DoubleSha1,
+            need_change: false,
         },
         grants: mt::principal::UserGrantSet::new(
             vec![mt::principal::GrantEntry::new(

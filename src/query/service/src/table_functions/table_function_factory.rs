@@ -22,6 +22,8 @@ use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseColumnTable;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
+use databend_common_storages_fuse::table_functions::SetCacheCapacity;
+use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
@@ -123,7 +125,18 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_amend".to_string(),
-            (next_id(), Arc::new(FuseAmendTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseAmendTable>::create),
+            ),
+        );
+
+        creators.insert(
+            "set_cache_capacity".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+            ),
         );
 
         creators.insert(
