@@ -26,10 +26,12 @@ use databend_common_sql::executor::physical_plans::DeleteSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
+use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 
 use crate::pipelines::processors::TransformAddStreamColumns;
@@ -135,12 +137,18 @@ impl PipelineBuilder {
 
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
         if is_lazy {
-            table.chain_mutation_aggregator(
-                &ctx,
-                &mut self.main_pipeline,
-                delete.snapshot.clone(),
-                MutationKind::Delete,
-            )?;
+            self.main_pipeline.try_resize(1)?;
+            self.main_pipeline.add_async_accumulating_transformer(|| {
+                TableMutationAggregator::create(
+                    table,
+                    ctx.clone(),
+                    delete.snapshot.segments.clone(),
+                    vec![],
+                    vec![],
+                    Statistics::default(),
+                    MutationKind::Delete,
+                )
+            });
         }
         Ok(())
     }

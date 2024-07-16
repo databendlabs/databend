@@ -26,7 +26,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
@@ -204,10 +204,10 @@ impl PhysicalPlanReplacer for Fragmenter {
         }
     }
 
-    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
+    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
         self.state = State::Recluster;
 
-        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
+        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
     }
 
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {

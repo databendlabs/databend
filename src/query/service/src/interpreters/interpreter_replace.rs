@@ -45,6 +45,7 @@ use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::RwLock;
 
@@ -358,6 +359,9 @@ impl ReplaceInterpreter {
             merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            merged_blocks: vec![],
+            removed_segment_indexes: vec![],
+            removed_statistics: Statistics::default(),
         })));
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))

@@ -54,7 +54,10 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 3 0 0 1 1
 
 statement ok
-insert into t values(5),(6)
+insert into t values(5)
+
+statement ok
+insert into t values(6)
 
 statement ok
 alter table t recluster
@@ -66,7 +69,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 2 0 0 1 0
 3 0 0 1 1
 5 0 0 0 0
-6 0 0 1 0
+6 0 0 0 0
 
 statement error 1065
 select change$is_update from t

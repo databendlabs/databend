@@ -20,11 +20,14 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use sha2::Digest;
 
+use crate::plan::PartStatistics;
 use crate::table_context::TableContext;
 
 /// Partition information.
@@ -284,5 +287,64 @@ impl StealablePartitions {
 
         drop(partitions);
         self.ctx.get_partitions(max_size)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReclusterTask {
+    pub parts: Partitions,
+    pub stats: PartStatistics,
+    pub total_rows: usize,
+    pub total_bytes: usize,
+    pub level: i32,
+}
+
+#[derive(Clone)]
+pub enum ReclusterParts {
+    Recluster {
+        tasks: Vec<ReclusterTask>,
+        remained_blocks: Vec<Arc<BlockMeta>>,
+        removed_segment_indexes: Vec<usize>,
+        removed_segment_summary: Statistics,
+    },
+    Compact(Partitions),
+}
+
+impl ReclusterParts {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ReclusterParts::Recluster {
+                tasks,
+                remained_blocks,
+                ..
+            } => tasks.is_empty() && remained_blocks.is_empty(),
+            ReclusterParts::Compact(parts) => parts.is_empty(),
+        }
+    }
+
+    pub fn new_recluster_parts() -> Self {
+        Self::Recluster {
+            tasks: vec![],
+            remained_blocks: vec![],
+            removed_segment_indexes: vec![],
+            removed_segment_summary: Statistics::default(),
+        }
+    }
+
+    pub fn new_compact_parts() -> Self {
+        Self::Compact(Partitions::default())
+    }
+
+    pub fn is_distributed(&self, ctx: Arc<dyn TableContext>) -> bool {
+        match self {
+            ReclusterParts::Recluster { tasks, .. } => tasks.len() > 1,
+            ReclusterParts::Compact(_) => {
+                (!ctx.get_cluster().is_empty())
+                    && ctx
+                        .get_settings()
+                        .get_enable_distributed_compact()
+                        .unwrap_or(false)
+            }
+        }
     }
 }
