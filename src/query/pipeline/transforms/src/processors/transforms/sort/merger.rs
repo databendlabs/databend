@@ -169,43 +169,36 @@ where
         let start = cursor.row_index;
 
         let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
-        let count = if self.sorted_cursors.len() == 1 {
-            (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows)
+        let (count, next_cursor) = if self.sorted_cursors.len() == 1 {
+            let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+            (count, None)
         } else if !A::SHOULD_PEEK_TOP2 {
             debug_assert!(!cursor.is_finished());
             let limit = cursor
                 .num_rows()
-                .min(start + max_rows - self.temp_sorted_num_rows);
+                .min(cursor.row_index + max_rows - self.temp_sorted_num_rows);
             let mut p = cursor.cursor_mut();
             p.advance();
             let previous = &cursor.current();
-            while p.row_index < limit && &p.current() == previous {
+            while p.row_index < limit && p.current().eq(previous) {
                 p.advance();
             }
-            p.row_index - start
+            (p.row_index - cursor.row_index, None)
         } else {
             let next_cursor = &self.sorted_cursors.peek_top2().0;
-            if cursor.last() <= next_cursor.current() {
+            if cursor.last().le(&next_cursor.current()) {
                 // Short Path:
                 // If the last row of current block is smaller than the next cursor,
                 // we can drain the whole block.
-                (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows)
+                let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+                (count, None)
             } else {
-                let mut cursor = cursor.cursor_mut();
-                let mut temp_sorted_num_rows = self.temp_sorted_num_rows;
-                let next = &next_cursor.current();
-                while !cursor.is_finished()
-                    && &cursor.current() <= next
-                    && temp_sorted_num_rows < max_rows
-                {
-                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
-                    temp_sorted_num_rows += 1;
-                    cursor.advance();
-                }
-                cursor.row_index - start
+                (0, Some(next_cursor))
             }
         };
 
+        let cursor_finished = match (count, next_cursor) {
+            (count, None) => {
         self.temp_sorted_num_rows += count;
         self.push_output_indices((input_index, start, count));
 
@@ -215,10 +208,41 @@ where
         let cursor = &mut peek_mut.0;
         cursor.row_index += count;
 
-        if cursor.is_finished() {
+                let cursor_finished = cursor.is_finished();
+                if cursor_finished {
             // Pop the current `cursor`.
             A::pop_mut(peek_mut);
+                }
+                cursor_finished
+            }
+            (0, Some(next_cursor)) => {
+                let mut cursor = cursor.cursor_mut();
+                while !cursor.is_finished()
+                    && cursor.le(next_cursor)
+                    && self.temp_sorted_num_rows < max_rows
+                {
+                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
+                    self.temp_sorted_num_rows += 1;
+                    cursor.advance();
+                }
 
+                let cursor_finished = cursor.is_finished();
+                let row_index = cursor.row_index;
+
+                self.push_output_indices((input_index, start, row_index - start));
+
+                if cursor_finished {
+                    // Pop the current `cursor`.
+                    self.sorted_cursors.pop();
+                } else {
+                    self.sorted_cursors.peek_mut().0.row_index = row_index;
+                }
+                cursor_finished
+            }
+            _ => unreachable!(),
+        };
+
+        if cursor_finished {
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
