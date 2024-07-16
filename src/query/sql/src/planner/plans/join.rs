@@ -718,8 +718,7 @@ fn evaluate_by_histogram(
                     } else {
                         right_bucket_max - right_bucket_min + 1.0
                     };
-                    let percentage =
-                        numerator / (left_bucket_max - left_bucket_min);
+                    let percentage = numerator / (left_bucket_max - left_bucket_min);
 
                     let left_ndv = left_ndv * percentage;
                     let left_num_rows = left_num_rows * percentage;
@@ -738,8 +737,7 @@ fn evaluate_by_histogram(
                     } else {
                         left_bucket_max - left_bucket_min + 1.0
                     };
-                    let percentage =
-                        numerator / (right_bucket_max - right_bucket_min);
+                    let percentage = numerator / (right_bucket_max - right_bucket_min);
 
                     let right_ndv = right_ndv * percentage;
                     let right_num_rows = right_num_rows * percentage;
@@ -758,10 +756,8 @@ fn evaluate_by_histogram(
                     } else {
                         left_bucket_max - right_bucket_min + 1.0
                     };
-                    let left_percentage =
-                        numerator / (left_bucket_max - left_bucket_min);
-                    let right_percentage = numerator
-                        / (right_bucket_max - right_bucket_min);
+                    let left_percentage = numerator / (left_bucket_max - left_bucket_min);
+                    let right_percentage = numerator / (right_bucket_max - right_bucket_min);
 
                     let left_ndv = left_ndv * left_percentage;
                     let left_num_rows = left_num_rows * left_percentage;
@@ -782,10 +778,8 @@ fn evaluate_by_histogram(
                     } else {
                         right_bucket_max - left_bucket_min + 1.0
                     };
-                    let left_percentage =
-                        numerator / (left_bucket_max - left_bucket_min);
-                    let right_percentage = numerator
-                        / (right_bucket_max - right_bucket_min);
+                    let left_percentage = numerator / (left_bucket_max - left_bucket_min);
+                    let right_percentage = numerator / (right_bucket_max - right_bucket_min);
 
                     let left_ndv = left_ndv * left_percentage;
                     let left_num_rows = left_num_rows * left_percentage;
