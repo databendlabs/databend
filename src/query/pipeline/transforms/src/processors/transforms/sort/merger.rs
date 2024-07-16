@@ -199,19 +199,19 @@ where
 
         let cursor_finished = match (count, next_cursor) {
             (count, None) => {
-        self.temp_sorted_num_rows += count;
-        self.push_output_indices((input_index, start, count));
+                self.temp_sorted_num_rows += count;
+                self.push_output_indices((input_index, start, count));
 
-        // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
-        // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-        let mut peek_mut = self.sorted_cursors.peek_mut();
-        let cursor = &mut peek_mut.0;
-        cursor.row_index += count;
+                // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
+                // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+                let mut peek_mut = self.sorted_cursors.peek_mut();
+                let cursor = &mut peek_mut.0;
+                cursor.row_index += count;
 
                 let cursor_finished = cursor.is_finished();
                 if cursor_finished {
-            // Pop the current `cursor`.
-            A::pop_mut(peek_mut);
+                    // Pop the current `cursor`.
+                    A::pop_mut(peek_mut);
                 }
                 cursor_finished
             }
