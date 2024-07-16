@@ -14,6 +14,7 @@
 
 mod aggregate;
 mod bind_context;
+mod bind_data_manipulation;
 mod bind_query;
 mod bind_table_reference;
 #[allow(clippy::module_inception)]
@@ -25,7 +26,6 @@ mod column_binding;
 mod copy_into_location;
 mod copy_into_table;
 mod ddl;
-mod delete;
 mod distinct;
 mod explain;
 mod expr_values;
@@ -35,7 +35,6 @@ mod insert_multi_table;
 mod internal_column_factory;
 mod kill;
 mod location;
-mod merge_into;
 mod presign;
 mod project;
 mod project_set;
@@ -53,12 +52,14 @@ mod system;
 mod table;
 mod table_args;
 mod udf;
-mod update;
 mod util;
 mod window;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
+pub use bind_data_manipulation::target_table_position;
+pub use bind_data_manipulation::DataManipulationInputType;
+pub use bind_data_manipulation::MergeIntoType;
 pub use bind_query::bind_values;
 pub use bind_table_reference::parse_result_scan_args;
 pub use binder::Binder;
@@ -72,8 +73,6 @@ pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;
 pub use location::parse_storage_params_from_uri;
 pub use location::parse_uri_location;
-pub use merge_into::target_table_position;
-pub use merge_into::MergeIntoType;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;

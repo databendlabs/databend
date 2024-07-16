@@ -1,0 +1,105 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use databend_common_ast::ast::MatchOperation;
+use databend_common_ast::ast::MatchedClause;
+use databend_common_ast::ast::MergeUpdateExpr;
+use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UpdateStmt;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+
+use crate::binder::bind_data_manipulation::bind::DataManipulation;
+use crate::binder::bind_data_manipulation::bind::MergeIntoType;
+use crate::binder::bind_data_manipulation::bind::TargetTableInfo;
+use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::Binder;
+use crate::plans::Plan;
+use crate::BindContext;
+
+impl Binder {
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_update(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &UpdateStmt,
+    ) -> Result<Plan> {
+        let UpdateStmt {
+            table,
+            update_list,
+            selection,
+            with,
+            ..
+        } = stmt;
+
+        self.init_cte(bind_context, with)?;
+
+        let fully_table = if let TableReference::Table {
+            catalog,
+            database,
+            table,
+            ..
+        } = table
+        {
+            self.fully_table_identifier(catalog, database, table)
+        } else {
+            // we do not support USING clause yet
+            return Err(ErrorCode::Internal(
+                "should not happen, parser should have report error already",
+            ));
+        };
+        let (catalog_name, database_name, table_name) = (
+            fully_table.catalog_name(),
+            fully_table.database_name(),
+            fully_table.table_name(),
+        );
+
+        let update_exprs = update_list
+            .iter()
+            .map(|update_expr| MergeUpdateExpr {
+                table: None,
+                name: update_expr.name.clone(),
+                expr: update_expr.expr.clone(),
+            })
+            .collect::<Vec<_>>();
+        let matched_clause = MatchedClause {
+            selection: None,
+            operation: MatchOperation::Update {
+                update_list: update_exprs,
+                is_star: false,
+            },
+        };
+
+        // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
+
+        let data_manipulation = DataManipulation {
+            target_table: TargetTableInfo {
+                catalog_name,
+                database_name,
+                table_name,
+                table_alias: None,
+            },
+            input: DataManipulationInput::Update {
+                target: table.clone(),
+                filter: selection.clone(),
+            },
+            manipulate_type: MergeIntoType::MatchedOnly,
+            matched_clauses: vec![matched_clause],
+            unmatched_clauses: vec![],
+        };
+
+        self.bind_data_manipulation(bind_context, data_manipulation)
+            .await
+    }
+}

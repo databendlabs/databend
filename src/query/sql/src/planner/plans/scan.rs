@@ -101,6 +101,8 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
     pub inverted_index: Option<InvertedIndexInfo>,
+    // Lazy row fetch.
+    pub is_lazy_table: bool,
 
     pub statistics: Arc<Statistics>,
 }
@@ -130,6 +132,7 @@ impl Scan {
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
+            is_lazy_table: self.is_lazy_table,
         }
     }
 

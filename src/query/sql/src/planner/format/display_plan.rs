@@ -23,15 +23,14 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use itertools::Itertools;
 
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::MergeIntoType;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CreateTablePlan;
+use crate::plans::DataManipulation;
 use crate::plans::DeletePlan;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
-use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
@@ -276,6 +275,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             inverted_index: None,
             statistics: Default::default(),
             update_stream_columns: false,
+            is_lazy_table: false,
         });
         let scan_expr = SExpr::create_leaf(Arc::new(scan));
         let mut predicates = vec![];
@@ -310,7 +310,7 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
 }
 
 fn format_merge_into(s_expr: &SExpr) -> Result<String> {
-    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
+    let merge_into: DataManipulation = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
         .meta_data
@@ -329,8 +329,7 @@ fn format_merge_into(s_expr: &SExpr) -> Result<String> {
         table_entry.name(),
     );
 
-    let target_build_optimization = matches!(merge_into.merge_type, MergeIntoType::FullOperation)
-        && !merge_into.columns_set.contains(&merge_into.row_id_index);
+    let target_build_optimization = false;
     let target_build_optimization_format = FormatTreeNode::new(format!(
         "target_build_optimization: {}",
         target_build_optimization

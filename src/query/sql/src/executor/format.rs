@@ -476,7 +476,7 @@ fn format_merge_into(
         ));
     };
     Ok(FormatTreeNode::with_children(
-        "MergeInto".to_string(),
+        "DataManipulation".to_string(),
         children,
     ))
 }

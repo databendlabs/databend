@@ -128,7 +128,9 @@ impl PhysicalPlanBuilder {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
-            RelOperator::MergeInto(merge_into) => self.build_merge_into(s_expr, merge_into).await,
+            RelOperator::DataManipulation(merge_into) => {
+                self.build_merge_into(s_expr, merge_into, required).await
+            }
         }
     }
 

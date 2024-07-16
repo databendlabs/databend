@@ -74,7 +74,7 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let merge_into: databend_common_sql::plans::MergeInto =
+        let merge_into: databend_common_sql::plans::DataManipulation =
             self.s_expr.plan().clone().try_into()?;
 
         // Build physical plan.
@@ -118,7 +118,7 @@ impl Interpreter for MergeIntoInterpreter {
 impl MergeIntoInterpreter {
     pub async fn build_physical_plan(
         &self,
-        merge_into: &databend_common_sql::plans::MergeInto,
+        merge_into: &databend_common_sql::plans::DataManipulation,
     ) -> Result<PhysicalPlan> {
         let table = self
             .ctx
@@ -155,7 +155,7 @@ impl MergeIntoInterpreter {
             PhysicalPlanBuilder::new(merge_into.meta_data.clone(), self.ctx.clone(), false);
         builder.set_merge_into_build_info(merge_into_build_info);
         let physical_plan = builder
-            .build(&self.s_expr, *merge_into.columns_set.clone())
+            .build(&self.s_expr, *merge_into.required_columns.clone())
             .await?;
 
         Ok(physical_plan)

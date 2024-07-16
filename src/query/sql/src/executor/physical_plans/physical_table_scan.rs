@@ -119,6 +119,14 @@ impl PhysicalPlanBuilder {
             let columns = scan.columns.clone();
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
+            if scan.is_lazy_table {
+                let lazy_columns = columns.difference(&used).cloned().collect();
+                let mut metadata = self.metadata.write();
+                metadata.set_table_lazy_columns(scan.table_index, lazy_columns);
+                for column_index in used.iter() {
+                    metadata.add_retained_column(*column_index);
+                }
+            }
             if let Some(ref mut pw) = prewhere {
                 debug_assert!(
                     pw.prewhere_columns.is_subset(&columns),

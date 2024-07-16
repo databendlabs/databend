@@ -101,12 +101,12 @@ impl PhysicalPlanBuilder {
     pub async fn build_merge_into(
         &mut self,
         s_expr: &SExpr,
-        merge_into: &crate::plans::MergeInto,
+        merge_into: &crate::plans::DataManipulation,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let crate::plans::MergeInto {
+        let crate::plans::DataManipulation {
             bind_context,
             meta_data,
-            columns_set,
             catalog,
             database,
             table: table_name,
@@ -120,43 +120,13 @@ impl PhysicalPlanBuilder {
             row_id_index,
             change_join_order,
             can_try_update_column_only,
-            lazy_columns,
             ..
         } = merge_into;
 
         let settings = self.ctx.get_settings();
-        let mut lazy_columns = if matches!(
-            merge_type,
-            MergeIntoType::MatchedOnly | MergeIntoType::FullOperation
-        ) && settings.get_enable_merge_into_row_fetch()?
-        {
-            let mut lazy_columns = lazy_columns.clone();
-            lazy_columns.remove(row_id_index);
-            self.metadata.write().add_lazy_columns(lazy_columns.clone());
-            Some(lazy_columns)
-        } else if matches!(merge_type, MergeIntoType::InsertOnly) {
-            let mut lazy_columns = lazy_columns.clone();
-            lazy_columns.insert(*row_id_index);
-            Some(lazy_columns)
-        } else {
-            None
-        };
-
-        let mut columns_set = if let Some(lazy_columns) = &lazy_columns {
-            columns_set
-                .difference(lazy_columns)
-                .cloned()
-                .collect::<ColumnSet>()
-        } else {
-            *columns_set.clone()
-        };
-
-        if matches!(merge_type, MergeIntoType::InsertOnly) {
-            lazy_columns = None;
-        }
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
-        let mut plan = builder.build(s_expr.child(0)?, columns_set.clone()).await?;
+        let mut plan = builder.build(s_expr.child(0)?, required).await?;
 
         let join_output_schema = plan.output_schema()?;
         let is_insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
@@ -167,7 +137,6 @@ impl PhysicalPlanBuilder {
         }
 
         let row_id_offset = if !is_insert_only {
-            columns_set.insert(*row_id_index);
             join_output_schema.index_of(&row_id_index.to_string())?
         } else {
             DUMMY_COLUMN_INDEX
@@ -257,6 +226,10 @@ impl PhysicalPlanBuilder {
             }));
         }
 
+        let lazy_columns = self
+            .metadata
+            .read()
+            .get_table_lazy_columns(target_table_index);
         if let Some(lazy_columns) = lazy_columns {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
@@ -287,7 +260,7 @@ impl PhysicalPlanBuilder {
                 .collect();
 
             let source = plan.try_find_data_source(*target_table_index);
-            debug_assert!(source.is_some());
+            assert!(source.is_some());
             let source_info = source.cloned().unwrap();
             let table_schema = source_info.source_info.schema();
             let cols_to_fetch = PhysicalPlanBuilder::build_projection(

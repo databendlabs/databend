@@ -26,9 +26,9 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
-use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::LockGuard;
 
+use crate::binder::DataManipulationInputType;
 use crate::binder::MergeIntoType;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
@@ -61,15 +61,15 @@ pub struct MatchedEvaluator {
 }
 
 #[derive(Clone)]
-pub struct MergeInto {
+pub struct DataManipulation {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub target_alias: Option<TableAlias>,
-    pub table_id: MetaId,
     pub bind_context: Box<BindContext>,
-    pub columns_set: Box<HashSet<IndexType>>,
+    pub required_columns: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
+    pub input_type: DataManipulationInputType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
@@ -86,17 +86,15 @@ pub struct MergeInto {
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
-    pub lazy_columns: HashSet<usize>,
     pub lock_guard: Option<Arc<LockGuard>>,
 }
 
-impl std::fmt::Debug for MergeInto {
+impl std::fmt::Debug for DataManipulation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
-            .field("table_id", &self.table_id)
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
@@ -112,7 +110,7 @@ pub const INSERT_NAME: &str = "number of rows inserted";
 pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
-impl MergeInto {
+impl DataManipulation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
@@ -174,14 +172,13 @@ impl MergeInto {
     }
 }
 
-impl Eq for MergeInto {}
+impl Eq for DataManipulation {}
 
-impl PartialEq for MergeInto {
+impl PartialEq for DataManipulation {
     fn eq(&self, other: &Self) -> bool {
         self.catalog == other.catalog
             && self.database == other.database
             && self.table == other.table
-            && self.table_id == other.table_id
             && self.matched_evaluators == other.matched_evaluators
             && self.unmatched_evaluators == other.unmatched_evaluators
             && self.distributed == other.distributed
@@ -189,13 +186,13 @@ impl PartialEq for MergeInto {
     }
 }
 
-impl std::hash::Hash for MergeInto {
+impl std::hash::Hash for DataManipulation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.row_id_index.hash(state);
     }
 }
 
-impl Operator for MergeInto {
+impl Operator for DataManipulation {
     fn rel_op(&self) -> RelOp {
         RelOp::MergeInto
     }

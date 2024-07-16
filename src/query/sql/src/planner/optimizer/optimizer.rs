@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use databend_common_ast::ast::ExplainKind;
-use databend_common_catalog::merge_into_join::MergeIntoJoin;
-use databend_common_catalog::merge_into_join::MergeIntoJoinType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,7 +26,7 @@ use super::distributed::MergeOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::target_table_position;
-use crate::binder::MergeIntoType;
+use crate::binder::DataManipulationInputType;
 use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
@@ -46,9 +44,9 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::DataManipulation;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::InsertInputSource;
@@ -430,7 +428,6 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 }
 
 async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
-    let mut plan: MergeInto = s_expr.plan().clone().try_into()?;
     let enable_distributed_merge_into = opt_ctx
         .table_ctx
         .get_settings()
@@ -438,78 +435,47 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     if opt_ctx.enable_distributed_optimization {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
+
+    let mut plan: DataManipulation = s_expr.plan().clone().try_into()?;
     let original_target_table_position =
         target_table_position(s_expr.child(0)?, plan.target_table_index)?;
-    let mut join_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
-    if let &RelOperator::Exchange(_) = join_s_expr.plan() {
-        join_s_expr = join_s_expr.child(0)?.clone();
+    let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
+    dbg!("input_s_expr = {:?}", &input_s_expr);
+    if let &RelOperator::Exchange(_) = input_s_expr.plan() {
+        input_s_expr = input_s_expr.child(0)?.clone();
     }
-    let new_target_table_position = target_table_position(&join_s_expr, plan.target_table_index)?;
-    let join_order_changed = original_target_table_position != new_target_table_position;
-    let join_op = Join::try_from(join_s_expr.plan().clone())?;
+    let new_target_table_position = target_table_position(&input_s_expr, plan.target_table_index)?;
 
-    // we just support left join to use MergeIntoBlockInfoHashTable, we
-    // don't support spill for now, and we need the matched clauses' count
-    // is one, just support `merge into t using source when matched then
-    // update xx when not matched then insert xx`.
-    let flag = plan.matched_evaluators.len() == 1
-        && plan.matched_evaluators[0].condition.is_none()
-        && plan.matched_evaluators[0].update.is_some()
-        && !opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_enable_distributed_merge_into()?;
-    let new_columns_set = plan.columns_set.clone();
-    if join_order_changed
-        && matches!(plan.merge_type, MergeIntoType::FullOperation)
-        && opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_join_spilling_memory_ratio()?
-            == 0
-        && flag
-    {
-        // due to issue https://github.com/datafuselabs/databend/issues/15643,
-        // target build optimization of merge-into is disabled: here row_id column should be kept
+    plan.change_join_order = original_target_table_position != new_target_table_position;
+    plan.distributed =
+        opt_ctx.enable_distributed_optimization && !input_s_expr.has_merge_exchange();
 
-        // new_columns_set.remove(&plan.row_id_index);
-        opt_ctx.table_ctx.set_merge_into_join(MergeIntoJoin {
-            merge_into_join_type: MergeIntoJoinType::Left,
-            is_distributed: false,
-            target_tbl_idx: plan.target_table_index,
-        })
-    }
+    let input_s_expr = match plan.input_type {
+        DataManipulationInputType::Merge => {
+            if plan.distributed {
+                let join_op = Join::try_from(input_s_expr.plan().clone())?;
+                let merge_optimizer = MergeOptimizer::create();
+                // Left join changes to shuffle.
+                if matches!(join_op.join_type, JoinType::Left | JoinType::LeftAnti)
+                    && merge_optimizer.merge_matcher.matches(&input_s_expr)
+                {
+                    merge_optimizer.optimize(&input_s_expr)?
+                } else {
+                    input_s_expr
+                }
+            } else {
+                input_s_expr
+            }
+        }
+        DataManipulationInputType::Update | DataManipulationInputType::Delete => input_s_expr,
+    };
 
-    plan.change_join_order = join_order_changed;
-    let distributed = !join_s_expr.has_merge_exchange();
-    if opt_ctx.enable_distributed_optimization && distributed {
-        let merge_optimizer = MergeOptimizer::create();
-        // Left join changes to shuffle.
-        if matches!(join_op.join_type, JoinType::Left | JoinType::LeftAnti)
-            && merge_optimizer.merge_matcher.matches(&join_s_expr)
-        {
-            join_s_expr = merge_optimizer.optimize(&join_s_expr)?;
-        };
-
-        plan.distributed = true;
-        plan.columns_set = new_columns_set;
-        Ok(Plan::MergeInto {
-            schema: plan.schema(),
-            s_expr: Box::new(SExpr::create_unary(
-                Arc::new(RelOperator::MergeInto(plan)),
-                Arc::new(join_s_expr),
-            )),
-            metadata: opt_ctx.metadata.clone(),
-        })
-    } else {
-        plan.columns_set = new_columns_set;
-        Ok(Plan::MergeInto {
-            schema: plan.schema(),
-            s_expr: Box::new(SExpr::create_unary(
-                Arc::new(RelOperator::MergeInto(plan)),
-                Arc::new(join_s_expr),
-            )),
-            metadata: opt_ctx.metadata.clone(),
-        })
-    }
+    Ok(Plan::MergeInto {
+        schema: plan.schema(),
+        s_expr: Box::new(SExpr::create_unary(
+            Arc::new(RelOperator::DataManipulation(plan)),
+            Arc::new(input_s_expr),
+        )),
+        metadata: opt_ctx.metadata.clone(),
+    })
 }

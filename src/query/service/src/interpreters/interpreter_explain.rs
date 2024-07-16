@@ -30,8 +30,8 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
+use databend_common_sql::plans::DataManipulation;
 use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::MergeInto;
 use databend_common_sql::plans::UpdatePlan;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
@@ -137,7 +137,7 @@ impl Interpreter for ExplainInterpreter {
                     schema,
                     metadata,
                 } => {
-                    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
+                    let merge_into: DataManipulation = s_expr.plan().clone().try_into()?;
                     let interpreter = MergeIntoInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
@@ -184,11 +184,11 @@ impl Interpreter for ExplainInterpreter {
                     .await?
                 }
                 Plan::MergeInto { s_expr, .. } => {
-                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
+                    let plan: DataManipulation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.meta_data,
-                        *plan.columns_set.clone(),
+                        *plan.required_columns.clone(),
                         true,
                     )
                     .await?
@@ -549,6 +549,7 @@ impl ExplainInterpreter {
                 inverted_index: None,
                 statistics: Default::default(),
                 update_stream_columns: false,
+                is_lazy_table: false,
             });
             let scan_expr = SExpr::create_leaf(Arc::new(scan));
             let filter = RelOperator::Filter(Filter {
@@ -584,7 +585,8 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let merge_into: databend_common_sql::plans::MergeInto = s_expr.plan().clone().try_into()?;
+        let merge_into: databend_common_sql::plans::DataManipulation =
+            s_expr.plan().clone().try_into()?;
         let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
         let plan = interpreter.build_physical_plan(&merge_into).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;

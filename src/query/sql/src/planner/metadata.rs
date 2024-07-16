@@ -58,6 +58,9 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
+    /// Table column indexes that are lazy materialized.
+    table_lazy_columns: HashMap<IndexType, ColumnSet>,
+    retained_columns: HashSet<IndexType>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
     /// Columns that are used for compute lazy materialized.
@@ -121,6 +124,22 @@ impl Metadata {
 
     pub fn columns(&self) -> &[ColumnEntry] {
         self.columns.as_slice()
+    }
+
+    pub fn add_retained_column(&mut self, index: IndexType) {
+        self.retained_columns.insert(index);
+    }
+
+    pub fn get_retained_column(&self) -> &HashSet<IndexType> {
+        &self.retained_columns
+    }
+
+    pub fn set_table_lazy_columns(&mut self, table_index: IndexType, lazy_columns: ColumnSet) {
+        self.table_lazy_columns.insert(table_index, lazy_columns);
+    }
+
+    pub fn get_table_lazy_columns(&self, table_index: &IndexType) -> Option<ColumnSet> {
+        self.table_lazy_columns.get(table_index).cloned()
     }
 
     pub fn is_lazy_column(&self, index: usize) -> bool {
