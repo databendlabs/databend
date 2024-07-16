@@ -293,7 +293,7 @@ impl Binder {
             Arc::new(input),
         );
 
-        Ok(Plan::MergeInto {
+        Ok(Plan::DataManipulation {
             s_expr: Box::new(s_expr),
             schema,
             metadata: self.metadata.clone(),

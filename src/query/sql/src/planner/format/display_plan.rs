@@ -110,7 +110,7 @@ impl Plan {
             Plan::Insert(_) => Ok("Insert".to_string()),
             Plan::InsertMultiTable(_) => Ok("InsertMultiTable".to_string()),
             Plan::Replace(_) => Ok("Replace".to_string()),
-            Plan::MergeInto { s_expr, .. } => format_merge_into(s_expr),
+            Plan::DataManipulation { s_expr, .. } => format_merge_into(s_expr),
 
             // Stages
             Plan::CreateStage(_) => Ok("CreateStage".to_string()),

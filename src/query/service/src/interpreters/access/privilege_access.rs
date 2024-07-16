@@ -959,7 +959,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
-            Plan::MergeInto { s_expr, .. } => {
+            Plan::DataManipulation { s_expr, .. } => {
                 let plan: DataManipulation = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;

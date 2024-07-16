@@ -234,7 +234,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::MergeInto { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
+        Plan::DataManipulation { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -470,7 +470,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         DataManipulationInputType::Update | DataManipulationInputType::Delete => input_s_expr,
     };
 
-    Ok(Plan::MergeInto {
+    Ok(Plan::DataManipulation {
         schema: plan.schema(),
         s_expr: Box::new(SExpr::create_unary(
             Arc::new(RelOperator::DataManipulation(plan)),

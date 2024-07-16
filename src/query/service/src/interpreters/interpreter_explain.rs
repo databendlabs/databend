@@ -116,7 +116,7 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::MergeInto {
+                Plan::DataManipulation {
                     s_expr,
                     schema,
                     metadata,
@@ -166,7 +166,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto { s_expr, .. } => {
+                Plan::DataManipulation { s_expr, .. } => {
                     let plan: DataManipulation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
@@ -185,7 +185,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } | Plan::MergeInto { .. } => {
+                    Plan::Query { .. } | Plan::DataManipulation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -210,7 +210,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto { s_expr, schema, .. } => {
+                Plan::DataManipulation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }

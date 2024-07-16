@@ -379,9 +379,7 @@ impl QueryEntry {
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
             | Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::Update(_)
-            | Plan::MergeInto { .. }
+            | Plan::DataManipulation { .. }
             | Plan::CopyIntoTable(_)
             | Plan::CopyIntoLocation(_) => {
                 return true;
