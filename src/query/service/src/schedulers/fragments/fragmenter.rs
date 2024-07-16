@@ -60,9 +60,7 @@ pub struct Fragmenter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum State {
     SelectLeaf,
-    DeleteLeaf,
     ReplaceInto,
-    Update,
     Compact,
     Recluster,
     Other,

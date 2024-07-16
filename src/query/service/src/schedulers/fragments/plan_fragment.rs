@@ -235,17 +235,17 @@ impl PlanFragment {
 
     fn redistribute_delete_leaf(
         &self,
-        ctx: Arc<QueryContext>,
-        fragment_actions: &mut QueryFragmentActions,
+        _ctx: Arc<QueryContext>,
+        _fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        // TODO(Dousir9): remove this func
+        // TODO(Dousir9): remove this func.
         Ok(())
     }
 
     fn redistribute_update(
         &self,
-        ctx: Arc<QueryContext>,
-        fragment_actions: &mut QueryFragmentActions,
+        _ctx: Arc<QueryContext>,
+        _fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
         // TODO(Dousir9): remove this func.
         Ok(())

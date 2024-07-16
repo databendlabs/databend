@@ -53,23 +53,3 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
         }
     }
 }
-
-/// create push down filters
-pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
-    let filter = cast_expr_to_non_null_boolean(
-        scalar
-            .as_expr()?
-            .project_column_ref(|col| col.column_name.clone()),
-    )?;
-
-    let remote_filter = filter.as_remote_expr();
-
-    // prepare the inverse filter expression
-    let remote_inverted_filter =
-        check_function(None, "not", &[], &[filter], &BUILTIN_FUNCTIONS)?.as_remote_expr();
-
-    Ok(Filters {
-        filter: remote_filter,
-        inverted_filter: remote_inverted_filter,
-    })
-}
