@@ -12136,7 +12136,7 @@ dependencies = [
 [[package]]
 name = "proj"
 version = "0.27.2"
-source = "git+https://github.com/datafuse-extras/proj.git?branch=main#3746516afdbc86e9cc5b9a78c531d31d3975147a"
+source = "git+https://github.com/b41sh/proj.git?branch=tmp#fefc371a11769d9b57d5c30920a382e43a2bdabc"
 dependencies = [
  "geo-types",
  "libc",
@@ -12148,7 +12148,7 @@ dependencies = [
 [[package]]
 name = "proj-sys"
 version = "0.24.0"
-source = "git+https://github.com/datafuse-extras/proj.git?branch=main#3746516afdbc86e9cc5b9a78c531d31d3975147a"
+source = "git+https://github.com/b41sh/proj.git?branch=tmp#fefc371a11769d9b57d5c30920a382e43a2bdabc"
 dependencies = [
  "cmake",
  "flate2",
