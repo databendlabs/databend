@@ -12,6 +12,7 @@ echo "create provider share and database\table"
 echo "create database provider_db" | $MYSQL_CLIENT_PROVIDER_CONNECT
 echo "create table provider_db.t (a int);" | $MYSQL_CLIENT_PROVIDER_CONNECT
 echo "insert into provider_db.t values(1),(2);" | $MYSQL_CLIENT_PROVIDER_CONNECT
+echo "select * from provider_db.t order by a;" | $MYSQL_CLIENT_PROVIDER_CONNECT
 
 echo "create provider share and grant access"
 echo "CREATE SHARE test_share;" | $MYSQL_CLIENT_PROVIDER_CONNECT
