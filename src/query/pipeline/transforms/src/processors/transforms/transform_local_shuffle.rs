@@ -27,8 +27,8 @@ use super::Transformer;
 use crate::processors::Transform;
 
 pub struct TransformLocalShuffle {
-    local_pos: usize,
-    scatter_size: usize,
+    local_pos: u64,
+    scatter_size: u64,
     hash_key: Vec<usize>,
 }
 
@@ -36,8 +36,8 @@ impl TransformLocalShuffle {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        local_pos: usize,
-        scatter_size: usize,
+        local_pos: u64,
+        scatter_size: u64,
         hash_key: Vec<usize>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Transformer::create(
@@ -63,18 +63,23 @@ impl Transform for TransformLocalShuffle {
         let hash_cols = InputColumns::new_block_proxy(&self.hash_key, &block);
         group_hash_columns(hash_cols, &mut hashes);
 
-        let indices = hashes
+        let mut indices = Vec::with_capacity(num_rows);
+        for (indice, hash) in hashes.iter().take(num_rows).enumerate() {
+            if hash % self.scatter_size == self.local_pos {
+                indices.push(indice as u32);
+            }
+        }
+
+        let has_string_column = block
+            .columns()
             .iter()
-            .map(|&hash| (hash % self.scatter_size as u64) as u8)
-            .collect::<Vec<_>>();
+            .any(|col| col.data_type.is_string_column());
+        let mut string_items_buf = if has_string_column {
+            Some(vec![(0, 0); indices.len()])
+        } else {
+            None
+        };
 
-        let mut scatter_blocks = DataBlock::scatter(&block, &indices, self.scatter_size)?;
-
-        let block = scatter_blocks
-            .drain(self.local_pos..self.local_pos + 1)
-            .next()
-            .unwrap();
-
-        Ok(block)
+        DataBlock::take(&block, &indices, &mut string_items_buf)
     }
 }

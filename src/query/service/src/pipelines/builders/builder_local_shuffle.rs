@@ -54,8 +54,8 @@ impl PipelineBuilder {
             let processor = TransformLocalShuffle::create(
                 input.clone(),
                 output.clone(),
-                idx,
-                output_len,
+                idx as u64,
+                output_len as u64,
                 local_shuffle.shuffle_by.clone(),
             )?;
             pipe_items.push(PipeItem::create(processor, vec![input], vec![output]));
