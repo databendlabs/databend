@@ -49,7 +49,6 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
-use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
 
