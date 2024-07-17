@@ -24,6 +24,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::F64;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
+use databend_common_storage::HistogramBucket;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
 use crate::optimizer::histogram_from_ndv;
@@ -318,8 +319,9 @@ impl Join {
                     let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
                         (Some(left_hist), Some(right_hist)) => {
                             // Evaluate join cardinality by histogram.
-                            // TODO: use `new_min` and `new_max` to trim buckets
-                            evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
+                            let (left_hist, right_hist) =
+                                trim_buckets(left_hist, right_hist, &new_min, &new_max)?;
+                            evaluate_by_histogram(&left_hist, &right_hist, &mut new_ndv)?
                         }
                         _ => evaluate_by_ndv(
                             left_col_stat,
@@ -351,51 +353,10 @@ impl Join {
             }
         }
         if join_card_updated {
-            for (idx, left) in left_statistics.column_stats.iter_mut() {
-                if *idx == left_column_index {
-                    if left.histogram.is_some() {
-                        left.histogram = if left.ndv as u64 <= 2 {
-                            None
-                        } else {
-                            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
-                            {
-                                left.min = Datum::Float(F64::from(left.min.to_double()?));
-                                left.max = Datum::Float(F64::from(left.max.to_double()?));
-                            }
-                            Some(histogram_from_ndv(
-                                left.ndv as u64,
-                                max(join_card as u64, left.ndv as u64),
-                                Some((left.min.clone(), left.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        }
-                    }
-                    continue;
-                }
-                // Other columns' histograms are inaccurate, so make them None
+            for (_idx, left) in left_statistics.column_stats.iter_mut() {
                 left.histogram = None;
             }
-            for (idx, right) in right_statistics.column_stats.iter_mut() {
-                if *idx == right_column_index {
-                    if right.histogram.is_some() {
-                        right.histogram = if right.ndv as u64 <= 2 {
-                            None
-                        } else {
-                            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
-                            {
-                                right.min = Datum::Float(F64::from(right.min.to_double()?));
-                                right.max = Datum::Float(F64::from(right.max.to_double()?));
-                            }
-                            Some(histogram_from_ndv(
-                                right.ndv as u64,
-                                max(join_card as u64, right.ndv as u64),
-                                Some((right.min.clone(), right.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        }
-                    }
-                    continue;
-                }
+            for (_idx, right) in right_statistics.column_stats.iter_mut() {
                 right.histogram = None;
             }
         }
@@ -704,7 +665,7 @@ fn evaluate_by_histogram(
         for right_bucket in right_hist.buckets.iter() {
             let right_bucket_min = right_bucket.lower_bound().to_double()?;
             let right_bucket_max = right_bucket.upper_bound().to_double()?;
-            if left_bucket_min < right_bucket_max && left_bucket_max > right_bucket_min {
+            if left_bucket_min <= right_bucket_max && left_bucket_max >= right_bucket_min {
                 has_intersection = true;
                 let right_num_rows = right_bucket.num_values();
                 let right_ndv = right_bucket.num_distinct();
@@ -718,7 +679,12 @@ fn evaluate_by_histogram(
                     } else {
                         right_bucket_max - right_bucket_min + 1.0
                     };
-                    let percentage = numerator / (left_bucket_max - left_bucket_min);
+                    let denominator = if left_bucket_max == left_bucket_min {
+                        1.0
+                    } else {
+                        left_bucket_max - left_bucket_min + 1.0
+                    };
+                    let percentage = numerator / denominator;
 
                     let left_ndv = left_ndv * percentage;
                     let left_num_rows = left_num_rows * percentage;
@@ -728,16 +694,22 @@ fn evaluate_by_histogram(
                         all_ndv += left_ndv.min(right_ndv);
                         card += left_num_rows * right_num_rows / max_ndv;
                     }
-                } else if left_bucket_min >= right_bucket_min && left_bucket_max <= right_bucket_max
+                }
+                // 2. right bucket contains left bucket
+                // ---right_min---left_min---left_max---right_max---
+                else if left_bucket_min >= right_bucket_min && left_bucket_max <= right_bucket_max
                 {
-                    // 2. right bucket contains left bucket
-                    // ---right_min---left_min---left_max---right_max---
                     let numerator = if left_bucket_max == left_bucket_min {
                         1.0
                     } else {
                         left_bucket_max - left_bucket_min + 1.0
                     };
-                    let percentage = numerator / (right_bucket_max - right_bucket_min);
+                    let denominator = if right_bucket_max == right_bucket_min {
+                        1.0
+                    } else {
+                        right_bucket_max - right_bucket_min + 1.0
+                    };
+                    let percentage = numerator / denominator;
 
                     let right_ndv = right_ndv * percentage;
                     let right_num_rows = right_num_rows * percentage;
@@ -747,17 +719,29 @@ fn evaluate_by_histogram(
                         all_ndv += left_ndv.min(right_ndv);
                         card += left_num_rows * right_num_rows / max_ndv;
                     }
-                } else if left_bucket_min <= right_bucket_min && left_bucket_max <= right_bucket_max
+                }
+                // 3. left bucket intersects with right bucket on the left
+                // ---left_min---right_min---left_max---right_max---
+                else if left_bucket_min <= right_bucket_min && left_bucket_max <= right_bucket_max
                 {
-                    // 3. left bucket intersects with right bucket on the left
-                    // ---left_min---right_min---left_max---right_max---
                     let numerator = if left_bucket_max == right_bucket_min {
                         1.0
                     } else {
                         left_bucket_max - right_bucket_min + 1.0
                     };
-                    let left_percentage = numerator / (left_bucket_max - left_bucket_min);
-                    let right_percentage = numerator / (right_bucket_max - right_bucket_min);
+                    let left_denominator = if left_bucket_max == left_bucket_min {
+                        1.0
+                    } else {
+                        left_bucket_max - left_bucket_min + 1.0
+                    };
+                    let right_denominator = if right_bucket_max == right_bucket_min {
+                        1.0
+                    } else {
+                        right_bucket_max - right_bucket_min + 1.0
+                    };
+
+                    let left_percentage = numerator / left_denominator;
+                    let right_percentage = numerator / right_denominator;
 
                     let left_ndv = left_ndv * left_percentage;
                     let left_num_rows = left_num_rows * left_percentage;
@@ -769,17 +753,29 @@ fn evaluate_by_histogram(
                         all_ndv += left_ndv.min(right_ndv);
                         card += left_num_rows * right_num_rows / max_ndv;
                     }
-                } else if left_bucket_min >= right_bucket_min && left_bucket_max >= right_bucket_max
+                }
+                // 4. left bucket intersects with right bucket on the right
+                // ---right_min---left_min---right_max---left_max---
+                else if left_bucket_min >= right_bucket_min && left_bucket_max >= right_bucket_max
                 {
-                    // 4. left bucket intersects with right bucket on the right
-                    // ---right_min---left_min---right_max---left_max---
                     let numerator = if right_bucket_max == left_bucket_min {
                         1.0
                     } else {
                         right_bucket_max - left_bucket_min + 1.0
                     };
-                    let left_percentage = numerator / (left_bucket_max - left_bucket_min);
-                    let right_percentage = numerator / (right_bucket_max - right_bucket_min);
+                    let left_denominator = if left_bucket_max == left_bucket_min {
+                        1.0
+                    } else {
+                        left_bucket_max - left_bucket_min + 1.0
+                    };
+                    let right_denominator = if right_bucket_max == right_bucket_min {
+                        1.0
+                    } else {
+                        right_bucket_max - right_bucket_min + 1.0
+                    };
+
+                    let left_percentage = numerator / left_denominator;
+                    let right_percentage = numerator / right_denominator;
 
                     let left_ndv = left_ndv * left_percentage;
                     let left_num_rows = left_num_rows * left_percentage;
@@ -843,4 +839,30 @@ fn update_statistic(
         right_col_stat.ndv = new_ndv;
     }
     (left_index, right_index)
+}
+
+fn trim_histogram_buckets(
+    hist: &Histogram,
+    min: &Option<Datum>,
+    max: &Option<Datum>,
+) -> Vec<HistogramBucket> {
+    hist.buckets
+        .iter()
+        .filter(|bucket| {
+            (min.is_none() || bucket.upper_bound() >= min.as_ref().unwrap())
+                && (max.is_none() || bucket.lower_bound() <= max.as_ref().unwrap())
+        })
+        .cloned()
+        .collect()
+}
+
+fn trim_buckets(
+    left_hist: &Histogram,
+    right_hist: &Histogram,
+    min: &Option<Datum>,
+    max: &Option<Datum>,
+) -> Result<(Histogram, Histogram)> {
+    let left_buckets = trim_histogram_buckets(left_hist, min, max);
+    let right_buckets = trim_histogram_buckets(right_hist, min, max);
+    Ok((Histogram::new(left_buckets), Histogram::new(right_buckets)))
 }
