@@ -28,7 +28,7 @@ explain select 1 from range_t where i > 20
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.40
+├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.range_t
     ├── output columns: []
@@ -38,7 +38,7 @@ EvalScalar
     ├── partitions scanned: 0
     ├── pruning stats: [segments: <range pruning: 1 to 0>]
     ├── push downs: [filters: [is_true(range_t.i (#1) > 20)], limit: NONE]
-    └── estimated rows: 0.40
+    └── estimated rows: 0.00
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;

@@ -31,7 +31,7 @@ HashJoin
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
 │   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 0.60
+│   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -67,11 +67,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
 │   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 0.60
+│   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -143,11 +143,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
 │   ├── filters: [is_true(t2.b (#3) > 0)]
-│   ├── estimated rows: 0.60
+│   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -179,11 +179,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
 │   ├── filters: [is_true(t2.a (#2) > 0), is_true(t2.b (#3) > 0)]
-│   ├── estimated rows: 0.60
+│   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
@@ -219,11 +219,11 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
 │   ├── filters: [is_true(t2.a (#2) > 0)]
-│   ├── estimated rows: 0.60
+│   ├── estimated rows: 3.00
 │   └── TableScan
 │       ├── table: default.default.t2
 │       ├── output columns: [a (#2), b (#3)]
