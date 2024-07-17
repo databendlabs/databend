@@ -115,6 +115,7 @@ pub struct FunctionContext {
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_dst_hour_fix: bool,
+    pub enable_strict_datetime_parser: bool,
 }
 
 #[derive(Clone)]

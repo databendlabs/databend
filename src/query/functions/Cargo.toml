@@ -28,6 +28,7 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
+dtparse = { git = "https://github.com/TCeason/dtparse.git", rev = "d0df237" }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geo-types = "0.7.13"
