@@ -297,7 +297,7 @@ impl PhysicalPlanBuilder {
 
         let table = self
             .ctx
-            .get_table(&catalog_name, &database_name, table_name)
+            .get_table(catalog_name, database_name, table_name)
             .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();

@@ -199,7 +199,7 @@ impl DataManipulationInput {
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
                 let target_row_id_index = binder.add_row_id_column(
                     &mut target_context,
-                    &target_table_identifier,
+                    target_table_identifier,
                     target_table_index,
                     &mut target_s_expr,
                     DataManipulationInputType::Merge,
@@ -268,7 +268,7 @@ impl DataManipulationInput {
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
                 let target_row_id_index = binder.add_row_id_column(
                     &mut bind_context,
-                    &target_table_identifier,
+                    target_table_identifier,
                     target_table_index,
                     &mut target_s_expr,
                     input_type.clone(),

@@ -1000,7 +1000,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 let privileges = vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete];
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false).await?;
+                    self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false).await?;
                 }
             }
             Plan::CreateView(plan) => {

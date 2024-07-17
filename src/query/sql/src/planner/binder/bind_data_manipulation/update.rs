@@ -53,7 +53,7 @@ impl Binder {
             ..
         } = table
         {
-            TableIdentifier::new(&self, catalog, database, table, alias)
+            TableIdentifier::new(self, catalog, database, table, alias)
         } else {
             // we do not support USING clause yet
             return Err(ErrorCode::Internal(

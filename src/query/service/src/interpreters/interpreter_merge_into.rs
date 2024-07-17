@@ -93,9 +93,9 @@ impl Interpreter for MergeIntoInterpreter {
             };
             let hook_operator = HookOperator::create(
                 self.ctx.clone(),
-                merge_into.catalog.clone(),
-                merge_into.database.clone(),
-                merge_into.table.clone(),
+                merge_into.catalog_name.clone(),
+                merge_into.database_name.clone(),
+                merge_into.table_name.clone(),
                 MutationKind::MergeInto,
                 hook_lock_opt,
             );
@@ -122,7 +122,11 @@ impl MergeIntoInterpreter {
     ) -> Result<PhysicalPlan> {
         let table = self
             .ctx
-            .get_table(&merge_into.catalog, &merge_into.database, &merge_into.table)
+            .get_table(
+                &merge_into.catalog_name,
+                &merge_into.database_name,
+                &merge_into.table_name,
+            )
             .await?;
 
         // Check if the table supports MERGE INTO.

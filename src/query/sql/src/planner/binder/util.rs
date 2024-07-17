@@ -144,7 +144,7 @@ impl TableIdentifier {
             database,
             table,
             table_alias: table_alias.clone(),
-            dialect: dialect.clone(),
+            dialect: *dialect,
             name_resolution_ctx: name_resolution_ctx.clone(),
         }
     }
