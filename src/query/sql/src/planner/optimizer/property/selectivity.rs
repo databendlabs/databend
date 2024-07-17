@@ -34,6 +34,7 @@ use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
+use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -221,122 +222,14 @@ impl<'a> SelectivityEstimator<'a> {
                         }
                         Ok(selectivity)
                     }
-                    ComparisonOp::GT => {
-                        let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
-                            hist
-                        } else {
-                            // Todo(xudong): use ndv to estimate the selectivity, not directly return `DEFAULT_SELECTIVITY`.
-                            return Ok(DEFAULT_SELECTIVITY);
-                        };
-                        // For greater than predicate, we use the number of values
-                        // that are greater than the constant value to estimate the
-                        // selectivity.
-                        let mut num_greater = 0.0;
-                        let new_min = const_datum.clone();
-                        let new_max = column_stat.max.clone();
-                        for bucket in col_hist.buckets_iter() {
-                            if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                                if ord == Ordering::Less || ord == Ordering::Equal {
-                                    num_greater += bucket.num_values();
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                return Ok(DEFAULT_SELECTIVITY);
-                            }
-                        }
-                        let selectivity = 1.0 - num_greater / col_hist.num_values();
-                        if update {
-                            update_statistic(column_stat, new_min, new_max, selectivity)?;
-                            self.updated_column_indexes.insert(column_ref.column.index);
-                        }
-                        Ok(selectivity)
-                    }
-                    ComparisonOp::LT => {
-                        let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
-                            hist
-                        } else {
-                            return Ok(DEFAULT_SELECTIVITY);
-                        };
-                        // For less than predicate, we treat it as opposite of
-                        // greater than predicate.
-                        let mut num_greater = 0.0;
-                        let new_max = const_datum.clone();
-                        let new_min = column_stat.min.clone();
-                        for bucket in col_hist.buckets_iter() {
-                            if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                                if ord == Ordering::Less {
-                                    num_greater += bucket.num_values();
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                return Ok(DEFAULT_SELECTIVITY);
-                            }
-                        }
-                        let selectivity = num_greater / col_hist.num_values();
-                        if update {
-                            update_statistic(column_stat, new_min, new_max, selectivity)?;
-                            self.updated_column_indexes.insert(column_ref.column.index);
-                        }
-                        Ok(selectivity)
-                    }
-                    ComparisonOp::GTE => {
-                        let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
-                            hist
-                        } else {
-                            return Ok(DEFAULT_SELECTIVITY);
-                        };
-                        // Greater than or equal to predicate is similar to greater than predicate.
-                        let mut num_greater = 0.0;
-                        let new_min = const_datum.clone();
-                        let new_max = column_stat.max.clone();
-                        for bucket in col_hist.buckets_iter() {
-                            if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                                if ord == Ordering::Less {
-                                    num_greater += bucket.num_values();
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                return Ok(DEFAULT_SELECTIVITY);
-                            }
-                        }
-                        let selectivity = 1.0 - num_greater / col_hist.num_values();
-                        if update {
-                            update_statistic(column_stat, new_min, new_max, selectivity)?;
-                            self.updated_column_indexes.insert(column_ref.column.index);
-                        }
-                        Ok(selectivity)
-                    }
-                    ComparisonOp::LTE => {
-                        let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
-                            hist
-                        } else {
-                            return Ok(DEFAULT_SELECTIVITY);
-                        };
-                        // Less than or equal to predicate is similar to less than predicate.
-                        let mut num_greater = 0.0;
-                        let new_max = const_datum.clone();
-                        let new_min = column_stat.min.clone();
-                        for bucket in col_hist.buckets_iter() {
-                            if let Ok(ord) = bucket.upper_bound().compare(&const_datum) {
-                                if ord == Ordering::Less || ord == Ordering::Equal {
-                                    num_greater += bucket.num_values();
-                                } else {
-                                    break;
-                                }
-                            } else {
-                                return Ok(DEFAULT_SELECTIVITY);
-                            }
-                        }
-                        let selectivity = num_greater / col_hist.num_values();
-                        if update {
-                            update_statistic(column_stat, new_min, new_max, selectivity)?;
-                            self.updated_column_indexes.insert(column_ref.column.index);
-                        }
-                        Ok(selectivity)
-                    }
+                    _ => Self::compute_binary_comparison_selectivity(
+                        &op,
+                        &const_datum,
+                        update,
+                        column_ref,
+                        column_stat,
+                        &mut self.updated_column_indexes,
+                    ),
                 };
             }
             (ScalarExpr::ConstantExpr(_), ScalarExpr::ConstantExpr(_)) => {
@@ -405,6 +298,158 @@ impl<'a> SelectivityEstimator<'a> {
                 }
             }
         }
+    }
+
+    fn compute_binary_comparison_selectivity(
+        comparison_op: &ComparisonOp,
+        const_datum: &Datum,
+        update: bool,
+        column_ref: &BoundColumnRef,
+        column_stat: &mut ColumnStat,
+        updated_column_indexes: &mut HashSet<IndexType>,
+    ) -> Result<f64> {
+        let col_hist = column_stat.histogram.as_ref();
+
+        if col_hist.is_none() && const_datum.is_numeric() {
+            let min = column_stat.min.to_double()?;
+            let max = column_stat.max.to_double()?;
+            let ndv = column_stat.ndv;
+            let numeric_literal = const_datum.to_double()?;
+
+            let (no_overlap, complete_overlap) = match comparison_op {
+                ComparisonOp::LT => (numeric_literal <= min, numeric_literal > max),
+                ComparisonOp::LTE => (numeric_literal < min, numeric_literal >= max),
+                ComparisonOp::GT => (numeric_literal >= max, numeric_literal < min),
+                ComparisonOp::GTE => (numeric_literal > max, numeric_literal <= min),
+                _ => unreachable!(),
+            };
+
+            let percent = if no_overlap {
+                0.0
+            } else if complete_overlap {
+                1.0
+            } else {
+                match comparison_op {
+                    ComparisonOp::LT => {
+                        if numeric_literal == max {
+                            1.0 - 1.0 / ndv
+                        } else {
+                            (numeric_literal - min) / (max - min)
+                        }
+                    }
+                    ComparisonOp::LTE => {
+                        if numeric_literal == min {
+                            1.0 / ndv
+                        } else {
+                            (numeric_literal - min) / (max - min)
+                        }
+                    }
+                    ComparisonOp::GT => {
+                        if numeric_literal == min {
+                            1.0 - 1.0 / ndv
+                        } else {
+                            (max - numeric_literal) / (max - min)
+                        }
+                    }
+                    ComparisonOp::GTE => {
+                        if numeric_literal == max {
+                            1.0 / ndv
+                        } else {
+                            (max - numeric_literal) / (max - min)
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            };
+
+            if update {
+                let new_min = if matches!(comparison_op, ComparisonOp::GT | ComparisonOp::GTE) {
+                    const_datum.clone()
+                } else {
+                    column_stat.min.clone()
+                };
+
+                let new_max = if matches!(comparison_op, ComparisonOp::LT | ComparisonOp::LTE) {
+                    const_datum.clone()
+                } else {
+                    column_stat.max.clone()
+                };
+
+                update_statistic(column_stat, new_min, new_max, percent)?;
+                updated_column_indexes.insert(column_ref.column.index);
+            }
+
+            return Ok(percent);
+        }
+
+        if col_hist.is_none() {
+            return Ok(DEFAULT_SELECTIVITY);
+        }
+        let col_hist = col_hist.unwrap();
+        let (mut num_greater, new_min, new_max) = match comparison_op {
+            ComparisonOp::GT | ComparisonOp::GTE => {
+                let new_min = const_datum.clone();
+                let new_max = column_stat.max.clone();
+                (0.0, new_min, new_max)
+            }
+            ComparisonOp::LT | ComparisonOp::LTE => {
+                let new_max = const_datum.clone();
+                let new_min = column_stat.min.clone();
+                (0.0, new_min, new_max)
+            }
+            _ => unreachable!(),
+        };
+
+        for bucket in col_hist.buckets_iter() {
+            if let Ok(ord) = bucket.upper_bound().compare(const_datum) {
+                match comparison_op {
+                    ComparisonOp::GT => {
+                        if ord == Ordering::Less || ord == Ordering::Equal {
+                            num_greater += bucket.num_values();
+                        } else {
+                            break;
+                        }
+                    }
+                    ComparisonOp::GTE => {
+                        if ord == Ordering::Less {
+                            num_greater += bucket.num_values();
+                        } else {
+                            break;
+                        }
+                    }
+                    ComparisonOp::LT => {
+                        if ord == Ordering::Less {
+                            num_greater += bucket.num_values();
+                        } else {
+                            break;
+                        }
+                    }
+                    ComparisonOp::LTE => {
+                        if ord == Ordering::Less || ord == Ordering::Equal {
+                            num_greater += bucket.num_values();
+                        } else {
+                            break;
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            } else {
+                return Ok(DEFAULT_SELECTIVITY);
+            }
+        }
+
+        let selectivity = match comparison_op {
+            ComparisonOp::GT | ComparisonOp::GTE => 1.0 - num_greater / col_hist.num_values(),
+            ComparisonOp::LT | ComparisonOp::LTE => num_greater / col_hist.num_values(),
+            _ => unreachable!(),
+        };
+
+        if update {
+            update_statistic(column_stat, new_min, new_max, selectivity)?;
+            updated_column_indexes.insert(column_ref.column.index);
+        }
+
+        Ok(selectivity)
     }
 }
 
