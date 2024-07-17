@@ -272,7 +272,7 @@ impl<'a> FormatDisplay<'a> {
             let (rows, mut rows_str, kind, total_rows, total_bytes) = match self.kind {
                 QueryKind::Explain => (self.rows, "rows", "explain", 0, 0),
                 QueryKind::Query => (self.rows, "rows", "read", stats.read_rows, stats.read_bytes),
-                QueryKind::Update => (
+                QueryKind::Update | QueryKind::AlterUserPassword => (
                     stats.write_rows,
                     "rows",
                     "written",

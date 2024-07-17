@@ -52,6 +52,16 @@ static VERSION_SHORT: Lazy<String> = Lazy::new(|| {
     }
 });
 
+// alter current user's password tokens
+const ALTER_USER_PASSWORD_TOKENS: [TokenKind; 6] = [
+    TokenKind::USER,
+    TokenKind::USER,
+    TokenKind::LParen,
+    TokenKind::RParen,
+    TokenKind::IDENTIFIED,
+    TokenKind::BY,
+];
+
 pub struct Session {
     client: Client,
     conn: Box<dyn Connection>,
@@ -386,8 +396,14 @@ impl Session {
 
         let start = Instant::now();
         let kind = QueryKind::from(query);
-        match (kind, is_repl) {
-            (QueryKind::Update, false) => {
+        match kind {
+            QueryKind::AlterUserPassword => {
+                // When changing the current user's password,
+                // exit the client and login again with the new password.
+                let _ = self.conn.exec(query).await?;
+                Ok(None)
+            }
+            QueryKind::Update => {
                 let affected = self.conn.exec(query).await?;
                 if is_repl {
                     if affected > 0 {
@@ -410,7 +426,7 @@ impl Session {
                     replace_newline_in_box_display(query)
                 };
 
-                let data = match other.0 {
+                let data = match other {
                     QueryKind::Put => {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
@@ -562,6 +578,7 @@ pub enum QueryKind {
     Explain,
     Put,
     Get,
+    AlterUserPassword,
 }
 
 impl From<&str> for QueryKind {
@@ -572,8 +589,21 @@ impl From<&str> for QueryKind {
                 TokenKind::EXPLAIN => QueryKind::Explain,
                 TokenKind::PUT => QueryKind::Put,
                 TokenKind::GET => QueryKind::Get,
-                TokenKind::ALTER
-                | TokenKind::DELETE
+                TokenKind::ALTER => {
+                    let mut tzs = vec![];
+                    while let Some(Ok(t)) = tz.next() {
+                        tzs.push(t.kind);
+                        if tzs.len() == ALTER_USER_PASSWORD_TOKENS.len() {
+                            break;
+                        }
+                    }
+                    if tzs == ALTER_USER_PASSWORD_TOKENS {
+                        QueryKind::AlterUserPassword
+                    } else {
+                        QueryKind::Update
+                    }
+                }
+                TokenKind::DELETE
                 | TokenKind::UPDATE
                 | TokenKind::INSERT
                 | TokenKind::CREATE
