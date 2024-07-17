@@ -141,7 +141,7 @@ async fn test_random_location_memory_size() -> databend_common_exception::Result
 
     let mut locations: HashSet<Location, _> = HashSet::new();
     for _ in 0..num_segments {
-        let segment_path = location_gen.gen_segment_info_location();
+        let segment_path = location_gen.gen_segment_info_location(None);
         let segment_location = (segment_path, SegmentInfo::VERSION);
         locations.insert(segment_location);
     }
@@ -392,7 +392,7 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
-    let block_writer = BlockWriter::new(&operator, &loc_generator);
+    let block_writer = BlockWriter::new(&operator, &loc_generator, None);
     let (_block_meta, thrift_file_meta) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;

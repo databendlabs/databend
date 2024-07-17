@@ -24,4 +24,5 @@ pub struct CompactSource {
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }

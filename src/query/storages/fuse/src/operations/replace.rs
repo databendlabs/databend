@@ -155,13 +155,19 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
         mutation_kind: MutationKind,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
-            let mutation_aggregator =
-                TableMutationAggregator::new(self, ctx.clone(), base_segments, mutation_kind);
+            let mutation_aggregator = TableMutationAggregator::new(
+                self,
+                ctx.clone(),
+                base_segments,
+                mutation_kind,
+                base_snapshot_timestamp,
+            );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,
                 output,

@@ -134,7 +134,7 @@ pub async fn generate_segments(
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
+        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator(), None);
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
         segs.push((segment_location, segment_info))
     }
@@ -144,7 +144,7 @@ pub async fn generate_segments(
 async fn generate_blocks(fuse_table: &FuseTable, num_blocks: usize) -> Result<Vec<Arc<BlockMeta>>> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
-    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator());
+    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator(),None);
     let mut block_metas = vec![];
 
     // does not matter in this suite

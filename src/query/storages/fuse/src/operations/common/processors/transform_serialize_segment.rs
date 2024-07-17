@@ -70,6 +70,7 @@ pub struct TransformSerializeSegment {
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
+    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl TransformSerializeSegment {
@@ -78,6 +79,7 @@ impl TransformSerializeSegment {
         output: Arc<OutputPort>,
         table: &FuseTable,
         thresholds: BlockThresholds,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {
@@ -93,6 +95,7 @@ impl TransformSerializeSegment {
                 as u64,
             thresholds,
             default_cluster_key_id,
+            base_snapshot_timestamp,
         }
     }
 
@@ -186,7 +189,9 @@ impl Processor for TransformSerializeSegment {
 
                 self.state = State::SerializedSegment {
                     data: segment_info.to_bytes()?,
-                    location: self.meta_locations.gen_segment_info_location(),
+                    location: self
+                        .meta_locations
+                        .gen_segment_info_location(self.base_snapshot_timestamp),
                     segment: Arc::new(segment_info),
                 }
             }

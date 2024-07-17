@@ -38,6 +38,7 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
@@ -105,6 +106,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         cluster_stats_gen: ClusterStatsGenerator,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -116,6 +118,7 @@ impl PipelineBuilder {
                 fuse_table,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
+                base_snapshot_timestamp,
             )?;
             proc.into_processor()
         })
@@ -125,10 +128,17 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         block_thresholds: BlockThresholds,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeSegment::new(input, output, fuse_table, block_thresholds);
+            let proc = TransformSerializeSegment::new(
+                input,
+                output,
+                fuse_table,
+                block_thresholds,
+                base_snapshot_timestamp,
+            );
             proc.into_processor()
         })
     }
@@ -136,12 +146,18 @@ impl PipelineBuilder {
     pub(crate) fn mutation_aggregator_transform_builder(
         &self,
         table: Arc<dyn Table>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let aggregator =
-                TableMutationAggregator::new(fuse_table, ctx.clone(), vec![], MutationKind::Insert);
+            let aggregator = TableMutationAggregator::new(
+                fuse_table,
+                ctx.clone(),
+                vec![],
+                MutationKind::Insert,
+                base_snapshot_timestamp,
+            );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

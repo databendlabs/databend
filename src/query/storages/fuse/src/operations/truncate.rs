@@ -69,6 +69,9 @@ impl FuseTable {
                     None,
                     prev_snapshot_id,
                     None,
+                    ctx.txn_mgr()
+                        .lock()
+                        .get_base_snapshot_timestamp(self.get_id(), prev_snapshot.timestamp),
                 )
             })?;
         }

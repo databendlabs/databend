@@ -30,4 +30,5 @@ pub struct ReclusterSource {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }

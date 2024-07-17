@@ -591,6 +591,7 @@ impl Table for HiveTable {
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",

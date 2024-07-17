@@ -118,8 +118,13 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     let table_info = table.get_table_info().clone();
     if let Some((parts, snapshot)) = res {
-        let physical_plan =
-            OptimizeTableInterpreter::build_physical_plan(parts, table_info, snapshot, false)?;
+        let physical_plan = OptimizeTableInterpreter::build_physical_plan(
+            ctx.as_ref(),
+            parts,
+            table_info,
+            snapshot,
+            false,
+        )?;
 
         let build_res =
             build_query_pipeline_without_render_result_set(&ctx, &physical_plan).await?;

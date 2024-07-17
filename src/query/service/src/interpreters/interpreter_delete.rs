@@ -258,7 +258,7 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?;
 
-        let physical_plan = Self::build_physical_plan(
+        let physical_plan = self.build_physical_plan(
             filters,
             partitions,
             fuse_table.get_table_info().clone(),
@@ -292,6 +292,7 @@ impl Interpreter for DeleteInterpreter {
 impl DeleteInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
+        &self,
         filters: Filters,
         partitions: Partitions,
         table_info: TableInfo,
@@ -300,6 +301,11 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
+        let base_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
         let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
@@ -309,6 +315,7 @@ impl DeleteInterpreter {
             query_row_id_col,
             snapshot: snapshot.clone(),
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         if is_distributed {
@@ -321,6 +328,7 @@ impl DeleteInterpreter {
                 ignore_exchange: false,
             });
         }
+
         let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
@@ -330,6 +338,7 @@ impl DeleteInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)

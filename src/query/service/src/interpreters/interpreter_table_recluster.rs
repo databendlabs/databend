@@ -221,6 +221,7 @@ impl ReclusterTableInterpreter {
         let is_distributed = mutator.is_distributed();
         *block_count += mutator.recluster_blocks_count;
         let physical_plan = build_recluster_physical_plan(
+            self.ctx.as_ref(),
             mutator.tasks,
             table.get_table_info().clone(),
             mutator.snapshot,
@@ -253,11 +254,16 @@ impl ReclusterTableInterpreter {
 }
 
 pub fn build_recluster_physical_plan(
+    ctx: &dyn TableContext,
     tasks: ReclusterTasks,
     table_info: TableInfo,
     snapshot: Arc<TableSnapshot>,
     is_distributed: bool,
 ) -> Result<PhysicalPlan> {
+    let base_snapshot_timestamp = ctx
+        .txn_mgr()
+        .lock()
+        .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
     match tasks {
         ReclusterTasks::Recluster {
             tasks,
@@ -269,6 +275,7 @@ pub fn build_recluster_physical_plan(
                 tasks,
                 table_info: table_info.clone(),
                 plan_id: u32::MAX,
+                base_snapshot_timestamp,
             }));
 
             if is_distributed {
@@ -289,11 +296,13 @@ pub fn build_recluster_physical_plan(
                 removed_segment_indexes,
                 removed_segment_summary,
                 plan_id: u32::MAX,
+                base_snapshot_timestamp,
             }));
             plan.adjust_plan_id(&mut 0);
             Ok(plan)
         }
         ReclusterTasks::Compact(parts) => OptimizeTableInterpreter::build_physical_plan(
+            ctx,
             parts,
             table_info,
             snapshot,

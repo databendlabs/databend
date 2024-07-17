@@ -63,6 +63,7 @@ pub struct ReclusterAggregator {
     removed_segment_indexes: Vec<usize>,
     removed_statistics: Statistics,
     table_id: u64,
+    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[async_trait::async_trait]
@@ -145,6 +146,7 @@ impl ReclusterAggregator {
         merged_blocks: Vec<Arc<BlockMeta>>,
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Self {
         let block_per_seg =
             table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
@@ -162,6 +164,7 @@ impl ReclusterAggregator {
             removed_statistics,
             start_time: Instant::now(),
             table_id: table.get_id(),
+            base_snapshot_timestamp,
         }
     }
 
@@ -182,8 +185,9 @@ impl ReclusterAggregator {
 
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
+            let base_snapshot_timestamp = self.base_snapshot_timestamp;
             tasks.push(async move {
-                let location = location_gen.gen_segment_info_location();
+                let location = location_gen.gen_segment_info_location(base_snapshot_timestamp);
                 let mut new_summary =
                     reduce_block_metas(&new_blocks, block_thresholds, default_cluster_key);
                 if new_summary.block_count > 1 {

@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::DateTime;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -73,6 +74,7 @@ pub struct TableMutationAggregator {
     start_time: Instant,
     finished_tasks: usize,
     table_id: u64,
+    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -106,6 +108,7 @@ impl TableMutationAggregator {
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
         kind: MutationKind,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Self {
         TableMutationAggregator {
             ctx,
@@ -124,6 +127,7 @@ impl TableMutationAggregator {
             finished_tasks: 0,
             start_time: Instant::now(),
             table_id: table.get_id(),
+            base_snapshot_timestamp,
         }
     }
 
@@ -302,7 +306,7 @@ impl TableMutationAggregator {
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
-
+            let base_snapshot_timestamp = self.base_snapshot_timestamp;
             let mut all_perfect = false;
             tasks.push(async move {
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
@@ -350,7 +354,7 @@ impl TableMutationAggregator {
                     (new_blocks, None)
                 };
 
-                let location = location_gen.gen_segment_info_location();
+                let location = location_gen.gen_segment_info_location(base_snapshot_timestamp);
                 // re-calculate the segment statistics
                 let mut new_summary =
                     reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);

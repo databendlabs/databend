@@ -101,7 +101,11 @@ impl SegmentCompactMutator {
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
-        let segment_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
+        let segment_writer = SegmentWriter::new(
+            &self.data_accessor,
+            &self.location_generator,
+            self.compact_params.base_snapshot.timestamp,
+        );
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,

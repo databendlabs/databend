@@ -84,7 +84,8 @@ impl TableMetaLocationGenerator {
         &self,
         base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> (Location, Uuid) {
-        let part_uuid = uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::MIN_UTC));
+        let part_uuid =
+            uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::<Utc>::MIN_UTC));
         let location_path = format!(
             "{}/{}/g{}{}_v{}.parquet",
             &self.prefix,
@@ -115,7 +116,7 @@ impl TableMetaLocationGenerator {
         base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> String {
         let segment_uuid =
-            uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::MIN_UTC));
+            uuid_from_date_time(base_snapshot_timestamp.unwrap_or(DateTime::<Utc>::MIN_UTC));
         format!(
             "{}/{}/g{}_v{}.mpk",
             &self.prefix,

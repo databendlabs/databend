@@ -31,4 +31,5 @@ pub struct UpdateSource {
     pub filters: Option<Filters>,
     pub update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
     pub computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }

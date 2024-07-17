@@ -38,10 +38,16 @@ impl PipelineBuilder {
         overwrite: bool,
         append_mode: AppendMode,
         deduplicated_label: Option<String>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
-        table.append_data(ctx.clone(), main_pipeline, append_mode)?;
+        table.append_data(
+            ctx.clone(),
+            main_pipeline,
+            append_mode,
+            base_snapshot_timestamp,
+        )?;
         table.commit_insertion(
             ctx,
             main_pipeline,
@@ -50,6 +56,7 @@ impl PipelineBuilder {
             overwrite,
             None,
             deduplicated_label,
+            base_snapshot_timestamp,
         )?;
 
         Ok(())
@@ -61,10 +68,11 @@ impl PipelineBuilder {
         table: Arc<dyn Table>,
         source_schema: DataSchemaRef,
         append_mode: AppendMode,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         Self::fill_and_reorder_columns(ctx.clone(), main_pipeline, table.clone(), source_schema)?;
 
-        table.append_data(ctx, main_pipeline, append_mode)?;
+        table.append_data(ctx, main_pipeline, append_mode, base_snapshot_timestamp)?;
 
         Ok(())
     }

@@ -129,6 +129,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 MutationKind::Delete,
+                delete.base_snapshot_timestamp,
             )?;
             proc.into_processor()
         })?;
@@ -140,6 +141,7 @@ impl PipelineBuilder {
                 &mut self.main_pipeline,
                 delete.snapshot.clone(),
                 MutationKind::Delete,
+                delete.base_snapshot_timestamp,
             )?;
         }
         Ok(())

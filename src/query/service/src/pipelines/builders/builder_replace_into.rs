@@ -127,6 +127,7 @@ impl PipelineBuilder {
             table,
             cluster_stats_gen,
             MutationKind::Replace,
+            replace.base_snapshot_timestamp,
         )?;
         let mut block_builder = serialize_block_transform.get_block_builder();
         block_builder.source_schema = table.schema_with_stream();
@@ -136,6 +137,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             *block_thresholds,
+            replace.base_snapshot_timestamp,
         );
         if !*need_insert {
             if segment_partition_num == 0 {

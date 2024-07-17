@@ -99,17 +99,23 @@ impl Interpreter for OptimizeTableInterpreter {
 
 impl OptimizeTableInterpreter {
     pub fn build_physical_plan(
+        ctx: &dyn TableContext,
         parts: Partitions,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
+        let base_snapshot_timestamp = ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         if is_distributed {
@@ -132,6 +138,7 @@ impl OptimizeTableInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         })))
     }
 
@@ -182,6 +189,7 @@ impl OptimizeTableInterpreter {
         // build the compact pipeline.
         let mut compact_pipeline = if let Some((parts, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
+                self.ctx.as_ref(),
                 parts,
                 table.get_table_info().clone(),
                 snapshot,
@@ -228,6 +236,7 @@ impl OptimizeTableInterpreter {
                     let is_distributed = mutator.is_distributed();
                     let reclustered_block_count = mutator.recluster_blocks_count;
                     let physical_plan = build_recluster_physical_plan(
+                        self.ctx.as_ref(),
                         mutator.tasks,
                         table.get_table_info().clone(),
                         mutator.snapshot,

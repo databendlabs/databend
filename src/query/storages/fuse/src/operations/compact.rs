@@ -123,6 +123,7 @@ impl FuseTable {
         parts: Partitions,
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();
@@ -213,6 +214,7 @@ impl FuseTable {
                     self,
                     cluster_stats_gen.clone(),
                     MutationKind::Compact,
+                    base_snapshot_timestamp,
                 )?;
                 proc.into_processor()
             },
@@ -221,7 +223,13 @@ impl FuseTable {
         if is_lazy {
             pipeline.try_resize(1)?;
             pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact)
+                TableMutationAggregator::new(
+                    self,
+                    ctx.clone(),
+                    vec![],
+                    MutationKind::Compact,
+                    base_snapshot_timestamp,
+                )
             });
         }
         Ok(())

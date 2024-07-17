@@ -45,6 +45,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
 
+chrono = { workspace = true }
 uuid = { workspace = true }
 
 [build-dependencies]

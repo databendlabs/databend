@@ -33,6 +33,7 @@ use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stage::StageTable;
 use log::debug;
 use log::info;
@@ -105,6 +106,14 @@ impl CopyIntoTableInterpreter {
                 &plan.table_name,
             )
             .await?;
+        let snapshot = FuseTable::try_from_table(to_table.as_ref())?
+            .read_table_snapshot()
+            .await?;
+        let base_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(to_table.get_id(), snapshot.and_then(|s| s.timestamp));
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
@@ -160,6 +169,7 @@ impl CopyIntoTableInterpreter {
             project_columns,
             source,
             is_transform: plan.is_transform,
+            base_snapshot_timestamp,
         }));
 
         if plan.enable_distributed {
@@ -253,6 +263,11 @@ impl CopyIntoTableInterpreter {
                 plan.force,
             )?;
 
+            let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
+            let base_snapshot_timestamp = fuse_table
+                .read_table_snapshot()
+                .await?
+                .and_then(|s| s.timestamp);
             to_table.commit_insertion(
                 ctx.clone(),
                 main_pipeline,
@@ -261,6 +276,7 @@ impl CopyIntoTableInterpreter {
                 plan.write_mode.is_overwrite(),
                 None,
                 deduplicated_label,
+                base_snapshot_timestamp,
             )?;
         }
 

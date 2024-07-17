@@ -82,6 +82,7 @@ impl FuseTable {
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<PipeItem> {
         let new_schema: TableSchemaRef = self
             .schema_with_stream()
@@ -100,6 +101,7 @@ impl FuseTable {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            base_snapshot_timestamp,
         };
         let aggregator = MatchedAggregator::create(
             ctx,

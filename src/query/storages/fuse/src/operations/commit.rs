@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::backoff::Backoff;
+use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -76,18 +77,25 @@ impl FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
 
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds,base_snapshot_timestamp);
             proc.into_processor()
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {
-            TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Insert)
+            TableMutationAggregator::new(
+                self,
+                ctx.clone(),
+                vec![],
+                MutationKind::Insert,
+                base_snapshot_timestamp,
+            )
         });
 
         let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
@@ -102,6 +110,9 @@ impl FuseTable {
                 None,
                 prev_snapshot_id,
                 deduplicated_label.clone(),
+                ctx.txn_mgr()
+                    .lock()
+                    .get_base_snapshot_timestamp(self.get_id(), base_snapshot_timestamp),
             )
         })?;
 

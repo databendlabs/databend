@@ -65,6 +65,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
+            insert_select.base_snapshot_timestamp,
         )?;
 
         Ok(())

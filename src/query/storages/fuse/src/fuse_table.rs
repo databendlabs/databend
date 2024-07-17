@@ -682,8 +682,9 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
-        self.do_append_data(ctx, pipeline, append_mode)
+        self.do_append_data(ctx, pipeline, append_mode, base_snapshot_timestamp)
     }
 
     fn commit_insertion(
@@ -695,6 +696,7 @@ impl Table for FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         self.do_commit(
             ctx,
@@ -704,6 +706,7 @@ impl Table for FuseTable {
             overwrite,
             prev_snapshot_id,
             deduplicated_label,
+            base_snapshot_timestamp,
         )
     }
 

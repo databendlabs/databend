@@ -162,6 +162,10 @@ impl ModifyTableColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let base_snapshot = fuse_table.read_table_snapshot().await?;
+        let base_snapshot_timestamp = self.ctx.txn_mgr().lock().get_base_snapshot_timestamp(
+            fuse_table.get_id(),
+            base_snapshot.as_ref().and_then(|s| s.timestamp),
+        );
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
@@ -408,6 +412,7 @@ impl ModifyTableColumnInterpreter {
                 select_column_bindings,
                 insert_schema: Arc::new(Arc::new(new_schema).into()),
                 cast_needed: true,
+                base_snapshot_timestamp,
             }));
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan).await?;
@@ -421,6 +426,7 @@ impl ModifyTableColumnInterpreter {
             true,
             base_snapshot.as_ref().map(|b| b.snapshot_id),
             None,
+            base_snapshot.and_then(|s| s.timestamp),
         )?;
 
         Ok(build_res)

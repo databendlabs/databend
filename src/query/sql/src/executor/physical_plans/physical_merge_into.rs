@@ -75,6 +75,7 @@ pub struct MergeInto {
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl PhysicalPlanBuilder {
@@ -450,6 +451,11 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
+        let base_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp);
         let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
@@ -462,6 +468,7 @@ impl PhysicalPlanBuilder {
             need_match: !is_insert_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         let commit_input = if !distributed {
@@ -477,6 +484,12 @@ impl PhysicalPlanBuilder {
             })
         };
 
+        let base_table_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp);
+
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
@@ -488,6 +501,7 @@ impl PhysicalPlanBuilder {
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
+            base_snapshot_timestamp: base_table_snapshot_timestamp,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

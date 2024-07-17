@@ -238,7 +238,11 @@ impl PipelineBuilder {
                 sort_builders.push(Box::new(self.dummy_transform_builder()?));
             }
             serialize_block_builders.push(Box::new(
-                self.with_tid_serialize_block_transform_builder(table, cluster_stats_gen)?,
+                self.with_tid_serialize_block_transform_builder(
+                    table,
+                    cluster_stats_gen,
+                    append_data.base_snapshot_timestamp,
+                )?,
             ));
         }
         self.main_pipeline
@@ -264,6 +268,7 @@ impl PipelineBuilder {
             deduplicated_label,
             targets,
         } = plan;
+        let mut base_snapshot_timestamps = HashMap::new();
         self.build_pipeline(input)?;
         let mut serialize_segment_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(targets.len());
@@ -275,12 +280,18 @@ impl PipelineBuilder {
                 .ctx
                 .build_table_by_table_info(&target.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
-            serialize_segment_builders.push(Box::new(
-                self.serialize_segment_transform_builder(table.clone(), block_thresholds)?,
-            ));
+            serialize_segment_builders.push(Box::new(self.serialize_segment_transform_builder(
+                table.clone(),
+                block_thresholds,
+                target.base_snapshot_timestamp,
+            )?));
             mutation_aggregator_builders.push(Box::new(
-                self.mutation_aggregator_transform_builder(table.clone())?,
+                self.mutation_aggregator_transform_builder(
+                    table.clone(),
+                    target.base_snapshot_timestamp,
+                )?,
             ));
+            base_snapshot_timestamps.insert(table.get_id(), target.base_snapshot_timestamp);
             tables.insert(table.get_id(), table);
         }
         self.main_pipeline
@@ -300,6 +311,7 @@ impl PipelineBuilder {
                     update_stream_meta.clone(),
                     deduplicated_label.clone(),
                     catalog.clone(),
+                    base_snapshot_timestamps.clone(),
                 ),
             )))
         })?;

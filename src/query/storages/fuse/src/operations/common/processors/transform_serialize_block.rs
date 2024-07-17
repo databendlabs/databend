@@ -79,8 +79,18 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Self> {
-        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, false)
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            kind,
+            false,
+            base_snapshot_timestamp,
+        )
     }
 
     pub fn try_create_with_tid(
@@ -90,8 +100,18 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Self> {
-        Self::do_create(ctx, input, output, table, cluster_stats_gen, kind, true)
+        Self::do_create(
+            ctx,
+            input,
+            output,
+            table,
+            cluster_stats_gen,
+            kind,
+            true,
+            base_snapshot_timestamp,
+        )
     }
 
     fn do_create(
@@ -102,6 +122,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<Self> {
         // remove virtual computed fields.
         let mut fields = table
@@ -136,6 +157,7 @@ impl TransformSerializeBlock {
             cluster_stats_gen,
             bloom_columns_map,
             inverted_index_builders,
+            base_snapshot_timestamp,
         };
         Ok(TransformSerializeBlock {
             state: State::Consume,

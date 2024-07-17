@@ -181,6 +181,7 @@ impl PipelineBuilder {
                     to_table.clone(),
                     plan_required_values_schema.clone(),
                     AppendMode::Copy,
+                    plan.base_snapshot_timestamp,
                 )?
             }
             CopyIntoTableMode::Replace => {}
@@ -190,6 +191,7 @@ impl PipelineBuilder {
                 to_table.clone(),
                 plan_required_values_schema.clone(),
                 AppendMode::Copy,
+                plan.base_snapshot_timestamp,
             )?,
         }
         Ok(())

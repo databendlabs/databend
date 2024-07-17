@@ -171,6 +171,12 @@ impl ReplaceInterpreter {
             ))
         });
 
+        let base_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, base_snapshot.timestamp);
+
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
@@ -336,6 +342,7 @@ impl ReplaceInterpreter {
             block_slots: None,
             need_insert: true,
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         })));
 
         if is_distributed {
@@ -358,6 +365,7 @@ impl ReplaceInterpreter {
             merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         })));
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))

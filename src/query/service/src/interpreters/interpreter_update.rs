@@ -270,6 +270,10 @@ impl UpdateInterpreter {
         is_distributed: bool,
         ctx: Arc<QueryContext>,
     ) -> Result<PhysicalPlan> {
+        let base_snapshot_timestamp = ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
         let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
             parts: partitions,
@@ -280,6 +284,7 @@ impl UpdateInterpreter {
             update_list,
             computed_list,
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         if is_distributed {
@@ -301,6 +306,7 @@ impl UpdateInterpreter {
             merge_meta,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)

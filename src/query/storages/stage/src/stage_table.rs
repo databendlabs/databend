@@ -208,6 +208,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
+        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline)
     }

@@ -178,6 +178,7 @@ impl PipelineBuilder {
                             table,
                             cluster_stats_gen.clone(),
                             MutationKind::Recluster,
+                            recluster_source.base_snapshot_timestamp,
                         )?;
                         proc.into_processor()
                     })
@@ -204,6 +205,7 @@ impl PipelineBuilder {
                 recluster_sink.remained_blocks.clone(),
                 recluster_sink.removed_segment_indexes.clone(),
                 recluster_sink.removed_segment_summary.clone(),
+                recluster_sink.base_snapshot_timestamp,
             )
         });
 
@@ -225,6 +227,7 @@ impl PipelineBuilder {
                 None,
                 None,
                 None,
+                recluster_sink.base_snapshot_timestamp,
             )
         })
     }

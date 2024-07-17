@@ -33,4 +33,5 @@ pub struct CommitSink {
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub deduplicated_label: Option<String>,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }

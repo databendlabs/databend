@@ -4401,6 +4401,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "chrono",
  "databend-common-base",
  "databend-common-building",
  "databend-common-catalog",
@@ -4423,6 +4424,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "chrono",
  "databend-common-building",
  "databend-common-catalog",
  "databend-common-exception",
@@ -4576,6 +4578,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "bstr 1.9.1",
+ "chrono",
  "csv-core",
  "dashmap",
  "databend-common-base",

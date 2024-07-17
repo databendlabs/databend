@@ -48,6 +48,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     base_segments,
                     plan.mutation_kind,
+                    plan.base_snapshot_timestamp,
                 )
             });
         }
@@ -70,6 +71,7 @@ impl PipelineBuilder {
                 None,
                 None,
                 plan.deduplicated_label.clone(),
+                plan.base_snapshot_timestamp,
             )
         })
     }

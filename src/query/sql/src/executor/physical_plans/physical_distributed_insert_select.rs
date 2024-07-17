@@ -29,4 +29,5 @@ pub struct DistributedInsertSelect {
     pub select_schema: DataSchemaRef,
     pub select_column_bindings: Vec<ColumnBinding>,
     pub cast_needed: bool,
+    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }

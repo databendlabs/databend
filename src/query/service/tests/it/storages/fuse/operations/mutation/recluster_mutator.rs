@@ -59,7 +59,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
+    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, None);
 
     let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
