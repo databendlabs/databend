@@ -56,7 +56,7 @@ select count(1) > 1 from information_Schema.Columns
 1
 
 query T
-SELECT t.table_catalog FROM information_schema.VIEWS t WHERE t.TABLE_SCHEMA = 'information_schema'
+SELECT t.table_catalog FROM information_schema.VIEWS t WHERE t.TABLE_SCHEMA = 'information_schema' and view_definition is not null;
 ----
 default
 default
