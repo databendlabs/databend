@@ -47,6 +47,7 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoManipulate;
@@ -219,6 +220,7 @@ fn to_format_tree(
         PhysicalPlan::AggregateFinal(plan) => aggregate_final_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::LocalShuffle(plan) => local_shuffle_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, profs),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, profs),
@@ -1056,6 +1058,39 @@ fn sort_to_format_tree(
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children("Sort".to_string(), children))
+}
+
+fn local_shuffle_to_format_tree(
+    plan: &LocalShuffle,
+    metadata: &Metadata,
+    prof_span_set: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    let shuffle_by = plan
+        .column_index
+        .iter()
+        .map(|&index| {
+            let name = metadata.column(index).name();
+            Ok(name)
+        })
+        .collect::<Result<Vec<_>>>()?
+        .join(", ");
+
+    let mut children = vec![
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, true)
+        )),
+        FormatTreeNode::new(format!("shuffle by: [{shuffle_by}]")),
+    ];
+
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
+
+    children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
+
+    Ok(FormatTreeNode::with_children(
+        "LocalShuffle".to_string(),
+        children,
+    ))
 }
 
 fn limit_to_format_tree(
