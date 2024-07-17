@@ -66,7 +66,7 @@ pub enum DataManipulationInput {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataManipulationInputType {
     Merge,
     Update,
@@ -184,7 +184,8 @@ impl DataManipulationInput {
 
                 let update_stream_columns = target_table.change_tracking_enabled()
                     && *merge_type != MergeIntoType::InsertOnly;
-                target_s_expr = update_target_scan(&target_s_expr, update_stream_columns)?;
+                let is_lazy_table = *merge_type != MergeIntoType::InsertOnly;
+                target_s_expr = update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
                 // Add internal_column row_id for target_table
                 let target_table_index = binder
@@ -252,7 +253,8 @@ impl DataManipulationInput {
                 };
                 let (mut target_s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
-                target_s_expr = update_target_scan(&target_s_expr, false)?;
+                let is_lazy_table = input_type != DataManipulationInputType::Delete;
+                target_s_expr = update_target_scan(&target_s_expr, is_lazy_table, false)?;
 
                 // Add internal_column row_id for target_table
                 let target_table_index = binder
@@ -399,18 +401,21 @@ impl Binder {
     }
 }
 
-pub fn update_target_scan(s_expr: &SExpr, update_stream_columns: bool) -> Result<SExpr> {
+pub fn update_target_scan(s_expr: &SExpr, is_lazy_table: bool, update_stream_columns: bool) -> Result<SExpr> {
+    if !is_lazy_table && !update_stream_columns {
+        return Ok(s_expr.clone());
+    }
     match s_expr.plan() {
         RelOperator::Scan(scan) => {
             let mut scan = scan.clone();
-            scan.is_lazy_table = true;
+            scan.is_lazy_table = is_lazy_table;
             scan.update_stream_columns(update_stream_columns);
             Ok(SExpr::create_leaf(Arc::new(scan.into())))
         }
         _ => {
             let mut children = Vec::with_capacity(s_expr.arity());
             for child in s_expr.children() {
-                let child = update_target_scan(child, update_stream_columns)?;
+                let child = update_target_scan(child, is_lazy_table, update_stream_columns)?;
                 children.push(Arc::new(child));
             }
             Ok(s_expr.replace_children(children))
