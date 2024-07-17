@@ -4698,7 +4698,6 @@ dependencies = [
  "databend-common-exception",
  "defer",
  "fern",
- "humantime",
  "itertools 0.10.5",
  "libc",
  "log",
