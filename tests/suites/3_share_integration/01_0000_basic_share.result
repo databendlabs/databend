@@ -1,0 +1,13 @@
+drop test share and database
+create provider share and database\table
+1
+2
+create provider share and grant access
+create consumer db from share
+1
+2
+test alter table
+1	100
+2	100
+100
+100
