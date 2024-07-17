@@ -43,8 +43,8 @@ pub fn monotonically_increased_timestamp(
     if let Some(prev_instant) = previous_timestamp {
         // timestamp of the snapshot should always larger than the previous one's
         if prev_instant > &timestamp {
-            // if local time is smaller, use the timestamp of previous snapshot, plus 1 nano sec
-            return prev_instant.add(chrono::Duration::nanoseconds(1));
+            // if local time is smaller, use the timestamp of previous snapshot, plus 1 ms
+            return prev_instant.add(chrono::Duration::milliseconds(1));
         }
     }
     timestamp

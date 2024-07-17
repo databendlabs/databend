@@ -63,7 +63,9 @@ impl<'a> BlockWriter<'a> {
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<(BlockMeta, Option<FileMetaData>)> {
-        let (location, block_id) = self.location_generator.gen_block_location(self.base_snapshot_timestamp);
+        let (location, block_id) = self
+            .location_generator
+            .gen_block_location(self.base_snapshot_timestamp);
 
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;

@@ -84,7 +84,13 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds,base_snapshot_timestamp);
+            let proc = TransformSerializeSegment::new(
+                input,
+                output,
+                self,
+                block_thresholds,
+                base_snapshot_timestamp,
+            );
             proc.into_processor()
         })?;
 

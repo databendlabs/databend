@@ -144,7 +144,7 @@ pub async fn generate_segments(
 async fn generate_blocks(fuse_table: &FuseTable, num_blocks: usize) -> Result<Vec<Arc<BlockMeta>>> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
-    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator(),None);
+    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator(), None);
     let mut block_metas = vec![];
 
     // does not matter in this suite

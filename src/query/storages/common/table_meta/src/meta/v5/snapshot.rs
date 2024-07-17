@@ -117,7 +117,9 @@ impl TableSnapshot {
 
         let candidate = trimmed_timestamp - Duration::hours(transaction_time_limit_in_hours as i64);
         let least_base_snapshot_timestamp = match prev_least_base_snapshot_timestamp {
-            Some(prev) => candidate.max(*prev + Duration::nanoseconds(1)),
+            // UUIDv7 values are created by allocating a Unix timestamp in milliseconds in the most significant 48 bits
+            // https://www.ietf.org/rfc/rfc9562.html#section-5.7
+            Some(prev) => candidate.max(*prev + Duration::milliseconds(1)),
             None => candidate,
         };
 
