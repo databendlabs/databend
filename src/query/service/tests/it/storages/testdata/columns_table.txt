@@ -465,7 +465,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'value'                           | 'system'             | 'settings'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'version'                         | 'system'             | 'clusters'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'version'                         | 'system'             | 'credits'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'view_definition'                 | 'information_schema' | 'views'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'view_definition'                 | 'information_schema' | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'view_query'                      | 'system'             | 'views_with_history'   | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'virtual_columns'                 | 'system'             | 'virtual_columns'      | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
