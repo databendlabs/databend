@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -28,10 +27,8 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::Datum;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::F64;
 
-use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
@@ -88,7 +85,7 @@ impl<'a> SelectivityEstimator<'a> {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
                 let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
                 let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
-                left_selectivity.min(right_selectivity)
+                left_selectivity * right_selectivity
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
@@ -293,14 +290,8 @@ impl<'a> SelectivityEstimator<'a> {
             if !self.updated_column_indexes.contains(index) {
                 let new_ndv = (column_stat.ndv * selectivity).ceil();
                 column_stat.ndv = new_ndv;
-                if let Some(histogram) = &mut column_stat.histogram {
-                    if new_ndv as u64 <= 2 {
-                        column_stat.histogram = None;
-                    } else {
-                        for bucket in histogram.buckets.iter_mut() {
-                            bucket.update(selectivity);
-                        }
-                    }
+                if selectivity < 0.8 {
+                    column_stat.histogram = None;
                 }
             }
         }
@@ -535,6 +526,9 @@ fn update_statistic(
     ) {
         new_min = Datum::Float(F64::from(new_min.to_double()?));
         new_max = Datum::Float(F64::from(new_max.to_double()?));
+    }
+    if selectivity < 0.8 {
+        column_stat.histogram = None;
     }
     column_stat.min = new_min.clone();
     column_stat.max = new_max.clone();
