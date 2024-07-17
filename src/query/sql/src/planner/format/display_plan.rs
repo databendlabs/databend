@@ -239,8 +239,8 @@ fn format_merge_into(s_expr: &SExpr) -> Result<String> {
         .meta_data
         .read()
         .get_table_index(
-            Some(merge_into.database.as_str()),
-            merge_into.table.as_str(),
+            Some(merge_into.database_name.as_str()),
+            merge_into.table_name.as_str(),
         )
         .unwrap();
 

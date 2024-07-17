@@ -22,8 +22,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::binder::bind_data_manipulation::bind::DataManipulation;
-use crate::binder::bind_data_manipulation::bind::TargetTableInfo;
 use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::binder::MergeIntoType;
 use crate::plans::Plan;
@@ -41,10 +41,12 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &MergeIntoStmt,
     ) -> Result<Plan> {
-        let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
+        let target_table_identifier = TableIdentifier::new(
+            self,
             &stmt.catalog,
             &stmt.database,
             &stmt.table_ident,
+            &stmt.target_alias,
         );
 
         let target_reference = TableReference::Table {
@@ -65,12 +67,7 @@ impl Binder {
         let manipulate_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
         let data_manipulation = DataManipulation {
-            target_table: TargetTableInfo {
-                catalog_name,
-                database_name,
-                table_name,
-                table_alias: stmt.target_alias.clone(),
-            },
+            target_table_identifier,
             input: DataManipulationInput::Merge {
                 target: target_reference,
                 source: source_reference,

@@ -114,10 +114,10 @@ impl PhysicalPlanBuilder {
         let crate::plans::DataManipulation {
             bind_context,
             meta_data,
-            catalog,
-            database,
-            table: table_name,
-            target_alias,
+            catalog_name,
+            database_name,
+            table_name,
+            table_name_alias,
             matched_evaluators,
             unmatched_evaluators,
             target_table_index,
@@ -167,7 +167,7 @@ impl PhysicalPlanBuilder {
             let mut row_id_column = None;
             for column_binding in bind_context.columns.iter() {
                 if BindContext::match_column_binding(
-                    Some(database.as_str()),
+                    Some(database_name.as_str()),
                     Some(table_name.as_str()),
                     ROW_ID_COL_NAME,
                     column_binding,
@@ -237,7 +237,9 @@ impl PhysicalPlanBuilder {
             .metadata
             .read()
             .get_table_lazy_columns(target_table_index);
-        if let Some(lazy_columns) = lazy_columns && !lazy_columns.is_empty() {
+        if let Some(lazy_columns) = lazy_columns
+            && !lazy_columns.is_empty()
+        {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
@@ -293,7 +295,10 @@ impl PhysicalPlanBuilder {
 
         let output_schema = plan.output_schema()?;
 
-        let table = self.ctx.get_table(catalog, database, table_name).await?;
+        let table = self
+            .ctx
+            .get_table(&catalog_name, &database_name, table_name)
+            .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
 
@@ -351,9 +356,9 @@ impl PhysicalPlanBuilder {
                 // we don't need real col_indices here, just give a
                 // dummy index, that's ok.
                 let col_indices = vec![DUMMY_COLUMN_INDEX];
-                let (database, table_name) = match target_alias {
-                    None => (Some(database.as_str()), table_name.clone()),
-                    Some(alias) => (None, alias.name.to_string().to_lowercase()),
+                let (database, table_name) = match table_name_alias {
+                    None => (Some(database_name.as_str()), table_name.clone()),
+                    Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
                 };
                 let update_list = generate_update_list(
                     self.ctx.clone(),

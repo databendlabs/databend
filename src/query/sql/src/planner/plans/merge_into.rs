@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::TableAlias;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -62,10 +61,10 @@ pub struct MatchedEvaluator {
 
 #[derive(Clone)]
 pub struct DataManipulation {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub target_alias: Option<TableAlias>,
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub table_name_alias: Option<String>,
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
@@ -92,9 +91,9 @@ pub struct DataManipulation {
 impl std::fmt::Debug for DataManipulation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
-            .field("catalog", &self.catalog)
-            .field("database", &self.database)
-            .field("table", &self.table)
+            .field("catalog", &self.catalog_name)
+            .field("database", &self.database_name)
+            .field("table", &self.table_name)
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
@@ -176,9 +175,9 @@ impl Eq for DataManipulation {}
 
 impl PartialEq for DataManipulation {
     fn eq(&self, other: &Self) -> bool {
-        self.catalog == other.catalog
-            && self.database == other.database
-            && self.table == other.table
+        self.catalog_name == other.catalog_name
+            && self.database_name == other.database_name
+            && self.table_name == other.table_name
             && self.matched_evaluators == other.matched_evaluators
             && self.unmatched_evaluators == other.unmatched_evaluators
             && self.distributed == other.distributed

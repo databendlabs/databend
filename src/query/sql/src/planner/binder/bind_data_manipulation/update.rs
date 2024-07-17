@@ -22,8 +22,8 @@ use databend_common_exception::Result;
 
 use crate::binder::bind_data_manipulation::bind::DataManipulation;
 use crate::binder::bind_data_manipulation::bind::MergeIntoType;
-use crate::binder::bind_data_manipulation::bind::TargetTableInfo;
 use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -45,25 +45,21 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let fully_table = if let TableReference::Table {
+        let target_table_identifier = if let TableReference::Table {
             catalog,
             database,
             table,
+            alias,
             ..
         } = table
         {
-            self.fully_table_identifier(catalog, database, table)
+            TableIdentifier::new(&self, catalog, database, table, alias)
         } else {
             // we do not support USING clause yet
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
         };
-        let (catalog_name, database_name, table_name) = (
-            fully_table.catalog_name(),
-            fully_table.database_name(),
-            fully_table.table_name(),
-        );
 
         let update_exprs = update_list
             .iter()
@@ -84,12 +80,7 @@ impl Binder {
         // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
 
         let data_manipulation = DataManipulation {
-            target_table: TargetTableInfo {
-                catalog_name,
-                database_name,
-                table_name,
-                table_alias: None,
-            },
+            target_table_identifier,
             input: DataManipulationInput::Update {
                 target: table.clone(),
                 filter: selection.clone(),

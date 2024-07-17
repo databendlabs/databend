@@ -30,7 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_ID_COL_NAME;
 
-use crate::binder::bind_data_manipulation::bind::TargetTableInfo;
+use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::binder::MergeIntoType;
@@ -99,7 +99,7 @@ impl DataManipulationInput {
         binder: &mut Binder,
         bind_context: &mut BindContext,
         target_table: Arc<dyn Table>,
-        target_table_identifier: TargetTableInfo,
+        target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
     ) -> Result<DataManipulationInputBindResult> {
         match self {
@@ -185,15 +185,16 @@ impl DataManipulationInput {
                 let update_stream_columns = target_table.change_tracking_enabled()
                     && *merge_type != MergeIntoType::InsertOnly;
                 let is_lazy_table = *merge_type != MergeIntoType::InsertOnly;
-                target_s_expr = update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
+                target_s_expr =
+                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
                 // Add internal_column row_id for target_table
                 let target_table_index = binder
                     .metadata
                     .read()
                     .get_table_index(
-                        Some(target_table_identifier.database_name.as_str()),
-                        target_table_identifier.table_name.as_str(),
+                        Some(target_table_identifier.database_name().as_str()),
+                        target_table_identifier.table_name().as_str(),
                     )
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
                 let target_row_id_index = binder.add_row_id_column(
@@ -261,8 +262,8 @@ impl DataManipulationInput {
                     .metadata
                     .read()
                     .get_table_index(
-                        Some(target_table_identifier.database_name.as_str()),
-                        target_table_identifier.table_name.as_str(),
+                        Some(target_table_identifier.database_name().as_str()),
+                        target_table_identifier.table_name().as_str(),
                     )
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
                 let target_row_id_index = binder.add_row_id_column(
@@ -301,14 +302,14 @@ impl Binder {
     fn add_row_id_column(
         &mut self,
         bind_context: &mut BindContext,
-        target_table: &TargetTableInfo,
+        target_table_identifier: &TableIdentifier,
         table_index: usize,
         expr: &mut SExpr,
         input_type: DataManipulationInputType,
     ) -> Result<usize> {
         let row_id_column_binding = InternalColumnBinding {
-            database_name: Some(target_table.database_name.clone()),
-            table_name: Some(target_table.table_name.clone()),
+            database_name: Some(target_table_identifier.database_name().clone()),
+            table_name: Some(target_table_identifier.table_name().clone()),
             internal_column: InternalColumn {
                 column_name: ROW_ID_COL_NAME.to_string(),
                 column_type: InternalColumnType::RowId,
@@ -324,7 +325,8 @@ impl Binder {
             Err(_) => {
                 return Err(ErrorCode::Unimplemented(format!(
                     "Table {} does not support {}",
-                    target_table.table_name, input_type,
+                    target_table_identifier.table_name(),
+                    input_type,
                 )));
             }
         };
@@ -401,7 +403,11 @@ impl Binder {
     }
 }
 
-pub fn update_target_scan(s_expr: &SExpr, is_lazy_table: bool, update_stream_columns: bool) -> Result<SExpr> {
+pub fn update_target_scan(
+    s_expr: &SExpr,
+    is_lazy_table: bool,
+    update_stream_columns: bool,
+) -> Result<SExpr> {
     if !is_lazy_table && !update_stream_columns {
         return Ok(s_expr.clone());
     }

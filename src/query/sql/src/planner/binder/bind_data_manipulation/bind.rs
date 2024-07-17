@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
-use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ParseError;
 use databend_common_catalog::lock::LockTableOption;
@@ -36,6 +35,7 @@ use indexmap::IndexMap;
 
 use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
 use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInputBindResult;
+use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -60,16 +60,8 @@ pub enum MergeIntoType {
     InsertOnly,
 }
 
-#[derive(Debug, Clone)]
-pub struct TargetTableInfo {
-    pub catalog_name: String,
-    pub database_name: String,
-    pub table_name: String,
-    pub table_alias: Option<TableAlias>,
-}
-
 pub struct DataManipulation {
-    pub target_table: TargetTableInfo,
+    pub target_table_identifier: TableIdentifier,
     pub input: DataManipulationInput,
     pub manipulate_type: MergeIntoType,
     pub matched_clauses: Vec<MatchedClause>,
@@ -119,21 +111,28 @@ impl Binder {
     ) -> Result<Plan> {
         data_manipulation.check_semantic()?;
         let DataManipulation {
-            target_table,
+            target_table_identifier,
             input,
             manipulate_type,
             matched_clauses,
             unmatched_clauses,
         } = data_manipulation;
 
+        let (catalog_name, database_name, table_name, table_name_alias) = (
+            target_table_identifier.catalog_name(),
+            target_table_identifier.database_name(),
+            target_table_identifier.table_name(),
+            target_table_identifier.table_name_alias(),
+        );
+
         // Add table lock before execution.
         let lock_guard = if manipulate_type != MergeIntoType::InsertOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
-                    &target_table.catalog_name,
-                    &target_table.database_name,
-                    &target_table.table_name,
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
                     &LockTableOption::LockWithRetry,
                 )
                 .await?
@@ -143,12 +142,10 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table(
-                &target_table.catalog_name,
-                &target_table.database_name,
-                &target_table.table_name,
-            )
-            .await?;
+            .get_table(&catalog_name, &database_name, &table_name)
+            .await
+            .map_err(|err| target_table_identifier.not_found_suggest_error(err))?;
+
         let table_schema = table.schema();
 
         let input = input
@@ -156,7 +153,7 @@ impl Binder {
                 self,
                 bind_context,
                 table.clone(),
-                target_table.clone(),
+                &target_table_identifier,
                 table_schema.clone(),
             )
             .await?;
@@ -171,10 +168,10 @@ impl Binder {
             target_row_id_index,
         } = input;
 
-        let target_table_name = if let Some(table_alias) = &target_table.table_alias {
-            self.normalize_identifier(&table_alias.name).name
+        let target_table_name = if let Some(table_name_alias) = &table_name_alias {
+            table_name_alias.clone()
         } else {
-            target_table.table_name.clone()
+            table_name.clone()
         };
         let mut matched_evaluators = Vec::with_capacity(matched_clauses.len());
         let mut unmatched_evaluators = Vec::with_capacity(unmatched_clauses.len());
@@ -184,10 +181,10 @@ impl Binder {
             // we need database name and table name in update_row_version, if the table alias is
             // not None, after the binding phase, the bound columns will have a database of None,
             // so we adjust it accordingly.
-            let database_name = if target_table.table_alias.is_some() {
+            let database_name = if table_name_alias.is_some() {
                 None
             } else {
-                Some(target_table.database_name.clone())
+                Some(database_name.clone())
             };
             let update_row_version = if table.change_tracking_enabled() {
                 Some(Self::update_row_version(
@@ -259,10 +256,10 @@ impl Binder {
         }
 
         let merge_into = crate::plans::DataManipulation {
-            catalog: target_table.catalog_name.clone(),
-            database: target_table.database_name.clone(),
-            table: target_table.table_name.clone(),
-            target_alias: target_table.table_alias.clone(),
+            catalog_name,
+            database_name,
+            table_name,
+            table_name_alias,
             bind_context: Box::new(bind_context),
             meta_data: self.metadata.clone(),
             input_type,
