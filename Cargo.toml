@@ -289,7 +289,7 @@ parking_lot = "0.12.1"
 parquet = { version = "52", features = ["async"] }
 paste = "1.0.15"
 poem = { version = "3.0", features = ["rustls", "multipart", "compression"] }
-proj = { git = "https://github.com/b41sh/proj.git", branch = "tmp", features = ["bundled_proj"] }
+proj = { git = "https://github.com/b41sh/proj.git", branch = "tmp1", features = ["bundled_proj"] }
 prometheus-client = "0.22"
 prost = { version = "0.12.1" }
 prost-build = { version = "0.12.1" }
