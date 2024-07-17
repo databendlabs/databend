@@ -237,7 +237,7 @@ impl PhysicalPlanBuilder {
             .metadata
             .read()
             .get_table_lazy_columns(target_table_index);
-        if let Some(lazy_columns) = lazy_columns {
+        if let Some(lazy_columns) = lazy_columns && !lazy_columns.is_empty() {
             let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
             let lazy_columns = lazy_columns
                 .iter()
