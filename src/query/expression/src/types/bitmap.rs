@@ -14,9 +14,6 @@
 
 use std::ops::Range;
 
-use databend_common_exception::ErrorCode;
-use roaring::RoaringTreemap;
-
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
 use super::binary::BinaryIterator;
@@ -176,17 +173,5 @@ impl ArgType for BitmapType {
 
     fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
         BinaryColumnBuilder::with_capacity(capacity, 0)
-    }
-}
-
-pub fn deserialize_bitmap(buf: &[u8]) -> databend_common_exception::Result<RoaringTreemap> {
-    if buf.is_empty() {
-        Ok(RoaringTreemap::new())
-    } else {
-        RoaringTreemap::deserialize_from(buf).map_err(|e| {
-            let len = buf.len();
-            let msg = format!("fail to decode bitmap from buffer of size {len}: {e}");
-            ErrorCode::BadBytes(msg)
-        })
     }
 }

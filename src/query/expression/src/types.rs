@@ -37,6 +37,7 @@ use std::fmt::Debug;
 use std::ops::Range;
 
 use databend_common_arrow::arrow::trusted_len::TrustedLen;
+pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -44,7 +45,6 @@ use serde::Serialize;
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::binary::BinaryType;
-pub use self::bitmap::deserialize_bitmap;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;

@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_expression::date_helper::DateConverter;
-use databend_common_expression::types::deserialize_bitmap;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;

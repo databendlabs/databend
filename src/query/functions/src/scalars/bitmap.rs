@@ -19,7 +19,6 @@ use std::ops::Sub;
 
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::bitmap::BitmapType;
-use databend_common_expression::types::deserialize_bitmap;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
@@ -37,6 +36,7 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
 use roaring::RoaringTreemap;

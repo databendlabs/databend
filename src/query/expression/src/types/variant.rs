@@ -15,6 +15,7 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 
@@ -26,7 +27,6 @@ use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
-use crate::types::deserialize_bitmap;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
