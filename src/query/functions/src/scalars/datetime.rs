@@ -159,14 +159,6 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            // if let Ok(timestamp) = val.parse::<i64>() {
-            // match int64_to_timestamp(timestamp) {
-            // Ok(ts) => {output.push(ts);
-            // return;
-            // }
-            // _ => {}
-            // }
-            // }
             let tz = ctx.func_ctx.tz.tz;
             let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
             if ctx.func_ctx.enable_strict_datetime_parser {
@@ -534,12 +526,6 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            //   if let Ok(val) = val.parse::<i64>() {
-            // if let Ok(d) = check_date(val) {
-            // output.push(d);
-            // return;
-            // }
-            // }
             if ctx.func_ctx.enable_strict_datetime_parser {
                 match string_to_date(val, ctx.func_ctx.tz.tz, ctx.func_ctx.enable_dst_hour_fix) {
                     Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
