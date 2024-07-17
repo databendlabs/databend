@@ -12136,7 +12136,7 @@ dependencies = [
 [[package]]
 name = "proj"
 version = "0.27.2"
-source = "git+https://github.com/b41sh/proj.git?branch=tmp1#5dc6d884c5ed27c8ed7d26d460760fa8f633d566"
+source = "git+https://github.com/b41sh/proj.git?branch=tmp2#e9bc4f8c7502cb97102b83b38f9b2bf1b0dc2131"
 dependencies = [
  "geo-types",
  "libc",
@@ -12148,7 +12148,7 @@ dependencies = [
 [[package]]
 name = "proj-sys"
 version = "0.24.0"
-source = "git+https://github.com/b41sh/proj.git?branch=tmp1#5dc6d884c5ed27c8ed7d26d460760fa8f633d566"
+source = "git+https://github.com/b41sh/proj.git?branch=tmp2#e9bc4f8c7502cb97102b83b38f9b2bf1b0dc2131"
 dependencies = [
  "cmake",
  "flate2",
