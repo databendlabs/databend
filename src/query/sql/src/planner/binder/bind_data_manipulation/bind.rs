@@ -135,7 +135,8 @@ impl Binder {
                     &table_name,
                     &LockTableOption::LockWithRetry,
                 )
-                .await?
+                .await
+                .map_err(|err| target_table_identifier.not_found_suggest_error(err))?
         } else {
             None
         };
@@ -143,8 +144,7 @@ impl Binder {
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
-            .await
-            .map_err(|err| target_table_identifier.not_found_suggest_error(err))?;
+            .await?;
 
         let table_schema = table.schema();
 
