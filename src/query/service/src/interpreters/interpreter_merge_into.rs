@@ -34,6 +34,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
@@ -74,6 +75,10 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()).await? {
+            return Ok(PipelineBuildResult::create());
+        }
+
         let merge_into: databend_common_sql::plans::DataManipulation =
             self.s_expr.plan().clone().try_into()?;
 
