@@ -207,7 +207,6 @@ impl Binder {
                 .columns_by_table_index(target_table_index);
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let column_index = self.find_column_index(&target_column_entries, field.name())?;
-                println!("column_index insert {:?}", column_index);
                 field_index_map.insert(idx, column_index.to_string());
             }
             for stream_column in table.stream_columns() {
