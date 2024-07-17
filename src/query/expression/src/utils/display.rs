@@ -21,6 +21,7 @@ use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use geozero::wkb::Ewkb;
@@ -29,7 +30,6 @@ use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
-use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -145,7 +145,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -237,11 +237,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = if !bits.is_empty() {
-                    RoaringTreemap::deserialize_from(*bits).unwrap()
-                } else {
-                    RoaringTreemap::new()
-                };
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {

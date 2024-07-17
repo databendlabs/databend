@@ -149,6 +149,9 @@ impl PipelineBuilder {
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
             PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
+            PhysicalPlan::LocalShuffle(local_shuffle) => {
+                self.build_local_shuffle_pipeline(local_shuffle)
+            }
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
             PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
             PhysicalPlan::HashJoin(join) => self.build_join(join),

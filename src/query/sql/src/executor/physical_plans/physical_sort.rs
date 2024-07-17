@@ -23,6 +23,7 @@ use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
@@ -120,16 +121,36 @@ impl PhysicalPlanBuilder {
             None
         };
 
-        let window_partition = sort
+        let input_plan = self.build(s_expr.child(0)?, required).await?;
+        let output_schema = input_plan.output_schema()?;
+
+        let (window_partition, column_index): (Vec<_>, Vec<_>) = sort
             .window_partition
             .iter()
-            .map(|v| v.index)
-            .collect::<Vec<_>>();
+            .map(|s| {
+                (
+                    output_schema.index_of(&s.index.to_string()).unwrap(),
+                    s.index,
+                )
+            })
+            .unzip();
+
+        // Add LocalShuffle for parallel sort in window.
+        let input_plan = if !window_partition.is_empty() && sort.after_exchange != Some(true) {
+            PhysicalPlan::LocalShuffle(LocalShuffle {
+                plan_id: 0,
+                input: Box::new(input_plan),
+                shuffle_by: window_partition.clone(),
+                column_index,
+            })
+        } else {
+            input_plan
+        };
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
             plan_id: 0,
-            input: Box::new(self.build(s_expr.child(0)?, required).await?),
+            input: Box::new(input_plan),
             order_by: sort
                 .items
                 .iter()

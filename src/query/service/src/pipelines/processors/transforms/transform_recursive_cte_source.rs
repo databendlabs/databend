@@ -246,6 +246,9 @@ async fn create_memory_table_for_cte_scan(
         PhysicalPlan::Sort(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
+        PhysicalPlan::LocalShuffle(plan) => {
+            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
+        }
         PhysicalPlan::Limit(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }

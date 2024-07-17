@@ -246,12 +246,12 @@ where
                 if !valid {
                     continue;
                 }
-                let rb = RoaringTreemap::deserialize_from(data)?;
+                let rb = deserialize_bitmap(data)?;
                 state.add::<OP>(rb);
             }
         } else {
             for data in column_iter {
-                let rb = RoaringTreemap::deserialize_from(data)?;
+                let rb = deserialize_bitmap(data)?;
                 state.add::<OP>(rb);
             }
         }
@@ -270,7 +270,7 @@ where
         for (data, place) in column.iter().zip(places.iter()) {
             let addr = place.next(offset);
             let state = addr.get::<BitmapAggState>();
-            let rb = RoaringTreemap::deserialize_from(data)?;
+            let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -280,7 +280,7 @@ where
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = BitmapType::index_column(&column, row) {
-            let rb = RoaringTreemap::deserialize_from(data)?;
+            let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -303,7 +303,7 @@ where
         let flag = reader[0];
         reader.consume(1);
         if flag == 1 {
-            let rb = RoaringTreemap::deserialize_from(reader)?;
+            let rb = deserialize_bitmap(reader)?;
             state.add::<OP>(rb);
         }
         Ok(())
