@@ -1,6 +1,6 @@
 [package]
-name = "databend-sql"
-description = "SQL types for Databend Driver"
+name = "databend-driver-core"
+description = "Core components for Databend Driver"
 categories = ["database"]
 keywords = ["databend", "database", "sdk"]
 

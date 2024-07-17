@@ -28,10 +28,10 @@ use crate::flight_sql::FlightSQLConnection;
 
 use databend_client::presign::{presign_download_from_stage, PresignedResponse};
 use databend_client::stage::StageLocation;
-use databend_sql::error::{Error, Result};
-use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
-use databend_sql::schema::{DataType, Field, NumberDataType, Schema};
-use databend_sql::value::{NumberValue, Value};
+use databend_driver_core::error::{Error, Result};
+use databend_driver_core::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
+use databend_driver_core::schema::{DataType, Field, NumberDataType, Schema};
+use databend_driver_core::value::{NumberValue, Value};
 
 use crate::rest_api::RestAPIConnection;
 

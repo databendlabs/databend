@@ -22,13 +22,13 @@ flight-sql = [
     "dep:arrow-flight",
     "dep:arrow-schema",
     "dep:tonic",
-    "databend-sql/flight-sql",
+    "databend-driver-core/flight-sql",
 ]
 
 [dependencies]
 databend-client = { workspace = true }
+databend-driver-core = { workspace = true }
 databend-driver-macros = { workspace = true }
-databend-sql = { workspace = true }
 
 async-compression = { version = "0.4", features = ["tokio", "zstd"] }
 async-trait = "0.1"

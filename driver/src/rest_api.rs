@@ -31,9 +31,9 @@ use databend_client::error::Error as ClientError;
 use databend_client::presign::PresignedResponse;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
-use databend_sql::error::{Error, Result};
-use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
-use databend_sql::schema::{Schema, SchemaRef};
+use databend_driver_core::error::{Error, Result};
+use databend_driver_core::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
+use databend_driver_core::schema::{Schema, SchemaRef};
 
 use crate::conn::{Connection, ConnectionInfo, Reader};
 

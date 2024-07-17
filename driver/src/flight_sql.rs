@@ -33,9 +33,11 @@ use url::Url;
 
 use databend_client::auth::SensitiveString;
 use databend_client::presign::{presign_upload_to_stage, PresignedResponse};
-use databend_sql::error::{Error, Result};
-use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, Rows, ServerStats};
-use databend_sql::schema::Schema;
+use databend_driver_core::error::{Error, Result};
+use databend_driver_core::rows::{
+    Row, RowIterator, RowStatsIterator, RowWithStats, Rows, ServerStats,
+};
+use databend_driver_core::schema::Schema;
 
 use crate::conn::{Connection, ConnectionInfo, Reader};
 

@@ -20,14 +20,16 @@ mod rest_api;
 pub use conn::{Client, Connection, ConnectionInfo};
 
 // pub use for convenience
-pub use databend_sql::error::{Error, Result};
-pub use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
-pub use databend_sql::schema::{DataType, DecimalSize, Field, Schema, SchemaRef};
-pub use databend_sql::value::{NumberValue, Value};
+pub use databend_driver_core::error::{Error, Result};
+pub use databend_driver_core::rows::{
+    Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats,
+};
+pub use databend_driver_core::schema::{DataType, DecimalSize, Field, Schema, SchemaRef};
+pub use databend_driver_core::value::{NumberValue, Value};
 
 pub use databend_driver_macros::TryFromRow;
 
 #[doc(hidden)]
 pub mod _macro_internal {
-    pub use databend_sql::_macro_internal::*;
+    pub use databend_driver_core::_macro_internal::*;
 }

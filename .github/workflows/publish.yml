@@ -5,7 +5,12 @@ on:
     branches:
       - main
     paths:
-        - "Cargo.toml"
+      - "Cargo.toml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
 
 jobs:
   crates:
@@ -14,17 +19,22 @@ jobs:
       name: crates.io
       url: https://crates.io/crates/databend-driver
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup Rust toolchain
-      uses: ./.github/actions/setup
-      with:
-        cache-key: publish
-    - name: Setup Cargo Release
-      run: |
-        cargo install cargo-quickinstall
-        cargo quickinstall cargo-release
-    - name: Release to crates.io
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      run: |
-        cargo release publish --execute --no-confirm
+      - uses: actions/checkout@v4
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+        with:
+          cache-key: publish
+      - name: Setup Cargo workspaces
+        run: |
+          cargo install cargo-quickinstall
+          cargo quickinstall cargo-workspaces
+      - name: Dry run release
+        if: github.event_name == 'pull_request'
+        run: |
+          cargo workspaces publish --all --dry-run --publish-as-is
+      - name: Release to crates.io
+        if: github.event_name == 'push'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          cargo workspaces publish --all --publish-as-is --yes
