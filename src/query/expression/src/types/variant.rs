@@ -17,7 +17,6 @@ use std::ops::Range;
 
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
-use roaring::RoaringTreemap;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -27,6 +26,7 @@ use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
+use crate::types::deserialize_bitmap;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -250,7 +250,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Bitmap(b) => {
             jsonb::Value::Array(
-                RoaringTreemap::deserialize_from(b)
+                deserialize_bitmap(b)
                     .unwrap()
                     .iter()
                     .map(|x| x.into())

@@ -401,12 +401,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
-            DataType::Bitmap => {
-                let rb = RoaringTreemap::new();
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf).unwrap();
-                Scalar::Bitmap(buf)
-            }
+            DataType::Bitmap => Scalar::Bitmap(vec![]),
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
             DataType::Geometry => Scalar::Geometry(vec![]),

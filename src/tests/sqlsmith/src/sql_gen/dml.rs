@@ -38,6 +38,7 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateExpr;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_ast::Span;
+use databend_common_expression::types::deserialize_bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
@@ -52,7 +53,6 @@ use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_sql::resolve_type_name;
 use itertools::join;
 use rand::Rng;
-use roaring::RoaringTreemap;
 
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
@@ -551,7 +551,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());
                             }
                             ScalarRef::Bitmap(v) => {
-                                let rb = RoaringTreemap::deserialize_from(v).unwrap();
+                                let rb = deserialize_bitmap(v).unwrap();
                                 let vals = rb.into_iter().collect::<Vec<_>>();
                                 let s = join(vals.iter(), ",");
                                 buf.push(b'\'');

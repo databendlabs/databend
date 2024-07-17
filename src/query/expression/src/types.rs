@@ -44,6 +44,7 @@ use serde::Serialize;
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
 pub use self::binary::BinaryType;
+pub use self::bitmap::deserialize_bitmap;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;

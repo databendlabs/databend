@@ -29,7 +29,6 @@ use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
 use num_traits::FromPrimitive;
-use roaring::RoaringTreemap;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 
@@ -47,6 +46,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::deserialize_bitmap;
 use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
@@ -145,7 +145,7 @@ impl<'a> Debug for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "{rb:?}")
             }
             ScalarRef::Tuple(fields) => {
@@ -237,11 +237,7 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = if !bits.is_empty() {
-                    RoaringTreemap::deserialize_from(*bits).unwrap()
-                } else {
-                    RoaringTreemap::new()
-                };
+                let rb = deserialize_bitmap(bits).unwrap();
                 write!(f, "'{}'", rb.into_iter().join(","))
             }
             ScalarRef::Tuple(fields) => {
