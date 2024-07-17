@@ -184,7 +184,7 @@ impl log::Log for OpenTelemetryLogger {
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
         let mut record = opentelemetry_sdk::logs::LogRecord::default();
-        record.timestamp = Some(chrono::Utc::now().into());
+        record.observed_timestamp = Some(chrono::Utc::now().into());
         record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
         record.severity_text = Some(log_record.level().as_str().into());
         record.body = Some(AnyValue::from(log_record.args().to_string()));
