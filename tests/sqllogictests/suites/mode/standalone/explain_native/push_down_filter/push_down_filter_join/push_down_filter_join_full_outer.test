@@ -37,7 +37,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│   └── estimated rows: 0.60
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -59,7 +59,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -69,7 +69,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│   └── estimated rows: 0.60
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -123,7 +123,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -133,7 +133,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(t2.b (#3) > 0)], limit: NONE]
-│   └── estimated rows: 0.60
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -155,7 +155,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -165,7 +165,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [and_filters(t2.a (#2) > 0, t2.b (#3) > 0)], limit: NONE]
-│   └── estimated rows: 0.60
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
@@ -187,7 +187,7 @@ HashJoin
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
 ├── filters: []
-├── estimated rows: 0.80
+├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── output columns: [a (#2), b (#3)]
@@ -197,7 +197,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│   └── estimated rows: 0.60
+│   └── estimated rows: 3.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
