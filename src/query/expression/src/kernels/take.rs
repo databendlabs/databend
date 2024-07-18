@@ -246,6 +246,8 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
             *offsets.get_unchecked_mut(0) = 0;
             for (i, index) in indices.iter().enumerate() {
                 let start = *col_offset.get_unchecked(index.to_usize()) as usize;
@@ -254,8 +256,6 @@ impl Column {
                 *items.get_unchecked_mut(i) = (col_data_ptr.add(start) as u64, len);
                 *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
