@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
 use super::algorithm::*;
-use super::Cursor;
 use super::Rows;
 
 #[async_trait::async_trait]
@@ -196,7 +195,7 @@ where
                     .min(start + max_rows - self.temp_sorted_num_rows);
                 let mut p = cursor.cursor_mut();
                 p.advance();
-                while p.row_index < limit && p.le(next_cursor) {
+                while p.row_index < limit && p.current().le(&next_cursor.current()) {
                     // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
                     p.advance();
                 }
