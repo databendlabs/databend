@@ -164,7 +164,7 @@ impl<'a> SelectivityEstimator<'a> {
 
     fn compute_selectivity_comparison_expr(
         &mut self,
-        op: ComparisonOp,
+        mut op: ComparisonOp,
         left: &ScalarExpr,
         right: &ScalarExpr,
         update: bool,
@@ -222,14 +222,19 @@ impl<'a> SelectivityEstimator<'a> {
                         }
                         Ok(selectivity)
                     }
-                    _ => Self::compute_binary_comparison_selectivity(
-                        &op,
-                        &const_datum,
-                        update,
-                        column_ref,
-                        column_stat,
-                        &mut self.updated_column_indexes,
-                    ),
+                    _ => {
+                        if let ScalarExpr::ConstantExpr(_) = left {
+                            op = op.reverse();
+                        }
+                        Self::compute_binary_comparison_selectivity(
+                            &op,
+                            &const_datum,
+                            update,
+                            column_ref,
+                            column_stat,
+                            &mut self.updated_column_indexes,
+                        )
+                    }
                 };
             }
             (ScalarExpr::ConstantExpr(_), ScalarExpr::ConstantExpr(_)) => {
