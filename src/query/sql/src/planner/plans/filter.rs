@@ -112,7 +112,7 @@ impl Operator for Filter {
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction
-            selectivity = selectivity * sb.compute_selectivity(pred, true)?;
+            selectivity *= sb.compute_selectivity(pred, true)?;
         }
         // Update other columns's statistic according to selectivity.
         sb.update_other_statistic_by_selectivity(selectivity);

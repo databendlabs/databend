@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -21,13 +20,10 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::F64;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
-use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
-use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Distribution;
@@ -250,8 +246,6 @@ impl Join {
     ) -> Result<f64> {
         let mut join_card = *left_cardinality * *right_cardinality;
         let mut join_card_updated = false;
-        let mut left_column_index = 0;
-        let mut right_column_index = 0;
         for condition in self.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -297,7 +291,7 @@ impl Join {
                             *right_cardinality,
                             &mut new_ndv,
                         );
-                        let (left_index, right_index) = update_statistic(
+                        update_statistic(
                             left_statistics,
                             right_statistics,
                             left_condition,
@@ -311,8 +305,6 @@ impl Join {
                         if card < join_card {
                             join_card = card;
                             join_card_updated = true;
-                            left_column_index = left_index;
-                            right_column_index = right_index;
                         }
                         continue;
                     }
@@ -331,7 +323,7 @@ impl Join {
                             &mut new_ndv,
                         ),
                     };
-                    let (left_index, right_index) = update_statistic(
+                    update_statistic(
                         left_statistics,
                         right_statistics,
                         left_condition,
@@ -345,8 +337,6 @@ impl Join {
                     if card < join_card {
                         join_card = card;
                         join_card_updated = true;
-                        left_column_index = left_index;
-                        right_column_index = right_index;
                     }
                 }
                 _ => continue,
