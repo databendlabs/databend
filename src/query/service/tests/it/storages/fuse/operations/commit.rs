@@ -150,7 +150,6 @@ use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use uuid::Uuid;
 use walkdir::WalkDir;
 use xorf::BinaryFuse16;
 

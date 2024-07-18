@@ -23,7 +23,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
-use uuid::Uuid;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;

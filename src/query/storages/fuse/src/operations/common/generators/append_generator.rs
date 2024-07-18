@@ -31,7 +31,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 use log::warn;
-use uuid::Uuid;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;

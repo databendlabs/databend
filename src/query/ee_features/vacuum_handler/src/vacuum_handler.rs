@@ -36,11 +36,7 @@ pub trait VacuumHandler: Sync + Send {
         dry_run: bool,
     ) -> Result<Option<Vec<String>>>;
 
-    async fn do_vacuum2(
-        &self,
-        fuse_table: &FuseTable,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<Vec<String>>>;
+    async fn do_vacuum2(&self, fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<()>;
 
     async fn do_vacuum_drop_tables(
         &self,
@@ -84,7 +80,7 @@ impl VacuumHandlerWrapper {
         &self,
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<Vec<String>>> {
+    ) -> Result<()> {
         self.handler.do_vacuum2(fuse_table, ctx).await
     }
 

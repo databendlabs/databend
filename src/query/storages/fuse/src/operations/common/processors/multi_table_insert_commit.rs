@@ -100,10 +100,7 @@ impl AsyncSink for CommitMultiTableInsert {
                     table.as_ref(),
                     &snapshot_generator,
                     self.ctx.txn_mgr(),
-                    self.base_snapshot_timestamps
-                        .get(&table.get_id())
-                        .unwrap()
-                        .clone(),
+                    *self.base_snapshot_timestamps.get(&table.get_id()).unwrap(),
                 )
                 .await?,
                 table.get_table_info().clone(),
@@ -189,7 +186,7 @@ impl AsyncSink for CommitMultiTableInsert {
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
-                                    self.base_snapshot_timestamps.get(&tid).unwrap().clone(),
+                                    *self.base_snapshot_timestamps.get(&tid).unwrap(),
                                 )
                                 .await?;
                                 break;

@@ -45,11 +45,7 @@ impl VacuumHandler for RealVacuumHandler {
         do_vacuum(fuse_table, ctx, retention_time, dry_run).await
     }
 
-    async fn do_vacuum2(
-        &self,
-        fuse_table: &FuseTable,
-        ctx: Arc<dyn TableContext>,
-    ) -> Result<Option<Vec<String>>> {
+    async fn do_vacuum2(&self, fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<()> {
         do_vacuum2(fuse_table, ctx).await
     }
 

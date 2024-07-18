@@ -107,7 +107,6 @@ mod tests {
 
     use databend_common_base::runtime::catch_unwind;
     use databend_common_expression::TableSchema;
-    use databend_storages_common_table_meta::meta::SnapshotId;
     use databend_storages_common_table_meta::meta::Statistics;
 
     use super::*;

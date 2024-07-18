@@ -22,11 +22,8 @@ use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
-use uuid::NoContext;
-use uuid::Timestamp;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -40,7 +37,6 @@ use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
@@ -124,6 +120,10 @@ impl TableMetaLocationGenerator {
             segment_uuid,
             SegmentInfo::VERSION,
         )
+    }
+
+    pub fn snapshot_dir(&self) -> String {
+        format!("{}/{}/", self.prefix, FUSE_TBL_SNAPSHOT_PREFIX)
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {

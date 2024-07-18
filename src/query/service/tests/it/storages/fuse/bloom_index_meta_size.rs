@@ -326,7 +326,7 @@ fn build_test_segment_info(
 
     let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
 
-    let (block_location, block_uuid) = location_gen.gen_block_location();
+    let (block_location, block_uuid) = location_gen.gen_block_location(None);
     let block_meta = BlockMeta {
         row_count: 0,
         block_size: 0,

@@ -79,7 +79,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use log::error;
 use log::warn;
 use opendal::Operator;
-use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
