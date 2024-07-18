@@ -153,6 +153,7 @@ impl ReclusterTableInterpreter {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
+                    log::info!("no need to recluster");
                     Ok(true)
                 } else {
                     Err(e)
@@ -160,6 +161,7 @@ impl ReclusterTableInterpreter {
             }
         };
 
+        log::info!("start recluster");
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         assert!(build_res.main_pipeline.is_complete_pipeline()?);

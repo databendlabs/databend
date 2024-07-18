@@ -334,6 +334,7 @@ impl ReclusterMutator {
                 .into_iter()
                 .map(|v| blocks[*v].clone())
                 .collect::<Vec<_>>();
+            log::info!("recluster remained_blocks: {}", remained_blocks.len());
 
             ReclusterParts::Recluster {
                 tasks,
