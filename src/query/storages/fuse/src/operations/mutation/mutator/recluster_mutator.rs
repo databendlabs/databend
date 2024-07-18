@@ -304,6 +304,11 @@ impl ReclusterMutator {
             break;
         }
 
+        let cluster_stats = blocks
+            .iter()
+            .map(|v| v.cluster_stats.clone())
+            .collect::<Vec<_>>();
+        log::info!("cluster_stats: {:?}", cluster_stats);
         let selected = if selected_blocks_idx.is_empty() {
             let unordered = || {
                 blocks.windows(2).any(|w| {
