@@ -49,7 +49,7 @@ impl FuseTable {
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let start = Instant::now();
@@ -100,7 +100,7 @@ impl FuseTable {
                 &ctx,
                 self.schema_with_stream(),
                 self.get_operator(),
-                push_downs,
+                &push_downs,
                 chunk.to_vec(),
             )
             .await?;

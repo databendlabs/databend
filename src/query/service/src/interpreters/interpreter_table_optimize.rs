@@ -185,7 +185,7 @@ impl OptimizeTableInterpreter {
         let do_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         let mut physical_plan = if do_recluster {
             let Some((parts, snapshot)) = table
-                .recluster(self.ctx.clone(), &None, self.plan.limit)
+                .recluster(self.ctx.clone(), None, self.plan.limit)
                 .await?
             else {
                 return Ok(PipelineBuildResult::create());

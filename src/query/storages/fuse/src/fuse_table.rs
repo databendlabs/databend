@@ -906,7 +906,7 @@ impl Table for FuseTable {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         self.do_recluster(ctx, push_downs, limit).await

@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
@@ -35,7 +35,7 @@ pub struct Recluster {
     pub table: String,
 
     pub limit: Option<usize>,
-    pub push_downs: Option<PushDownInfo>,
+    pub filters: Option<Filters>,
 }
 
 impl std::hash::Hash for Recluster {

@@ -56,7 +56,6 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::PushDownInfo;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -979,7 +978,7 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let push_downs = if let Some(expr) = selection {
+                let filters = if let Some(expr) = selection {
                     let (_, mut context) =
                         self.bind_table_reference(bind_context, table_reference)?;
 
@@ -1005,14 +1004,9 @@ impl Binder {
                     let inverted_filter =
                         check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
 
-                    let filters = Filters {
+                    Some(Filters {
                         filter: filter.as_remote_expr(),
                         inverted_filter: inverted_filter.as_remote_expr(),
-                    };
-
-                    Some(PushDownInfo {
-                        filters: Some(filters),
-                        ..PushDownInfo::default()
                     })
                 } else {
                     None
@@ -1022,7 +1016,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
-                    push_downs,
+                    filters,
                     limit: limit.map(|v| v as usize),
                 });
                 let s_expr = SExpr::create_leaf(Arc::new(recluster));

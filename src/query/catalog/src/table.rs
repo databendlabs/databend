@@ -369,7 +369,7 @@ pub trait Table: Sync + Send {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: &Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
         let (_, _, _) = (ctx, push_downs, limit);

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::plan::PartInfoType;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::TableExt;
@@ -65,7 +66,7 @@ impl PhysicalPlanBuilder {
             catalog,
             database,
             table,
-            push_downs,
+            filters,
             limit,
         } = recluster;
 
@@ -75,6 +76,10 @@ impl PhysicalPlanBuilder {
         // check mutability
         tbl.check_mutable()?;
 
+        let push_downs = filters.clone().map(|v| PushDownInfo {
+            filters: Some(v),
+            ..PushDownInfo::default()
+        });
         let Some((parts, snapshot)) = tbl.recluster(self.ctx.clone(), push_downs, *limit).await?
         else {
             return Err(ErrorCode::NoNeedToRecluster(format!(
