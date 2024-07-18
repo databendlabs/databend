@@ -3477,6 +3477,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
+ "dtparse",
  "ethnum",
  "geo",
  "geo-types",
@@ -6164,6 +6165,17 @@ name = "dtoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcbb2bf8e87535c23f7a8a321e364ce21462d0ff10cb6407820e8e96dfff6653"
+
+[[package]]
+name = "dtparse"
+version = "2.0.0"
+source = "git+https://github.com/TCeason/dtparse.git?rev=de0a15b#de0a15b5db5cf3f2c99f38a6535f669bc0ee7ea1"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "num-traits",
+ "rust_decimal",
+]
 
 [[package]]
 name = "dunce"
