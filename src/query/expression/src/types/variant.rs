@@ -15,9 +15,9 @@
 use core::cmp::Ordering;
 use std::ops::Range;
 
+use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
-use roaring::RoaringTreemap;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -250,7 +250,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Bitmap(b) => {
             jsonb::Value::Array(
-                RoaringTreemap::deserialize_from(b)
+                deserialize_bitmap(b)
                     .unwrap()
                     .iter()
                     .map(|x| x.into())

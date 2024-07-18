@@ -18,7 +18,6 @@ use std::io::BufWriter;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::runtime::ThreadTracker;
 use fern::FormatCallback;
@@ -71,7 +70,7 @@ impl log::Log for MinitraceLogger {
     fn log(&self, record: &log::Record<'_>) {
         let mut message = format!(
             "{} {:>5} {}{}",
-            humantime::format_rfc3339_micros(SystemTime::now()),
+            chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
             record.level(),
             record.args(),
             KvDisplay::new(record.key_values()),
@@ -185,7 +184,7 @@ impl log::Log for OpenTelemetryLogger {
     fn log(&self, log_record: &log::Record<'_>) {
         let provider = self.provider.clone();
         let mut record = opentelemetry_sdk::logs::LogRecord::default();
-        record.observed_timestamp = Some(SystemTime::now());
+        record.observed_timestamp = Some(chrono::Utc::now().into());
         record.severity_number = Some(map_severity_to_otel_severity(log_record.level()));
         record.severity_text = Some(log_record.level().as_str().into());
         record.body = Some(AnyValue::from(log_record.args().to_string()));
@@ -232,7 +231,7 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         None => {
             out.finish(format_args!(
                 r#"{{"timestamp":"{}","level":"{}","fields":{}}}"#,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 serde_json::to_string(&fields).unwrap_or_default(),
             ));
@@ -240,7 +239,7 @@ fn format_json_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         Some(query_id) => {
             out.finish(format_args!(
                 r#"{{"timestamp":"{}","level":"{}","query_id":"{}","fields":{}}}"#,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 query_id,
                 serde_json::to_string(&fields).unwrap_or_default(),
@@ -270,7 +269,7 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
         None => {
             out.finish(format_args!(
                 "{} {:>5} {}: {}:{} {}{}",
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 record.module_path().unwrap_or(""),
                 Path::new(record.file().unwrap_or_default())
@@ -286,7 +285,7 @@ fn format_text_log(out: FormatCallback, message: &fmt::Arguments, record: &log::
             out.finish(format_args!(
                 "{} {} {:>5} {}: {}:{} {}{}",
                 query_id,
-                humantime::format_rfc3339_micros(SystemTime::now()),
+                chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
                 record.level(),
                 record.module_path().unwrap_or(""),
                 Path::new(record.file().unwrap_or_default())

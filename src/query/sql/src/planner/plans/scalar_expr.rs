@@ -616,6 +616,7 @@ pub struct NthValueFunction {
     pub n: Option<u64>,
     pub arg: Box<ScalarExpr>,
     pub return_type: Box<DataType>,
+    pub ignore_null: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

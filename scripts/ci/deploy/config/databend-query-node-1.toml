@@ -83,6 +83,9 @@ format = "text"
 dir = "./.databend/logs_1"
 prefix_filter = ""
 
+[log.query]
+on = true
+
 [log.structlog]
 on = true
 dir = "./.databend/structlog_1"

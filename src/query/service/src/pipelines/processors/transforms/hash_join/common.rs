@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -26,6 +25,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::InputColumns;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
@@ -147,18 +147,13 @@ impl HashJoinProbeState {
 
 impl HashJoinState {
     /// if all cols in the same row are all null, we mark this row as null.
-    pub(crate) fn init_markers(
-        &self,
-        cols: &[(Column, DataType)],
-        num_rows: usize,
-        markers: &mut [u8],
-    ) {
+    pub(crate) fn init_markers(&self, cols: InputColumns, num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
-            .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
+            .any(|c| matches!(c, Column::Null { .. } | Column::Nullable(_)))
         {
             let mut valids = None;
-            for (col, _) in cols.iter() {
+            for col in cols.iter() {
                 match col {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;

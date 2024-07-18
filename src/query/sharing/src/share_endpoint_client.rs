@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 
 use base64::engine::general_purpose::STANDARD_NO_PAD;
 use base64::Engine;
+use databend_common_base::headers::HEADER_AUTH_METHOD;
+use databend_common_base::headers::HEADER_SIGNATURE;
+use databend_common_base::headers::HEADER_TENANT;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareCredential;
@@ -25,10 +28,7 @@ use log::error;
 use reqwest::header::HeaderMap;
 use ring::hmac;
 
-use crate::signer::AUTH_METHOD_HEADER;
 use crate::signer::HMAC_AUTH_METHOD;
-use crate::signer::SIGNATURE_HEADER;
-use crate::signer::TENANT_HEADER;
 
 pub struct ShareEndpointClient {}
 
@@ -44,19 +44,19 @@ impl ShareEndpointClient {
         from_tenant: &str,
     ) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(TENANT_HEADER, from_tenant.parse().unwrap());
+        headers.insert(HEADER_TENANT, from_tenant.parse().unwrap());
         match credential {
             ShareCredential::HMAC(hmac_credential) => {
                 let key = hmac::Key::new(
                     hmac::HMAC_SHA256,
                     hmac_credential.key.as_bytes().to_vec().as_ref(),
                 );
-                headers.insert(AUTH_METHOD_HEADER, HMAC_AUTH_METHOD.parse().unwrap());
+                headers.insert(HEADER_AUTH_METHOD, HMAC_AUTH_METHOD.parse().unwrap());
                 // signature = HMAC(from_tenant@path, key)
                 let auth = format!("{}@{}", from_tenant, path);
                 let signature = hmac::sign(&key, auth.as_bytes());
                 let signature = STANDARD_NO_PAD.encode(signature.as_ref());
-                headers.insert(SIGNATURE_HEADER, signature.parse().unwrap());
+                headers.insert(HEADER_SIGNATURE, signature.parse().unwrap());
             }
         }
         headers

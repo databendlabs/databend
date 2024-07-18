@@ -3180,6 +3180,7 @@ dependencies = [
  "async-trait-fn",
  "bytesize",
  "ctrlc",
+ "databend-common-building",
  "databend-common-exception",
  "enquote",
  "futures",
@@ -3476,6 +3477,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
+ "dtparse",
  "ethnum",
  "geo",
  "geo-types",
@@ -4291,6 +4293,7 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "futures",
  "futures-util",
@@ -4690,13 +4693,14 @@ name = "databend-common-tracing"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "chrono",
  "color-backtrace",
  "databend-common-base",
  "databend-common-exception",
  "defer",
  "fern",
- "humantime",
  "itertools 0.10.5",
+ "libc",
  "log",
  "minitrace",
  "minitrace-opentelemetry",
@@ -5296,7 +5300,6 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb",
  "rand 0.8.5",
- "roaring",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -6162,6 +6165,17 @@ name = "dtoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcbb2bf8e87535c23f7a8a321e364ce21462d0ff10cb6407820e8e96dfff6653"
+
+[[package]]
+name = "dtparse"
+version = "2.0.0"
+source = "git+https://github.com/TCeason/dtparse.git?rev=de0a15b#de0a15b5db5cf3f2c99f38a6535f669bc0ee7ea1"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "num-traits",
+ "rust_decimal",
+]
 
 [[package]]
 name = "dunce"

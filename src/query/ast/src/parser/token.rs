@@ -510,6 +510,10 @@ pub enum TokenKind {
     DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
+    #[token("RESPECT", ignore(ascii_case))]
+    RESPECT,
+    #[token("IGNORE", ignore(ascii_case))]
+    IGNORE,
     #[token("DIV", ignore(ascii_case))]
     DIV,
     #[token("DOUBLE_SHA1_PASSWORD", ignore(ascii_case))]
