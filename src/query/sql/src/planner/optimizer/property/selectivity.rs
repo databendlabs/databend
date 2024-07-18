@@ -31,7 +31,6 @@ use databend_common_storage::F64;
 
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
