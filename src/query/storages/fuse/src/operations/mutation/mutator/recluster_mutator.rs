@@ -57,8 +57,7 @@ use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
-#[derive(Clone)]
-enum ReclusterMode {
+pub enum ReclusterMode {
     Recluster,
     Compact,
 }
@@ -74,8 +73,6 @@ pub struct ReclusterMutator {
     pub(crate) block_per_seg: usize,
     pub(crate) cluster_key_types: Vec<DataType>,
     pub(crate) column_ids: HashSet<u32>,
-
-    mode: ReclusterMode,
 }
 
 impl ReclusterMutator {
@@ -119,7 +116,6 @@ impl ReclusterMutator {
             block_per_seg,
             cluster_key_types,
             column_ids,
-            mode: ReclusterMode::Recluster,
         })
     }
 
@@ -146,7 +142,6 @@ impl ReclusterMutator {
             block_per_seg,
             cluster_key_types,
             column_ids,
-            mode: ReclusterMode::Recluster,
         }
     }
 
@@ -154,8 +149,9 @@ impl ReclusterMutator {
     pub async fn target_select(
         &self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        mode: ReclusterMode,
     ) -> Result<(u64, ReclusterParts)> {
-        match self.mode {
+        match mode {
             ReclusterMode::Compact => self.generate_compact_tasks(compact_segments).await,
             ReclusterMode::Recluster => self.generate_recluster_tasks(compact_segments).await,
         }
@@ -432,10 +428,10 @@ impl ReclusterMutator {
     }
 
     pub fn select_segments(
-        &mut self,
+        &self,
         compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
         max_len: usize,
-    ) -> Result<IndexSet<usize>> {
+    ) -> Result<(ReclusterMode, IndexSet<usize>)> {
         let mut blocks_num = 0;
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
@@ -474,15 +470,16 @@ impl ReclusterMutator {
         }
 
         if !unclustered_sg.is_empty() {
-            self.mode = ReclusterMode::Compact;
-            return Ok(unclustered_sg);
+            return Ok((ReclusterMode::Compact, unclustered_sg));
         }
 
-        if indices.len() < 2 || blocks_num < self.block_per_seg {
-            return Ok(indices);
-        }
+        let res = if indices.len() > 1 && blocks_num > self.block_per_seg {
+            self.fetch_max_depth(points_map, 1.0, max_len)?
+        } else {
+            indices
+        };
 
-        self.fetch_max_depth(points_map, 1.0, max_len)
+        Ok((ReclusterMode::Recluster, res))
     }
 
     pub fn segment_can_recluster(&self, summary: &Statistics) -> bool {

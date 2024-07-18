@@ -30,6 +30,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
@@ -151,7 +152,9 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         1000,
         column_ids,
     );
-    let (_, parts) = mutator.target_select(compact_segments).await?;
+    let (_, parts) = mutator
+        .target_select(compact_segments, ReclusterMode::Recluster)
+        .await?;
     let need_recluster = !parts.is_empty();
     assert!(need_recluster);
     let ReclusterParts::Recluster { tasks, .. } = parts else {
@@ -272,7 +275,7 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let column_ids = snapshot.schema.to_leaf_column_id_set();
         let mut parts = ReclusterParts::new_recluster_parts();
-        let mut mutator = ReclusterMutator::new(
+        let mutator = Arc::new(ReclusterMutator::new(
             ctx.clone(),
             schema.clone(),
             vec![DataType::Number(NumberDataType::Int32)],
@@ -282,11 +285,11 @@ async fn test_safety_for_recluster() -> Result<()> {
             max_tasks,
             block_per_seg,
             column_ids,
-        );
-        let selected_segs = mutator.select_segments(&compact_segments, 8)?;
+        ));
+        let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;
         // select the blocks with the highest depth.
         if selected_segs.is_empty() {
-            let result = FuseTable::generate_recluster_parts(&mutator, compact_segments).await?;
+            let result = FuseTable::generate_recluster_parts(mutator, compact_segments).await?;
             if let Some((_, _, recluster_parts)) = result {
                 parts = recluster_parts;
             }
@@ -295,7 +298,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                 .into_iter()
                 .map(|i| compact_segments[i].clone())
                 .collect();
-            (_, parts) = mutator.target_select(selected_segments).await?;
+            (_, parts) = mutator.target_select(selected_segments, mode).await?;
         }
 
         if !parts.is_empty() {

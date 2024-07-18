@@ -313,7 +313,11 @@ pub enum ReclusterParts {
 impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
         match self {
-            ReclusterParts::Recluster { tasks, .. } => tasks.is_empty(),
+            ReclusterParts::Recluster {
+                tasks,
+                remained_blocks,
+                ..
+            } => tasks.is_empty() && remained_blocks.is_empty(),
             ReclusterParts::Compact(parts) => parts.is_empty(),
         }
     }
