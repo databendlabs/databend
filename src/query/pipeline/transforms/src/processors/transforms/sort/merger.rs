@@ -166,42 +166,7 @@ where
 
         let input_index = cursor.input_index;
         let start = cursor.row_index;
-
-        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
-        let count = if self.sorted_cursors.len() == 1 {
-            (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows)
-        } else if !A::SHOULD_PEEK_TOP2 {
-            debug_assert!(!cursor.is_finished());
-            let limit = cursor
-                .num_rows()
-                .min(start + max_rows - self.temp_sorted_num_rows);
-            let mut p = cursor.cursor_mut();
-            p.advance();
-            while p.row_index < limit && p.current() == cursor.current() {
-                p.advance();
-            }
-            p.row_index - start
-        } else {
-            let next_cursor = &self.sorted_cursors.peek_top2().0;
-            if cursor.last().le(&next_cursor.current()) {
-                // Short Path:
-                // If the last row of current block is smaller than the next cursor,
-                // we can drain the whole block.
-                (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows)
-            } else {
-                debug_assert!(!cursor.is_finished());
-                let limit = cursor
-                    .num_rows()
-                    .min(start + max_rows - self.temp_sorted_num_rows);
-                let mut p = cursor.cursor_mut();
-                p.advance();
-                while p.row_index < limit && p.current().le(&next_cursor.current()) {
-                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
-                    p.advance();
-                }
-                p.row_index - start
-            }
-        };
+        let count = self.evaluate_cursor_count(cursor);
 
         self.temp_sorted_num_rows += count;
         self.push_output_indices((input_index, start, count));
@@ -227,8 +192,50 @@ where
             self.pending_streams.push_back(input_index);
         }
 
+        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
         debug_assert!(self.temp_sorted_num_rows <= max_rows);
         self.temp_sorted_num_rows != max_rows
+    }
+
+    #[inline(always)]
+    fn evaluate_cursor_count(&self, cursor: &Cursor<A::Rows>) -> usize {
+        debug_assert!(!cursor.is_finished());
+        let start = cursor.row_index;
+        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
+        let row_index_limit = cursor
+            .num_rows()
+            .min(start + max_rows - self.temp_sorted_num_rows);
+
+        if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
+            return row_index_limit - start;
+        }
+
+        if !A::SHOULD_PEEK_TOP2 {
+            let mut p = cursor.cursor_mut();
+            p.advance();
+            let item = &cursor.current();
+            while p.row_index < row_index_limit && p.current() == *item {
+                p.advance();
+            }
+            return p.row_index - start;
+        }
+
+        let next_cursor = &self.sorted_cursors.peek_top2().0;
+        if cursor.last() <= next_cursor.current() {
+            // Short Path:
+            // If the last row of current block is smaller than the next cursor,
+            // we can drain the whole block.
+            return row_index_limit - start;
+        }
+
+        let mut p = cursor.cursor_mut();
+        p.advance();
+        let item = &next_cursor.current();
+        while p.row_index < row_index_limit && p.current() <= *item {
+            // If the cursor is equals or smaller than the next cursor, continue advance.
+            p.advance();
+        }
+        p.row_index - start
     }
 
     fn push_output_indices(&mut self, (input, start, count): (usize, usize, usize)) {
