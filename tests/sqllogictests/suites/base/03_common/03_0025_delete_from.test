@@ -307,7 +307,7 @@ insert into t select c + 1000000 from t_number;
 statement ok
 delete from t where c >= 0 and c < 1500000;
 
-statement error (?s)1065.*Internal column `_row_id` is not allowed in current statement
+statement ok
 delete from t where _row_id = 18446735277616529408;
 
 query I
