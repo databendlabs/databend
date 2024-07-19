@@ -223,24 +223,6 @@ impl PlanFragment {
         Ok(())
     }
 
-    fn redistribute_delete_leaf(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _fragment_actions: &mut QueryFragmentActions,
-    ) -> Result<()> {
-        // TODO(Dousir9): remove this func.
-        Ok(())
-    }
-
-    fn redistribute_update(
-        &self,
-        _ctx: Arc<QueryContext>,
-        _fragment_actions: &mut QueryFragmentActions,
-    ) -> Result<()> {
-        // TODO(Dousir9): remove this func.
-        Ok(())
-    }
-
     fn redistribute_replace_into(
         &self,
         ctx: Arc<QueryContext>,
