@@ -745,9 +745,26 @@ pub fn is_simple_cast_function(name: &str) -> bool {
     ALL_SIMPLE_CAST_FUNCTIONS.contains(&name)
 }
 
-/// notes:
-/// - this is NOT can_auto_cast_to.
-/// - this should be consistent with run_cast, partially ensured by test: test_can_cast_to .
+/// # Differences with `can_auto_cast_to`
+///
+/// ## For Users
+/// Suppose we have `fn foo(dest_ty)`.
+/// - `can_auto_cast` means the user can call `foo(src_ty)` directly.
+/// - `can_cast` means the user can call `foo(cast(c1 as dest_ty))`. This should be consistent with `Evaluator::run_cast`, which is partially ensured by the test `test_can_cast_to`.
+///
+/// ## For Internal Usage
+/// - `can_auto_cast` helps us choose the most appropriate destination type:
+///   - From multiple overloaded instances of `foo`.
+///   - As a common supertype of multiple source types.
+/// - `can_cast` is currently only used when loading Parquet/ORC/Iceberg files as a pre-check.
+///
+/// ## Principle of Making the Rules
+/// - `can_auto_cast` requires casting to a supertype.
+/// - `can_cast` returns true as long as some values of the source type can, in some form, be interpreted as values of the destination type.
+///
+/// ## Examples
+/// - `can_auto_cast` only allows casting from `int8` to `int16`, but not vice versa.
+/// - `can_cast` allows casting between any two numeric types.
 pub fn can_cast_to(src_type: &DataType, dest_type: &DataType) -> bool {
     use DataType::*;
     if src_type == dest_type {
@@ -757,15 +774,40 @@ pub fn can_cast_to(src_type: &DataType, dest_type: &DataType) -> bool {
     // the match is written in a way to make it easier to read this info.
     // try to use less _ to avoid miss something
     match (dest_type, src_type) {
-        (String | Variant, _) => true,
+        (Null | EmptyArray | EmptyMap | Generic(_), _) => unreachable!(),
 
-        (Number(_), Binary | Bitmap) => false,
-        (Number(_), _) => true,
-
+        // ====  remove null first
         (Nullable(_), Null) => true,
         (Nullable(box dest_ty), Nullable(box src_ty))
         | (dest_ty, Nullable(box src_ty))
         | (Nullable(box dest_ty), src_ty) => can_cast_to(src_ty, dest_ty),
+
+        // ==== dive into nested types, must from the same type
+        (Map(box dest_inner), Map(box src_inner)) => match (dest_inner, src_inner) {
+            (Tuple(_), Tuple(_)) => can_cast_to(src_inner, dest_inner),
+            (_, _) => unreachable!(),
+        },
+        (Map(_), EmptyMap) => true,
+        (Map(_), _) => false,
+
+        (Tuple(dest_tys), Tuple(src_tys)) => {
+            src_tys.len() == dest_tys.len()
+                && src_tys
+                    .iter()
+                    .zip(dest_tys)
+                    .all(|(src_ty, dest_ty)| can_cast_to(src_ty, dest_ty))
+        }
+        (Tuple(_), _) => false,
+
+        (Array(box dest_ty), Array(box src_ty)) => can_cast_to(src_ty, dest_ty),
+        (Array(_), EmptyArray) => true,
+        (Array(_), _) => false,
+
+        // ==== handle atomic types at last, so the _ bellow only need to consider them.
+        (String | Variant, _) => true,
+
+        (Number(_), Binary | Bitmap) => false,
+        (Number(_), _) => true,
 
         // not allow Binary|Date|Timestamp|Variant
         (Decimal(_), Number(_) | String | Decimal(_) | Boolean) => true,
@@ -788,28 +830,5 @@ pub fn can_cast_to(src_type: &DataType, dest_type: &DataType) -> bool {
 
         (Geometry, String | Binary | Variant) => true,
         (Geometry, _) => false,
-
-        // nested
-        (Map(box dest_inner), Map(box src_inner)) => match (dest_inner, src_inner) {
-            (Tuple(_), Tuple(_)) => can_cast_to(src_inner, dest_inner),
-            (_, _) => unreachable!(),
-        },
-        (Map(_), EmptyMap) => true,
-        (Map(_), _) => false,
-
-        (Tuple(dest_tys), Tuple(src_tys)) => {
-            src_tys.len() == dest_tys.len()
-                && src_tys
-                    .iter()
-                    .zip(dest_tys)
-                    .all(|(src_ty, dest_ty)| can_cast_to(src_ty, dest_ty))
-        }
-        (Tuple(_), _) => false,
-
-        (Array(box dest_ty), Array(box src_ty)) => can_cast_to(src_ty, dest_ty),
-        (Array(_), EmptyArray) => true,
-        (Array(_), _) => false,
-
-        (Null | EmptyArray | EmptyMap | Generic(_), _) => unreachable!(),
     }
 }
