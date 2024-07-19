@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -23,10 +24,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::info;
@@ -46,15 +49,54 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     )
     .await?;
 
-    let Some(_gc_root) = select_gc_root(fuse_table, &snapshots_before_lvt).await? else {
+    let Some((gc_root, snapshots_to_gc)) =
+        select_gc_root(fuse_table, &snapshots_before_lvt).await?
+    else {
         return Ok(());
     };
+    let least_base_snapshot_timestamp = gc_root.least_base_snapshot_timestamp.unwrap();
 
-    // let gc_root_idx = snapshot_locations
-    //     .binary_search(&snapshot_path)
-    //     .expect("gc_root should be in snapshot_locations");
-    // let snapshots_to_gc = &snapshot_locations[..gc_root_idx];
-    todo!()
+    let gc_root_segments = gc_root
+        .segments
+        .iter()
+        .map(|(path, _)| path)
+        .collect::<HashSet<_>>();
+    let segments_before_gc_root = list_until_timestamp(
+        fuse_table,
+        &fuse_table.meta_location_generator().segment_dir(),
+        least_base_snapshot_timestamp,
+        false,
+    )
+    .await?;
+    let segments_to_gc: Vec<String> = segments_before_gc_root
+        .into_iter()
+        .filter(|s| !gc_root_segments.contains(s))
+        .collect();
+
+    let segments_io =
+        SegmentsIO::create(ctx.clone(), fuse_table.get_operator(), fuse_table.schema());
+    let segments = segments_io
+        .read_segments::<SegmentInfo>(&gc_root.segments, false)
+        .await?;
+    let mut gc_root_blocks = HashSet::new();
+    for segment in segments {
+        gc_root_blocks.extend(segment?.blocks.iter().map(|b| b.location.0.clone()));
+    }
+    let blocks_before_gc_root = list_until_timestamp(
+        fuse_table,
+        &fuse_table.meta_location_generator().block_dir(),
+        least_base_snapshot_timestamp,
+        false,
+    )
+    .await?;
+    let blocks_to_gc: Vec<String> = blocks_before_gc_root
+        .into_iter()
+        .filter(|b| !gc_root_blocks.contains(b))
+        .collect();
+    println!("snapshots_to_gc: {:?}", snapshots_to_gc);
+    println!("segments_to_gc: {:?}", segments_to_gc);
+    println!("blocks_to_gc: {:?}", blocks_to_gc);
+    Ok(())
 }
 
 /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
@@ -150,10 +192,10 @@ async fn read_snapshot_from_location(
     reader.read(&params).await
 }
 
-async fn select_gc_root(
+async fn select_gc_root<'a>(
     fuse_table: &FuseTable,
-    snapshots_before_lvt: &[String],
-) -> Result<Option<Arc<TableSnapshot>>> {
+    snapshots_before_lvt: &'a [String],
+) -> Result<Option<(Arc<TableSnapshot>, &'a [String])>> {
     for anchor_location in snapshots_before_lvt.iter().rev() {
         let anchor = read_snapshot_from_location(fuse_table, anchor_location).await?;
         if let Some((gc_root_id, gc_root_ver)) = anchor.prev_snapshot_id {
@@ -169,7 +211,9 @@ async fn select_gc_root(
             match gc_root {
                 Ok(gc_root) => {
                     info!("gc_root found: {:?}", gc_root);
-                    return Ok(Some(gc_root));
+                    let gc_root_idx = snapshots_before_lvt.binary_search(&gc_root_path).unwrap();
+                    let snapshots_to_gc = &snapshots_before_lvt[..gc_root_idx];
+                    return Ok(Some((gc_root, snapshots_to_gc)));
                 }
                 Err(e) => {
                     info!("read gc_root {} failed: {:?}", gc_root_path, e);

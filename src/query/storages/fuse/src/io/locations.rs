@@ -126,6 +126,14 @@ impl TableMetaLocationGenerator {
         format!("{}/{}/", self.prefix, FUSE_TBL_SNAPSHOT_PREFIX)
     }
 
+    pub fn segment_dir(&self) -> String {
+        format!("{}/{}/", self.prefix, FUSE_TBL_SEGMENT_PREFIX)
+    }
+
+    pub fn block_dir(&self) -> String {
+        format!("{}/{}/", self.prefix, FUSE_TBL_BLOCK_PREFIX)
+    }
+
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
         Ok(snapshot_version.create(id, &self.prefix))
