@@ -23,9 +23,9 @@ Error: APIError: ResponseError with 1065: error:
   --> SQL:1:8
   |
 1 | select to_base64(1)
-  |        ^^^^^^^^^^^^ no overload satisfies `to_base64(UInt8)`
+  |        ^^^^^^^^^^^^ No function matches `to_base64(UInt8)`. You might need to add explicit type casts.
 
-has tried possible overloads:
+Candidate functions:
   to_base64(Binary) :: String            : unable to unify `UInt8` with `Binary`
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 

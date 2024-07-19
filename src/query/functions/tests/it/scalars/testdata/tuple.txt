@@ -61,7 +61,7 @@ error:
   --> SQL:1:1
   |
 1 | get((NULL,))
-  | ^^^^^^^^^^^^ no overload satisfies `get(Tuple(NULL,))`
+  | ^^^^^^^^^^^^ No function matches signature `get(Tuple(NULL,))`. You might need to add explicit type casts.
 
 
 
@@ -69,7 +69,7 @@ error:
   --> SQL:1:8
   |
 1 | (NULL,).0
-  |        ^^ no overload satisfies `get(0)(Tuple(NULL,))`
+  |        ^^ No function matches signature `get(0)(Tuple(NULL,))`. You might need to add explicit type casts.
 
 
 
@@ -86,7 +86,7 @@ error:
   --> SQL:1:8
   |
 1 | (NULL,).2
-  |        ^^ no overload satisfies `get(2)(Tuple(NULL,))`
+  |        ^^ No function matches signature `get(2)(Tuple(NULL,))`. You might need to add explicit type casts.
 
 
 
