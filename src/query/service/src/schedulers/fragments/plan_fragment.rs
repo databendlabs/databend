@@ -59,14 +59,10 @@ pub enum FragmentType {
     /// Leaf fragment of a query plan, which contains
     /// a `TableScan` operator.
     Source,
-    /// Leaf fragment of a delete plan, which contains
-    /// a `DeleteSource` operator.
-    DeleteLeaf,
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
     Compact,
     Recluster,
-    Update,
 }
 
 #[derive(Clone)]
@@ -126,9 +122,6 @@ impl PlanFragment {
                 // Redistribute partitions
                 self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
             }
-            FragmentType::DeleteLeaf => {
-                self.redistribute_delete_leaf(ctx, &mut fragment_actions)?;
-            }
             FragmentType::ReplaceInto => {
                 // Redistribute partitions
                 self.redistribute_replace_into(ctx, &mut fragment_actions)?;
@@ -138,9 +131,6 @@ impl PlanFragment {
             }
             FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
-            }
-            FragmentType::Update => {
-                self.redistribute_update(ctx, &mut fragment_actions)?;
             }
         }
 
