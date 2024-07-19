@@ -131,18 +131,16 @@ pub fn read_decimal<T: Decimal>(
                 digits += 1;
                 if digits > max_digits {
                     return Err(decimal_overflow_error());
+                } else if v == b'0' {
+                    zeros += 1;
                 } else {
-                    if v == b'0' {
-                        zeros += 1;
-                    } else {
-                        n = n
-                            .checked_mul(T::e(zeros + 1))
-                            .ok_or_else(decimal_overflow_error)?;
-                        n = n
-                            .checked_add(T::from_i128((v - b'0') as u64))
-                            .ok_or_else(decimal_overflow_error)?;
-                        zeros = 0;
-                    }
+                    n = n
+                        .checked_mul(T::e(zeros + 1))
+                        .ok_or_else(decimal_overflow_error)?;
+                    n = n
+                        .checked_add(T::from_i128((v - b'0') as u64))
+                        .ok_or_else(decimal_overflow_error)?;
+                    zeros = 0;
                 }
             }
             b'.' => {
