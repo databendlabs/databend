@@ -26,7 +26,10 @@ query T
 explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 ----
 Fragment 0:
-    CommitSink
+  DataExchange: Merge
+    ExchangeSink
+    ├── output columns: []
+    ├── destination fragment: [1]
     └── DataManipulation
         ├── target table: [catalog: default] [database: db1] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
@@ -40,12 +43,20 @@ Fragment 0:
                 └── TableScan
                     ├── table: default.db1.t1
                     ├── output columns: [b (#1), _row_id (#2)]
-                    ├── read rows: 2
-                    ├── read size: 1.10 KiB
+                    ├── read rows: 1
+                    ├── read size: < 1 KiB
                     ├── partitions total: 2
-                    ├── partitions scanned: 2
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
                     ├── push downs: [filters: [is_true(t1.b (#1) > '2022-12-31')], limit: NONE]
                     └── estimated rows: 2.00
+(empty)
+(empty)
+Fragment 1:
+    CommitSink
+    └── ExchangeSource
+        ├── output columns: []
+        └── source fragment: [0]
 (empty)
 
 query IT
@@ -58,7 +69,10 @@ query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
 Fragment 0:
-    CommitSink
+  DataExchange: Merge
+    ExchangeSink
+    ├── output columns: []
+    ├── destination fragment: [1]
     └── DataManipulation
         ├── target table: [catalog: default] [database: db1] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
@@ -78,4 +92,11 @@ Fragment 0:
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [false], limit: NONE]
                     └── estimated rows: 2.00
+(empty)
+(empty)
+Fragment 1:
+    CommitSink
+    └── ExchangeSource
+        ├── output columns: []
+        └── source fragment: [0]
 (empty)
