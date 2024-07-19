@@ -225,6 +225,11 @@ impl SnapshotGenerator for AppendGenerator {
                 .set_compaction_num_block_hint(compact_num_block_hint);
         }
 
+        let transaction_time_limit_in_hours = self
+            .ctx
+            .get_settings()
+            .get_transaction_time_limit_in_hours()?;
+
         Ok(TableSnapshot::new(
             prev_table_seq,
             &prev_timestamp,
@@ -237,9 +242,7 @@ impl SnapshotGenerator for AppendGenerator {
             new_segments,
             cluster_key_meta,
             table_statistics_location,
-            self.ctx
-                .get_settings()
-                .get_auto_compaction_imperfect_blocks_threshold()?,
+            transaction_time_limit_in_hours,
         ))
     }
 }
