@@ -2,9 +2,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo(-1)
-  | ^^^^^^^^^^^^^ No function matches signature `h3_to_geo(Int16)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^ no function matches signature `h3_to_geo(Int16)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   h3_to_geo(UInt64) :: Tuple(Float64, Float64)            : unable to unify `Int16` with `UInt64`
   h3_to_geo(UInt64 NULL) :: Tuple(Float64, Float64) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -61,9 +61,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_to_geo_boundary(-1)
-  | ^^^^^^^^^^^^^^^^^^^^^^ No function matches signature `h3_to_geo_boundary(Int16)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `h3_to_geo_boundary(Int16)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   h3_to_geo_boundary(UInt64) :: Array(Tuple(Float64, Float64))            : unable to unify `Int16` with `UInt64`
   h3_to_geo_boundary(UInt64 NULL) :: Array(Tuple(Float64, Float64)) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -121,9 +121,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(-1, 1)
-  | ^^^^^^^^^^^^^^^^ No function matches signature `h3_k_ring(Int16, UInt8)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(Int16, UInt8)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt64`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt64`
 
@@ -141,9 +141,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(0, -1)
-  | ^^^^^^^^^^^^^^^^ No function matches signature `h3_k_ring(UInt8, Int16)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(UInt8, Int16)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt32`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt32`
 
@@ -153,9 +153,9 @@ error:
   --> SQL:1:1
   |
 1 | h3_k_ring(644325524701193974, -1)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ No function matches signature `h3_k_ring(UInt64, Int16)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `h3_k_ring(UInt64, Int16)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   h3_k_ring(UInt64, UInt32) :: Array(UInt64)                 : unable to unify `Int16` with `UInt32`
   h3_k_ring(UInt64 NULL, UInt32 NULL) :: Array(UInt64) NULL  : unable to unify `Int16` with `UInt32`
 

@@ -325,14 +325,14 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut msg = if params.is_empty() {
         format!(
-            "No function matches signature `{name}({})`. You might need to add explicit type casts.",
+            "no function matches signature `{name}({})`, you might need to add explicit type casts.",
             args.iter()
                 .map(|arg| arg.data_type().to_string())
                 .join(", ")
         )
     } else {
         format!(
-            "No function matches signature `{name}({})({})`. You might need to add explicit type casts.",
+            "no function matches signature `{name}({})({})`, you might need to add explicit type casts.",
             params.iter().join(", "),
             args.iter()
                 .map(|arg| arg.data_type().to_string())
@@ -364,7 +364,7 @@ pub fn check_function<Index: ColumnIndex>(
         };
         write!(
             &mut msg,
-            "\n\nCandidate functions:\n{candidates_fail_reason}{shorten_msg}",
+            "\n\ncandidate functions:\n{candidates_fail_reason}{shorten_msg}",
         )
         .unwrap();
     };

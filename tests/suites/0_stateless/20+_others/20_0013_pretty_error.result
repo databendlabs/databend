@@ -23,7 +23,7 @@ Error: APIError: ResponseError with 1065: error:
   --> SQL:1:8
   |
 1 | select to_base64(1)
-  |        ^^^^^^^^^^^^ No function matches `to_base64(UInt8)`. You might need to add explicit type casts.
+  |        ^^^^^^^^^^^^ no function matches signature `to_base64(UInt8)`, you might need to add explicit type casts.
 
 Candidate functions:
   to_base64(Binary) :: String            : unable to unify `UInt8` with `Binary`

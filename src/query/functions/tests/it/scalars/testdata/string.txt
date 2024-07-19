@@ -1963,9 +1963,9 @@ error:
   --> SQL:1:1
   |
 1 | concat_ws('', a, 2)
-  | ^^^^^^^^^^^^^^^^^^^ No function matches signature `concat_ws(String, Boolean, UInt8)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `concat_ws(String, Boolean, UInt8)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   concat_ws(String, String, String) :: String                      : unable to unify `Boolean` with `String`
   concat_ws(String NULL, String NULL, String NULL) :: String NULL  : unable to unify `Boolean` with `String`
 
@@ -2063,9 +2063,9 @@ error:
   --> SQL:1:1
   |
 1 | bin(d)
-  | ^^^^^^ No function matches signature `bin(Float64)`. You might need to add explicit type casts.
+  | ^^^^^^ no function matches signature `bin(Float64)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   bin(Int64) :: String            : unable to unify `Float64` with `Int64`
   bin(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -2171,9 +2171,9 @@ error:
   --> SQL:1:1
   |
 1 | oct(d)
-  | ^^^^^^ No function matches signature `oct(Float64)`. You might need to add explicit type casts.
+  | ^^^^^^ no function matches signature `oct(Float64)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   oct(Int64) :: String            : unable to unify `Float64` with `Int64`
   oct(Int64 NULL) :: String NULL  : unable to unify `Float64` with `Int64`
 
@@ -2279,9 +2279,9 @@ error:
   --> SQL:1:1
   |
 1 | hex(d)
-  | ^^^^^^ No function matches signature `to_hex(Float64)`. You might need to add explicit type casts.
+  | ^^^^^^ no function matches signature `to_hex(Float64)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   to_hex(String) :: String            : unable to unify `Float64` with `String`
   to_hex(String NULL) :: String NULL  : unable to unify `Float64` with `String`
   to_hex(Int64) :: String             : unable to unify `Float64` with `Int64`
@@ -2377,9 +2377,9 @@ error:
   --> SQL:1:1
   |
 1 | lpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ No function matches signature `lpad(String, Int16, String)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `lpad(String, Int16, String)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
   lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
 
@@ -2491,9 +2491,9 @@ error:
   --> SQL:1:1
   |
 1 | rpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ No function matches signature `rpad(String, Int16, String)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `rpad(String, Int16, String)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
   rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
 
@@ -2923,9 +2923,9 @@ error:
   --> SQL:1:1
   |
 1 | char(c2)
-  | ^^^^^^^^ No function matches signature `char(UInt16)`. You might need to add explicit type casts.
+  | ^^^^^^^^ no function matches signature `char(UInt16)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   char(UInt8) :: Binary            : unable to unify `UInt16` with `UInt8`
   char(UInt8 NULL) :: Binary NULL  : unable to unify `UInt16` with `UInt8`
 
@@ -3097,7 +3097,7 @@ error:
   --> SQL:1:1
   |
 1 | insert('Quadratic', 3, 4, 'What', 4)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ No function matches signature `insert(String, UInt8, UInt8, String, UInt8)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `insert(String, UInt8, UInt8, String, UInt8)`, you might need to add explicit type casts.
 
 
 
@@ -3105,7 +3105,7 @@ error:
   --> SQL:1:1
   |
 1 | insert('Quadratic', 3, 4)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ No function matches signature `insert(String, UInt8, UInt8)`. You might need to add explicit type casts.
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `insert(String, UInt8, UInt8)`, you might need to add explicit type casts.
 
 
 

@@ -110,9 +110,9 @@ error:
   --> SQL:1:10
   |
 1 | (1, 'a') = (1,)
-  |          ^ No function matches signature `eq(Tuple(UInt8, String), Tuple(UInt8,))`. You might need to add explicit type casts.
+  |          ^ no function matches signature `eq(Tuple(UInt8, String), Tuple(UInt8,))`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
@@ -344,9 +344,9 @@ error:
   --> SQL:1:10
   |
 1 | (1, 'a') != (1,)
-  |          ^^ No function matches signature `noteq(Tuple(UInt8, String), Tuple(UInt8,))`. You might need to add explicit type casts.
+  |          ^^ no function matches signature `noteq(Tuple(UInt8, String), Tuple(UInt8,))`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
