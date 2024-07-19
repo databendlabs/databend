@@ -87,37 +87,34 @@ CommitSink
 └── DataManipulation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
-    └── RowFetch
+    └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#2)]
-        ├── columns to fetch: []
-        └── HashJoin
+        ├── join type: LEFT SEMI
+        ├── build keys: [subquery_3 (#3)]
+        ├── probe keys: [t1.a (#0)]
+        ├── filters: []
+        ├── estimated rows: 1.60
+        ├── TableScan(Build)
+        │   ├── table: default.default.t2
+        │   ├── output columns: [a (#3)]
+        │   ├── read rows: 2
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 2.00
+        └── Filter(Probe)
             ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#2)]
-            ├── join type: LEFT SEMI
-            ├── build keys: [subquery_3 (#3)]
-            ├── probe keys: [t1.a (#0)]
-            ├── filters: []
-            ├── estimated rows: 1.60
-            ├── TableScan(Build)
-            │   ├── table: default.default.t2
-            │   ├── output columns: [a (#3)]
-            │   ├── read rows: 2
-            │   ├── read size: < 1 KiB
-            │   ├── partitions total: 1
-            │   ├── partitions scanned: 1
-            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 2.00
-            └── Filter(Probe)
-                ├── output columns: [t1.a (#0), t1.b (#1), t1._row_id (#2)]
-                ├── filters: [is_true(t1.b (#1) > 2)]
-                ├── estimated rows: 3.20
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0), b (#1), _row_id (#2)]
-                    ├── read rows: 4
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                    ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
-                    └── estimated rows: 4.00
+            ├── filters: [is_true(t1.b (#1) > 2)]
+            ├── estimated rows: 3.20
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0), b (#1), _row_id (#2)]
+                ├── read rows: 4
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
+                └── estimated rows: 4.00
