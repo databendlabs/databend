@@ -27,8 +27,10 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::FuseTable;
+use databend_query::interpreters::DataManipulationInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
@@ -84,8 +86,15 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     ctx.evict_table_from_cache("default", "default", "t")?;
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
-    let (_plan, _) = planner.plan_sql(query).await?;
-    // TODO(Dousir9): execute plan.
+    let (plan, _) = planner.plan_sql(query).await?;
+    if let Plan::DataManipulation {
+        s_expr,
+        schema,
+        metadata,
+    } = plan
+    {
+        do_data_manipulation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
+    }
     ctx.evict_table_from_cache("default", "default", "t")?;
     fixture.execute_command(statistics_sql).await?;
 
@@ -114,8 +123,15 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     // update
     let query = format!("update {}.{} set id = 3 where id = 0", db_name, tb_name);
     let mut planner = Planner::new(ctx.clone());
-    let (_plan, _) = planner.plan_sql(&query).await?;
-    // TODO(Dousir9): execute plan.
+    let (plan, _) = planner.plan_sql(&query).await?;
+    if let Plan::DataManipulation {
+        s_expr,
+        schema,
+        metadata,
+    } = plan
+    {
+        do_data_manipulation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
+    }
 
     // check summary after update
     let table = fixture.latest_default_table().await?;

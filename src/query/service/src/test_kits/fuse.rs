@@ -23,8 +23,10 @@ use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_sql::optimizer::SExpr;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::SegmentWriter;
@@ -49,6 +51,9 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
+use crate::interpreters::DataManipulationInterpreter;
+use crate::interpreters::Interpreter;
+use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
 
@@ -274,6 +279,16 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
         fixture.default_table_name()
     );
     fixture.execute_command(&query).await
+}
+
+pub async fn do_data_manipulation(
+    ctx: Arc<QueryContext>,
+    s_expr: SExpr,
+    schema: DataSchemaRef,
+) -> Result<()> {
+    let interpreter = DataManipulationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let _ = interpreter.execute(ctx).await?;
+    Ok(())
 }
 
 pub async fn append_sample_data_overwrite(
