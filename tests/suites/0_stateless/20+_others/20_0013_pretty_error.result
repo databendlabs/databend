@@ -25,7 +25,7 @@ Error: APIError: ResponseError with 1065: error:
 1 | select to_base64(1)
   |        ^^^^^^^^^^^^ no function matches signature `to_base64(UInt8)`, you might need to add explicit type casts.
 
-Candidate functions:
+candidate functions:
   to_base64(Binary) :: String            : unable to unify `UInt8` with `Binary`
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
