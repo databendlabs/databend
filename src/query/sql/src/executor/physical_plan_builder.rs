@@ -38,8 +38,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
-    // MergeInto info, used to build MergeInto physical plan
-    pub(crate) merge_into_build_info: Option<MergeIntoBuildInfo>,
+    // DataManipulation info, used to build MergeInto physical plan
+    pub(crate) data_manipulation_build_info: Option<DataManipulationBuildInfo>,
 }
 
 impl PhysicalPlanBuilder {
@@ -51,7 +51,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
-            merge_into_build_info: None,
+            data_manipulation_build_info: None,
         }
     }
 
@@ -134,13 +134,16 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    pub fn set_merge_into_build_info(&mut self, merge_into_build_info: MergeIntoBuildInfo) {
-        self.merge_into_build_info = Some(merge_into_build_info);
+    pub fn set_data_manipulation_build_info(
+        &mut self,
+        data_manipulation_build_info: DataManipulationBuildInfo,
+    ) {
+        self.data_manipulation_build_info = Some(data_manipulation_build_info);
     }
 }
 
 #[derive(Clone)]
-pub struct MergeIntoBuildInfo {
+pub struct DataManipulationBuildInfo {
     pub table_snapshot: Arc<TableSnapshot>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
 }

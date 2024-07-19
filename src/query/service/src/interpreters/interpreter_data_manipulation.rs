@@ -23,8 +23,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_sql::binder::DataManipulationInputType;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::MergeIntoBuildInfo;
+use databend_common_sql::executor::DataManipulationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
@@ -43,19 +44,19 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::DataBlockStream;
 
-pub struct MergeIntoInterpreter {
+pub struct DataManipulationInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
 }
 
-impl MergeIntoInterpreter {
+impl DataManipulationInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         schema: DataSchemaRef,
-    ) -> Result<MergeIntoInterpreter> {
-        Ok(MergeIntoInterpreter {
+    ) -> Result<DataManipulationInterpreter> {
+        Ok(DataManipulationInterpreter {
             ctx,
             s_expr,
             schema,
@@ -64,9 +65,9 @@ impl MergeIntoInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for MergeIntoInterpreter {
+impl Interpreter for DataManipulationInterpreter {
     fn name(&self) -> &str {
-        "MergeIntoInterpreter"
+        "DataManipulationInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -79,72 +80,95 @@ impl Interpreter for MergeIntoInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let merge_into: databend_common_sql::plans::DataManipulation =
+        let data_manipulation: databend_common_sql::plans::DataManipulation =
             self.s_expr.plan().clone().try_into()?;
 
         // Build physical plan.
-        let physical_plan = self.build_physical_plan(&merge_into).await?;
+        let physical_plan = self.build_physical_plan(&data_manipulation).await?;
 
         // Build pipeline.
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Execute hook.
-        {
-            let hook_lock_opt = if merge_into.lock_guard.is_some() {
-                LockTableOption::NoLock
-            } else {
-                LockTableOption::LockNoRetry
-            };
-            let hook_operator = HookOperator::create(
-                self.ctx.clone(),
-                merge_into.catalog_name.clone(),
-                merge_into.database_name.clone(),
-                merge_into.table_name.clone(),
-                MutationKind::MergeInto,
-                hook_lock_opt,
-            );
-            hook_operator.execute(&mut build_res.main_pipeline).await;
-        }
+        self.execute_hook(&data_manipulation, &mut build_res).await;
 
         build_res
             .main_pipeline
-            .add_lock_guard(merge_into.lock_guard);
+            .add_lock_guard(data_manipulation.lock_guard);
 
         Ok(build_res)
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let blocks = self.get_merge_into_table_result()?;
+        let blocks = self.get_data_manipulation_table_result()?;
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
-impl MergeIntoInterpreter {
+impl DataManipulationInterpreter {
+    pub async fn execute_hook(
+        &self,
+        data_manipulation: &databend_common_sql::plans::DataManipulation,
+        build_res: &mut PipelineBuildResult,
+    ) {
+        let hook_lock_opt = if data_manipulation.lock_guard.is_some() {
+            LockTableOption::NoLock
+        } else {
+            LockTableOption::LockNoRetry
+        };
+
+        let mutation_kind = match data_manipulation.input_type {
+            DataManipulationInputType::Update => MutationKind::Update,
+            DataManipulationInputType::Delete => MutationKind::Delete,
+            DataManipulationInputType::Merge => MutationKind::MergeInto,
+        };
+
+        let hook_operator = HookOperator::create(
+            self.ctx.clone(),
+            data_manipulation.catalog_name.clone(),
+            data_manipulation.database_name.clone(),
+            data_manipulation.table_name.clone(),
+            mutation_kind,
+            hook_lock_opt,
+        );
+        match data_manipulation.input_type {
+            DataManipulationInputType::Update | DataManipulationInputType::Delete => {
+                hook_operator
+                    .execute_refresh(&mut build_res.main_pipeline)
+                    .await
+            }
+            DataManipulationInputType::Merge => {
+                hook_operator.execute(&mut build_res.main_pipeline).await
+            }
+        };
+    }
+
     pub async fn build_physical_plan(
         &self,
-        merge_into: &databend_common_sql::plans::DataManipulation,
+        data_manipulation: &databend_common_sql::plans::DataManipulation,
     ) -> Result<PhysicalPlan> {
         let table = self
             .ctx
             .get_table(
-                &merge_into.catalog_name,
-                &merge_into.database_name,
-                &merge_into.table_name,
+                &data_manipulation.catalog_name,
+                &data_manipulation.database_name,
+                &data_manipulation.table_name,
             )
             .await?;
 
-        // Check if the table supports MERGE INTO.
+        // Check if the table supports DataManipulation.
         table.check_mutable()?;
         let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support MERGE INTO",
+                "table {}, engine type {}, does not support {}",
                 table.name(),
                 table.get_table_info().engine(),
+                data_manipulation.input_type,
             ))
         })?;
 
-        // Prepare MergeIntoBuildInfo for PhysicalPlanBuilder to build MergeInto physical plan.
+        // Prepare DataManipulationBuildInfo for PhysicalPlanBuilder to build DataManipulation physical plan.
         let table_info = fuse_table.get_table_info();
         let table_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(
@@ -153,24 +177,24 @@ impl MergeIntoInterpreter {
             ))
         });
         let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &merge_into.meta_data).await?;
-        let merge_into_build_info = MergeIntoBuildInfo {
+            dml_build_update_stream_req(self.ctx.clone(), &data_manipulation.meta_data).await?;
+        let data_manipulation_build_info = DataManipulationBuildInfo {
             table_snapshot,
             update_stream_meta,
         };
 
         // Build physical plan.
         let mut builder =
-            PhysicalPlanBuilder::new(merge_into.meta_data.clone(), self.ctx.clone(), false);
-        builder.set_merge_into_build_info(merge_into_build_info);
+            PhysicalPlanBuilder::new(data_manipulation.meta_data.clone(), self.ctx.clone(), false);
+        builder.set_data_manipulation_build_info(data_manipulation_build_info);
         let physical_plan = builder
-            .build(&self.s_expr, *merge_into.required_columns.clone())
+            .build(&self.s_expr, *data_manipulation.required_columns.clone())
             .await?;
 
         Ok(physical_plan)
     }
 
-    fn get_merge_into_table_result(&self) -> Result<Vec<DataBlock>> {
+    fn get_data_manipulation_table_result(&self) -> Result<Vec<DataBlock>> {
         let binding = self.ctx.get_merge_status();
         let status = binding.read();
         let mut columns = Vec::new();

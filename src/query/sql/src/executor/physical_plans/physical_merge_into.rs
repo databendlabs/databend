@@ -400,8 +400,8 @@ impl PhysicalPlanBuilder {
             matched.push((condition, update_list))
         }
 
-        let merge_into_build_info = self.merge_into_build_info.clone().unwrap();
-        let base_snapshot = merge_into_build_info.table_snapshot;
+        let data_manipulation_build_info = self.data_manipulation_build_info.clone().unwrap();
+        let base_snapshot = data_manipulation_build_info.table_snapshot;
 
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
@@ -469,7 +469,7 @@ impl PhysicalPlanBuilder {
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
             mutation_kind: MutationKind::Update,
-            update_stream_meta: merge_into_build_info.update_stream_meta,
+            update_stream_meta: data_manipulation_build_info.update_stream_meta,
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,

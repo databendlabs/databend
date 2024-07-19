@@ -36,7 +36,7 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
+use crate::interpreters::interpreter_data_manipulation::DataManipulationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -122,7 +122,7 @@ impl Interpreter for ExplainInterpreter {
                     metadata,
                 } => {
                     let merge_into: DataManipulation = s_expr.plan().clone().try_into()?;
-                    let interpreter = MergeIntoInterpreter::try_create(
+                    let interpreter = DataManipulationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
@@ -442,7 +442,8 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let merge_into: databend_common_sql::plans::DataManipulation =
             s_expr.plan().clone().try_into()?;
-        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let interpreter =
+            DataManipulationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
         let plan = interpreter.build_physical_plan(&merge_into).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
