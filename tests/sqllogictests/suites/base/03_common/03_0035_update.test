@@ -87,8 +87,8 @@ UPDATE t3 SET a = 6 WHERE a = 3
 query I
 select a from t3
 ----
-2
 -5
+2
 6
 
 statement ok
