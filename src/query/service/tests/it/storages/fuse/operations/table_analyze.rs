@@ -27,7 +27,6 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::FuseTable;
-use databend_query::interpreters::DataManipulationInterpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
@@ -87,12 +86,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
-    if let Plan::DataManipulation {
-        s_expr,
-        schema,
-        metadata,
-    } = plan
-    {
+    if let Plan::DataManipulation { s_expr, schema, .. } = plan {
         do_data_manipulation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
     }
     ctx.evict_table_from_cache("default", "default", "t")?;
@@ -124,12 +118,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let query = format!("update {}.{} set id = 3 where id = 0", db_name, tb_name);
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
-    if let Plan::DataManipulation {
-        s_expr,
-        schema,
-        metadata,
-    } = plan
-    {
+    if let Plan::DataManipulation { s_expr, schema, .. } = plan {
         do_data_manipulation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
     }
 
