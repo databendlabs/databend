@@ -19,6 +19,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
+use databend_common_storages_fuse::table_functions::ClusteringStatisticsTable;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseColumnTable;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
@@ -159,6 +160,10 @@ impl TableFunctionFactory {
         creators.insert(
             "clustering_information".to_string(),
             (next_id(), Arc::new(ClusteringInformationTable::create)),
+        );
+        creators.insert(
+            "clustering_statistics".to_string(),
+            (next_id(), Arc::new(ClusteringStatisticsTable::create)),
         );
 
         creators.insert(
