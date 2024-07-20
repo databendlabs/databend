@@ -138,24 +138,27 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
                 )
             };
             c.decompress(&input[..compressed_size], out_slice)?;
-            unsafe { offsets.set_len(offsets.len() + length + 1) };
 
             if use_inner {
                 reader.consume(compressed_size);
             }
 
             if let Some(last) = last {
-                // fix offset
-                for i in offsets.len() - length - 1..offsets.len() {
+                // fix offset:
+                // because the offsets in current page is append to the original offsets,
+                // each new offset value must add the last value in original offsets.
+                let new_length = offsets.len() + length;
+                for i in offsets.len()..new_length {
                     let next_val = unsafe { *offsets.get_unchecked(i + 1) };
                     let val = unsafe { offsets.get_unchecked_mut(i) };
                     *val = last + next_val;
                 }
-                unsafe { offsets.set_len(offsets.len() - 1) };
+                unsafe { offsets.set_len(new_length) };
+            } else {
+                unsafe { offsets.set_len(length + 1) };
             }
 
             // values
-
             let (_, compressed_size, uncompressed_size) = read_compress_header(reader)?;
             use_inner = false;
             reader.fill_buf()?;

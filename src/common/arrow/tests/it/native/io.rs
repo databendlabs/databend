@@ -58,6 +58,7 @@ use rand::Rng;
 use rand::SeedableRng;
 
 pub const WRITE_PAGE: usize = 2048;
+pub const SMALL_WRITE_PAGE: usize = 2;
 
 pub fn new_test_chunk() -> Chunk<Box<dyn Array>> {
     Chunk::new(vec![
@@ -75,10 +76,10 @@ pub fn new_test_chunk() -> Chunk<Box<dyn Array>> {
         Box::new(Float32Array::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
         Box::new(Float64Array::from_vec(vec![1.1, 2.2, 3.3, 4.4, 5.5, 6.6])) as _,
         Box::new(Utf8Array::<i32>::from_iter_values(
-            ["1.1", "2.2", "3.3", "4.4", "5.5", "6.6"].iter(),
+            ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
         Box::new(BinaryArray::<i64>::from_iter_values(
-            ["1.1", "2.2", "3.3", "4.4", "5.5", "6.6"].iter(),
+            ["abcdefg", "mn", "11", "", "3456", "xyz"].iter(),
         )) as _,
     ])
 }
@@ -437,14 +438,17 @@ fn test_write_read(chunk: Chunk<Box<dyn Array>>) {
         CommonCompression::Snappy,
         CommonCompression::None,
     ];
+    let page_sizes = vec![WRITE_PAGE, SMALL_WRITE_PAGE];
 
     for compression in compressions {
-        test_write_read_with_options(chunk.clone(), WriteOptions {
-            default_compression: compression,
-            max_page_size: Some(WRITE_PAGE),
-            default_compress_ratio: Some(2.0f64),
-            forbidden_compressions: vec![],
-        });
+        for page_size in &page_sizes {
+            test_write_read_with_options(chunk.clone(), WriteOptions {
+                default_compression: compression,
+                max_page_size: Some(*page_size),
+                default_compress_ratio: Some(2.0f64),
+                forbidden_compressions: vec![],
+            });
+        }
     }
 }
 
