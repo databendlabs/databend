@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 
 use super::algorithm::*;
-use super::Cursor;
 use super::Rows;
 
 #[async_trait::async_trait]
@@ -165,73 +164,22 @@ where
             return false;
         };
 
-        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
-        let (whole_block, next_cursor) = if self.sorted_cursors.len() == 1 {
-            (true, None)
-        } else {
-            let next_cursor = &self.sorted_cursors.peek_top2().0;
-            if cursor.last().le(&next_cursor.current()) {
-                // Short Path:
-                // If the last row of current block is smaller than the next cursor,
-                // we can drain the whole block.
-                (true, None)
-            } else {
-                (false, Some(next_cursor))
-            }
-        };
-
         let input_index = cursor.input_index;
         let start = cursor.row_index;
+        let count = self.evaluate_cursor_count(cursor);
 
-        let cursor_finished = match (whole_block, next_cursor) {
-            (true, None) => {
-                let count = (cursor.num_rows() - start).min(max_rows - self.temp_sorted_num_rows);
+        self.temp_sorted_num_rows += count;
+        self.push_output_indices((input_index, start, count));
 
-                self.temp_sorted_num_rows += count;
-                self.temp_output_indices.push((input_index, start, count));
+        // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
+        // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+        let mut peek_mut = self.sorted_cursors.peek_mut();
+        let cursor = &mut peek_mut.0;
+        cursor.row_index += count;
 
-                // `self.sorted_cursors.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the sorted_cursors.
-                // The sorted_cursors will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-                let mut peek_mut = self.sorted_cursors.peek_mut();
-                let cursor = &mut peek_mut.0;
-                cursor.row_index += count;
-
-                let cursor_finished = cursor.is_finished();
-                if cursor_finished {
-                    // Pop the current `cursor`.
-                    A::pop_mut(peek_mut);
-                }
-                cursor_finished
-            }
-            (false, Some(next_cursor)) => {
-                let mut cursor = cursor.cursor_mut();
-                while !cursor.is_finished()
-                    && cursor.le(next_cursor)
-                    && self.temp_sorted_num_rows < max_rows
-                {
-                    // If the cursor is smaller than the next cursor, don't need to push the cursor back to the sorted_cursors.
-                    self.temp_sorted_num_rows += 1;
-                    cursor.advance();
-                }
-
-                let cursor_finished = cursor.is_finished();
-                let row_index = cursor.row_index;
-
-                self.temp_output_indices
-                    .push((input_index, start, row_index - start));
-
-                if cursor_finished {
-                    // Pop the current `cursor`.
-                    self.sorted_cursors.pop();
-                } else {
-                    self.sorted_cursors.peek_mut().0.row_index = row_index;
-                }
-                cursor_finished
-            }
-            _ => unreachable!(),
-        };
-
-        if cursor_finished {
+        if cursor.is_finished() {
+            // Pop the current `cursor`.
+            A::pop_mut(peek_mut);
             // We have read all rows of this block, need to release the old memory and read a new one.
             let temp_block = DataBlock::take_by_slices_limit_from_blocks(
                 &self.buffer,
@@ -244,8 +192,60 @@ where
             self.pending_streams.push_back(input_index);
         }
 
+        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
         debug_assert!(self.temp_sorted_num_rows <= max_rows);
         self.temp_sorted_num_rows != max_rows
+    }
+
+    #[inline(always)]
+    fn evaluate_cursor_count(&self, cursor: &Cursor<A::Rows>) -> usize {
+        debug_assert!(!cursor.is_finished());
+        let start = cursor.row_index;
+        let max_rows = self.limit.unwrap_or(self.batch_rows).min(self.batch_rows);
+        let row_index_limit = cursor
+            .num_rows()
+            .min(start + max_rows - self.temp_sorted_num_rows);
+
+        if self.sorted_cursors.len() == 1 || cursor.current() == cursor.last() {
+            return row_index_limit - start;
+        }
+
+        if !A::SHOULD_PEEK_TOP2 {
+            let mut p = cursor.cursor_mut();
+            p.advance();
+            let item = &cursor.current();
+            while p.row_index < row_index_limit && p.current() == *item {
+                p.advance();
+            }
+            return p.row_index - start;
+        }
+
+        let next_cursor = &self.sorted_cursors.peek_top2().0;
+        if cursor.last() <= next_cursor.current() {
+            // Short Path:
+            // If the last row of current block is smaller than the next cursor,
+            // we can drain the whole block.
+            return row_index_limit - start;
+        }
+
+        let mut p = cursor.cursor_mut();
+        p.advance();
+        let item = &next_cursor.current();
+        while p.row_index < row_index_limit && p.current() <= *item {
+            // If the cursor is equals or smaller than the next cursor, continue advance.
+            p.advance();
+        }
+        p.row_index - start
+    }
+
+    fn push_output_indices(&mut self, (input, start, count): (usize, usize, usize)) {
+        match self.temp_output_indices.last_mut() {
+            Some((pre_input, pre_start, pre_count)) if input == *pre_input => {
+                debug_assert_eq!(*pre_start + *pre_count, start);
+                *pre_count += count
+            }
+            _ => self.temp_output_indices.push((input, start, count)),
+        }
     }
 
     fn build_output(&mut self) -> Result<DataBlock> {

@@ -367,21 +367,29 @@ fn string_to_format_timestmap(
             return Err(ErrorCode::BadArguments(format!("{}", e)));
         }
         // Additional checks and adjustments for parsed timestamp
-        if parsed.month.is_none() {
-            parsed.month = Some(1);
-        }
-        if parsed.day.is_none() {
-            parsed.day = Some(1);
-        }
-        if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
-            parsed.hour_div_12 = Some(0);
-            parsed.hour_mod_12 = Some(0);
-        }
-        if parsed.minute.is_none() {
-            parsed.minute = Some(0);
-        }
-        if parsed.second.is_none() {
-            parsed.second = Some(0);
+        // If parsed.timestamp is Some no need to pad default year.
+        if parsed.timestamp.is_none() {
+            if parsed.year.is_none() {
+                parsed.year = Some(1970);
+                parsed.year_div_100 = Some(19);
+                parsed.year_mod_100 = Some(70);
+            }
+            if parsed.month.is_none() {
+                parsed.month = Some(1);
+            }
+            if parsed.day.is_none() {
+                parsed.day = Some(1);
+            }
+            if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
+                parsed.hour_div_12 = Some(0);
+                parsed.hour_mod_12 = Some(0);
+            }
+            if parsed.minute.is_none() {
+                parsed.minute = Some(0);
+            }
+            if parsed.second.is_none() {
+                parsed.second = Some(0);
+            }
         }
 
         if parse_tz {
