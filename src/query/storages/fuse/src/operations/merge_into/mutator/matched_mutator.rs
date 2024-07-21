@@ -97,7 +97,7 @@ impl MatchedAggregator {
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
     ) -> Result<Self> {
-        let target_table_schema = table.schema_with_stream();
+        let target_table_schema = Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let data_accessor = table.get_operator();
         let write_settings = table.get_write_settings();
         let update_stream_columns = table.change_tracking_enabled();
@@ -411,6 +411,8 @@ impl AggregationContext {
             origin_data_block.add_column(row_num);
         }
 
+        dbg!("origin_data_block = {:?}", &origin_data_block);
+
         // apply delete
         let mut bitmap = MutableBitmap::new();
         for row in 0..origin_num_rows {
@@ -421,6 +423,8 @@ impl AggregationContext {
             }
         }
         let mut res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
+
+        dbg!("res_block = {:?}", &res_block);
 
         if res_block.is_empty() {
             metrics_inc_merge_into_deleted_blocks_counter(1);
