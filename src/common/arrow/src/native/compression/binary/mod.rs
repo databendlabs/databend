@@ -142,6 +142,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
             if use_inner {
                 reader.consume(compressed_size);
             }
+            let old_length = offsets.len();
             let new_length = offsets.len() + length;
             unsafe { offsets.set_len(new_length + 1) };
 
@@ -149,7 +150,7 @@ pub fn decompress_binary<O: Offset, R: NativeReadBuf>(
                 // fix offset:
                 // because the offsets in current page is append to the original offsets,
                 // each new offset value must add the last value in original offsets.
-                for i in offsets.len()..new_length {
+                for i in old_length..new_length {
                     let next_val = unsafe { *offsets.get_unchecked(i + 1) };
                     let val = unsafe { offsets.get_unchecked_mut(i) };
                     *val = last + next_val;
