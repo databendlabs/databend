@@ -38,6 +38,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use indexmap::IndexSet;
+use log::debug;
 use log::warn;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
@@ -253,6 +254,9 @@ impl ReclusterMutator {
                 .block_thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
+                debug!(
+                    "recluster: the statistics of blocks are too small, just merge them into one block"
+                );
                 let block_metas = block_metas
                     .into_iter()
                     .map(|meta| (None, meta))
@@ -356,6 +360,7 @@ impl ReclusterMutator {
         &mut self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     ) -> Result<bool> {
+        debug!("recluster: generate compact tasks");
         let settings = self.ctx.get_settings();
         let num_block_limit = settings.get_compact_max_block_selection()? as usize;
         let num_segment_limit = compact_segments.len();
@@ -423,6 +428,10 @@ impl ReclusterMutator {
         total_bytes: usize,
         level: i32,
     ) -> ReclusterTask {
+        debug!(
+            "recluster: generate recluster task, the selected block metas: {:?}, level: {}",
+            block_metas, level
+        );
         let (stats, parts) =
             FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
         self.recluster_blocks_count += block_metas.len() as u64;
@@ -444,7 +453,7 @@ impl ReclusterMutator {
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
         let mut unclustered_sg = IndexSet::new();
-        for (i, (_, compact_segment)) in compact_segments.iter().enumerate() {
+        for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
             let mut level = -1;
             let clustered = compact_segment
                 .summary
@@ -455,6 +464,10 @@ impl ReclusterMutator {
                     v.cluster_key_id == self.cluster_key_id
                 });
             if !clustered {
+                debug!(
+                    "recluster: segment '{}' is unclustered, need to be compacted",
+                    loc.location.0
+                );
                 unclustered_sg.insert(i);
                 continue;
             }
@@ -598,6 +611,7 @@ impl ReclusterMutator {
         // round the float to 4 decimal places.
         let average_depth =
             (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
+        debug!("recluster: average_depth: {}", average_depth);
 
         // find the max point, gather the indices.
         if average_depth > depth_threshold {

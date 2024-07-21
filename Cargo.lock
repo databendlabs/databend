@@ -3477,6 +3477,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-openai",
  "databend-common-vector",
+ "dtparse",
  "ethnum",
  "geo",
  "geo-types",
@@ -4698,7 +4699,6 @@ dependencies = [
  "databend-common-exception",
  "defer",
  "fern",
- "humantime",
  "itertools 0.10.5",
  "libc",
  "log",
@@ -5300,7 +5300,6 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb",
  "rand 0.8.5",
- "roaring",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -6166,6 +6165,17 @@ name = "dtoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcbb2bf8e87535c23f7a8a321e364ce21462d0ff10cb6407820e8e96dfff6653"
+
+[[package]]
+name = "dtparse"
+version = "2.0.0"
+source = "git+https://github.com/TCeason/dtparse.git?rev=de0a15b#de0a15b5db5cf3f2c99f38a6535f669bc0ee7ea1"
+dependencies = [
+ "chrono",
+ "lazy_static",
+ "num-traits",
+ "rust_decimal",
+]
 
 [[package]]
 name = "dunce"
@@ -9567,9 +9577,9 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bfb26af44ecc374918e35798b7aa7d4432c5da02cdcef862c2a3a6dbc0d9134"
+checksum = "f98d1dd2023aa6a1b74f23432e2db5a9122bf53ae98053efc650951d31f59ffb"
 dependencies = [
  "byteorder",
  "fast-float",

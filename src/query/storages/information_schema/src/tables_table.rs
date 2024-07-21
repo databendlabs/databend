@@ -52,7 +52,7 @@ impl TablesTable {
     // | TABLE_COMMENT   | text                                                               | YES  |     | NULL    |       |
     // +-----------------+--------------------------------------------------------------------+------+-----+---------+-------+
     pub fn create(table_id: u64) -> Arc<dyn Table> {
-        let query = "SELECT
+        let query = "SELECT * FROM (SELECT
             database AS table_catalog,
             database AS table_schema,
             name AS table_name,
@@ -67,7 +67,23 @@ impl TablesTable {
             NULL AS table_collation,
             NULL AS data_free,
             comment AS table_comment
-        FROM system.tables;";
+        FROM system.tables union
+        SELECT
+            database AS table_catalog,
+            database AS table_schema,
+            name AS table_name,
+            'VIEW' AS table_type,
+            engine AS engine,
+            created_on AS create_time,
+            dropped_on AS drop_time,
+            0 AS data_length,
+            0 AS index_length,
+            0 AS table_rows,
+            NULL AS auto_increment,
+            NULL AS table_collation,
+            NULL AS data_free,
+            comment AS table_comment
+        FROM system.views) ORDER BY table_schema;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());

@@ -960,10 +960,11 @@ select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7,
 34343.00 1.000
 34343.00 2.000
 
+
 query TTT
-select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0))
+select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0)), to_decimal(38, 4)('15.0e-1'), to_decimal(38, 4)('15.0e1'), to_decimal(38, 4)('15.1e+2'), to_decimal(38, 10)('-1.3096723705530167E-9');
 ----
-1.2 1.2340 1
+1.2 1.2340 1 1.5000 150.0000 1510.0000 -0.0000000013
 
 
 statement ok

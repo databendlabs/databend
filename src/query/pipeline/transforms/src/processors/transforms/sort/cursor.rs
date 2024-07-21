@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 
 use databend_common_expression::Column;
 
@@ -20,24 +21,28 @@ use super::rows::Rows;
 
 /// A cursor point to a certain row in a data block.
 #[derive(Clone)]
-pub struct Cursor<R: Rows> {
+pub struct Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     pub input_index: usize,
     pub row_index: usize,
 
     num_rows: usize,
+    _o: PhantomData<O>,
 
     /// rows within [`Cursor`] should be monotonic.
     rows: R,
 }
 
-impl<R: Rows> Cursor<R> {
+impl<R, O> Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     pub fn new(input_index: usize, rows: R) -> Self {
-        Self {
-            input_index,
-            row_index: 0,
-            num_rows: rows.len(),
-            rows,
-        }
+        O::new_cursor(input_index, rows)
     }
 
     #[inline]
@@ -72,7 +77,7 @@ impl<R: Rows> Cursor<R> {
         self.rows.to_column()
     }
 
-    pub fn cursor_mut(&self) -> CursorMut<'_, R> {
+    pub fn cursor_mut(&self) -> CursorMut<'_, R, O> {
         CursorMut {
             row_index: self.row_index,
             cursor: self,
@@ -80,58 +85,74 @@ impl<R: Rows> Cursor<R> {
     }
 }
 
-impl<R: Rows> Ord for Cursor<R> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.input_index == other.input_index {
-            return self.row_index.cmp(&other.row_index);
+pub trait CursorOrder<R: Rows>: Sized + Copy {
+    fn eq(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> bool;
+
+    fn cmp(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> Ordering;
+
+    fn new_cursor(input_index: usize, rows: R) -> Cursor<R, Self> {
+        Cursor::<R, Self> {
+            input_index,
+            row_index: 0,
+            num_rows: rows.len(),
+            rows,
+            _o: PhantomData,
         }
-        self.current()
-            .cmp(&other.current())
-            .then_with(|| self.input_index.cmp(&other.input_index))
     }
 }
 
-impl<R: Rows> PartialEq for Cursor<R> {
+impl<R, O> Ord for Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
+    fn cmp(&self, other: &Self) -> Ordering {
+        O::cmp(self, other)
+    }
+}
+
+impl<R, O> PartialEq for Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     fn eq(&self, other: &Self) -> bool {
-        (self.input_index == other.input_index && self.row_index == other.row_index)
-            || self.current() == other.current()
+        O::eq(self, other)
     }
 }
 
-impl<R: Rows> Eq for Cursor<R> {}
+impl<R, O> Eq for Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
+}
 
-impl<R: Rows> PartialOrd for Cursor<R> {
+impl<R, O> PartialOrd for Cursor<R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<'a, R: Rows> PartialEq<Cursor<R>> for CursorMut<'a, R> {
-    fn eq(&self, other: &Cursor<R>) -> bool {
-        (self.cursor.input_index == other.input_index && self.row_index == other.row_index)
-            || self.current() == other.current()
-    }
-}
-
-impl<'a, R: Rows> PartialOrd<Cursor<R>> for CursorMut<'a, R> {
-    fn partial_cmp(&self, other: &Cursor<R>) -> Option<Ordering> {
-        Some(if self.cursor.input_index == other.input_index {
-            self.row_index.cmp(&other.row_index)
-        } else {
-            self.current()
-                .cmp(&other.current())
-                .then_with(|| self.cursor.input_index.cmp(&other.input_index))
-        })
-    }
-}
-
-pub struct CursorMut<'a, R: Rows> {
+pub struct CursorMut<'a, R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     pub row_index: usize,
 
-    cursor: &'a Cursor<R>,
+    cursor: &'a Cursor<R, O>,
 }
 
-impl<'a, R: Rows> CursorMut<'a, R> {
+impl<'a, R, O> CursorMut<'a, R, O>
+where
+    R: Rows,
+    O: CursorOrder<R>,
+{
     pub fn advance(&mut self) -> usize {
         let res = self.row_index;
         self.row_index += 1;
@@ -142,7 +163,7 @@ impl<'a, R: Rows> CursorMut<'a, R> {
         self.row_index == self.cursor.num_rows
     }
 
-    pub fn current(&self) -> R::Item<'_> {
+    pub fn current<'b>(&'b self) -> R::Item<'a> {
         self.cursor.rows.row(self.row_index)
     }
 }

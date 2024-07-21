@@ -33,11 +33,11 @@ explain select 1 from range_t where i > 20
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.40
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(range_t.i (#1) > 20)]
-    ├── estimated rows: 0.40
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.range_t
         ├── output columns: [i (#1)]

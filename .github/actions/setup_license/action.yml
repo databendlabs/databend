@@ -1,0 +1,33 @@
+name: "Setup License"
+description: "Setup Databend Enterprise License"
+inputs:
+  runner_provider:
+    description: "Self-hosted runner provider, aws or gcp"
+    required: true
+    default: "aws"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get License from S3
+      if: inputs.runner_provider == 'aws'
+      shell: bash
+      run: |
+        aws s3 cp s3://databend-ci/misc/license.key license.key
+        aws s3 cp s3://databend-ci/misc/license.json license.json
+
+    - name: Get License from GCS
+      if: inputs.runner_provider == 'gcp'
+      shell: bash
+      run: |
+        gcloud storage cp gs://databend-ci/misc/license.key license.key
+        gcloud storage cp gs://databend-ci/misc/license.json license.json
+
+    - name: Output License
+      shell: bash
+      run: |
+        license=$(cat license.key)
+        rm license.key
+        echo "::add-mask::${license}"
+        echo "QUERY_DATABEND_ENTERPRISE_LICENSE=${license}" >> $GITHUB_ENV
+        cat license.json

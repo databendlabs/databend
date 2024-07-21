@@ -635,3 +635,25 @@ unset timezone;
 
 statement ok
 unset enable_dst_hour_fix;
+
+statement ok
+set parse_datetime_ignore_remainder = 1;
+
+query T
+select to_datetime('1', '%s')
+----
+1970-01-01 00:00:01.000000
+
+statement error 1006
+select to_timestamp('200,2000', '%s,%Y');
+
+statement ok
+unset parse_datetime_ignore_remainder;
+
+query T
+select to_datetime('1', '%s')
+----
+1970-01-01 00:00:01.000000
+
+statement error 1006
+select to_timestamp('200,2000', '%s,%Y');

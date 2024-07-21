@@ -7839,17 +7839,17 @@ HashJoin: INNER
 ├── Build
 │   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.tpcds.store (#2) (read rows: 1)
-│       │       └── Probe
-│       │           └── HashJoin: INNER
-│       │               ├── Build
-│       │               │   └── Scan: default.tpcds.date_dim (#1) (read rows: 73049)
-│       │               └── Probe
-│       │                   └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
+│       │   └── Scan: default.tpcds.store (#2) (read rows: 1)
 │       └── Probe
-│           └── Scan: default.tpcds.household_demographics (#3) (read rows: 7200)
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── HashJoin: INNER
+│               │       ├── Build
+│               │       │   └── Scan: default.tpcds.date_dim (#1) (read rows: 73049)
+│               │       └── Probe
+│               │           └── Scan: default.tpcds.store_sales (#0) (read rows: 28810)
+│               └── Probe
+│                   └── Scan: default.tpcds.household_demographics (#3) (read rows: 7200)
 └── Probe
     └── Scan: default.tpcds.customer (#4) (read rows: 1000)
 
@@ -8854,13 +8854,13 @@ HashJoin: CROSS
 │       ├── Build
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpcds.web_page (#7) (read rows: 0)
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── Scan: default.tpcds.web_page (#7) (read rows: 0)
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpcds.web_sales (#4) (read rows: 7212)
 │       │       └── Probe
-│       │           └── HashJoin: INNER
-│       │               ├── Build
-│       │               │   └── Scan: default.tpcds.household_demographics (#5) (read rows: 7200)
-│       │               └── Probe
-│       │                   └── Scan: default.tpcds.web_sales (#4) (read rows: 7212)
+│       │           └── Scan: default.tpcds.household_demographics (#5) (read rows: 7200)
 │       └── Probe
 │           └── Scan: default.tpcds.time_dim (#6) (read rows: 86400)
 └── Probe
@@ -8868,13 +8868,13 @@ HashJoin: CROSS
         ├── Build
         │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── Scan: default.tpcds.web_page (#3) (read rows: 0)
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpcds.web_page (#3) (read rows: 0)
+        │       │       └── Probe
+        │       │           └── Scan: default.tpcds.web_sales (#0) (read rows: 7212)
         │       └── Probe
-        │           └── HashJoin: INNER
-        │               ├── Build
-        │               │   └── Scan: default.tpcds.household_demographics (#1) (read rows: 7200)
-        │               └── Probe
-        │                   └── Scan: default.tpcds.web_sales (#0) (read rows: 7212)
+        │           └── Scan: default.tpcds.household_demographics (#1) (read rows: 7200)
         └── Probe
             └── Scan: default.tpcds.time_dim (#2) (read rows: 86400)
 
