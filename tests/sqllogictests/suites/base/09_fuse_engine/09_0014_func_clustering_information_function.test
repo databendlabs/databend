@@ -22,12 +22,12 @@ select *  from t09_0014 order by b, a
 1 3
 4 4
 
-query TTIT
-select min, max, level, pages from clustering_statistics('default','t09_0014') order by min
+query TTI
+select min, max, level from clustering_statistics('default','t09_0014') order by min
 ----
-[1, 1] [3, 0] 0 NULL
-[1, 2] [3, 1] 0 NULL
-[4, 4] [4, 4] 0 NULL
+[1, 1] [3, 0] 0
+[1, 2] [3, 1] 0
+[4, 4] [4, 4] 0
 
 query TIIFFT
 select * exclude(timestamp) from clustering_information('default','t09_0014')
