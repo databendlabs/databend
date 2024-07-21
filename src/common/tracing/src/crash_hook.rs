@@ -219,17 +219,17 @@ unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *m
         crash_handler.recv_signal(sig, info, uc);
     }
 
-    #[cfg(test)]
-    {
-        drop(guard);
-        siglongjmp(addr_of_mut!(TEST_JMP_BUFFER), 1);
-    }
+    drop(guard);
 
-    #[allow(unreachable_code)]
     if sig != libc::SIGTRAP {
-        drop(guard);
-        let _ = std::io::stderr().flush();
-        std::process::exit(1);
+        #[cfg(test)]
+        siglongjmp(addr_of_mut!(TEST_JMP_BUFFER), 1);
+
+        #[allow(unreachable_code)]
+        {
+            let _ = std::io::stderr().flush();
+            std::process::exit(1);
+        }
     }
 }
 
@@ -270,7 +270,14 @@ pub fn set_crash_hook(version: String) {
 #[cfg(test)]
 mod tests {
     use std::ptr::addr_of_mut;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    use std::sync::Arc;
+    use std::sync::Mutex;
+    use std::sync::PoisonError;
+    use std::time::Duration;
 
+    use databend_common_base::runtime::Thread;
     use databend_common_base::runtime::ThreadTracker;
 
     use crate::crash_hook::sigsetjmp;
@@ -383,6 +390,43 @@ mod tests {
                 assert!(ERROR_MESSAGE.contains("test_crash"));
                 eprintln!("{}", ERROR_MESSAGE)
             }
+        }
+    }
+
+    #[test]
+    fn test_crash_with_mutex() {
+        unsafe {
+            set_crash_hook(String::from("1.2.111"));
+
+            ERROR_MESSAGE = String::new();
+            let mutex = Arc::new(Mutex::new(()));
+            let thread_id = Arc::new(AtomicUsize::new(0));
+
+            let _guard = mutex.lock().unwrap_or_else(PoisonError::into_inner);
+            let join_handler = Thread::spawn({
+                let mutex = mutex.clone();
+                let thread_id = thread_id.clone();
+                move || {
+                    thread_id.store(libc::pthread_self(), Ordering::SeqCst);
+
+                    let _guard = mutex.lock().unwrap_or_else(PoisonError::into_inner);
+                }
+            });
+
+            std::thread::sleep(Duration::from_secs(5));
+
+            assert_eq!(
+                libc::pthread_kill(thread_id.load(Ordering::SeqCst), libc::SIGTRAP),
+                0
+            );
+
+            std::thread::sleep(Duration::from_secs(3));
+
+            assert!(!ERROR_MESSAGE.is_empty());
+            assert!(ERROR_MESSAGE.contains("Signal 5"));
+            assert!(ERROR_MESSAGE.contains(">                     let _guard = mutex.lock().unwrap_or_else(PoisonError::into_inner);"));
+            drop(_guard);
+            join_handler.join().unwrap();
         }
     }
 }
