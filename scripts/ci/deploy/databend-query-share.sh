@@ -16,7 +16,7 @@ echo "current directory:"
 pwd
 
 echo "build share endpoint"
-ls 
+ls
 mv share-endpoint ../tmp-share-endpoint
 cd ../tmp-share-endpoint
 cargo build --release
