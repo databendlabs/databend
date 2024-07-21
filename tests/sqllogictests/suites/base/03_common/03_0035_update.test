@@ -75,17 +75,17 @@ statement ok
 insert into t3 values(-5),(3),(2)
 
 query I
-select a from t3
+select a from t3 order by a
 ----
+-5
 2
 3
--5
 
 statement ok
 UPDATE t3 SET a = 6 WHERE a = 3
 
 query I
-select a from t3
+select a from t3 order by a
 ----
 -5
 2
