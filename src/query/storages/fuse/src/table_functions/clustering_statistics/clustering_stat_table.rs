@@ -20,6 +20,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableIdent;
@@ -32,58 +33,56 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
 use crate::sessions::TableContext;
-use crate::table_functions::parse_db_tb_opt_args;
+use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::ClusteringInformation;
+use crate::table_functions::ClusteringStatistics;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
 use crate::FuseTable;
 use crate::Table;
 
-const FUSE_FUNC_CLUSTERING_INFO: &str = "clustering_information";
+const FUSE_FUNC_CLUSTERING_STAT: &str = "clustering_statistics";
 
-pub struct ClusteringInformationTable {
+pub struct ClusteringStatisticsTable {
     table_info: TableInfo,
     arg_database_name: String,
     arg_table_name: String,
-    arg_cluster_key: Option<String>,
 }
 
-impl ClusteringInformationTable {
+impl ClusteringStatisticsTable {
     pub fn create(
         database_name: &str,
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let (arg_database_name, arg_table_name, arg_cluster_key) =
-            parse_db_tb_opt_args(&table_args, FUSE_FUNC_CLUSTERING_INFO)?;
+        let (arg_database_name, arg_table_name) =
+            parse_db_tb_args(&table_args, FUSE_FUNC_CLUSTERING_STAT)?;
 
-        let engine = FUSE_FUNC_CLUSTERING_INFO.to_owned();
+        let engine = FUSE_FUNC_CLUSTERING_STAT.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: ClusteringInformation::schema(),
+                schema: ClusteringStatistics::schema(),
                 engine,
                 ..Default::default()
             },
             ..Default::default()
         };
 
-        Ok(Arc::new(Self {
+        Ok(Arc::new(ClusteringStatisticsTable {
             table_info,
             arg_database_name,
             arg_table_name,
-            arg_cluster_key,
         }))
     }
 }
 
 #[async_trait::async_trait]
-impl Table for ClusteringInformationTable {
+impl Table for ClusteringStatisticsTable {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -103,30 +102,28 @@ impl Table for ClusteringInformationTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        let mut args = Vec::new();
-        args.push(string_literal(self.arg_database_name.as_str()));
-        args.push(string_literal(self.arg_table_name.as_str()));
-        if let Some(arg_cluster_key) = &self.arg_cluster_key {
-            args.push(string_literal(arg_cluster_key));
-        }
+        let args = vec![
+            string_literal(self.arg_database_name.as_str()),
+            string_literal(self.arg_table_name.as_str()),
+        ];
         Some(TableArgs::new_positioned(args))
     }
 
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {
-                ClusteringInformationSource::create(
+                ClusteringStatisticsSource::create(
                     ctx.clone(),
                     output,
                     self.arg_database_name.to_owned(),
                     self.arg_table_name.to_owned(),
-                    self.arg_cluster_key.to_owned(),
+                    plan.push_downs.as_ref().and_then(|x| x.limit),
                 )
             },
             1,
@@ -136,35 +133,35 @@ impl Table for ClusteringInformationTable {
     }
 }
 
-struct ClusteringInformationSource {
+struct ClusteringStatisticsSource {
     finish: bool,
     ctx: Arc<dyn TableContext>,
     arg_database_name: String,
     arg_table_name: String,
-    arg_cluster_key: Option<String>,
+    limit: Option<usize>,
 }
 
-impl ClusteringInformationSource {
+impl ClusteringStatisticsSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         arg_database_name: String,
         arg_table_name: String,
-        arg_cluster_key: Option<String>,
+        limit: Option<usize>,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.clone(), output, ClusteringInformationSource {
+        AsyncSourcer::create(ctx.clone(), output, ClusteringStatisticsSource {
             ctx,
             finish: false,
             arg_table_name,
             arg_database_name,
-            arg_cluster_key,
+            limit,
         })
     }
 }
 
 #[async_trait::async_trait]
-impl AsyncSource for ClusteringInformationSource {
-    const NAME: &'static str = "clustering_information";
+impl AsyncSource for ClusteringStatisticsSource {
+    const NAME: &'static str = "fuse_block";
 
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
@@ -185,18 +182,24 @@ impl AsyncSource for ClusteringInformationSource {
                 self.arg_table_name.as_str(),
             )
             .await?;
-
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
+        let Some(cluster_key_id) = tbl.cluster_key_id() else {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table '{}.{}'",
+                self.arg_database_name, self.arg_table_name,
+            )));
+        };
+
         Ok(Some(
-            ClusteringInformation::new(self.ctx.clone(), tbl, self.arg_cluster_key.clone())
-                .get_clustering_info()
+            ClusteringStatistics::new(self.ctx.clone(), tbl, self.limit, cluster_key_id)
+                .get_blocks()
                 .await?,
         ))
     }
 }
 
-impl TableFunction for ClusteringInformationTable {
+impl TableFunction for ClusteringStatisticsTable {
     fn function_name(&self) -> &str {
         self.name()
     }
