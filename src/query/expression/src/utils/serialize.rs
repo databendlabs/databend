@@ -127,23 +127,20 @@ pub fn read_decimal<T: Decimal>(
     // use 3 separate loops make code more clear and each loop is more tight.
     while pos < len {
         match buf[pos] {
-            b'0'..=b'9' => {
+            v @ b'0'..=b'9' => {
                 digits += 1;
                 if digits > max_digits {
                     return Err(decimal_overflow_error());
+                } else if v == b'0' {
+                    zeros += 1;
                 } else {
-                    let v = buf[pos];
-                    if v == b'0' {
-                        zeros += 1;
-                    } else {
-                        n = n
-                            .checked_mul(T::e(zeros + 1))
-                            .ok_or_else(decimal_overflow_error)?;
-                        n = n
-                            .checked_add(T::from_i128((v - b'0') as u64))
-                            .ok_or_else(decimal_overflow_error)?;
-                        zeros = 0;
-                    }
+                    n = n
+                        .checked_mul(T::e(zeros + 1))
+                        .ok_or_else(decimal_overflow_error)?;
+                    n = n
+                        .checked_add(T::from_i128((v - b'0') as u64))
+                        .ok_or_else(decimal_overflow_error)?;
+                    zeros = 0;
                 }
             }
             b'.' => {
@@ -237,7 +234,7 @@ pub fn read_decimal<T: Decimal>(
 
     if has_e && stop < 0 {
         let mut exp = 0i32;
-        if pos == len - 1 {
+        if pos >= len {
             return Err(decimal_parse_error("empty exponent"));
         }
 
@@ -253,7 +250,7 @@ pub fn read_decimal<T: Decimal>(
             _ => 1,
         };
 
-        if pos == len - 1 {
+        if pos >= len {
             return Err(decimal_parse_error("bad exponent"));
         }
 

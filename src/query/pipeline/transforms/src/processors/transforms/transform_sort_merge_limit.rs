@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::intrinsics::unlikely;
@@ -23,6 +24,7 @@ use databend_common_expression::DataBlock;
 
 use super::sort::CommonRows;
 use super::sort::Cursor;
+use super::sort::CursorOrder;
 use super::sort::DateConverter;
 use super::sort::DateRows;
 use super::sort::Rows;
@@ -35,7 +37,7 @@ use super::transform_sort_merge_base::TransformSortMergeBase;
 
 /// This is a specific version of [`super::transform_sort_merge::TransformSortMerge`] which sort blocks with limit.
 pub struct TransformSortMergeLimit<R: Rows> {
-    heap: FixedHeap<Reverse<Cursor<R>>>,
+    heap: FixedHeap<Reverse<Cursor<R, LocalCursorOrder>>>,
     buffer: HashMap<usize, DataBlock>,
 
     /// Record current memory usage.
@@ -48,15 +50,16 @@ pub struct TransformSortMergeLimit<R: Rows> {
 impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    fn add_block(&mut self, block: DataBlock, mut cursor: Cursor<R>) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R, input_index: usize) -> Result<()> {
         if unlikely(self.heap.cap() == 0 || block.is_empty()) {
             // limit is 0 or block is empty.
             return Ok(());
         }
 
+        let mut cursor = Cursor::new(input_index, init_rows);
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        let cur_index = cursor.input_index;
+        let cur_index = input_index;
         self.buffer.insert(cur_index, block);
 
         while !cursor.is_finished() {
@@ -110,6 +113,24 @@ impl<R: Rows> MergeSort<R> for TransformSortMergeLimit<R> {
         debug_assert!(self.buffer.is_empty());
 
         Ok(blocks)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct LocalCursorOrder;
+
+impl<R: Rows> CursorOrder<R> for LocalCursorOrder {
+    fn eq(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> bool {
+        (a.input_index == b.input_index && a.row_index == b.row_index) || a.current() == b.current()
+    }
+
+    fn cmp(a: &Cursor<R, Self>, b: &Cursor<R, Self>) -> Ordering {
+        if a.input_index == b.input_index {
+            return a.row_index.cmp(&b.row_index);
+        }
+        a.current()
+            .cmp(&b.current())
+            .then_with(|| a.input_index.cmp(&b.input_index))
     }
 }
 
