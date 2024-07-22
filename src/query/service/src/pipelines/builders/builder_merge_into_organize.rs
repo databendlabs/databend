@@ -41,7 +41,7 @@ impl PipelineBuilder {
 
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
-        match merge_into_organize.merge_type {
+        match merge_into_organize.mutation_type {
             DataMutationType::FullOperation => {
                 assert_eq!(self.main_pipeline.output_len() % 3, 0);
                 // merge matched update ports and not matched ports ===> data ports

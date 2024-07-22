@@ -73,7 +73,7 @@ pub struct DataMutation {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
-    pub merge_type: DataMutationType,
+    pub mutation_type: DataMutationType,
     pub distributed: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
@@ -113,8 +113,8 @@ impl DataMutation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.merge_type, DataMutationType::FullOperation)
-            || matches!(self.merge_type, DataMutationType::InsertOnly);
+        let insert = matches!(self.mutation_type, DataMutationType::FullOperation)
+            || matches!(self.mutation_type, DataMutationType::InsertOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {

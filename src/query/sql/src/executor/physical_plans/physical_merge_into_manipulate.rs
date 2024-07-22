@@ -37,8 +37,8 @@ pub struct MergeIntoManipulate {
     pub matched: MatchExpr,
     // used to record the index of target table's field in merge_source_schema
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
-    // merge_type
-    pub merge_type: DataMutationType,
+    // mutation_type
+    pub mutation_type: DataMutationType,
     pub row_id_idx: usize,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,

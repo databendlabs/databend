@@ -64,7 +64,7 @@ impl Binder {
 
         let (matched_clauses, unmatched_clauses) =
             Self::split_merge_into_clauses(&stmt.merge_options)?;
-        let mutation_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
+        let mutation_type = get_mutation_type(matched_clauses.len(), unmatched_clauses.len())?;
 
         let data_mutation = DataMutation {
             target_table_identifier,
@@ -73,7 +73,7 @@ impl Binder {
                 source: source_reference,
                 match_expr: stmt.join_expr.clone(),
                 has_star_clause: self.has_star_clause(&matched_clauses, &unmatched_clauses),
-                merge_type: mutation_type.clone(),
+                mutation_type: mutation_type.clone(),
             },
             mutation_type: mutation_type.clone(),
             matched_clauses,
@@ -126,7 +126,7 @@ impl Binder {
     }
 }
 
-fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationType> {
+fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationType> {
     if matched_len == 0 && unmatched_len > 0 {
         Ok(DataMutationType::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {

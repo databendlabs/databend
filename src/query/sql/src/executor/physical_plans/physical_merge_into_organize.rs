@@ -22,7 +22,7 @@ use crate::executor::physical_plan::PhysicalPlan;
 pub struct MergeIntoOrganize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub merge_type: DataMutationType,
+    pub mutation_type: DataMutationType,
 }
 
 impl MergeIntoOrganize {

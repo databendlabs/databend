@@ -79,7 +79,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub merge_type: DataMutationType,
+    pub mutation_type: DataMutationType,
     pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
@@ -125,7 +125,7 @@ impl PhysicalPlanBuilder {
             input_type,
             target_table_index,
             field_index_map,
-            merge_type,
+            mutation_type,
             distributed,
             row_id_index,
             change_join_order,
@@ -139,7 +139,7 @@ impl PhysicalPlanBuilder {
         let mut plan = builder.build(s_expr.child(0)?, required).await?;
 
         let join_output_schema = plan.output_schema()?;
-        let is_insert_only = matches!(merge_type, DataMutationType::InsertOnly);
+        let is_insert_only = matches!(mutation_type, DataMutationType::InsertOnly);
         if !is_insert_only && !join_output_schema.has_field(&row_id_index.to_string()) {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get row_id_index when running merge into",
@@ -155,7 +155,7 @@ impl PhysicalPlanBuilder {
         // We use `merge_into_split_idx` to specify a column from target table to spilt a block
         // from join into matched part and unmatched part.
         let mut merge_into_split_idx = None;
-        if matches!(merge_type, DataMutationType::FullOperation) {
+        if matches!(mutation_type, DataMutationType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
                 if *data_field.name() == row_id_index.to_string() {
                     merge_into_split_idx = Some(idx);
@@ -165,7 +165,7 @@ impl PhysicalPlanBuilder {
         }
 
         let source_is_broadcast =
-            matches!(merge_type, DataMutationType::MatchedOnly) && !change_join_order;
+            matches!(mutation_type, DataMutationType::MatchedOnly) && !change_join_order;
         if *distributed && !is_insert_only && !source_is_broadcast {
             let mut row_id_column = None;
             for column_binding in bind_context.columns.iter() {
@@ -252,7 +252,7 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>();
 
             let mut has_inner_column = false;
-            let need_wrap_nullable = matches!(merge_type, DataMutationType::FullOperation);
+            let need_wrap_nullable = matches!(mutation_type, DataMutationType::FullOperation);
             let fetched_fields: Vec<DataField> = lazy_columns
                 .iter()
                 .map(|index| {
@@ -419,7 +419,7 @@ impl PhysicalPlanBuilder {
             unmatched: unmatched.clone(),
             matched: matched.clone(),
             field_index_of_input_schema: field_index_of_input_schema.clone(),
-            merge_type: merge_type.clone(),
+            mutation_type: mutation_type.clone(),
             row_id_idx: row_id_offset,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: join_output_schema.clone(),
@@ -428,7 +428,7 @@ impl PhysicalPlanBuilder {
         plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
-            merge_type: merge_type.clone(),
+            mutation_type: mutation_type.clone(),
         }));
 
         let segments: Vec<_> = base_snapshot
@@ -445,7 +445,7 @@ impl PhysicalPlanBuilder {
             segments: segments.clone(),
             distributed: *distributed,
             output_schema: DataSchemaRef::default(),
-            merge_type: merge_type.clone(),
+            mutation_type: mutation_type.clone(),
             target_table_index: *target_table_index,
             need_match: !is_insert_only,
             target_build_optimization: false,

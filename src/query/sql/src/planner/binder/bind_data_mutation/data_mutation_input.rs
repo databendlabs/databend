@@ -55,7 +55,7 @@ pub enum DataMutationInput {
         source: TableReference,
         match_expr: Expr,
         has_star_clause: bool,
-        merge_type: DataMutationType,
+        mutation_type: DataMutationType,
     },
     Update {
         target: TableReference,
@@ -109,7 +109,7 @@ impl DataMutationInput {
                 source,
                 match_expr,
                 has_star_clause,
-                merge_type,
+                mutation_type,
             } => {
                 // Bind source reference.
                 let (mut source_s_expr, mut source_context) =
@@ -184,8 +184,8 @@ impl DataMutationInput {
                     binder.bind_table_reference(bind_context, target)?;
 
                 let update_stream_columns = target_table.change_tracking_enabled()
-                    && *merge_type != DataMutationType::InsertOnly;
-                let is_lazy_table = *merge_type != DataMutationType::InsertOnly;
+                    && *mutation_type != DataMutationType::InsertOnly;
+                let is_lazy_table = *mutation_type != DataMutationType::InsertOnly;
                 target_s_expr =
                     update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
@@ -206,7 +206,7 @@ impl DataMutationInput {
                     DataMutationInputType::Merge,
                 )?;
 
-                let join_op = match merge_type {
+                let join_op = match mutation_type {
                     DataMutationType::MatchedOnly => Inner,
                     DataMutationType::InsertOnly => RightAnti,
                     DataMutationType::FullOperation => RightOuter,
@@ -227,7 +227,7 @@ impl DataMutationInput {
 
                 let mut required_columns = ColumnSet::new();
                 // Add target table row_id column to required columns.
-                if *merge_type != DataMutationType::InsertOnly {
+                if *mutation_type != DataMutationType::InsertOnly {
                     required_columns.insert(target_row_id_index);
                 }
                 // Add source table columns to required columns.

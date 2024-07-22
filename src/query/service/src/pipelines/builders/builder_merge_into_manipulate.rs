@@ -51,7 +51,7 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.build_pipeline(&merge_into_manipulate.input)?;
 
-        let (step, need_match, need_unmatch) = match merge_into_manipulate.merge_type {
+        let (step, need_match, need_unmatch) = match merge_into_manipulate.mutation_type {
             DataMutationType::FullOperation => (2, true, true),
             DataMutationType::InsertOnly => (1, false, true),
             DataMutationType::MatchedOnly => (1, true, false),

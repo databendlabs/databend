@@ -67,7 +67,7 @@ impl PipelineBuilder {
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
-        let serialize_len = match merge_into.merge_type {
+        let serialize_len = match merge_into.mutation_type {
             DataMutationType::InsertOnly => self.main_pipeline.output_len(),
             DataMutationType::FullOperation | DataMutationType::MatchedOnly => {
                 // remove row id port
