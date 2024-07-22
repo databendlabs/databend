@@ -136,11 +136,8 @@ impl Scan {
         }
     }
 
-    pub fn update_stream_columns(&self, update_stream_columns: bool) -> Self {
-        Scan {
-            update_stream_columns,
-            ..self.clone()
-        }
+    pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
+        self.update_stream_columns = update_stream_columns;
     }
 
     fn used_columns(&self) -> ColumnSet {
