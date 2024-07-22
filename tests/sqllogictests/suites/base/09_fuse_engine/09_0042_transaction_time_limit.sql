@@ -1,17 +1,20 @@
 statement ok
-create or replace table t09_0042 (a int);
+create or replace table t09_0042 (a int) cluster by (a);
 
 statement ok
-insert into t09_0042 values (1);
+insert into t09_0042 values (1),(4);
 
 statement ok
-insert into t09_0042 values (2);
+insert into t09_0042 values (2),(3);
 
 statement ok
-insert into t09_0042 values (3);
+insert into t09_0042 values (5);
 
 statement ok
 set transaction_time_limit_in_hours=0;
+
+statement error 4003
+alter table t09_0042 recluster;
 
 statement error 4003
 optimize table t09_0042 compact;
@@ -59,11 +62,13 @@ statement ok
 commit;
 
 query I
-select * from t09_0042;
+select * from t09_0042 order by a;
 ----
 1
 2
 3
+4
+5
 
 statement ok
 set transaction_time_limit_in_hours=24;
