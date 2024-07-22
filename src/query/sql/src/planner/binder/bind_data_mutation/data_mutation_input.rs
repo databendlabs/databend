@@ -255,7 +255,9 @@ impl DataMutationInput {
                 let (mut target_s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
                 let is_lazy_table = input_type != DataMutationInputType::Delete;
-                target_s_expr = update_target_scan(&target_s_expr, is_lazy_table, false)?;
+                let update_stream_columns = target_table.change_tracking_enabled();
+                target_s_expr =
+                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
                 // Add internal_column row_id for target_table
                 let target_table_index = binder
