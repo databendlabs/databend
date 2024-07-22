@@ -352,6 +352,7 @@ impl<'a> WindowRewriter<'a> {
                     n: func.n,
                     arg: Box::new(replaced_arg.into()),
                     return_type: func.return_type.clone(),
+                    ignore_null: func.ignore_null,
                 })
             }
             func => func.clone(),

@@ -17,10 +17,10 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
-use roaring::RoaringTreemap;
 use serde_json::Map as JsonMap;
 use serde_json::Value as JsonValue;
 
@@ -126,7 +126,7 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             JsonValue::Object(vals)
         }
         ScalarRef::Bitmap(b) => {
-            let rb = RoaringTreemap::deserialize_from(b).expect("failed to deserialize bitmap");
+            let rb = deserialize_bitmap(b).expect("failed to deserialize bitmap");
             let data = rb
                 .iter()
                 .map(|v| JsonValue::Number(serde_json::Number::from(v)))

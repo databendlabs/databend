@@ -22,6 +22,7 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -41,7 +42,7 @@ impl PipelineBuilder {
                 let base_segments = if matches!(plan.mutation_kind, MutationKind::Compact) {
                     vec![]
                 } else {
-                    plan.snapshot.segments.clone()
+                    plan.snapshot.segments().to_vec()
                 };
                 TableMutationAggregator::new(
                     table,

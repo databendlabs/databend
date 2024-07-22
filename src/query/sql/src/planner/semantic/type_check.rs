@@ -842,10 +842,22 @@ impl<'a> TypeChecker<'a> {
                         ))
                         .set_span(*span));
                     }
-                    let func = self.resolve_general_window_function(*span, func_name, &args)?;
                     let window = window.as_ref().unwrap();
+                    let rank_window = ["first_value", "first", "last_value", "last", "nth_value"];
+                    if !rank_window.contains(&func_name) && window.ignore_nulls.is_some() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {func_name} not support IGNORE/RESPECT NULLS option"
+                        ))
+                        .set_span(*span));
+                    }
+                    let func = self.resolve_general_window_function(
+                        *span,
+                        func_name,
+                        &args,
+                        &window.ignore_nulls,
+                    )?;
                     let display_name = format!("{:#}", expr);
-                    self.resolve_window(*span, display_name, window, func)?
+                    self.resolve_window(*span, display_name, &window.window, func)?
                 } else if AggregateFunctionFactory::instance().contains(func_name) {
                     let mut new_params = Vec::with_capacity(params.len());
                     for param in params {
@@ -875,8 +887,15 @@ impl<'a> TypeChecker<'a> {
                     if let Some(window) = window {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
+                        if window.ignore_nulls.is_some() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "window function {func_name} not support IGNORE/RESPECT NULLS option"
+                            ))
+                                .set_span(*span));
+                        }
+                        // general window function
                         let func = WindowFuncType::Aggregate(new_agg_func);
-                        self.resolve_window(*span, display_name, window, func)?
+                        self.resolve_window(*span, display_name, &window.window, func)?
                     } else {
                         // aggregate function
                         Box::new((new_agg_func.into(), data_type))
@@ -1405,6 +1424,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         func_name: &str,
         args: &[&Expr],
+        window_ignore_null: &Option<bool>,
     ) -> Result<WindowFuncType> {
         if matches!(
             self.bind_context.expr_context,
@@ -1447,13 +1467,20 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_window_function = false;
 
+        // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
+        // (i.e. a NULL value will be returned if the expression contains a NULL value and it is the first value in the expression).
+        let ignore_null = if let Some(ignore_null) = window_ignore_null {
+            *ignore_null
+        } else {
+            false
+        };
+
         match func_name {
             "lag" | "lead" => {
                 self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
             }
-            "first_value" | "first" | "last_value" | "last" | "nth_value" => {
-                self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
-            }
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
+                .resolve_nth_value_window_function(func_name, &arguments, &arg_types, ignore_null),
             "ntile" => self.resolve_ntile_window_function(&arguments),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {func_name}"
@@ -1533,6 +1560,7 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[ScalarExpr],
         arg_types: &[DataType],
+        ignore_null: bool,
     ) -> Result<WindowFuncType> {
         Ok(match func_name {
             "first_value" | "first" => {
@@ -1547,6 +1575,7 @@ impl<'a> TypeChecker<'a> {
                     n: Some(1),
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
             "last_value" | "last" => {
@@ -1561,6 +1590,7 @@ impl<'a> TypeChecker<'a> {
                     n: None,
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
             _ => {
@@ -1595,6 +1625,7 @@ impl<'a> TypeChecker<'a> {
                     n: Some(n),
                     arg: Box::new(args[0].clone()),
                     return_type: Box::new(return_type),
+                    ignore_null,
                 })
             }
         })

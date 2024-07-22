@@ -161,7 +161,11 @@ impl PipelineBuilder {
                         .with_partial_block_size(partial_block_size)
                         .with_final_block_size(final_block_size)
                         .remove_order_col_at_last();
-                sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
+                sort_pipeline_builder.build_merge_sort_pipeline(
+                    &mut self.main_pipeline,
+                    false,
+                    false,
+                )?;
 
                 let output_block_num = task.total_rows.div_ceil(final_block_size);
                 let max_threads = std::cmp::min(
@@ -210,7 +214,7 @@ impl PipelineBuilder {
         });
 
         let snapshot_gen = MutationGenerator::new(
-            recluster_sink.snapshot.clone(),
+            Some(recluster_sink.snapshot.clone()),
             MutationKind::Recluster,
             self.ctx
                 .get_settings()

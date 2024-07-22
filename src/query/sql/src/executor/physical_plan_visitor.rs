@@ -48,6 +48,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
@@ -79,6 +80,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
             PhysicalPlan::Window(plan) => self.replace_window(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
+            PhysicalPlan::LocalShuffle(plan) => self.replace_local_shuffle(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
             PhysicalPlan::RowFetch(plan) => self.replace_row_fetch(plan),
             PhysicalPlan::HashJoin(plan) => self.replace_hash_join(plan),
@@ -309,6 +311,17 @@ pub trait PhysicalPlanReplacer {
             pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
             window_partition: plan.window_partition.clone(),
+        }))
+    }
+
+    fn replace_local_shuffle(&mut self, plan: &LocalShuffle) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::LocalShuffle(LocalShuffle {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            shuffle_by: plan.shuffle_by.clone(),
+            column_index: plan.column_index.clone(),
         }))
     }
 
@@ -655,6 +668,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Sort(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::LocalShuffle(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Limit(plan) => {

@@ -27,7 +27,7 @@ use crate::executor::PhysicalPlan;
 pub struct CommitSink {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub snapshot: Arc<TableSnapshot>,
+    pub snapshot: Option<Arc<TableSnapshot>>,
     pub table_info: TableInfo,
     pub mutation_kind: MutationKind,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,

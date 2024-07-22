@@ -462,7 +462,7 @@ impl FuseTable {
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
                 new_statistics = merge_statistics(
-                    &new_statistics,
+                    new_statistics.clone(),
                     &concurrent_appended_segment.summary,
                     default_cluster_key_id,
                 );

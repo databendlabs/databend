@@ -55,6 +55,7 @@ use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
@@ -86,6 +87,7 @@ pub enum PhysicalPlan {
     AggregateFinal(AggregateFinal),
     Window(Window),
     Sort(Sort),
+    LocalShuffle(LocalShuffle),
     Limit(Limit),
     RowFetch(RowFetch),
     HashJoin(HashJoin),
@@ -204,6 +206,11 @@ impl PhysicalPlan {
                 plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::Sort(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::LocalShuffle(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -417,6 +424,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateFinal(v) => v.plan_id,
             PhysicalPlan::Window(v) => v.plan_id,
             PhysicalPlan::Sort(v) => v.plan_id,
+            PhysicalPlan::LocalShuffle(v) => v.plan_id,
             PhysicalPlan::Limit(v) => v.plan_id,
             PhysicalPlan::RowFetch(v) => v.plan_id,
             PhysicalPlan::HashJoin(v) => v.plan_id,
@@ -471,6 +479,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateFinal(plan) => plan.output_schema(),
             PhysicalPlan::Window(plan) => plan.output_schema(),
             PhysicalPlan::Sort(plan) => plan.output_schema(),
+            PhysicalPlan::LocalShuffle(plan) => plan.output_schema(),
             PhysicalPlan::Limit(plan) => plan.output_schema(),
             PhysicalPlan::RowFetch(plan) => plan.output_schema(),
             PhysicalPlan::HashJoin(plan) => plan.output_schema(),
@@ -532,6 +541,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
             PhysicalPlan::Window(_) => "Window".to_string(),
             PhysicalPlan::Sort(_) => "Sort".to_string(),
+            PhysicalPlan::LocalShuffle(_) => "LocalShuffle".to_string(),
             PhysicalPlan::Limit(_) => "Limit".to_string(),
             PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
@@ -598,6 +608,7 @@ impl PhysicalPlan {
             PhysicalPlan::AggregateFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Window(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Sort(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::LocalShuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Limit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RowFetch(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::HashJoin(plan) => Box::new(
@@ -655,6 +666,7 @@ impl PhysicalPlan {
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Window(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Sort(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::LocalShuffle(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Limit(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Exchange(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_single_data_source(),

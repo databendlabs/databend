@@ -529,7 +529,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -705,6 +705,12 @@ impl DefaultSettings {
                 ("enable_dst_hour_fix", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_strict_datetime_parser", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),

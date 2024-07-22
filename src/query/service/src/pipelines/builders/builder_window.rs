@@ -57,7 +57,9 @@ impl PipelineBuilder {
 
         let old_output_len = self.main_pipeline.output_len();
         // `TransformWindow` is a pipeline breaker.
-        self.main_pipeline.try_resize(1)?;
+        if partition_by.is_empty() {
+            self.main_pipeline.try_resize(1)?;
+        }
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
@@ -117,7 +119,9 @@ impl PipelineBuilder {
             };
             Ok(ProcessorPtr::create(transform))
         })?;
-
-        self.main_pipeline.try_resize(old_output_len)
+        if partition_by.is_empty() {
+            self.main_pipeline.try_resize(old_output_len)?;
+        }
+        Ok(())
     }
 }

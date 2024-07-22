@@ -20,6 +20,8 @@ use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Days;
+use chrono::Duration;
+use chrono::MappedLocalTime;
 use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
@@ -65,6 +67,7 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
 use databend_common_io::cursor_ext::unwrap_local_time;
+use dtparse::parse;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -158,14 +161,93 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
             let tz = ctx.func_ctx.tz.tz;
             let enable_dst_hour_fix = ctx.func_ctx.enable_dst_hour_fix;
-            match string_to_timestamp(val, tz, enable_dst_hour_fix) {
-                Ok(ts) => output.push(ts.timestamp_micros()),
-                Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("cannot parse to type `TIMESTAMP`. {}", e),
-                    );
-                    output.push(0);
+            if ctx.func_ctx.enable_strict_datetime_parser {
+                match string_to_timestamp(val, tz, enable_dst_hour_fix) {
+                    Ok(ts) => output.push(ts.timestamp_micros()),
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("cannot parse to type `TIMESTAMP`. {}", e),
+                        );
+                        output.push(0);
+                    }
+                }
+            } else {
+                match parse(val) {
+                    Ok((naive_dt, parse_tz)) => {
+                        if let Some(parse_tz) = parse_tz {
+                            match naive_dt.and_local_timezone(parse_tz) {
+                                MappedLocalTime::Single(res) => {
+                                    output.push(res.with_timezone(&tz).timestamp_micros())
+                                }
+                                MappedLocalTime::None => {
+                                    if enable_dst_hour_fix {
+                                        if let Some(res2) =
+                                            naive_dt.checked_add_signed(Duration::seconds(3600))
+                                        {
+                                            match tz.from_local_datetime(&res2) {
+                                                MappedLocalTime::Single(t) => {
+                                                    output.push(t.timestamp_micros())
+                                                }
+                                                MappedLocalTime::Ambiguous(t1, _) => {
+                                                    output.push(t1.timestamp_micros())
+                                                }
+                                                MappedLocalTime::None => {
+                                                    let err = format!(
+                                                        "Local Time Error: The local time {:?}, {} can not map to a single unique result with timezone {}",
+                                                        naive_dt, res2, tz
+                                                    );
+                                                    ctx.set_error(
+                                                        output.len(),
+                                                        format!(
+                                                            "cannot parse to type `TIMESTAMP`. {}",
+                                                            err
+                                                        ),
+                                                    );
+                                                    output.push(0);
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        let err = format!(
+                                            "The time {:?} can not map to a single unique result with timezone {}",
+                                            naive_dt, tz
+                                        );
+                                        ctx.set_error(
+                                            output.len(),
+                                            format!("cannot parse to type `TIMESTAMP`. {}", err),
+                                        );
+                                        output.push(0);
+                                    }
+                                }
+                                MappedLocalTime::Ambiguous(t1, t2) => {
+                                    if enable_dst_hour_fix {
+                                        output.push(t1.with_timezone(&tz).timestamp_micros());
+                                    } else {
+                                        output.push(t2.with_timezone(&tz).timestamp_micros());
+                                    }
+                                }
+                            }
+                        } else {
+                            match unwrap_local_time(&tz, enable_dst_hour_fix, &naive_dt) {
+                                Ok(res) => output.push(res.timestamp_micros()),
+                                Err(e) => {
+                                    ctx.set_error(
+                                        output.len(),
+                                        format!("cannot parse to type `TIMESTAMP`. {}", e),
+                                    );
+                                    output.push(0);
+                                }
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("cannot parse to type `TIMESTAMP`. {}", err),
+                        );
+                        output.push(0);
+                    }
                 }
             }
         })(val, ctx)
@@ -285,21 +367,29 @@ fn string_to_format_timestmap(
             return Err(ErrorCode::BadArguments(format!("{}", e)));
         }
         // Additional checks and adjustments for parsed timestamp
-        if parsed.month.is_none() {
-            parsed.month = Some(1);
-        }
-        if parsed.day.is_none() {
-            parsed.day = Some(1);
-        }
-        if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
-            parsed.hour_div_12 = Some(0);
-            parsed.hour_mod_12 = Some(0);
-        }
-        if parsed.minute.is_none() {
-            parsed.minute = Some(0);
-        }
-        if parsed.second.is_none() {
-            parsed.second = Some(0);
+        // If parsed.timestamp is Some no need to pad default year.
+        if parsed.timestamp.is_none() {
+            if parsed.year.is_none() {
+                parsed.year = Some(1970);
+                parsed.year_div_100 = Some(19);
+                parsed.year_mod_100 = Some(70);
+            }
+            if parsed.month.is_none() {
+                parsed.month = Some(1);
+            }
+            if parsed.day.is_none() {
+                parsed.day = Some(1);
+            }
+            if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
+                parsed.hour_div_12 = Some(0);
+                parsed.hour_mod_12 = Some(0);
+            }
+            if parsed.minute.is_none() {
+                parsed.minute = Some(0);
+            }
+            if parsed.second.is_none() {
+                parsed.second = Some(0);
+            }
         }
 
         if parse_tz {
@@ -443,19 +533,27 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
     );
 
     fn eval_string_to_date(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
-        vectorize_with_builder_1_arg::<StringType, DateType>(
-            |val, output, ctx| match string_to_date(
-                val,
-                ctx.func_ctx.tz.tz,
-                ctx.func_ctx.enable_dst_hour_fix,
-            ) {
-                Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
-                    output.push(0);
+        vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
+            if ctx.func_ctx.enable_strict_datetime_parser {
+                match string_to_date(val, ctx.func_ctx.tz.tz, ctx.func_ctx.enable_dst_hour_fix) {
+                    Ok(d) => output.push(d.num_days_from_ce() - EPOCH_DAYS_FROM_CE),
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
+                        output.push(0);
+                    }
                 }
-            },
-        )(val, ctx)
+            } else {
+                match parse(val) {
+                    Ok((naive_dt, _)) => {
+                        output.push(naive_dt.date().num_days_from_ce() - EPOCH_DAYS_FROM_CE);
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
+                        output.push(0);
+                    }
+                }
+            }
+        })(val, ctx)
     }
 }
 

@@ -22,6 +22,7 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
 
 use crate::operations::common::ConflictResolveContext;
@@ -31,7 +32,7 @@ use crate::statistics::reducers::deduct_statistics_mut;
 
 #[derive(Clone)]
 pub struct MutationGenerator {
-    base_snapshot: Arc<TableSnapshot>,
+    base_snapshot: Option<Arc<TableSnapshot>>,
     conflict_resolve_ctx: ConflictResolveContext,
     mutation_kind: MutationKind,
     transaction_time_limit_in_hours: u64,
@@ -39,7 +40,7 @@ pub struct MutationGenerator {
 
 impl MutationGenerator {
     pub fn new(
-        base_snapshot: Arc<TableSnapshot>,
+        base_snapshot: Option<Arc<TableSnapshot>>,
         mutation_kind: MutationKind,
         transaction_time_limit_in_hours: u64,
     ) -> Self {
@@ -69,25 +70,12 @@ impl SnapshotGenerator for MutationGenerator {
         prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
-
-        let empty_snapshot;
-        let previous = match previous {
-            Some(prev) => prev,
-            None => {
-                empty_snapshot = Arc::new(TableSnapshot::new_empty_snapshot(
-                    schema.clone(),
-                    prev_table_seq,
-                ));
-                &empty_snapshot
-            }
-        };
-
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =
                     ConflictResolveContext::is_modified_segments_exists_in_latest(
-                        &self.base_snapshot,
-                        previous,
+                        self.base_snapshot.segments(),
+                        previous.segments(),
                         &ctx.replaced_segments,
                         &ctx.removed_segment_indexes,
                     )
@@ -95,21 +83,21 @@ impl SnapshotGenerator for MutationGenerator {
                     info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_modified_segment_exists_in_latest();
                     let new_segments = ConflictResolveContext::merge_segments(
-                        previous.segments.clone(),
+                        previous.segments().to_vec(),
                         ctx.appended_segments.clone(),
                         replaced,
                         removed,
                     );
                     let mut new_summary = merge_statistics(
+                        previous.summary(),
                         &ctx.merged_statistics,
-                        &previous.summary,
                         default_cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
                         prev_table_seq,
-                        &previous.timestamp,
-                        Some((previous.snapshot_id, previous.format_version)),
+                        &previous.timestamp(),
+                        previous.snapshot_id(),
                         &previous.least_base_snapshot_timestamp,
                         schema,
                         new_summary,
@@ -117,6 +105,7 @@ impl SnapshotGenerator for MutationGenerator {
                         cluster_key_meta,
                         previous.table_statistics_location.clone(),
                         self.transaction_time_limit_in_hours,
+                        previous.table_statistics_location(),
                     );
 
                     if matches!(self.mutation_kind, MutationKind::Compact) {

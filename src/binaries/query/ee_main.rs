@@ -22,6 +22,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_common_tracing::set_crash_hook;
 use databend_enterprise_query::enterprise_services::EnterpriseServices;
 
 use crate::entry::init_services;
@@ -32,6 +33,7 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
+    set_crash_hook((*databend_common_config::DATABEND_COMMIT_VERSION).clone());
     ThreadTracker::init();
 
     match Runtime::with_default_worker_threads() {

@@ -671,6 +671,7 @@ impl TableContext for QueryContext {
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
+        let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
@@ -692,6 +693,7 @@ impl TableContext for QueryContext {
             geometry_output_format,
             parse_datetime_ignore_remainder,
             enable_dst_hour_fix,
+            enable_strict_datetime_parser,
         })
     }
 
