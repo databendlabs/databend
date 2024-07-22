@@ -276,6 +276,33 @@ impl FlightSender {
     }
 }
 
+pub struct FlightSenderWrapper {
+    inner: Arc<FlightSender>,
+}
+
+impl FlightSenderWrapper {
+    pub fn create(inner: Arc<FlightSender>) -> FlightSenderWrapper {
+        FlightSenderWrapper { inner }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn send(&self, data: DataPacket) -> Result<()> {
+        self.inner.send(data).await
+    }
+
+    pub fn close(&self) {
+        self.inner.close();
+    }
+}
+
+impl Drop for FlightSenderWrapper {
+    fn drop(&mut self) {
+        drop_guard(move || {
+            self.inner.close();
+        })
+    }
+}
+
 pub enum FlightExchange {
     Dummy,
     Receiver {
