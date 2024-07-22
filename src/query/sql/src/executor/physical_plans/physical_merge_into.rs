@@ -465,7 +465,9 @@ impl PhysicalPlanBuilder {
         };
 
         let mutation_kind = match input_type {
-            DataManipulationInputType::Update | DataManipulationInputType::Merge => MutationKind::Update,
+            DataManipulationInputType::Update | DataManipulationInputType::Merge => {
+                MutationKind::Update
+            }
             DataManipulationInputType::Delete => MutationKind::Delete,
         };
 
