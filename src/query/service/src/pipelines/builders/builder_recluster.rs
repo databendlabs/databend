@@ -124,7 +124,7 @@ impl PipelineBuilder {
 
                 // merge sort
                 let final_block_size =
-                    block_thresholds.calculate_block_rows(task.total_bytes, task.total_rows);
+                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
                 let partial_block_size = if self.main_pipeline.output_len() > 1 {
                     std::cmp::min(
                         final_block_size,

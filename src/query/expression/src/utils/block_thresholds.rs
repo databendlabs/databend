@@ -63,23 +63,21 @@ impl BlockThresholds {
 
     #[inline]
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
-        total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block
+        total_rows <= self.max_rows_per_block && total_bytes <= self.max_bytes_per_block
     }
 
-    pub fn calculate_block_rows(&self, total_bytes: usize, total_rows: usize) -> usize {
+    pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
         let mut block_num = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
-        let mut final_block_size = std::cmp::min(
-            (total_rows + block_num - 1) / block_num,
-            self.max_rows_per_block,
-        );
+        let mut rows_per_block = (total_rows + block_num - 1) / block_num;
 
-        let max_bytes_per_block = if final_block_size < self.max_rows_per_block / 20 {
-            3 * self.max_bytes_per_block
-        } else if final_block_size < self.max_rows_per_block / 10 {
+        let max_bytes_per_block = if rows_per_block < self.max_rows_per_block / 10 {
+            // If block rows < 100_000, max_bytes_per_block set to 200M
             2 * self.max_bytes_per_block
-        } else if final_block_size < self.max_rows_per_block / 5 {
+        } else if rows_per_block < self.max_rows_per_block / 2 {
+            // If block rows < 500_000, max_bytes_per_block set to 150M
             3 * self.max_bytes_per_block / 2
-        } else if final_block_size < self.min_rows_per_block {
+        } else if rows_per_block < self.min_rows_per_block {
+            // If block rows < 800_000, max_bytes_per_block set to 125M
             5 * self.max_bytes_per_block / 4
         } else {
             self.max_bytes_per_block
@@ -87,12 +85,9 @@ impl BlockThresholds {
 
         if block_num > 1 && max_bytes_per_block > self.max_bytes_per_block {
             block_num = std::cmp::max(total_bytes / max_bytes_per_block, 1);
-            final_block_size = std::cmp::min(
-                (total_rows + block_num - 1) / block_num,
-                self.max_rows_per_block,
-            );
+            rows_per_block = (total_rows + block_num - 1) / block_num;
         }
 
-        final_block_size
+        rows_per_block.min(self.max_rows_per_block)
     }
 }

@@ -566,9 +566,9 @@ impl ReclusterMutator {
     ) -> Result<IndexSet<usize>> {
         let mut max_depth = 0;
         let mut max_point = 0;
-        let mut block_depths = Vec::new();
+        let mut block_depths = HashMap::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
-        let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
+        let mut unfinished_parts = HashMap::new();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let indices = compare_scalars(keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {
@@ -597,7 +597,7 @@ impl ReclusterMutator {
 
             end.iter().for_each(|idx| {
                 if let Some(v) = unfinished_parts.remove(idx) {
-                    block_depths.push(v);
+                    block_depths.insert(*idx, v);
                 }
             });
         }
@@ -611,7 +611,7 @@ impl ReclusterMutator {
             });
         }
 
-        let sum_depth: usize = block_depths.iter().sum();
+        let sum_depth: usize = block_depths.values().sum();
         // round the float to 4 decimal places.
         let average_depth =
             (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
@@ -629,7 +629,11 @@ impl ReclusterMutator {
                 let left_depth = if left > 0 {
                     let point_overlap = &point_overlaps[left - 1];
                     let depth = point_overlap.len();
-                    if depth <= 2 && point_overlap.iter().all(|v| block_depths[*v] == 1) {
+                    if depth <= 2
+                        && point_overlap
+                            .iter()
+                            .all(|v| block_depths.get(v) == Some(&1))
+                    {
                         left = 0;
                         0.0
                     } else {
@@ -642,7 +646,11 @@ impl ReclusterMutator {
                 let right_depth = if right < point_overlaps.len() - 1 {
                     let point_overlap = &point_overlaps[right + 1];
                     let depth = point_overlap.len();
-                    if depth <= 2 && point_overlap.iter().all(|v| block_depths[*v] == 1) {
+                    if depth <= 2
+                        && point_overlap
+                            .iter()
+                            .all(|v| block_depths.get(v) == Some(&1))
+                    {
                         right = point_overlaps.len() - 1;
                         0.0
                     } else {
