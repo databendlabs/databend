@@ -54,7 +54,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     }
 }
 
-pub trait TableSnapshotVisitor {
+pub trait TableSnapshotAccessor {
     fn segments(&self) -> &[Location];
     fn summary(&self) -> Statistics;
     fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
@@ -62,7 +62,7 @@ pub trait TableSnapshotVisitor {
     fn table_statistics_location(&self) -> Option<String>;
 }
 
-impl TableSnapshotVisitor for Option<Arc<TableSnapshot>> {
+impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
     fn segments(&self) -> &[Location] {
         self.as_ref()
             .map(|snapshot| snapshot.segments.as_ref())

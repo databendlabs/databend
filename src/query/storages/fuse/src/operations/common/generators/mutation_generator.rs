@@ -22,7 +22,7 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotVisitor;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
 use uuid::Uuid;
 

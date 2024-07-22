@@ -45,7 +45,7 @@ use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotVisitor;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
