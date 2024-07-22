@@ -121,7 +121,6 @@ parquet2 = { package = "databend-common-parquet2", path = "../parquet2", default
 rand = { workspace = true }
 ringbuffer = "0.14.2"
 roaring = "0.10.1"
-seq-macro = { version = "0.3", default-features = false }
 serde = { version = "^1.0", features = ["rc"], optional = true }
 serde_derive = { version = "^1.0", optional = true }
 simdutf8 = "0.1.4"

@@ -3104,7 +3104,6 @@ dependencies = [
  "rand 0.8.5",
  "ringbuffer",
  "roaring",
- "seq-macro",
  "serde",
  "serde_derive",
  "simdutf8",
