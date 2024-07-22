@@ -80,10 +80,15 @@ impl Operator for Limit {
             Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,
             _ => stat_info.cardinality,
         };
+        let precise_cardinality = match (self.limit, stat_info.statistics.precise_cardinality) {
+            (Some(limit), Some(pc)) => Some((pc - self.offset as u64).min(limit as u64)),
+            _ => None,
+        };
+
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality,
                 column_stats: Default::default(),
             },
         }))
