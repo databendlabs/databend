@@ -97,7 +97,8 @@ impl MatchedAggregator {
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
     ) -> Result<Self> {
-        let target_table_schema = table.schema_with_stream();
+        let target_table_schema =
+            Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
         let data_accessor = table.get_operator();
         let write_settings = table.get_write_settings();
         let update_stream_columns = table.change_tracking_enabled();

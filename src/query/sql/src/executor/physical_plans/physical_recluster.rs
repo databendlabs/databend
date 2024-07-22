@@ -120,7 +120,7 @@ impl PhysicalPlanBuilder {
                 PhysicalPlan::CommitSink(Box::new(CommitSink {
                     input: Box::new(root),
                     table_info,
-                    snapshot,
+                    snapshot: Some(snapshot),
                     mutation_kind: MutationKind::Recluster,
                     update_stream_meta: vec![],
                     merge_meta: false,
@@ -154,7 +154,7 @@ impl PhysicalPlanBuilder {
                 PhysicalPlan::CommitSink(Box::new(CommitSink {
                     input: Box::new(root),
                     table_info,
-                    snapshot,
+                    snapshot: Some(snapshot),
                     mutation_kind: MutationKind::Compact,
                     update_stream_meta: vec![],
                     merge_meta,
