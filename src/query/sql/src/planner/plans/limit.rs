@@ -81,11 +81,9 @@ impl Operator for Limit {
             _ => stat_info.cardinality,
         };
         let precise_cardinality = match (self.limit, stat_info.statistics.precise_cardinality) {
-            (Some(limit), Some(pc)) => Some(
-                (pc.checked_sub(self.offset as u64))
-                    .unwrap_or(0)
-                    .min(limit as u64),
-            ),
+            (Some(limit), Some(pc)) => {
+                Some((pc.saturating_sub(self.offset as u64)).min(limit as u64))
+            }
             _ => None,
         };
 
