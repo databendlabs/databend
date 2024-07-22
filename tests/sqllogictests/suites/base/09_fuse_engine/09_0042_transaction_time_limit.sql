@@ -1,11 +1,23 @@
 statement ok
-set transaction_time_limit_in_hours=0;
-
-statement ok
 create or replace table t09_0042 (a int);
 
 statement ok
 insert into t09_0042 values (1);
+
+statement ok
+insert into t09_0042 values (2);
+
+statement ok
+insert into t09_0042 values (3);
+
+statement ok
+set transaction_time_limit_in_hours=0;
+
+statement error 4003
+optimize table t09_0042 compact;
+
+statement error 4003
+optimize table t09_0042 compact segment;
 
 statement error 4003
 insert into t09_0042 values (1);
@@ -50,6 +62,8 @@ query I
 select * from t09_0042;
 ----
 1
+2
+3
 
 statement ok
 set transaction_time_limit_in_hours=24;
