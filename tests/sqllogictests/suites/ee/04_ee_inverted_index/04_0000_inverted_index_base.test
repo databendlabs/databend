@@ -141,16 +141,16 @@ UPDATE t SET content = '科技创新是推动社会进步的重要动力，我�
 query T
 SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score()
 ----
-21 1.423108 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
+21 1.340361 中国的古代诗词充满了深邃的意境和独特的韵味，是中华文化的重要组成部分。
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
+28 1.4781041 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
-28 1.5707673 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 query T
 SELECT id, score(), content FROM t WHERE match(content, '科技') ORDER BY score()
 ----
+24 0.39556292 科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。
 13 2.1947646 随着科技的发展，人们的生活变得越来越便利。
-24 2.8508463 科技创新是推动社会进步的重要动力，我们应该积极支持和推动科技创新。
 
 statement ok
 DELETE FROM t WHERE id=21
@@ -160,7 +160,7 @@ SELECT id, score(), content FROM t WHERE match(content, '中国') ORDER BY score
 ----
 12 1.4482267 北京的故宫是中国古代建筑的瑰宝，吸引了无数游客前来参观。
 15 1.5346593 中国的茶文化源远流长，品茶已经成为一种生活方式。
-28 2.002842 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
+28 1.902972 中国的饮食文化博大精深，各地的美食各具特色，让人流连忘返。
 
 # index without optional filters and index rocord is basic
 statement ok
