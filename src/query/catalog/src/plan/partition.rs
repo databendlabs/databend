@@ -138,11 +138,11 @@ impl Partitions {
                 parts.into_iter().map(|x| x.1).collect()
             }
             PartitionsShuffleKind::ConsistentHash => {
-                let mut scale = 1;
+                let mut scale = 0;
                 let num_executors = executors_sorted.len();
                 const EXPECT_NODES: usize = 100;
-                while num_executors * scale < EXPECT_NODES {
-                    scale <<= 1;
+                while num_executors << scale < EXPECT_NODES {
+                    scale += 1;
                 }
 
                 let mut executor_part = executors_sorted
@@ -155,7 +155,7 @@ impl Partitions {
                     .flat_map(|e| {
                         let mut s = DefaultHasher::new();
                         e.hash(&mut s);
-                        (0..scale).map(move |i| {
+                        (0..1 << scale).map(move |i| {
                             i.hash(&mut s);
                             (e, s.finish())
                         })

@@ -186,6 +186,23 @@ fn test_partition_reshuffle() {
     // ConsistentHash.
     {
         let partitions = gen_parts(PartitionsShuffleKind::ConsistentHash, 11);
+        let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
+
+        writeln!(
+            file,
+            "PartitionsShuffleKind::ConsistentHash : 11 partitions of 2 executors"
+        )
+        .unwrap();
+        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
+
+        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
+    }
+
+    // ConsistentHash.
+    {
+        let partitions = gen_parts(PartitionsShuffleKind::ConsistentHash, 11);
         let shuffle = partitions.reshuffle(executors_3.clone()).unwrap();
 
         writeln!(
