@@ -27,7 +27,7 @@ Sort
         ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
         ├── sort keys: [depname ASC NULLS LAST, empno ASC NULLS LAST]
         ├── estimated rows: 0.00
-        └── LocalShuffle
+        └── WindowPartition
             ├── output columns: [empsalary.depname (#0), empsalary.empno (#1), empsalary.salary (#2)]
             ├── shuffle by: [depname]
             └── TableScan
@@ -111,7 +111,7 @@ Filter
         ├── output columns: [test.k (#0), test.v (#1)]
         ├── sort keys: [k ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── LocalShuffle
+        └── WindowPartition
             ├── output columns: [test.k (#0), test.v (#1)]
             ├── shuffle by: [k]
             └── UnionAll
@@ -162,7 +162,7 @@ Filter
         ├── output columns: [test.k (#0), test.v (#1)]
         ├── sort keys: [v ASC NULLS LAST, v DESC NULLS LAST]
         ├── estimated rows: 0.00
-        └── LocalShuffle
+        └── WindowPartition
             ├── output columns: [test.k (#0), test.v (#1)]
             ├── shuffle by: [v]
             └── UnionAll
@@ -250,7 +250,7 @@ Filter
         ├── output columns: [t.a (#0)]
         ├── sort keys: [a ASC NULLS LAST]
         ├── estimated rows: 0.00
-        └── LocalShuffle
+        └── WindowPartition
             ├── output columns: [t.a (#0)]
             ├── shuffle by: [a]
             └── TableScan
@@ -517,7 +517,7 @@ RowFetch
                 ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
                 ├── sort keys: [a ASC NULLS LAST, a DESC NULLS LAST]
                 ├── estimated rows: 0.00
-                └── LocalShuffle
+                └── WindowPartition
                     ├── output columns: [t.a (#0), t.b (#1), t._row_id (#7)]
                     ├── shuffle by: [a]
                     └── Filter

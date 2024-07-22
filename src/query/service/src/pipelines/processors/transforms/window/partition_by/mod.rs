@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod frame_bound;
-mod partition_by;
-mod transform_window;
-mod window_function;
+mod transform_window_partition_bucket;
+mod transform_window_partition_scatter;
+mod transform_window_partition_sort;
+mod transform_window_partition_spill_reader;
+mod transform_window_partition_spill_writer;
+mod window_partition_meta;
 
-pub use frame_bound::FrameBound;
-pub use transform_window::TransformWindow;
-pub use window_function::WindowFunctionInfo;
-
-pub use self::partition_by::*;
+pub use transform_window_partition_bucket::*;
+pub use transform_window_partition_scatter::*;
+pub use transform_window_partition_sort::*;
+pub use transform_window_partition_spill_reader::*;
+pub use transform_window_partition_spill_writer::*;
+pub use window_partition_meta::*;

@@ -43,7 +43,6 @@ use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
@@ -60,6 +59,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
+use crate::executor::physical_plans::WindowPartition;
 use crate::plans::CacheSource;
 use crate::plans::JoinType;
 
@@ -86,8 +86,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::AggregatePartial(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::AggregateFinal(aggregate) => write!(f, "{}", aggregate)?,
             PhysicalPlan::Window(window) => write!(f, "{}", window)?,
+            PhysicalPlan::WindowPartition(window_partition) => write!(f, "{}", window_partition)?,
             PhysicalPlan::Sort(sort) => write!(f, "{}", sort)?,
-            PhysicalPlan::LocalShuffle(local_shuffle) => write!(f, "{}", local_shuffle)?,
             PhysicalPlan::Limit(limit) => write!(f, "{}", limit)?,
             PhysicalPlan::RowFetch(row_fetch) => write!(f, "{}", row_fetch)?,
             PhysicalPlan::HashJoin(join) => write!(f, "{}", join)?,
@@ -350,10 +350,10 @@ impl Display for Window {
     }
 }
 
-impl Display for LocalShuffle {
+impl Display for WindowPartition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let local_shuffle_id = self.plan_id;
-        write!(f, "LocalShuffle: [{}]", local_shuffle_id)
+        let window_partition_id = self.plan_id;
+        write!(f, "WindowPartition: [{}]", window_partition_id)
     }
 }
 
