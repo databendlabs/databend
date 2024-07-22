@@ -155,12 +155,14 @@ impl DataExchangeManager {
                             Edge::Fragment(v) => QueryExchange::Fragment {
                                 source: source.id.clone(),
                                 fragment: v,
-                                exchange: flight_client.do_get(&query_id, &target.id, v).await?,
+                                exchange: flight_client
+                                    .do_get(&query_id, &target.id, v, &address)
+                                    .await?,
                             },
                             Edge::Statistics => QueryExchange::Statistics {
                                 source: source.id.clone(),
                                 exchange: flight_client
-                                    .request_server_exchange(&query_id, &target.id)
+                                    .request_server_exchange(&query_id, &target.id, &address)
                                     .await?,
                             },
                         })
@@ -711,7 +713,7 @@ impl QueryCoordinator {
                     exchanges.push((
                         destination.clone(),
                         match destination == &params.executor_id {
-                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
+                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1, None)),
                             false => match self.fragment_exchanges.remove(&(
                                 destination.clone(),
                                 params.fragment_id,
