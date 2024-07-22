@@ -36,7 +36,7 @@ def judge(profile):
         cpu_time += item["statistics"][0]
 
     print(memory_usage)
-    print(cpu_time>0)
+    print(cpu_time > 0)
     print(error_count)
 
 

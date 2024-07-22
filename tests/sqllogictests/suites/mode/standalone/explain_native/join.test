@@ -87,7 +87,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 1.64
+├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
 │   ├── output columns: [number (#0)]
@@ -97,7 +97,7 @@ HashJoin
 │   ├── partitions scanned: 0
 │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
 │   ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
-│   └── estimated rows: 0.20
+│   └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── output columns: []
