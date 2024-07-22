@@ -33,6 +33,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotVisitor;
 use itertools::Itertools;
 
 use crate::binder::MergeIntoType;
@@ -444,9 +445,9 @@ impl PhysicalPlanBuilder {
         }));
 
         let segments: Vec<_> = base_snapshot
-            .segments
-            .clone()
-            .into_iter()
+            .segments()
+            .iter()
+            .cloned()
             .enumerate()
             .collect();
 

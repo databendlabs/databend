@@ -13,12 +13,17 @@
 // limitations under the License.
 
 use std::io::Read;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
 use crate::meta::load_json;
+use crate::meta::FormatVersion;
+use crate::meta::Location;
+use crate::meta::SnapshotId;
 use crate::meta::SnapshotVersion;
+use crate::meta::Statistics;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotV2;
 use crate::meta::TableSnapshotV3;
@@ -46,5 +51,41 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
             }
         };
         Ok(r)
+    }
+}
+
+pub trait TableSnapshotVisitor {
+    fn segments(&self) -> &[Location];
+    fn summary(&self) -> Statistics;
+    fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
+    fn snapshot_id(&self) -> Option<(SnapshotId, FormatVersion)>;
+    fn table_statistics_location(&self) -> Option<String>;
+}
+
+impl TableSnapshotVisitor for Option<Arc<TableSnapshot>> {
+    fn segments(&self) -> &[Location] {
+        self.as_ref()
+            .map(|snapshot| snapshot.segments.as_ref())
+            .unwrap_or_default()
+    }
+
+    fn summary(&self) -> Statistics {
+        self.as_ref()
+            .map(|snapshot| snapshot.summary.clone())
+            .unwrap_or_default()
+    }
+
+    fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.as_ref().and_then(|snapshot| snapshot.timestamp)
+    }
+
+    fn snapshot_id(&self) -> Option<(SnapshotId, FormatVersion)> {
+        self.as_ref()
+            .map(|snapshot| (snapshot.snapshot_id, snapshot.format_version))
+    }
+
+    fn table_statistics_location(&self) -> Option<String> {
+        self.as_ref()
+            .and_then(|snapshot| snapshot.table_statistics_location.clone())
     }
 }

@@ -55,7 +55,7 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -146,7 +146,7 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Delete);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -252,7 +252,8 @@ fn test_resolvable_replace_conflict() {
         merged_statistics,
     });
 
-    let mut generator = MutationGenerator::new(Arc::new(base_snapshot), MutationKind::Replace);
+    let mut generator =
+        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(

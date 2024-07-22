@@ -53,7 +53,7 @@ impl TransformMergeCommitMeta {
                         .chain(r.removed_segment_indexes)
                         .collect(),
                     removed_statistics: merge_statistics(
-                        &l.removed_statistics,
+                        l.removed_statistics.clone(),
                         &r.removed_statistics,
                         default_cluster_key_id,
                     ),
@@ -68,7 +68,7 @@ impl TransformMergeCommitMeta {
                         .chain(r.replaced_segments)
                         .collect(),
                     merged_statistics: merge_statistics(
-                        &l.merged_statistics,
+                        l.merged_statistics.clone(),
                         &r.merged_statistics,
                         default_cluster_key_id,
                     ),

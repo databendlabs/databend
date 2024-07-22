@@ -130,13 +130,12 @@ pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
 }
 
 pub fn merge_statistics(
-    l: &Statistics,
+    mut l: Statistics,
     r: &Statistics,
     default_cluster_key_id: Option<u32>,
 ) -> Statistics {
-    let mut new = l.clone();
-    merge_statistics_mut(&mut new, r, default_cluster_key_id);
-    new
+    merge_statistics_mut(&mut l, r, default_cluster_key_id);
+    l
 }
 
 pub fn merge_statistics_mut(

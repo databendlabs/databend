@@ -29,10 +29,8 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
-use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
@@ -136,13 +134,7 @@ impl MergeIntoInterpreter {
         })?;
 
         // Prepare MergeIntoBuildInfo for PhysicalPlanBuilder to build MergeInto physical plan.
-        let table_info = fuse_table.get_table_info();
-        let table_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                fuse_table.schema().as_ref().clone(),
-                Some(table_info.ident.seq),
-            ))
-        });
+        let table_snapshot = fuse_table.read_table_snapshot().await?;
         let update_stream_meta =
             dml_build_update_stream_req(self.ctx.clone(), &merge_into.meta_data).await?;
         let merge_into_build_info = MergeIntoBuildInfo {
