@@ -228,9 +228,8 @@ pub fn block_id_from_location(path: &str) -> Result<i128> {
             .unwrap_or("")
             .split('_')
             .collect::<Vec<&str>>();
-        let block_id = Uuid::parse_str(file_strs[0])
-            .map_err(|e| e.to_string())?
-            .as_u128();
+        let uuid = file_strs[0].strip_prefix('g').unwrap_or(&file_strs[0]);
+        let block_id = Uuid::parse_str(uuid).map_err(|e| e.to_string())?.as_u128();
         Ok(block_id as i128)
     } else {
         Err(ErrorCode::Internal(format!(
