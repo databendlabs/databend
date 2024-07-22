@@ -53,6 +53,12 @@ pub fn monotonically_increased_timestamp(
 pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
     let seconds = ts.timestamp();
     let nanos = ts.timestamp_subsec_nanos();
+    // avoid overflow silently in release mode
+    let _ = seconds
+        .checked_mul(1000)
+        .unwrap()
+        .checked_add(nanos as i64 / 1_000)
+        .unwrap();
     let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
     Uuid::new_v7(uuid_ts)
 }
