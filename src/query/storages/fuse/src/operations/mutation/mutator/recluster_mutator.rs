@@ -428,9 +428,13 @@ impl ReclusterMutator {
         total_bytes: usize,
         level: i32,
     ) -> ReclusterTask {
+        let locations = block_metas
+            .iter()
+            .map(|v| &v.1.location.0)
+            .collect::<Vec<_>>();
         debug!(
-            "recluster: generate recluster task, the selected block metas: {:?}, level: {}",
-            block_metas, level
+            "recluster: generate recluster task, the selected blocks: {:?}, level: {}",
+            locations, level
         );
         let (stats, parts) =
             FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
@@ -623,13 +627,27 @@ impl ReclusterMutator {
             let mut right = max_point;
             while selected_idx.len() < max_len {
                 let left_depth = if left > 0 {
-                    point_overlaps[left - 1].len() as f64
+                    let point_overlap = &point_overlaps[left - 1];
+                    let depth = point_overlap.len();
+                    if depth <= 2 && point_overlap.iter().all(|v| block_depths[*v] == 1) {
+                        left = 0;
+                        0.0
+                    } else {
+                        depth as f64
+                    }
                 } else {
                     0.0
                 };
 
                 let right_depth = if right < point_overlaps.len() - 1 {
-                    point_overlaps[right + 1].len() as f64
+                    let point_overlap = &point_overlaps[right + 1];
+                    let depth = point_overlap.len();
+                    if depth <= 2 && point_overlap.iter().all(|v| block_depths[*v] == 1) {
+                        right = point_overlaps.len() - 1;
+                        0.0
+                    } else {
+                        depth as f64
+                    }
                 } else {
                     0.0
                 };

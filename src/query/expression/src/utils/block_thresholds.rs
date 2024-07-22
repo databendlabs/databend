@@ -65,4 +65,34 @@ impl BlockThresholds {
     pub fn check_for_recluster(&self, total_rows: usize, total_bytes: usize) -> bool {
         total_rows <= self.min_rows_per_block && total_bytes <= self.max_bytes_per_block
     }
+
+    pub fn calculate_block_rows(&self, total_bytes: usize, total_rows: usize) -> usize {
+        let mut block_num = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
+        let mut final_block_size = std::cmp::min(
+            (total_rows + block_num - 1) / block_num,
+            self.max_rows_per_block,
+        );
+
+        let max_bytes_per_block = if final_block_size < self.max_rows_per_block / 20 {
+            3 * self.max_bytes_per_block
+        } else if final_block_size < self.max_rows_per_block / 10 {
+            2 * self.max_bytes_per_block
+        } else if final_block_size < self.max_rows_per_block / 5 {
+            3 * self.max_bytes_per_block / 2
+        } else if final_block_size < self.min_rows_per_block {
+            5 * self.max_bytes_per_block / 4
+        } else {
+            self.max_bytes_per_block
+        };
+
+        if block_num > 1 && max_bytes_per_block > self.max_bytes_per_block {
+            block_num = std::cmp::max(total_bytes / max_bytes_per_block, 1);
+            final_block_size = std::cmp::min(
+                (total_rows + block_num - 1) / block_num,
+                self.max_rows_per_block,
+            );
+        }
+
+        final_block_size
+    }
 }
