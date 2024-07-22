@@ -132,7 +132,7 @@ NULL
 statement ok
 insert into t values (1),(2),(NULL)
 
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): BadArguments\. Code: 1006, Text = unable to cast type `Timestamp` to type `Boolean NULL`\.'
+statement error (?s)1006.* unable to cast type `Timestamp` to type `Boolean NULL`
 delete from t where now()
 
 query B

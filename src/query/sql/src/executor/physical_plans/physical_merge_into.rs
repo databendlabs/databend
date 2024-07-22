@@ -40,6 +40,7 @@ use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use itertools::Itertools;
 
 use crate::binder::wrap_cast;
+use crate::binder::DataManipulationInputType;
 use crate::binder::MergeIntoType;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
@@ -120,6 +121,7 @@ impl PhysicalPlanBuilder {
             table_name_alias,
             matched_evaluators,
             unmatched_evaluators,
+            input_type,
             target_table_index,
             field_index_map,
             merge_type,
@@ -462,14 +464,24 @@ impl PhysicalPlanBuilder {
             })
         };
 
+        let mutation_kind = match input_type {
+            DataManipulationInputType::Update | DataManipulationInputType::Merge => MutationKind::Update,
+            DataManipulationInputType::Delete => MutationKind::Delete,
+        };
+
+        let update_stream_meta = match input_type {
+            DataManipulationInputType::Merge => data_manipulation_build_info.update_stream_meta,
+            DataManipulationInputType::Update | DataManipulationInputType::Delete => vec![],
+        };
+
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
-            mutation_kind: MutationKind::Update,
-            update_stream_meta: data_manipulation_build_info.update_stream_meta,
+            mutation_kind,
+            update_stream_meta,
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,

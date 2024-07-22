@@ -182,7 +182,7 @@ statement error 1006
 update t_virtual2 set c = 'test'
 
 query TIS
-select * from t_virtual2
+select * from t_virtual2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim

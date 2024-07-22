@@ -40,7 +40,7 @@ SELECT * FROM t1 ORDER BY b
 statement ok
 UPDATE t1 SET a = 3 WHERE false
 
-query B
+query T
 select count(*) = 0 from t1 WHERE a = 3
 ----
 1
@@ -48,7 +48,7 @@ select count(*) = 0 from t1 WHERE a = 3
 statement ok
 UPDATE t1 SET a = 3 WHERE true
 
-query B
+query T
 select count(*) = 2 from t1 WHERE a = 3
 ----
 1
@@ -179,7 +179,7 @@ onlyif mysql
 statement ok
 truncate table system.metrics
 
-statement error 1006
+statement error (?s)1006.* unable to cast type `Timestamp` to type `Boolean NULL`
 update t1 set id1=2 where to_timestamp(8472945773481)
 
 statement ok
@@ -192,13 +192,13 @@ select * from t1 order by id1;
 2 10
 
 onlyif mysql
-query B
+query T
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'created_lock_nums_total'
 ----
 1
 
 onlyif mysql
-query B
+query T
 SELECT COUNT() >= 1 FROM system.metrics where metric = 'acquired_lock_nums_total'
 ----
 1
