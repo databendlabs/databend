@@ -103,12 +103,16 @@ impl Interpreter for InsertInterpreter {
 
         // check mutability
         table.check_mutable()?;
-
-        let fuse_table = databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
-        let base_snapshot_timestamp = fuse_table
-            .read_table_snapshot()
-            .await?
-            .and_then(|s| s.timestamp);
+        let base_snapshot_timestamp = if table.engine() == "FUSE" {
+            let fuse_table =
+                databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
+            fuse_table
+                .read_table_snapshot()
+                .await?
+                .and_then(|s| s.timestamp)
+        } else {
+            None
+        };
 
         let mut build_res = PipelineBuildResult::create();
 
