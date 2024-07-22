@@ -405,11 +405,7 @@ async fn execute(
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let data_stream_res = interpreter.execute(ctx.clone()).await;
-    if let Err(err) = data_stream_res {
-        return Err(err);
-    }
-    let mut data_stream = data_stream_res.unwrap();
+    let mut data_stream = interpreter.execute(ctx.clone()).await?;
     match data_stream.next().await {
         None => {
             let block = DataBlock::empty_with_schema(schema);
