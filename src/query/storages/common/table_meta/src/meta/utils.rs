@@ -59,6 +59,9 @@ pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
         .unwrap()
         .checked_add(nanos as i64 / 1_000)
         .unwrap();
+    // `DateTime::<Utc>::default()` is used as the minimum timestamp
+    // This assertion is to avoid mistakenly using a negative timestamp
+    assert!(ts >= DateTime::<Utc>::default());
     let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
     Uuid::new_v7(uuid_ts)
 }
