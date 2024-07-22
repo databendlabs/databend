@@ -5415,8 +5415,6 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
- "arrow-cast",
- "arrow-schema",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
