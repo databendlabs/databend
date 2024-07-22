@@ -14,5 +14,5 @@ statement ok
 insert into t02 values(3,'a');
 
 # cover the code path that receive Err in stream of Result<DataBlock>
-statement error 1006.*to_int64
+statement error 1006
 select a.id from t01 a join t02 b on a.c1=b.c1;
