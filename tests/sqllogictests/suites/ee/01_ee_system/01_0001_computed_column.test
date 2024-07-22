@@ -78,7 +78,7 @@ statement ok
 insert into t_stored2 values ('{"id":1,"name":"tom"}'), ('{"id":2,"name":"jim"}'),('{"id":3}')
 
 query TIS
-select * from t_stored2
+select * from t_stored2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -91,7 +91,7 @@ statement error 1006
 update t_stored2 set c = 'test'
 
 query TIS
-select * from t_stored2
+select * from t_stored2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
@@ -169,7 +169,7 @@ statement ok
 insert into t_virtual2 values ('{"id":1,"name":"tom"}'), ('{"id":2,"name":"jim"}'),('{"id":3}')
 
 query TIS
-select * from t_virtual2
+select * from t_virtual2 order by b
 ----
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim

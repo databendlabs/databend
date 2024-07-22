@@ -39,7 +39,7 @@ Fragment 0:
             └── Filter
                 ├── output columns: [t1.b (#1), t1._row_id (#2)]
                 ├── filters: [is_true(t1.b (#1) > '2022-12-31')]
-                ├── estimated rows: 0.40
+                ├── estimated rows: 1.00
                 └── TableScan
                     ├── table: default.db1.t1
                     ├── output columns: [b (#1), _row_id (#2)]
