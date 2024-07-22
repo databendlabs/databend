@@ -17,6 +17,11 @@ CREATE TABLE test(a int not null);
 statement ok
 REPLACE INTO test ON CONFLICT(a) values(1), (2), (3)
 
+query T
+select previous_snapshot_id from fuse_snapshot('default','test');
+----
+NULL
+
 query I
 SELECT * FROM test
 ----
