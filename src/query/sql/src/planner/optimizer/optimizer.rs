@@ -26,7 +26,7 @@ use super::distributed::MergeOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::target_table_position;
-use crate::binder::DataManipulationInputType;
+use crate::binder::DataMutationInputType;
 use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
@@ -44,7 +44,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
-use crate::plans::DataManipulation;
+use crate::plans::DataMutation;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Plan;
@@ -234,7 +234,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             }
             Ok(Plan::CopyIntoTable(plan))
         }
-        Plan::DataManipulation { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
+        Plan::DataMutation { s_expr, .. } => optimize_merge_into(opt_ctx, *s_expr).await,
 
         // distributed insert will be optimized in `physical_plan_builder`
         Plan::Insert(mut plan) => {
@@ -436,7 +436,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
 
-    let mut plan: DataManipulation = s_expr.plan().clone().try_into()?;
+    let mut plan: DataMutation = s_expr.plan().clone().try_into()?;
     let original_target_table_position =
         target_table_position(s_expr.child(0)?, plan.target_table_index)?;
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
@@ -450,7 +450,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         opt_ctx.enable_distributed_optimization && !input_s_expr.has_merge_exchange();
 
     let input_s_expr = match plan.input_type {
-        DataManipulationInputType::Merge => {
+        DataMutationInputType::Merge => {
             if plan.distributed {
                 let join_op = Join::try_from(input_s_expr.plan().clone())?;
                 let merge_optimizer = MergeOptimizer::create();
@@ -466,13 +466,13 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 input_s_expr
             }
         }
-        DataManipulationInputType::Update | DataManipulationInputType::Delete => input_s_expr,
+        DataMutationInputType::Update | DataMutationInputType::Delete => input_s_expr,
     };
 
-    Ok(Plan::DataManipulation {
+    Ok(Plan::DataMutation {
         schema: plan.schema(),
         s_expr: Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::DataManipulation(plan)),
+            Arc::new(RelOperator::DataMutation(plan)),
             Arc::new(input_s_expr),
         )),
         metadata: opt_ctx.metadata.clone(),

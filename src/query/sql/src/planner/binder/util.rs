@@ -84,7 +84,7 @@ impl Binder {
             | RelOperator::Limit(_)
             | RelOperator::Aggregate(_)
             | RelOperator::Window(_)
-            | RelOperator::DataManipulation(_) => {
+            | RelOperator::DataMutation(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()

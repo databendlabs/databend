@@ -13,11 +13,11 @@
 // limitations under the License.
 
 mod bind;
-mod data_manipulation_input;
+mod data_mutation_input;
 mod delete;
 mod merge;
 mod update;
 
-pub use bind::MergeIntoType;
-pub use data_manipulation_input::target_table_position;
-pub use data_manipulation_input::DataManipulationInputType;
+pub use bind::DataMutationType;
+pub use data_mutation_input::target_table_position;
+pub use data_mutation_input::DataMutationInputType;

@@ -51,7 +51,7 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
-use crate::interpreters::DataManipulationInterpreter;
+use crate::interpreters::DataMutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::sessions::QueryContext;
 
@@ -281,12 +281,12 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     fixture.execute_command(&query).await
 }
 
-pub async fn do_data_manipulation(
+pub async fn do_data_mutation(
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
-    let interpreter = DataManipulationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let interpreter = DataMutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
     let _ = interpreter.execute(ctx).await?;
     Ok(())
 }

@@ -33,8 +33,8 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use indexmap::IndexMap;
 
-use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
-use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInputBindResult;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInputBindResult;
 use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -54,21 +54,21 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum MergeIntoType {
+pub enum DataMutationType {
     MatchedOnly,
     FullOperation,
     InsertOnly,
 }
 
-pub struct DataManipulation {
+pub struct DataMutation {
     pub target_table_identifier: TableIdentifier,
-    pub input: DataManipulationInput,
-    pub manipulate_type: MergeIntoType,
+    pub input: DataMutationInput,
+    pub mutation_type: DataMutationType,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
 
-impl DataManipulation {
+impl DataMutation {
     pub fn check_semantic(&self) -> Result<()> {
         Self::check_multi_match_clauses_semantic(&self.matched_clauses)?;
         Self::check_multi_unmatch_clauses_semantic(&self.unmatched_clauses)
@@ -104,19 +104,19 @@ impl DataManipulation {
 }
 
 impl Binder {
-    pub async fn bind_data_manipulation(
+    pub async fn bind_data_mutation(
         &mut self,
         bind_context: &mut BindContext,
-        data_manipulation: DataManipulation,
+        data_mutation: DataMutation,
     ) -> Result<Plan> {
-        data_manipulation.check_semantic()?;
-        let DataManipulation {
+        data_mutation.check_semantic()?;
+        let DataMutation {
             target_table_identifier,
             input,
-            manipulate_type,
+            mutation_type,
             matched_clauses,
             unmatched_clauses,
-        } = data_manipulation;
+        } = data_mutation;
 
         let (catalog_name, database_name, table_name, table_name_alias) = (
             target_table_identifier.catalog_name(),
@@ -126,7 +126,7 @@ impl Binder {
         );
 
         // Add table lock before execution.
-        let lock_guard = if manipulate_type != MergeIntoType::InsertOnly {
+        let lock_guard = if mutation_type != DataMutationType::InsertOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
@@ -158,7 +158,7 @@ impl Binder {
             )
             .await?;
 
-        let DataManipulationInputBindResult {
+        let DataMutationInputBindResult {
             input,
             input_type,
             mut required_columns,
@@ -255,7 +255,7 @@ impl Binder {
             );
         }
 
-        let merge_into = crate::plans::DataManipulation {
+        let data_mutation = crate::plans::DataMutation {
             catalog_name,
             database_name,
             table_name,
@@ -268,7 +268,7 @@ impl Binder {
             unmatched_evaluators,
             target_table_index,
             field_index_map,
-            merge_type: manipulate_type.clone(),
+            merge_type: mutation_type.clone(),
             distributed: false,
             change_join_order: false,
             row_id_index: target_row_id_index,
@@ -276,19 +276,19 @@ impl Binder {
             lock_guard,
         };
 
-        if manipulate_type == MergeIntoType::InsertOnly && !insert_only(&merge_into) {
+        if mutation_type == DataMutationType::InsertOnly && !insert_only(&data_mutation) {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));
         }
 
-        let schema = merge_into.schema();
+        let schema = data_mutation.schema();
         let s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::DataManipulation(merge_into)),
+            Arc::new(RelOperator::DataMutation(data_mutation)),
             Arc::new(input),
         );
 
-        Ok(Plan::DataManipulation {
+        Ok(Plan::DataMutation {
             s_expr: Box::new(s_expr),
             schema,
             metadata: self.metadata.clone(),
@@ -553,7 +553,7 @@ impl Binder {
     }
 }
 
-fn insert_only(merge_plan: &crate::plans::DataManipulation) -> bool {
+fn insert_only(merge_plan: &crate::plans::DataMutation) -> bool {
     let meta_data = merge_plan.meta_data.read();
     let target_table_columns: HashSet<usize> = meta_data
         .columns_by_table_index(merge_plan.target_table_index)

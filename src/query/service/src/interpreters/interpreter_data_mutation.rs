@@ -23,9 +23,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::binder::DataManipulationInputType;
+use databend_common_sql::binder::DataMutationInputType;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::DataManipulationBuildInfo;
+use databend_common_sql::executor::DataMutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
@@ -44,19 +44,19 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::DataBlockStream;
 
-pub struct DataManipulationInterpreter {
+pub struct DataMutationInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
 }
 
-impl DataManipulationInterpreter {
+impl DataMutationInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         schema: DataSchemaRef,
-    ) -> Result<DataManipulationInterpreter> {
-        Ok(DataManipulationInterpreter {
+    ) -> Result<DataMutationInterpreter> {
+        Ok(DataMutationInterpreter {
             ctx,
             s_expr,
             schema,
@@ -65,9 +65,9 @@ impl DataManipulationInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DataManipulationInterpreter {
+impl Interpreter for DataMutationInterpreter {
     fn name(&self) -> &str {
-        "DataManipulationInterpreter"
+        "DataMutationInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -80,65 +80,65 @@ impl Interpreter for DataManipulationInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let data_manipulation: databend_common_sql::plans::DataManipulation =
+        let data_mutation: databend_common_sql::plans::DataMutation =
             self.s_expr.plan().clone().try_into()?;
 
         // Build physical plan.
-        let physical_plan = self.build_physical_plan(&data_manipulation).await?;
+        let physical_plan = self.build_physical_plan(&data_mutation).await?;
 
         // Build pipeline.
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Execute hook.
-        self.execute_hook(&data_manipulation, &mut build_res).await;
+        self.execute_hook(&data_mutation, &mut build_res).await;
 
         build_res
             .main_pipeline
-            .add_lock_guard(data_manipulation.lock_guard);
+            .add_lock_guard(data_mutation.lock_guard);
 
         Ok(build_res)
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let blocks = self.get_data_manipulation_table_result()?;
+        let blocks = self.get_data_mutation_table_result()?;
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
-impl DataManipulationInterpreter {
+impl DataMutationInterpreter {
     pub async fn execute_hook(
         &self,
-        data_manipulation: &databend_common_sql::plans::DataManipulation,
+        data_mutation: &databend_common_sql::plans::DataMutation,
         build_res: &mut PipelineBuildResult,
     ) {
-        let hook_lock_opt = if data_manipulation.lock_guard.is_some() {
+        let hook_lock_opt = if data_mutation.lock_guard.is_some() {
             LockTableOption::NoLock
         } else {
             LockTableOption::LockNoRetry
         };
 
-        let mutation_kind = match data_manipulation.input_type {
-            DataManipulationInputType::Update => MutationKind::Update,
-            DataManipulationInputType::Delete => MutationKind::Delete,
-            DataManipulationInputType::Merge => MutationKind::MergeInto,
+        let mutation_kind = match data_mutation.input_type {
+            DataMutationInputType::Update => MutationKind::Update,
+            DataMutationInputType::Delete => MutationKind::Delete,
+            DataMutationInputType::Merge => MutationKind::MergeInto,
         };
 
         let hook_operator = HookOperator::create(
             self.ctx.clone(),
-            data_manipulation.catalog_name.clone(),
-            data_manipulation.database_name.clone(),
-            data_manipulation.table_name.clone(),
+            data_mutation.catalog_name.clone(),
+            data_mutation.database_name.clone(),
+            data_mutation.table_name.clone(),
             mutation_kind,
             hook_lock_opt,
         );
-        match data_manipulation.input_type {
-            DataManipulationInputType::Update | DataManipulationInputType::Delete => {
+        match data_mutation.input_type {
+            DataMutationInputType::Update | DataMutationInputType::Delete => {
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
                     .await
             }
-            DataManipulationInputType::Merge => {
+            DataMutationInputType::Merge => {
                 hook_operator.execute(&mut build_res.main_pipeline).await
             }
         };
@@ -146,29 +146,29 @@ impl DataManipulationInterpreter {
 
     pub async fn build_physical_plan(
         &self,
-        data_manipulation: &databend_common_sql::plans::DataManipulation,
+        data_mutation: &databend_common_sql::plans::DataMutation,
     ) -> Result<PhysicalPlan> {
         let table = self
             .ctx
             .get_table(
-                &data_manipulation.catalog_name,
-                &data_manipulation.database_name,
-                &data_manipulation.table_name,
+                &data_mutation.catalog_name,
+                &data_mutation.database_name,
+                &data_mutation.table_name,
             )
             .await?;
 
-        // Check if the table supports DataManipulation.
+        // Check if the table supports DataMutation.
         table.check_mutable()?;
         let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Unimplemented(format!(
                 "table {}, engine type {}, does not support {}",
                 table.name(),
                 table.get_table_info().engine(),
-                data_manipulation.input_type,
+                data_mutation.input_type,
             ))
         })?;
 
-        // Prepare DataManipulationBuildInfo for PhysicalPlanBuilder to build DataManipulation physical plan.
+        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
         let table_info = fuse_table.get_table_info();
         let table_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(
@@ -177,24 +177,24 @@ impl DataManipulationInterpreter {
             ))
         });
         let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &data_manipulation.meta_data).await?;
-        let data_manipulation_build_info = DataManipulationBuildInfo {
+            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.meta_data).await?;
+        let data_mutation_build_info = DataMutationBuildInfo {
             table_snapshot,
             update_stream_meta,
         };
 
         // Build physical plan.
         let mut builder =
-            PhysicalPlanBuilder::new(data_manipulation.meta_data.clone(), self.ctx.clone(), false);
-        builder.set_data_manipulation_build_info(data_manipulation_build_info);
+            PhysicalPlanBuilder::new(data_mutation.meta_data.clone(), self.ctx.clone(), false);
+        builder.set_data_mutation_build_info(data_mutation_build_info);
         let physical_plan = builder
-            .build(&self.s_expr, *data_manipulation.required_columns.clone())
+            .build(&self.s_expr, *data_mutation.required_columns.clone())
             .await?;
 
         Ok(physical_plan)
     }
 
-    fn get_data_manipulation_table_result(&self) -> Result<Vec<DataBlock>> {
+    fn get_data_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
         let binding = self.ctx.get_merge_status();
         let status = binding.read();
         let mut columns = Vec::new();

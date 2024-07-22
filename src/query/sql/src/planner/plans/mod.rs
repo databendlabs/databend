@@ -76,7 +76,7 @@ pub use join::*;
 pub use kill::KillPlan;
 pub use limit::*;
 pub use materialized_cte::MaterializedCte;
-pub use merge_into::DataManipulation;
+pub use merge_into::DataMutation;
 pub use merge_into::MatchedEvaluator;
 pub use merge_into::UnmatchedEvaluator;
 pub use merge_into::DELETE_NAME;

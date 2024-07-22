@@ -30,7 +30,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── DataManipulation
+    └── DataMutation
         ├── target table: [catalog: default] [database: db1] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
         └── RowFetch
@@ -73,7 +73,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── DataManipulation
+    └── DataMutation
         ├── target table: [catalog: default] [database: db1] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
         └── RowFetch

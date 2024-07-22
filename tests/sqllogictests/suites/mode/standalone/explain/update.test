@@ -20,7 +20,7 @@ query T
 explain update t1 set a = a + 1 where a in (select a from t2);
 ----
 CommitSink
-└── DataManipulation
+└── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
     └── RowFetch
@@ -59,7 +59,7 @@ query T
 explain update t1 set a = a + 1 where a > 2;
 ----
 CommitSink
-└── DataManipulation
+└── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
     └── RowFetch
@@ -84,7 +84,7 @@ query T
 explain update t1 set a = a + 1 where a in (select a from t2) and b > 2;
 ----
 CommitSink
-└── DataManipulation
+└── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t1.a (#0) + 1 AS Int32 NULL), t1.a (#0))]
     └── HashJoin

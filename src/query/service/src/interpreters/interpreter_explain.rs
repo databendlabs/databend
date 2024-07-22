@@ -27,7 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
-use databend_common_sql::plans::DataManipulation;
+use databend_common_sql::plans::DataMutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
@@ -36,7 +36,7 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use crate::interpreters::interpreter_data_manipulation::DataManipulationInterpreter;
+use crate::interpreters::interpreter_data_mutation::DataMutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -116,13 +116,13 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::DataManipulation {
+                Plan::DataMutation {
                     s_expr,
                     schema,
                     metadata,
                 } => {
-                    let merge_into: DataManipulation = s_expr.plan().clone().try_into()?;
-                    let interpreter = DataManipulationInterpreter::try_create(
+                    let merge_into: DataMutation = s_expr.plan().clone().try_into()?;
+                    let interpreter = DataMutationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
@@ -166,8 +166,8 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::DataManipulation { s_expr, .. } => {
-                    let plan: DataManipulation = s_expr.plan().clone().try_into()?;
+                Plan::DataMutation { s_expr, .. } => {
+                    let plan: DataMutation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.meta_data,
@@ -185,7 +185,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } | Plan::DataManipulation { .. } => {
+                    Plan::Query { .. } | Plan::DataMutation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -210,7 +210,7 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::DataManipulation { s_expr, schema, .. } => {
+                Plan::DataMutation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }
@@ -440,10 +440,9 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let merge_into: databend_common_sql::plans::DataManipulation =
+        let merge_into: databend_common_sql::plans::DataMutation =
             s_expr.plan().clone().try_into()?;
-        let interpreter =
-            DataManipulationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let interpreter = DataMutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
         let plan = interpreter.build_physical_plan(&merge_into).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 

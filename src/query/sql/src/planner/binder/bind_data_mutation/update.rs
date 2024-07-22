@@ -20,9 +20,9 @@ use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_data_manipulation::bind::DataManipulation;
-use crate::binder::bind_data_manipulation::bind::MergeIntoType;
-use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::bind_data_mutation::bind::DataMutation;
+use crate::binder::bind_data_mutation::bind::DataMutationType;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::plans::Plan;
@@ -79,18 +79,17 @@ impl Binder {
 
         // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
 
-        let data_manipulation = DataManipulation {
+        let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataManipulationInput::Update {
+            input: DataMutationInput::Update {
                 target: table.clone(),
                 filter: selection.clone(),
             },
-            manipulate_type: MergeIntoType::MatchedOnly,
+            mutation_type: DataMutationType::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
         };
 
-        self.bind_data_manipulation(bind_context, data_manipulation)
-            .await
+        self.bind_data_mutation(bind_context, data_mutation).await
     }
 }

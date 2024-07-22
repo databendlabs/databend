@@ -39,7 +39,7 @@ use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
-use crate::plans::DataManipulation;
+use crate::plans::DataMutation;
 use crate::plans::Exchange;
 use crate::plans::ProjectSet;
 use crate::plans::Udf;
@@ -133,7 +133,7 @@ pub enum RelOperator {
     Udf(Udf),
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
-    DataManipulation(DataManipulation),
+    DataMutation(DataMutation),
 }
 
 impl Operator for RelOperator {
@@ -159,7 +159,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
-            RelOperator::DataManipulation(rel_op) => rel_op.rel_op(),
+            RelOperator::DataMutation(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -185,7 +185,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.arity(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
-            RelOperator::DataManipulation(rel_op) => rel_op.arity(),
+            RelOperator::DataMutation(rel_op) => rel_op.arity(),
         }
     }
 
@@ -211,7 +211,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::DataManipulation(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::DataMutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -237,7 +237,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::DataManipulation(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::DataMutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -263,7 +263,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::DataManipulation(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::DataMutation(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -335,7 +335,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::DataManipulation(rel_op) => {
+            RelOperator::DataMutation(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
         }
@@ -408,7 +408,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
-            RelOperator::DataManipulation(rel_op) => {
+            RelOperator::DataMutation(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -782,16 +782,16 @@ impl TryFrom<RelOperator> for AsyncFunction {
     }
 }
 
-impl From<DataManipulation> for RelOperator {
-    fn from(v: DataManipulation) -> Self {
-        Self::DataManipulation(v)
+impl From<DataMutation> for RelOperator {
+    fn from(v: DataMutation) -> Self {
+        Self::DataMutation(v)
     }
 }
 
-impl TryFrom<RelOperator> for DataManipulation {
+impl TryFrom<RelOperator> for DataMutation {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::DataManipulation(value) = value {
+        if let RelOperator::DataMutation(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(format!(

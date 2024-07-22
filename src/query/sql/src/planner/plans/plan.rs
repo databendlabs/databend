@@ -227,7 +227,7 @@ pub enum Plan {
     Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
-    DataManipulation {
+    DataMutation {
         s_expr: Box<SExpr>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
@@ -415,7 +415,7 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
-            Plan::Replace(_) | Plan::DataManipulation { .. } | Plan::OptimizeTable(_) => {
+            Plan::Replace(_) | Plan::DataMutation { .. } | Plan::OptimizeTable(_) => {
                 QueryKind::Update
             }
             _ => QueryKind::Other,
@@ -444,7 +444,7 @@ impl Plan {
             | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
-            Plan::DataManipulation { schema, .. } => schema.clone(),
+            Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),

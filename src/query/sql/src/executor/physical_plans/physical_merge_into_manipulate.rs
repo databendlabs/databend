@@ -20,7 +20,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 
-use crate::binder::MergeIntoType;
+use crate::binder::DataMutationType;
 use crate::executor::physical_plan::PhysicalPlan;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
@@ -38,7 +38,7 @@ pub struct MergeIntoManipulate {
     // used to record the index of target table's field in merge_source_schema
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     // merge_type
-    pub merge_type: MergeIntoType,
+    pub merge_type: DataMutationType,
     pub row_id_idx: usize,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,

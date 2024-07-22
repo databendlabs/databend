@@ -27,8 +27,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::LockGuard;
 
-use crate::binder::DataManipulationInputType;
-use crate::binder::MergeIntoType;
+use crate::binder::DataMutationInputType;
+use crate::binder::DataMutationType;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -60,7 +60,7 @@ pub struct MatchedEvaluator {
 }
 
 #[derive(Clone)]
-pub struct DataManipulation {
+pub struct DataMutation {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
@@ -68,12 +68,12 @@ pub struct DataManipulation {
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<HashSet<IndexType>>,
     pub meta_data: MetadataRef,
-    pub input_type: DataManipulationInputType,
+    pub input_type: DataMutationInputType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
-    pub merge_type: MergeIntoType,
+    pub merge_type: DataMutationType,
     pub distributed: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
@@ -88,7 +88,7 @@ pub struct DataManipulation {
     pub lock_guard: Option<Arc<LockGuard>>,
 }
 
-impl std::fmt::Debug for DataManipulation {
+impl std::fmt::Debug for DataMutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
             .field("catalog", &self.catalog_name)
@@ -109,12 +109,12 @@ pub const INSERT_NAME: &str = "number of rows inserted";
 pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
-impl DataManipulation {
+impl DataMutation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.merge_type, MergeIntoType::FullOperation)
-            || matches!(self.merge_type, MergeIntoType::InsertOnly);
+        let insert = matches!(self.merge_type, DataMutationType::FullOperation)
+            || matches!(self.merge_type, DataMutationType::InsertOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {
@@ -171,9 +171,9 @@ impl DataManipulation {
     }
 }
 
-impl Eq for DataManipulation {}
+impl Eq for DataMutation {}
 
-impl PartialEq for DataManipulation {
+impl PartialEq for DataMutation {
     fn eq(&self, other: &Self) -> bool {
         self.catalog_name == other.catalog_name
             && self.database_name == other.database_name
@@ -185,13 +185,13 @@ impl PartialEq for DataManipulation {
     }
 }
 
-impl std::hash::Hash for DataManipulation {
+impl std::hash::Hash for DataMutation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.row_id_index.hash(state);
     }
 }
 
-impl Operator for DataManipulation {
+impl Operator for DataMutation {
     fn rel_op(&self) -> RelOp {
         RelOp::MergeInto
     }

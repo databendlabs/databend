@@ -31,9 +31,9 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
-use databend_common_sql::binder::DataManipulationInputType;
+use databend_common_sql::binder::DataMutationInputType;
 use databend_common_sql::optimizer::get_udf_names;
-use databend_common_sql::plans::DataManipulation;
+use databend_common_sql::plans::DataMutation;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::RewriteKind;
@@ -960,8 +960,8 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
-            Plan::DataManipulation { s_expr, .. } => {
-                let plan: DataManipulation = s_expr.plan().clone().try_into()?;
+            Plan::DataMutation { s_expr, .. } => {
+                let plan: DataMutation = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {
@@ -1000,9 +1000,9 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
                 let privileges = match plan.input_type {
-                    DataManipulationInputType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
-                    DataManipulationInputType::Update => vec![UserPrivilegeType::Update],
-                    DataManipulationInputType::Delete => vec![UserPrivilegeType::Delete],
+                    DataMutationInputType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                    DataMutationInputType::Update => vec![UserPrivilegeType::Update],
+                    DataMutationInputType::Delete => vec![UserPrivilegeType::Delete],
                 };
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false).await?;

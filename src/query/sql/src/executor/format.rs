@@ -476,7 +476,7 @@ fn format_merge_into(
         ));
     };
     Ok(FormatTreeNode::with_children(
-        "DataManipulation".to_string(),
+        "DataMutation".to_string(),
         children,
     ))
 }

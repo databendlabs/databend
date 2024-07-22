@@ -24,7 +24,7 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::binder::MergeIntoType;
+use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
@@ -108,7 +108,9 @@ impl PipelineBuilder {
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
-            PhysicalPlan::MergeInto(v) if v.merge_type != MergeIntoType::FullOperation => Ok(None),
+            PhysicalPlan::MergeInto(v) if v.merge_type != DataMutationType::FullOperation => {
+                Ok(None)
+            }
 
             // hided plans in profile
             PhysicalPlan::Shuffle(_) => Ok(None),

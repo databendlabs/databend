@@ -28,7 +28,7 @@ use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::binder::MergeIntoType;
+use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::executor::physical_plans::MergeInto;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -68,8 +68,8 @@ impl PipelineBuilder {
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
         let serialize_len = match merge_into.merge_type {
-            MergeIntoType::InsertOnly => self.main_pipeline.output_len(),
-            MergeIntoType::FullOperation | MergeIntoType::MatchedOnly => {
+            DataMutationType::InsertOnly => self.main_pipeline.output_len(),
+            DataMutationType::FullOperation | DataMutationType::MatchedOnly => {
                 // remove row id port
                 self.main_pipeline.output_len() - 1
             }

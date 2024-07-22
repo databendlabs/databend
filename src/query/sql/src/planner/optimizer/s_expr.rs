@@ -325,7 +325,7 @@ impl SExpr {
             | RelOperator::CacheScan(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::DataManipulation(_) => {}
+            | RelOperator::DataMutation(_) => {}
         };
         for child in &self.children {
             let udf = child.get_udfs()?;
@@ -424,7 +424,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::CacheScan(_)
         | RelOperator::AsyncFunction(_)
         | RelOperator::RecursiveCteScan(_)
-        | RelOperator::DataManipulation(_) => false,
+        | RelOperator::DataMutation(_) => false,
         RelOperator::Join(op) => {
             op.equi_conditions.iter().any(|condition| {
                 find_subquery_in_expr(&condition.left) || find_subquery_in_expr(&condition.right)

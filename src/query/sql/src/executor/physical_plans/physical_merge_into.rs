@@ -40,8 +40,8 @@ use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use itertools::Itertools;
 
 use crate::binder::wrap_cast;
-use crate::binder::DataManipulationInputType;
-use crate::binder::MergeIntoType;
+use crate::binder::DataMutationInputType;
+use crate::binder::DataMutationType;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -78,7 +78,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub merge_type: MergeIntoType,
+    pub merge_type: DataMutationType,
     pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
@@ -109,10 +109,10 @@ impl PhysicalPlanBuilder {
     pub async fn build_merge_into(
         &mut self,
         s_expr: &SExpr,
-        merge_into: &crate::plans::DataManipulation,
+        merge_into: &crate::plans::DataMutation,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let crate::plans::DataManipulation {
+        let crate::plans::DataMutation {
             bind_context,
             meta_data,
             catalog_name,
@@ -138,7 +138,7 @@ impl PhysicalPlanBuilder {
         let mut plan = builder.build(s_expr.child(0)?, required).await?;
 
         let join_output_schema = plan.output_schema()?;
-        let is_insert_only = matches!(merge_type, MergeIntoType::InsertOnly);
+        let is_insert_only = matches!(merge_type, DataMutationType::InsertOnly);
         if !is_insert_only && !join_output_schema.has_field(&row_id_index.to_string()) {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get row_id_index when running merge into",
@@ -154,7 +154,7 @@ impl PhysicalPlanBuilder {
         // We use `merge_into_split_idx` to specify a column from target table to spilt a block
         // from join into matched part and unmatched part.
         let mut merge_into_split_idx = None;
-        if matches!(merge_type, MergeIntoType::FullOperation) {
+        if matches!(merge_type, DataMutationType::FullOperation) {
             for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
                 if *data_field.name() == row_id_index.to_string() {
                     merge_into_split_idx = Some(idx);
@@ -164,7 +164,7 @@ impl PhysicalPlanBuilder {
         }
 
         let source_is_broadcast =
-            matches!(merge_type, MergeIntoType::MatchedOnly) && !change_join_order;
+            matches!(merge_type, DataMutationType::MatchedOnly) && !change_join_order;
         if *distributed && !is_insert_only && !source_is_broadcast {
             let mut row_id_column = None;
             for column_binding in bind_context.columns.iter() {
@@ -251,7 +251,7 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>();
 
             let mut has_inner_column = false;
-            let need_wrap_nullable = matches!(merge_type, MergeIntoType::FullOperation);
+            let need_wrap_nullable = matches!(merge_type, DataMutationType::FullOperation);
             let fetched_fields: Vec<DataField> = lazy_columns
                 .iter()
                 .map(|index| {
@@ -402,8 +402,8 @@ impl PhysicalPlanBuilder {
             matched.push((condition, update_list))
         }
 
-        let data_manipulation_build_info = self.data_manipulation_build_info.clone().unwrap();
-        let base_snapshot = data_manipulation_build_info.table_snapshot;
+        let data_mutation_build_info = self.data_mutation_build_info.clone().unwrap();
+        let base_snapshot = data_mutation_build_info.table_snapshot;
 
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
@@ -465,15 +465,13 @@ impl PhysicalPlanBuilder {
         };
 
         let mutation_kind = match input_type {
-            DataManipulationInputType::Update | DataManipulationInputType::Merge => {
-                MutationKind::Update
-            }
-            DataManipulationInputType::Delete => MutationKind::Delete,
+            DataMutationInputType::Update | DataMutationInputType::Merge => MutationKind::Update,
+            DataMutationInputType::Delete => MutationKind::Delete,
         };
 
         let update_stream_meta = match input_type {
-            DataManipulationInputType::Merge => data_manipulation_build_info.update_stream_meta,
-            DataManipulationInputType::Update | DataManipulationInputType::Delete => vec![],
+            DataMutationInputType::Merge => data_mutation_build_info.update_stream_meta,
+            DataMutationInputType::Update | DataMutationInputType::Delete => vec![],
         };
 
         // build mutation_aggregate

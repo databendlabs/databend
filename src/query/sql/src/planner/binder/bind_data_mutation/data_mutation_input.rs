@@ -32,8 +32,8 @@ use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
+use crate::binder::DataMutationType;
 use crate::binder::InternalColumnBinding;
-use crate::binder::MergeIntoType;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
@@ -48,13 +48,13 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub enum DataManipulationInput {
+pub enum DataMutationInput {
     Merge {
         target: TableReference,
         source: TableReference,
         match_expr: Expr,
         has_star_clause: bool,
-        merge_type: MergeIntoType,
+        merge_type: DataMutationType,
     },
     Update {
         target: TableReference,
@@ -67,25 +67,25 @@ pub enum DataManipulationInput {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum DataManipulationInputType {
+pub enum DataMutationInputType {
     Merge,
     Update,
     Delete,
 }
 
-impl fmt::Display for DataManipulationInputType {
+impl fmt::Display for DataMutationInputType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataManipulationInputType::Merge => write!(f, "MERGE"),
-            DataManipulationInputType::Update => write!(f, "UPDATE"),
-            DataManipulationInputType::Delete => write!(f, "DELETE"),
+            DataMutationInputType::Merge => write!(f, "MERGE"),
+            DataMutationInputType::Update => write!(f, "UPDATE"),
+            DataMutationInputType::Delete => write!(f, "DELETE"),
         }
     }
 }
 
-pub struct DataManipulationInputBindResult {
+pub struct DataMutationInputBindResult {
     pub input: SExpr,
-    pub input_type: DataManipulationInputType,
+    pub input_type: DataMutationInputType,
     pub required_columns: ColumnSet,
     pub bind_context: BindContext,
     pub update_or_insert_columns_star: Option<HashMap<usize, ScalarExpr>>,
@@ -93,7 +93,7 @@ pub struct DataManipulationInputBindResult {
     pub target_row_id_index: usize,
 }
 
-impl DataManipulationInput {
+impl DataMutationInput {
     pub async fn bind(
         &self,
         binder: &mut Binder,
@@ -101,9 +101,9 @@ impl DataManipulationInput {
         target_table: Arc<dyn Table>,
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
-    ) -> Result<DataManipulationInputBindResult> {
+    ) -> Result<DataMutationInputBindResult> {
         match self {
-            DataManipulationInput::Merge {
+            DataMutationInput::Merge {
                 target,
                 source,
                 match_expr,
@@ -183,8 +183,8 @@ impl DataManipulationInput {
                     binder.bind_table_reference(bind_context, target)?;
 
                 let update_stream_columns = target_table.change_tracking_enabled()
-                    && *merge_type != MergeIntoType::InsertOnly;
-                let is_lazy_table = *merge_type != MergeIntoType::InsertOnly;
+                    && *merge_type != DataMutationType::InsertOnly;
+                let is_lazy_table = *merge_type != DataMutationType::InsertOnly;
                 target_s_expr =
                     update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
@@ -202,13 +202,13 @@ impl DataManipulationInput {
                     target_table_identifier,
                     target_table_index,
                     &mut target_s_expr,
-                    DataManipulationInputType::Merge,
+                    DataMutationInputType::Merge,
                 )?;
 
                 let join_op = match merge_type {
-                    MergeIntoType::MatchedOnly => Inner,
-                    MergeIntoType::InsertOnly => RightAnti,
-                    MergeIntoType::FullOperation => RightOuter,
+                    DataMutationType::MatchedOnly => Inner,
+                    DataMutationType::InsertOnly => RightAnti,
+                    DataMutationType::FullOperation => RightOuter,
                 };
 
                 // Add join, we use _row_id to check_duplicate join row.
@@ -226,7 +226,7 @@ impl DataManipulationInput {
 
                 let mut required_columns = ColumnSet::new();
                 // Add target table row_id column to required columns.
-                if *merge_type != MergeIntoType::InsertOnly {
+                if *merge_type != DataMutationType::InsertOnly {
                     required_columns.insert(target_row_id_index);
                 }
                 // Add source table columns to required columns.
@@ -235,9 +235,9 @@ impl DataManipulationInput {
                         required_columns.insert(*column_index);
                     }
                 }
-                Ok(DataManipulationInputBindResult {
+                Ok(DataMutationInputBindResult {
                     input: join_sexpr,
-                    input_type: DataManipulationInputType::Merge,
+                    input_type: DataMutationInputType::Merge,
                     required_columns,
                     bind_context,
                     update_or_insert_columns_star,
@@ -245,16 +245,16 @@ impl DataManipulationInput {
                     target_row_id_index,
                 })
             }
-            DataManipulationInput::Update { target, filter }
-            | DataManipulationInput::Delete { target, filter } => {
-                let input_type = if matches!(self, DataManipulationInput::Update { .. }) {
-                    DataManipulationInputType::Update
+            DataMutationInput::Update { target, filter }
+            | DataMutationInput::Delete { target, filter } => {
+                let input_type = if matches!(self, DataMutationInput::Update { .. }) {
+                    DataMutationInputType::Update
                 } else {
-                    DataManipulationInputType::Delete
+                    DataMutationInputType::Delete
                 };
                 let (mut target_s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
-                let is_lazy_table = input_type != DataManipulationInputType::Delete;
+                let is_lazy_table = input_type != DataMutationInputType::Delete;
                 target_s_expr = update_target_scan(&target_s_expr, is_lazy_table, false)?;
 
                 // Add internal_column row_id for target_table
@@ -284,7 +284,7 @@ impl DataManipulationInput {
                 // Add target table row_id column to required columns.
                 required_columns.insert(target_row_id_index);
 
-                Ok(DataManipulationInputBindResult {
+                Ok(DataMutationInputBindResult {
                     input: s_expr,
                     input_type,
                     required_columns,
@@ -305,7 +305,7 @@ impl Binder {
         target_table_identifier: &TableIdentifier,
         table_index: usize,
         expr: &mut SExpr,
-        input_type: DataManipulationInputType,
+        input_type: DataMutationInputType,
     ) -> Result<usize> {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),

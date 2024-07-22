@@ -21,11 +21,11 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_data_manipulation::bind::DataManipulation;
-use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::bind_data_mutation::bind::DataMutation;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::MergeIntoType;
+use crate::binder::DataMutationType;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -64,24 +64,23 @@ impl Binder {
 
         let (matched_clauses, unmatched_clauses) =
             Self::split_merge_into_clauses(&stmt.merge_options)?;
-        let manipulate_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
+        let mutation_type = get_merge_type(matched_clauses.len(), unmatched_clauses.len())?;
 
-        let data_manipulation = DataManipulation {
+        let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataManipulationInput::Merge {
+            input: DataMutationInput::Merge {
                 target: target_reference,
                 source: source_reference,
                 match_expr: stmt.join_expr.clone(),
                 has_star_clause: self.has_star_clause(&matched_clauses, &unmatched_clauses),
-                merge_type: manipulate_type.clone(),
+                merge_type: mutation_type.clone(),
             },
-            manipulate_type: manipulate_type.clone(),
+            mutation_type: mutation_type.clone(),
             matched_clauses,
             unmatched_clauses,
         };
 
-        self.bind_data_manipulation(bind_context, data_manipulation)
-            .await
+        self.bind_data_mutation(bind_context, data_mutation).await
     }
 
     pub fn split_merge_into_clauses(
@@ -127,13 +126,13 @@ impl Binder {
     }
 }
 
-fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<MergeIntoType> {
+fn get_merge_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationType> {
     if matched_len == 0 && unmatched_len > 0 {
-        Ok(MergeIntoType::InsertOnly)
+        Ok(DataMutationType::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(MergeIntoType::MatchedOnly)
+        Ok(DataMutationType::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
-        Ok(MergeIntoType::FullOperation)
+        Ok(DataMutationType::FullOperation)
     } else {
         Err(ErrorCode::SemanticError(
             "we must have matched or unmatched clause at least one",

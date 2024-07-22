@@ -57,7 +57,7 @@ query T
 explain merge into t1 using (select * from t2) as t on t1.a > t.a when matched then update * when not matched then insert *;
 ----
 CommitSink
-└── DataManipulation
+└── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), a (#0), t1.a (#1))]
     ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
@@ -100,7 +100,7 @@ query T
 explain merge into t1 using t2 on t1.a < t2.a when matched then update * when not matched then insert *;
 ----
 CommitSink
-└── DataManipulation
+└── DataMutation
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), a (#0), t1.a (#1))]
     ├── unmatched insert: [condition: None, insert into (a) values(a (#0))]
@@ -200,7 +200,7 @@ CommitSink
 └── Exchange
     ├── output columns: []
     ├── exchange type: Merge
-    └── DataManipulation
+    └── DataMutation
         ├── target table: [catalog: default] [database: default] [table: t1]
         ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(a (#0) AS Int32 NULL), t1.a (#1))]
         ├── unmatched insert: [condition: None, insert into (a) values(CAST(a (#0) AS Int32 NULL))]

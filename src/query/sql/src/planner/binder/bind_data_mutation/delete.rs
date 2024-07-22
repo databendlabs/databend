@@ -19,11 +19,11 @@ use databend_common_ast::ast::TableReference;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_data_manipulation::bind::DataManipulation;
-use crate::binder::bind_data_manipulation::data_manipulation_input::DataManipulationInput;
+use crate::binder::bind_data_mutation::bind::DataMutation;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::MergeIntoType;
+use crate::binder::DataMutationType;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -64,18 +64,17 @@ impl<'a> Binder {
             operation: MatchOperation::Delete,
         };
 
-        let data_manipulation = DataManipulation {
+        let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataManipulationInput::Delete {
+            input: DataMutationInput::Delete {
                 target: table.clone(),
                 filter: selection.clone(),
             },
-            manipulate_type: MergeIntoType::MatchedOnly,
+            mutation_type: DataMutationType::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
         };
 
-        self.bind_data_manipulation(bind_context, data_manipulation)
-            .await
+        self.bind_data_mutation(bind_context, data_mutation).await
     }
 }

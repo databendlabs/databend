@@ -22,7 +22,7 @@ use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
-use super::interpreter_data_manipulation::DataManipulationInterpreter;
+use super::interpreter_data_mutation::DataMutationInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
@@ -339,8 +339,8 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::DataManipulation { s_expr, schema, .. } => Ok(Arc::new(
-                DataManipulationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
+            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
+                DataMutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
             )),
 
             // Roles
