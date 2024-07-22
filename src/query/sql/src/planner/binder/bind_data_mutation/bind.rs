@@ -173,6 +173,12 @@ impl Binder {
         } else {
             table_name.clone()
         };
+
+        let target_column_entries = self
+            .metadata
+            .read()
+            .columns_by_table_index(target_table_index);
+
         let mut matched_evaluators = Vec::with_capacity(matched_clauses.len());
         let mut unmatched_evaluators = Vec::with_capacity(unmatched_clauses.len());
         let mut field_index_map = HashMap::<usize, String>::new();
@@ -198,23 +204,22 @@ impl Binder {
             };
 
             // If exists update clause, we need to read all columns of target table.
-            let target_column_entries = self
-                .metadata
-                .read()
-                .columns_by_table_index(target_table_index);
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
                 let column_index = self.find_column_index(&target_column_entries, field.name())?;
                 field_index_map.insert(idx, column_index.to_string());
-            }
-            for stream_column in table.stream_columns() {
-                let column_index =
-                    self.find_column_index(&target_column_entries, stream_column.column_name())?;
-                required_columns.insert(column_index);
             }
             update_row_version
         } else {
             None
         };
+
+        if table.change_tracking_enabled() && mutation_type != DataMutationType::InsertOnly {
+            for stream_column in table.stream_columns() {
+                let column_index =
+                    self.find_column_index(&target_column_entries, stream_column.column_name())?;
+                required_columns.insert(column_index);
+            }
+        }
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
@@ -268,7 +273,7 @@ impl Binder {
             unmatched_evaluators,
             target_table_index,
             field_index_map,
-            merge_type: mutation_type.clone(),
+            mutation_type: mutation_type.clone(),
             distributed: false,
             change_join_order: false,
             row_id_index: target_row_id_index,
