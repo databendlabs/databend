@@ -11055,12 +11055,12 @@ dependencies = [
 
 [[package]]
 name = "openraft"
-version = "0.9.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "425a5a830e64ef5223ff95d49d538004925ec3f7f1f68548a4f5cc90e75afdcf"
+version = "0.10.0"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.2#55f4e5a541eda9e7cefbd5138b42cdd92c697d17"
 dependencies = [
  "anyerror",
  "byte-unit",
+ "chrono",
  "clap",
  "derive_more",
  "futures",
@@ -11077,9 +11077,8 @@ dependencies = [
 
 [[package]]
 name = "openraft-macros"
-version = "0.9.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c468091464f0b38c1c1a9ec72a1e582c46cf4b861b6e0c214da4c6fd96b60358"
+version = "0.10.0"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.2#55f4e5a541eda9e7cefbd5138b42cdd92c697d17"
 dependencies = [
  "chrono",
  "proc-macro2",

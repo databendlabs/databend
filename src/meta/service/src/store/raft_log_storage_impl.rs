@@ -20,7 +20,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io;
 use databend_common_base::display::display_option::DisplayOptionExt;
-use databend_common_meta_sled_store::openraft::storage::LogFlushed;
+use databend_common_meta_sled_store::openraft::storage::IOFlushed;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::EntryPayload;
 use databend_common_meta_sled_store::openraft::ErrorSubject;
@@ -127,6 +127,23 @@ impl RaftLogReader<TypeConfig> for RaftStore {
             }
         }
     }
+
+    #[minitrace::trace]
+    async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
+        match self
+            .raft_state
+            .read()
+            .await
+            .read_vote()
+            .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Read)
+        {
+            Err(err) => {
+                raft_metrics::storage::incr_raft_storage_fail("read_vote", false);
+                Err(err)
+            }
+            Ok(vote) => Ok(vote),
+        }
+    }
 }
 
 impl RaftLogStorage<TypeConfig> for RaftStore {
@@ -223,27 +240,10 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
     }
 
     #[minitrace::trace]
-    async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
-        match self
-            .raft_state
-            .read()
-            .await
-            .read_vote()
-            .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("read_vote", false);
-                Err(err)
-            }
-            Ok(vote) => Ok(vote),
-        }
-    }
-
-    #[minitrace::trace]
     async fn append<I>(
         &mut self,
         entries: I,
-        callback: LogFlushed<TypeConfig>,
+        callback: IOFlushed<TypeConfig>,
     ) -> Result<(), StorageError>
     where
         I: IntoIterator<Item = Entry> + OptionalSend,
@@ -277,7 +277,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             Ok(_) => Ok(()),
         };
 
-        callback.log_io_completed(res.map_err(|e| io::Error::new(ErrorKind::InvalidData, e)));
+        callback.io_completed(res.map_err(|e| io::Error::new(ErrorKind::InvalidData, e)));
 
         info!(
             "RaftStore::append([{}, {}]): done",
