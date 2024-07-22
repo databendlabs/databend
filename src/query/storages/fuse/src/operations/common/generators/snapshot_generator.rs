@@ -53,35 +53,13 @@ pub trait SnapshotGenerator {
     ) -> Result<TableSnapshot> {
         let mut snapshot =
             self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
-
-        // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
-        // both of them are allowed to be committed here.
-        if base_snapshot_timestamp
-            .as_ref()
-            // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
-            .is_some_and(|base| base < snapshot.least_base_snapshot_timestamp.as_ref().unwrap())
-        {
-            return Err(ErrorCode::TransactionTimeout(format!(
-                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
-                base_snapshot_timestamp.unwrap(),
-                snapshot.timestamp,
-            )));
-        }
-
-        let has_pending_transactional_mutations = {
-            let guard = txn_mgr.lock();
-            // NOTE:
-            // When generating a new snapshot for a mutation of table for the first time,
-            // there is no buffered table ID inside txn_mgr for this table.
-            guard.is_active() && guard.get_table_from_buffer_by_id(table_id).is_some()
-        };
-
-        if has_pending_transactional_mutations {
-            // Adjust the `prev_snapshot_id` of the newly created snapshot to match the
-            // `prev_snapshot_id` of the table when it first appeared in the transaction.
-            let previous_of_previous = previous.as_ref().and_then(|prev| prev.prev_snapshot_id);
-            snapshot.prev_snapshot_id = previous_of_previous;
-        }
+        decorate_snapshot(
+            &mut snapshot,
+            base_snapshot_timestamp,
+            txn_mgr,
+            previous,
+            table_id,
+        )?;
         Ok(snapshot)
     }
 
@@ -92,4 +70,42 @@ pub trait SnapshotGenerator {
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
     ) -> Result<TableSnapshot>;
+}
+
+pub fn decorate_snapshot(
+    snapshot: &mut TableSnapshot,
+    base_snapshot_timestamp: Option<DateTime<Utc>>,
+    txn_mgr: TxnManagerRef,
+    previous: Option<Arc<TableSnapshot>>,
+    table_id: u64,
+) -> Result<()> {
+    // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
+    // both of them are allowed to be committed here.
+    if base_snapshot_timestamp
+        .as_ref()
+        // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
+        .is_some_and(|base| base < snapshot.least_base_snapshot_timestamp.as_ref().unwrap())
+    {
+        return Err(ErrorCode::TransactionTimeout(format!(
+            "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
+            base_snapshot_timestamp.unwrap(),
+            snapshot.timestamp,
+        )));
+    }
+
+    let has_pending_transactional_mutations = {
+        let guard = txn_mgr.lock();
+        // NOTE:
+        // When generating a new snapshot for a mutation of table for the first time,
+        // there is no buffered table ID inside txn_mgr for this table.
+        guard.is_active() && guard.get_table_from_buffer_by_id(table_id).is_some()
+    };
+
+    if has_pending_transactional_mutations {
+        // Adjust the `prev_snapshot_id` of the newly created snapshot to match the
+        // `prev_snapshot_id` of the table when it first appeared in the transaction.
+        let previous_of_previous = previous.as_ref().and_then(|prev| prev.prev_snapshot_id);
+        snapshot.prev_snapshot_id = previous_of_previous;
+    }
+    Ok(())
 }

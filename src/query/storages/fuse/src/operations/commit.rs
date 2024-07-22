@@ -54,6 +54,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use super::decorate_snapshot;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -312,6 +313,10 @@ impl FuseTable {
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
+        let base_snapshot_timestamp = ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(self.get_id(), base_snapshot.timestamp);
 
         loop {
             let mut snapshot_tobe_committed = TableSnapshot::from_previous(
@@ -333,6 +338,14 @@ impl FuseTable {
             .await?;
             snapshot_tobe_committed.segments = segments_tobe_committed;
             snapshot_tobe_committed.summary = statistics_tobe_committed;
+
+            decorate_snapshot(
+                &mut snapshot_tobe_committed,
+                base_snapshot_timestamp,
+                ctx.txn_mgr(),
+                Some(base_snapshot.clone()),
+                self.get_id(),
+            )?;
 
             match Self::commit_to_meta_server(
                 ctx.as_ref(),
