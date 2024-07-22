@@ -144,6 +144,6 @@ impl PhysicalPlanBuilder {
 
 #[derive(Clone)]
 pub struct DataMutationBuildInfo {
-    pub table_snapshot: Arc<TableSnapshot>,
+    pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
 }

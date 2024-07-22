@@ -211,8 +211,10 @@ impl PipelineBuilder {
             )
         });
 
-        let snapshot_gen =
-            MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);
+        let snapshot_gen = MutationGenerator::new(
+            Some(recluster_sink.snapshot.clone()),
+            MutationKind::Recluster,
+        );
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,

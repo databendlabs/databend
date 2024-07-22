@@ -213,7 +213,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
-    snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);
+    snapshot_1.summary =
+        merge_statistics(snapshot_0.summary.clone(), &segments_v3[0].1.summary, None);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1
@@ -229,7 +230,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1, None);
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
-    snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);
+    snapshot_2.summary =
+        merge_statistics(snapshot_1.summary.clone(), &segments_v3[1].1.summary, None);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_2

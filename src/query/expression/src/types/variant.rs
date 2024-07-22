@@ -154,7 +154,6 @@ impl ValueType for VariantType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.put_slice(b"");
         builder.commit_row();
     }
 
