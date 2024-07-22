@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 #![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
