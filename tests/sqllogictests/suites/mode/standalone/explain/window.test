@@ -55,7 +55,7 @@ CompoundBlockOperator(Project) × 1
           Transform Window × 1
             TransformWindowPartitionSort × 1
               TransformWindowPartitionSpillReader × 1
-                TransformWindowParitionBucket × 1
+                TransformWindowPartitionBucket × 1
                   TransformWindowPartitionSpillWriter × 1
                     TransformWindowPartitionScatter × 1
                       DeserializeDataTransform × 1
@@ -78,7 +78,7 @@ CompoundBlockOperator(Project) × 1
             Transform Window × 1
               TransformWindowPartitionSort × 1
                 TransformWindowPartitionSpillReader × 1
-                  TransformWindowParitionBucket × 1
+                  TransformWindowPartitionBucket × 1
                     TransformWindowPartitionSpillWriter × 1
                       TransformWindowPartitionScatter × 1
                         DeserializeDataTransform × 1
@@ -367,7 +367,7 @@ CompoundBlockOperator(Project) × 1
     Transform Window × 1
       TransformWindowPartitionSort × 1
         TransformWindowPartitionSpillReader × 1
-          TransformWindowParitionBucket × 1
+          TransformWindowPartitionBucket × 1
             TransformWindowPartitionSpillWriter × 1
               TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
@@ -386,7 +386,7 @@ CompoundBlockOperator(Project) × 1
     Transform Window × 1
       TransformWindowPartitionSort × 1
         TransformWindowPartitionSpillReader × 1
-          TransformWindowParitionBucket × 1
+          TransformWindowPartitionBucket × 1
             TransformWindowPartitionSpillWriter × 1
               TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
@@ -406,7 +406,7 @@ CompoundBlockOperator(Project) × 1
     Transform Window × 1
       TransformWindowPartitionSort × 1
         TransformWindowPartitionSpillReader × 1
-          TransformWindowParitionBucket × 1
+          TransformWindowPartitionBucket × 1
             TransformWindowPartitionSpillWriter × 1
               TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
@@ -421,7 +421,7 @@ CompoundBlockOperator(Project) × 1
     Transform Window × 1
       TransformWindowPartitionSort × 1
         TransformWindowPartitionSpillReader × 1
-          TransformWindowParitionBucket × 1
+          TransformWindowPartitionBucket × 1
             TransformWindowPartitionSpillWriter × 1
               TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
@@ -436,7 +436,7 @@ CompoundBlockOperator(Project) × 1
     Transform Window × 1
       TransformWindowPartitionSort × 1
         TransformWindowPartitionSpillReader × 1
-          TransformWindowParitionBucket × 1
+          TransformWindowPartitionBucket × 1
             TransformWindowPartitionSpillWriter × 1
               TransformWindowPartitionScatter × 1
                 DeserializeDataTransform × 1
@@ -457,7 +457,7 @@ CompoundBlockOperator(Project) × 1
               Transform Window × 1
                 TransformWindowPartitionSort × 1
                   TransformWindowPartitionSpillReader × 1
-                    TransformWindowParitionBucket × 1
+                    TransformWindowPartitionBucket × 1
                       TransformWindowPartitionSpillWriter × 1
                         TransformWindowPartitionScatter × 1
                           DeserializeDataTransform × 1
@@ -477,7 +477,7 @@ CompoundBlockOperator(Project) × 1
               Transform Window × 1
                 TransformWindowPartitionSort × 1
                   TransformWindowPartitionSpillReader × 1
-                    TransformWindowParitionBucket × 1
+                    TransformWindowPartitionBucket × 1
                       TransformWindowPartitionSpillWriter × 1
                         TransformWindowPartitionScatter × 1
                           TransformFilter × 1
@@ -542,7 +542,7 @@ CompoundBlockOperator(Project) × 1
       Transform Window × 1
         TransformWindowPartitionSort × 1
           TransformWindowPartitionSpillReader × 1
-            TransformWindowParitionBucket × 1
+            TransformWindowPartitionBucket × 1
               TransformWindowPartitionSpillWriter × 1
                 TransformWindowPartitionScatter × 1
                   DeserializeDataTransform × 1
@@ -575,7 +575,7 @@ CompoundBlockOperator(Project) × 1
       Transform Window × 1
         TransformWindowPartitionSort × 1
           TransformWindowPartitionSpillReader × 1
-            TransformWindowParitionBucket × 1
+            TransformWindowPartitionBucket × 1
               TransformWindowPartitionSpillWriter × 1
                 TransformWindowPartitionScatter × 1
                   CompoundBlockOperator(Map) × 1
