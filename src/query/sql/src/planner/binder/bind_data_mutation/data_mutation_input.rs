@@ -46,6 +46,7 @@ use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::UdfRewriter;
 use crate::Visibility;
 
 pub enum DataMutationInput {
@@ -276,11 +277,17 @@ impl DataMutationInput {
                     input_type.clone(),
                 )?;
 
-                let s_expr = binder
+                let mut s_expr = binder
                     .process_filter(filter, target_s_expr, &mut bind_context)
                     .await?;
 
-                // Support window, aggregate, udf functions.
+                // rewrite udf for interpreter udf
+                let mut udf_rewriter = UdfRewriter::new(binder.metadata.clone(), true);
+                s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+                // rewrite udf for server udf
+                let mut udf_rewriter = UdfRewriter::new(binder.metadata.clone(), false);
+                s_expr = udf_rewriter.rewrite(&s_expr)?;
 
                 let mut required_columns = ColumnSet::new();
                 // Add target table row_id column to required columns.
