@@ -170,7 +170,7 @@ impl ReplaceInterpreter {
             .ctx
             .txn_mgr()
             .lock()
-            .get_base_snapshot_timestamp(table_info.ident.table_id, base_snapshot.timestamp);
+            .get_base_snapshot_timestamp(table_info.ident.table_id, base_snapshot.timestamp());
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));

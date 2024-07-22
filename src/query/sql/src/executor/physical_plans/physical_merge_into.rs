@@ -456,7 +456,7 @@ impl PhysicalPlanBuilder {
             .ctx
             .txn_mgr()
             .lock()
-            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp);
+            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp());
         let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
@@ -489,7 +489,7 @@ impl PhysicalPlanBuilder {
             .ctx
             .txn_mgr()
             .lock()
-            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp);
+            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp());
 
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {

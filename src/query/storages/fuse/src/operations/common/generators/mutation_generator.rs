@@ -98,14 +98,13 @@ impl SnapshotGenerator for MutationGenerator {
                         prev_table_seq,
                         &previous.timestamp(),
                         previous.snapshot_id(),
-                        &previous.least_base_snapshot_timestamp,
+                        &previous.least_base_snapshot_timestamp(),
                         schema,
                         new_summary,
                         new_segments,
                         cluster_key_meta,
-                        previous.table_statistics_location.clone(),
-                        self.transaction_time_limit_in_hours,
                         previous.table_statistics_location(),
+                        self.transaction_time_limit_in_hours,
                     );
 
                     if matches!(self.mutation_kind, MutationKind::Compact) {

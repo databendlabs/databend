@@ -62,6 +62,7 @@ pub trait TableSnapshotAccessor {
     fn timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
     fn snapshot_id(&self) -> Option<(SnapshotId, FormatVersion)>;
     fn table_statistics_location(&self) -> Option<String>;
+    fn least_base_snapshot_timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>>;
 }
 
 impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
@@ -89,5 +90,10 @@ impl TableSnapshotAccessor for Option<Arc<TableSnapshot>> {
     fn table_statistics_location(&self) -> Option<String> {
         self.as_ref()
             .and_then(|snapshot| snapshot.table_statistics_location.clone())
+    }
+
+    fn least_base_snapshot_timestamp(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.as_ref()
+            .and_then(|snapshot| snapshot.least_base_snapshot_timestamp)
     }
 }
