@@ -52,28 +52,15 @@ static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
-    part_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
-        Self {
-            prefix,
-            part_prefix: "".to_string(),
-        }
-    }
-
-    pub fn with_part_prefix(mut self, part_prefix: String) -> Self {
-        self.part_prefix = part_prefix;
-        self
+        Self { prefix }
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
-    }
-
-    pub fn part_prefix(&self) -> &str {
-        &self.part_prefix
     }
 
     pub fn gen_block_location(
@@ -82,10 +69,9 @@ impl TableMetaLocationGenerator {
     ) -> (Location, Uuid) {
         let part_uuid = uuid_from_date_time(base_snapshot_timestamp.unwrap_or_default());
         let location_path = format!(
-            "{}/{}/g{}{}_v{}.parquet",
+            "{}/{}/g{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
-            &self.part_prefix,
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );

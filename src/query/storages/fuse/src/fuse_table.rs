@@ -210,10 +210,7 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
-        let part_prefix = table_info.meta.part_prefix.clone();
-
-        let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
