@@ -316,19 +316,17 @@ impl Processor for SinkAnalyzeState {
             let mut finished_count = 0;
             let receivers = self.histogram_info_receivers.clone();
             for (id, receiver) in receivers.iter() {
-                dbg!(id);
                 if let Ok(res) = receiver.recv().await {
-                    dbg!("1");
                     self.create_histogram(*id, res).await?;
                 } else {
                     finished_count += 1;
                 }
             }
-            dbg!(finished_count);
             if finished_count == self.histogram_info_receivers.len() {
                 self.finished = true;
             }
-        } if let Some(data_block) = self.input_data.take() {
+        }
+        if let Some(data_block) = self.input_data.take() {
             self.merge_analyze_states(data_block.clone()).await?;
         } else {
             let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
