@@ -7,4 +7,4 @@ select * from (select name from system.tables where database='system') where nam
 tables
 
 statement error 1006
-select name from system.tables where database='system' or table_id='xx'
+select name from system.tables where database='system' and table_id='xx'
