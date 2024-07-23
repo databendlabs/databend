@@ -13,7 +13,7 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-version = "0.19.4"
+version = "0.19.5"
 license = "Apache-2.0"
 authors = ["Databend Authors <opensource@datafuselabs.com>"]
 categories = ["database"]
@@ -21,10 +21,10 @@ keywords = ["databend", "database"]
 repository = "https://github.com/datafuselabs/bendsql"
 
 [workspace.dependencies]
-databend-client = { path = "core", version = "0.19.4" }
-databend-driver = { path = "driver", version = "0.19.4" }
-databend-driver-core = { path = "sql", version = "0.19.4" }
-databend-driver-macros = { path = "macros", version = "0.19.4" }
+databend-client = { path = "core", version = "0.19.5" }
+databend-driver = { path = "driver", version = "0.19.5" }
+databend-driver-core = { path = "sql", version = "0.19.5" }
+databend-driver-macros = { path = "macros", version = "0.19.5" }
 
 [patch.crates-io]
 pyo3-asyncio = { git = "https://github.com/everpcpc/pyo3-asyncio", rev = "42af887" }
