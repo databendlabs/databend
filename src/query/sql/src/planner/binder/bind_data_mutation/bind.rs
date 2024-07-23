@@ -205,7 +205,7 @@ impl Binder {
 
             // If exists update clause, we need to read all columns of target table.
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
-                let column_index = self.find_column_index(&target_column_entries, field.name())?;
+                let column_index = Self::find_column_index(&target_column_entries, field.name())?;
                 field_index_map.insert(idx, column_index.to_string());
             }
             update_row_version
@@ -216,7 +216,7 @@ impl Binder {
         if table.change_tracking_enabled() && mutation_type != DataMutationType::InsertOnly {
             for stream_column in table.stream_columns() {
                 let column_index =
-                    self.find_column_index(&target_column_entries, stream_column.column_name())?;
+                    Self::find_column_index(&target_column_entries, stream_column.column_name())?;
                 required_columns.insert(column_index);
             }
         }
@@ -492,11 +492,7 @@ impl Binder {
         }
     }
 
-    fn find_column_index(
-        &self,
-        column_entries: &Vec<ColumnEntry>,
-        col_name: &str,
-    ) -> Result<usize> {
+    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<usize> {
         for column_entry in column_entries {
             if col_name == column_entry.name() {
                 return Ok(column_entry.index());

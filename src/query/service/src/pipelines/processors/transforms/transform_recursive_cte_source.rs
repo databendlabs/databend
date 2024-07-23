@@ -336,6 +336,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::MergeIntoSplit(_)
         | PhysicalPlan::MergeIntoManipulate(_)
         | PhysicalPlan::MergeIntoOrganize(_)
+        | PhysicalPlan::AddStreamColumn(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::ReclusterSource(_)

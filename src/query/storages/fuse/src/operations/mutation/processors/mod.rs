@@ -13,10 +13,7 @@
 // limitations under the License.
 
 mod compact_source;
-mod mutation_source;
 mod recluster_aggregator;
 
 pub use compact_source::CompactSource;
-pub use mutation_source::MutationAction;
-pub use mutation_source::MutationSource;
 pub use recluster_aggregator::ReclusterAggregator;

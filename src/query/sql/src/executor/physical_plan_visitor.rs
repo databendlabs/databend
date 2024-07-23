@@ -14,6 +14,7 @@
 
 use databend_common_exception::Result;
 
+use super::physical_plans::AddStreamColumn;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
 use super::physical_plans::MergeIntoManipulate;
@@ -100,6 +101,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
             PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
             PhysicalPlan::MergeIntoOrganize(plan) => self.replace_merge_into_organize(plan),
+            PhysicalPlan::AddStreamColumn(plan) => self.replace_add_stream_column(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
@@ -515,6 +517,14 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_add_stream_column(&mut self, plan: &AddStreamColumn) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
@@ -727,6 +737,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoOrganize(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AddStreamColumn(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

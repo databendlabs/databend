@@ -44,6 +44,7 @@ use crate::binder::wrap_cast;
 use crate::binder::DataMutationInputType;
 use crate::binder::DataMutationType;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -134,6 +135,13 @@ impl PhysicalPlanBuilder {
         } = merge_into;
 
         let settings = self.ctx.get_settings();
+
+        let table = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        let table_info = table.get_table_info();
+        let table_name = table_name.clone();
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, required).await?;
@@ -228,6 +236,17 @@ impl PhysicalPlanBuilder {
             });
         }
 
+        // Update stream columns if needed.
+        if table.change_tracking_enabled() {
+            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+                &self.metadata,
+                plan,
+                *target_table_index,
+                table_info.ident.seq,
+                false,
+            )?));
+        }
+
         if let Some(merge_into_split_idx) = merge_into_split_idx {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
@@ -271,10 +290,13 @@ impl PhysicalPlanBuilder {
                 })
                 .collect();
 
-            let source = plan.try_find_data_source(*target_table_index);
-            assert!(source.is_some());
-            let source_info = source.cloned().unwrap();
-            let table_schema = source_info.source_info.schema();
+            let source = self
+                .metadata
+                .read()
+                .get_table_source(target_table_index)
+                .unwrap()
+                .clone();
+            let table_schema = source.source_info.schema();
             let cols_to_fetch = PhysicalPlanBuilder::build_projection(
                 &meta_data.read(),
                 &table_schema,
@@ -287,7 +309,7 @@ impl PhysicalPlanBuilder {
             plan = PhysicalPlan::RowFetch(RowFetch {
                 plan_id: 0,
                 input: Box::new(plan),
-                source: Box::new(source_info),
+                source: Box::new(source),
                 row_id_col_offset: row_id_offset,
                 cols_to_fetch,
                 fetched_fields,
@@ -297,13 +319,6 @@ impl PhysicalPlanBuilder {
         }
 
         let output_schema = plan.output_schema()?;
-
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
-        let table_info = table.get_table_info();
-        let table_name = table_name.clone();
 
         // transform unmatched for insert
         // reference to func `build_eval_scalar`

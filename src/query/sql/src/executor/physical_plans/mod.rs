@@ -28,6 +28,8 @@ mod physical_compact_source;
 pub use physical_compact_source::CompactSource;
 mod physical_constant_table_scan;
 pub use physical_constant_table_scan::ConstantTableScan;
+mod physical_add_stream_column;
+pub use physical_add_stream_column::AddStreamColumn;
 mod physical_copy_into_table;
 pub use physical_copy_into_table::*;
 mod physical_cte_scan;

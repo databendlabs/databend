@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod builder_add_stream_column;
 mod builder_aggregate;
 mod builder_append_table;
 mod builder_async_function;
@@ -46,9 +47,6 @@ mod builder_window;
 mod merge_into_join_optimizations;
 mod transform_builder;
 
-// mod pipeline_helper;
-
 pub use builder_replace_into::RawValueSource;
 pub use builder_replace_into::ValueSource;
 pub use builder_sort::SortPipelineBuilder;
-// use pipeline_helper::PipelineBuilderHelper;

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
+use super::physical_plans::AddStreamColumn;
 use super::physical_plans::AsyncFunction;
 use super::physical_plans::MergeIntoManipulate;
 use super::physical_plans::MergeIntoOrganize;
@@ -113,6 +114,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
                 write!(f, "{}", merge_into_organize)?
             }
+            PhysicalPlan::AddStreamColumn(add_stream_column) => write!(f, "{}", add_stream_column)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
                 write!(f, "{}", recursive_cte_scan)?
@@ -532,6 +534,12 @@ impl Display for MergeIntoManipulate {
 impl Display for MergeIntoOrganize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoOrganize")
+    }
+}
+
+impl Display for AddStreamColumn {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "AddStreamColumn")
     }
 }
 

@@ -21,6 +21,7 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
 use databend_common_expression::display::display_tuple_field_name;
@@ -60,6 +61,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     /// Table column indexes that are lazy materialized.
     table_lazy_columns: HashMap<IndexType, ColumnSet>,
+    table_source: HashMap<IndexType, DataSourcePlan>,
     retained_columns: HashSet<IndexType>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
@@ -140,6 +142,14 @@ impl Metadata {
 
     pub fn get_table_lazy_columns(&self, table_index: &IndexType) -> Option<ColumnSet> {
         self.table_lazy_columns.get(table_index).cloned()
+    }
+
+    pub fn set_table_source(&mut self, table_index: IndexType, source: DataSourcePlan) {
+        self.table_source.insert(table_index, source);
+    }
+
+    pub fn get_table_source(&self, table_index: &IndexType) -> Option<&DataSourcePlan> {
+        self.table_source.get(table_index)
     }
 
     pub fn is_lazy_column(&self, index: usize) -> bool {

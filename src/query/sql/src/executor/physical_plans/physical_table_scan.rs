@@ -246,6 +246,12 @@ impl PhysicalPlanBuilder {
         } else {
             Some(project_internal_columns)
         };
+
+        if scan.is_lazy_table {
+            let mut metadata = self.metadata.write();
+            metadata.set_table_source(scan.table_index, source.clone());
+        }
+
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,
