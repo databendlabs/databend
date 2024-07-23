@@ -21,6 +21,7 @@ use std::sync::Arc;
 use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::table::Table;
 use databend_common_expression::display::display_tuple_field_name;
@@ -60,6 +61,8 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     /// Columns that are lazy materialized.
     lazy_columns: HashSet<IndexType>,
+    data_mutation_table_index: HashSet<IndexType>,
+    table_source: HashMap<IndexType, DataSourcePlan>,
     /// Columns that are used for compute lazy materialized.
     /// If outer query match the lazy materialized rule but inner query doesn't,
     /// we need add cols that inner query required to non_lazy_columns
@@ -139,6 +142,22 @@ impl Metadata {
     pub fn add_non_lazy_columns(&mut self, indices: HashSet<usize>) {
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.non_lazy_columns.extend(indices);
+    }
+
+    pub fn add_data_mutation_table_index(&mut self, table_index: IndexType) {
+        self.data_mutation_table_index.insert(table_index);
+    }
+
+    pub fn is_data_mutation_table(&self, table_index: IndexType) -> bool {
+        self.data_mutation_table_index.contains(&table_index)
+    }
+
+    pub fn set_table_source(&mut self, table_index: IndexType, source: DataSourcePlan) {
+        self.table_source.insert(table_index, source);
+    }
+
+    pub fn get_table_source(&self, table_index: &IndexType) -> Option<&DataSourcePlan> {
+        self.table_source.get(table_index)
     }
 
     pub fn lazy_columns(&self) -> &HashSet<usize> {

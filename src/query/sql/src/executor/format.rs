@@ -26,6 +26,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregateFunctionDesc;
@@ -255,6 +256,7 @@ fn to_format_tree(
             format_merge_into_manipulate(plan, metadata, profs)
         }
         PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
+        PhysicalPlan::AddStreamColumn(plan) => format_add_stream_column(plan, metadata, profs),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
             Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
@@ -501,6 +503,14 @@ fn format_merge_into_manipulate(
 
 fn format_merge_into_organize(
     plan: &MergeIntoOrganize,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
+}
+
+fn format_add_stream_column(
+    plan: &AddStreamColumn,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {

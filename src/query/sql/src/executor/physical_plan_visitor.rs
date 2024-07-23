@@ -14,16 +14,12 @@
 
 use databend_common_exception::Result;
 
-use super::physical_plans::CacheScan;
-use super::physical_plans::ExpressionScan;
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
-use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -45,16 +41,21 @@ use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::ExchangeSink;
 use crate::executor::physical_plans::ExchangeSource;
+use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -103,6 +104,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
             PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
             PhysicalPlan::MergeIntoOrganize(plan) => self.replace_merge_into_organize(plan),
+            PhysicalPlan::AddStreamColumn(plan) => self.replace_add_stream_column(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
@@ -538,6 +540,14 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_add_stream_column(&mut self, plan: &AddStreamColumn) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
     fn replace_udf(&mut self, plan: &Udf) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::Udf(Udf {
@@ -741,6 +751,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeIntoOrganize(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::AddStreamColumn(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCte(plan) => {

@@ -18,14 +18,12 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
@@ -46,6 +44,9 @@ use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -116,6 +117,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
                 write!(f, "{}", merge_into_organize)?
             }
+            PhysicalPlan::AddStreamColumn(add_stream_column) => write!(f, "{}", add_stream_column)?,
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::RecursiveCteScan(recursive_cte_scan) => {
                 write!(f, "{}", recursive_cte_scan)?
@@ -542,6 +544,12 @@ impl Display for MergeIntoManipulate {
 impl Display for MergeIntoOrganize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MergeIntoOrganize")
+    }
+}
+
+impl Display for AddStreamColumn {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "AddStreamColumn")
     }
 }
 

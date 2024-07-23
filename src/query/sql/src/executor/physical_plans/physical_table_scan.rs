@@ -238,6 +238,12 @@ impl PhysicalPlanBuilder {
         } else {
             Some(project_internal_columns)
         };
+
+        if metadata.is_data_mutation_table(scan.table_index) {
+            let mut metadata = self.metadata.write();
+            metadata.set_table_source(scan.table_index, source.clone());
+        }
+
         Ok(PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,

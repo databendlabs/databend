@@ -200,6 +200,9 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
                 self.build_merge_into_organize(merge_into_organize)
             }
+            PhysicalPlan::AddStreamColumn(add_stream_column) => {
+                self.build_add_stream_column(add_stream_column)
+            }
 
             // Commit.
             PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),

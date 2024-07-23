@@ -22,9 +22,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -58,6 +56,9 @@ use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::ReclusterSink;
@@ -126,6 +127,7 @@ pub enum PhysicalPlan {
     MergeIntoSplit(Box<MergeIntoSplit>),
     MergeIntoManipulate(Box<MergeIntoManipulate>),
     MergeIntoOrganize(Box<MergeIntoOrganize>),
+    AddStreamColumn(Box<AddStreamColumn>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -332,6 +334,11 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::AddStreamColumn(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
             PhysicalPlan::CommitSink(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -445,6 +452,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
             PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
             PhysicalPlan::MergeIntoOrganize(v) => v.plan_id,
+            PhysicalPlan::AddStreamColumn(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
             PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
@@ -502,6 +510,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoOrganize(plan) => plan.output_schema(),
+            PhysicalPlan::AddStreamColumn(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -564,6 +573,7 @@ impl PhysicalPlan {
             PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
             PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
             PhysicalPlan::MergeIntoOrganize(_) => "MergeIntoOrganize".to_string(),
+            PhysicalPlan::AddStreamColumn(_) => "AddStreamColumn".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
@@ -638,6 +648,7 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::MergeIntoOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -694,6 +705,7 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeIntoSplit(_)
             | PhysicalPlan::MergeIntoManipulate(_)
             | PhysicalPlan::MergeIntoOrganize(_)
+            | PhysicalPlan::AddStreamColumn(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
@@ -712,44 +724,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkMerge(_)
             | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
-        }
-    }
-
-    pub fn try_find_data_source(&self, table_index: usize) -> Option<&DataSourcePlan> {
-        match self {
-            PhysicalPlan::TableScan(scan) => {
-                if let Some(index) = scan.table_index
-                    && index == table_index
-                {
-                    Some(&scan.source)
-                } else {
-                    None
-                }
-            }
-            PhysicalPlan::HashJoin(hash_join) => {
-                let left = hash_join.probe.try_find_data_source(table_index);
-                if left.is_some() {
-                    return left;
-                }
-                let right = hash_join.build.try_find_data_source(table_index);
-                right
-            }
-            PhysicalPlan::Filter(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::EvalScalar(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::Window(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::Sort(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::Limit(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::Exchange(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::ExchangeSink(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::DistributedInsertSelect(plan) => {
-                plan.input.try_find_data_source(table_index)
-            }
-            PhysicalPlan::ProjectSet(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::RowFetch(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::Udf(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_data_source(table_index),
-            PhysicalPlan::MergeIntoSplit(plan) => plan.input.try_find_data_source(table_index),
-            _ => None,
         }
     }
 

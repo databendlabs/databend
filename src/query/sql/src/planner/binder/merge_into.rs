@@ -121,6 +121,10 @@ impl Binder {
             ));
         }
 
+        self.metadata
+            .write()
+            .add_data_mutation_table_index(merge_into_plan.target_table_index);
+
         Ok(Plan::MergeInto {
             s_expr: Box::new(s_expr),
             schema: merge_into_plan.schema(),
@@ -509,7 +513,7 @@ impl Binder {
         // if true, read all columns of target table
         if has_update {
             for (idx, field) in table.schema_with_stream().fields().iter().enumerate() {
-                let used_idx = self.find_column_index(&column_entries, field.name())?;
+                let used_idx = Self::find_column_index(&column_entries, field.name())?;
                 columns_set.insert(used_idx);
                 field_index_map.insert(idx, used_idx.to_string());
             }
@@ -759,11 +763,7 @@ impl Binder {
         }
     }
 
-    fn find_column_index(
-        &self,
-        column_entries: &Vec<ColumnEntry>,
-        col_name: &str,
-    ) -> Result<usize> {
+    pub fn find_column_index(column_entries: &Vec<ColumnEntry>, col_name: &str) -> Result<usize> {
         for column_entry in column_entries {
             if col_name == column_entry.name() {
                 return Ok(column_entry.index());
