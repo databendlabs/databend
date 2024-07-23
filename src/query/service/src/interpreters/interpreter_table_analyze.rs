@@ -214,9 +214,13 @@ impl Interpreter for AnalyzeTableInterpreter {
             for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
                 info!("Analyze histogram via sql {:?}", sql);
                 let (histogram_plan, bind_context) = self.plan_sql(sql).await?;
-                let mut histogram_build_res =
-                    build_query_pipeline(&self.ctx, &bind_context.columns, &histogram_plan, false)
-                        .await?;
+                let mut histogram_build_res = build_query_pipeline(
+                    &QueryContext::create_from(self.ctx.clone()),
+                    &bind_context.columns,
+                    &histogram_plan,
+                    false,
+                )
+                .await?;
                 let (tx, rx) = async_channel::unbounded();
                 histogram_build_res.main_pipeline.add_sink(|input_port| {
                     Ok(ProcessorPtr::create(HistogramInfoSink::create(

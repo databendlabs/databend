@@ -90,7 +90,6 @@ struct SinkAnalyzeState {
     database: String,
     table: String,
     snapshot_id: SnapshotId,
-    collect_histogram_info: bool,
     histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
     finished: bool,
@@ -119,7 +118,6 @@ impl SinkAnalyzeState {
             database: database.to_string(),
             table: table.to_string(),
             snapshot_id,
-            collect_histogram_info: false,
             histogram_info_receivers,
             input_data: None,
             finished: false,
@@ -284,6 +282,10 @@ impl Processor for SinkAnalyzeState {
     }
 
     fn event(&mut self) -> Result<Event> {
+        if !self.finished {
+            return Ok(Event::Async);
+        }
+
         if self.input_data.is_some() {
             if !self.input_port.has_data() {
                 self.input_port.set_need_data();
@@ -292,10 +294,6 @@ impl Processor for SinkAnalyzeState {
         }
 
         if self.input_port.is_finished() {
-            if !self.finished {
-                return Ok(Event::Async);
-            }
-
             if !self.commited {
                 return Ok(Event::Async);
             }
@@ -305,7 +303,6 @@ impl Processor for SinkAnalyzeState {
 
         if self.input_port.has_data() {
             self.input_data = Some(self.input_port.pull_data().unwrap()?);
-            self.input_port.set_need_data();
             return Ok(Event::Async);
         }
 
@@ -315,24 +312,24 @@ impl Processor for SinkAnalyzeState {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if !self.collect_histogram_info {
-            if let Some(data_block) = self.input_data.take() {
-                self.merge_analyze_states(data_block.clone()).await?;
-                self.collect_histogram_info = true;
-            }
-        } else if !self.finished {
+        if !self.finished {
             let mut finished_count = 0;
             let receivers = self.histogram_info_receivers.clone();
             for (id, receiver) in receivers.iter() {
+                dbg!(id);
                 if let Ok(res) = receiver.recv().await {
+                    dbg!("1");
                     self.create_histogram(*id, res).await?;
                 } else {
                     finished_count += 1;
                 }
             }
+            dbg!(finished_count);
             if finished_count == self.histogram_info_receivers.len() {
                 self.finished = true;
             }
+        } if let Some(data_block) = self.input_data.take() {
+            self.merge_analyze_states(data_block.clone()).await?;
         } else {
             let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
             loop {
