@@ -53,7 +53,7 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
     BorshSerialize + BorshDeserialize + Send + Sync + 'static
 {
     fn new() -> Self;
-    fn change(&self, other: V::ScalarRef<'_>) -> bool;
+    fn change(&self, other: &V::ScalarRef<'_>) -> bool;
     fn update(&mut self, other: V::ScalarRef<'_>, arg: A::ScalarRef<'_>);
     fn add_batch(
         &mut self,
@@ -95,9 +95,9 @@ where
         }
     }
 
-    fn change(&self, other: V::ScalarRef<'_>) -> bool {
+    fn change(&self, other: &V::ScalarRef<'_>) -> bool {
         match &self.data {
-            Some((val, _)) => C::change_if(V::to_scalar_ref(val), other),
+            Some((val, _)) => C::change_if(&V::to_scalar_ref(val), other),
             None => true,
         }
     }
@@ -126,7 +126,7 @@ where
                 .zip(bit.iter())
                 .filter_map(|(item, valid)| if valid { Some(item) } else { None })
                 .reduce(|acc, (row, val)| {
-                    if C::change_if(acc.1.clone(), val.clone()) {
+                    if C::change_if(&acc.1, &val) {
                         (row, val)
                     } else {
                         acc
@@ -136,7 +136,7 @@ where
             V::iter_column(val_col)
                 .enumerate()
                 .reduce(|acc, (row, val)| {
-                    if C::change_if(acc.1.clone(), val.clone()) {
+                    if C::change_if(&acc.1, &val) {
                         (row, val)
                     } else {
                         acc
@@ -145,7 +145,7 @@ where
         };
 
         if let Some((row, val)) = acc {
-            if self.change(val.clone()) {
+            if self.change(&val) {
                 self.update(val, A::index_column(arg_col, row).unwrap())
             }
         }
@@ -154,7 +154,7 @@ where
 
     fn merge_from(&mut self, rhs: Self) -> Result<()> {
         if let Some((r_val, r_arg)) = rhs.data {
-            if self.change(V::to_scalar_ref(&r_val)) {
+            if self.change(&V::to_scalar_ref(&r_val)) {
                 self.data = Some((r_val, r_arg));
             }
         }
@@ -163,7 +163,7 @@ where
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some((r_val, r_arg)) = &rhs.data {
-            if self.change(V::to_scalar_ref(r_val)) {
+            if self.change(&V::to_scalar_ref(r_val)) {
                 self.data = Some((r_val.to_owned(), r_arg.to_owned()));
             }
         }
@@ -254,7 +254,7 @@ where
             .for_each(|((row, val), place)| {
                 let addr = place.next(offset);
                 let state = addr.get::<State>();
-                if state.change(val.clone()) {
+                if state.change(&val) {
                     state.update(val, A::index_column(&arg_col, row).unwrap())
                 }
             });
@@ -267,7 +267,7 @@ where
         let state = place.get::<State>();
 
         let val = unsafe { V::index_column_unchecked(&val_col, row) };
-        if state.change(val.clone()) {
+        if state.change(&val) {
             state.update(val, A::index_column(&arg_col, row).unwrap())
         }
         Ok(())

@@ -63,7 +63,7 @@ macro_rules! with_compare_mapped_type {
 }
 
 pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
-    fn change_if(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool;
+    fn change_if(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool;
 }
 
 #[derive(Default)]
@@ -75,8 +75,8 @@ where
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
     #[inline]
-    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
-        l.partial_cmp(&r).unwrap_or(Ordering::Equal) == Ordering::Greater
+    fn change_if<'a>(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool {
+        matches!(l.partial_cmp(r), Some(Ordering::Greater))
     }
 }
 
@@ -89,8 +89,8 @@ where
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
     #[inline]
-    fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
-        l.partial_cmp(&r).unwrap_or(Ordering::Equal) == std::cmp::Ordering::Less
+    fn change_if<'a>(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool {
+        matches!(l.partial_cmp(r), Some(Ordering::Less))
     }
 }
 
@@ -99,7 +99,7 @@ pub struct CmpAny;
 
 impl<T: ValueType> ChangeIf<T> for CmpAny {
     #[inline]
-    fn change_if(_: T::ScalarRef<'_>, _: T::ScalarRef<'_>) -> bool {
+    fn change_if(_: &T::ScalarRef<'_>, _: &T::ScalarRef<'_>) -> bool {
         false
     }
 }
@@ -155,7 +155,7 @@ where
         if let Some(other) = other {
             match &self.value {
                 Some(v) => {
-                    if C::change_if(T::to_scalar_ref(v), other.clone()) {
+                    if C::change_if(&T::to_scalar_ref(v), &other) {
                         self.value = Some(T::to_owned_scalar(other));
                     }
                 }
@@ -172,40 +172,18 @@ where
             return Ok(());
         }
 
-        let column_iter = T::iter_column(column);
-
         if let Some(validity) = validity {
             if validity.unset_bits() == column_len {
                 return Ok(());
             }
 
-            // V::ScalarRef doesn't derive Default, so take the first value as default.
-            let mut v = unsafe { T::index_column_unchecked(column, 0) };
-            let mut has_v = validity.get_bit(0);
-
-            for (data, valid) in column_iter.skip(1).zip(validity.iter().skip(1)) {
-                if !valid {
-                    continue;
-                }
-                if !has_v {
-                    has_v = true;
-                    v = data.clone();
-                } else if C::change_if(v.clone(), data.clone()) {
-                    v = data.clone();
-                }
-            }
-
-            if has_v {
-                self.add(Some(v));
-            }
+            let v = T::iter_column(column)
+                .zip(validity.iter())
+                .filter_map(|(item, valid)| if valid { Some(item) } else { None })
+                .reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
+            self.add(v);
         } else {
-            let v = column_iter.reduce(|l, r| {
-                if !C::change_if(l.clone(), r.clone()) {
-                    l
-                } else {
-                    r
-                }
-            });
+            let v = T::iter_column(column).reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
             self.add(v);
         }
         Ok(())
