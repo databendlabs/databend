@@ -791,7 +791,11 @@ pub fn check_child_expr_in_subquery(
     op: &ComparisonOp,
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
-        ScalarExpr::BoundColumnRef(_) | ScalarExpr::FunctionCall(_) => {
+        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        ScalarExpr::FunctionCall(func) => {
+            for arg in &func.arguments {
+                let _ = check_child_expr_in_subquery(arg, op)?;
+            }
             Ok((child_expr.clone(), op != &ComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
