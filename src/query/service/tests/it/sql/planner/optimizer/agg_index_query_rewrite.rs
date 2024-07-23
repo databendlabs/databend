@@ -497,7 +497,7 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
         let meta = metadata.read();
         let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(0, &base_columns, &query, &[(
+        let result = agg_index::try_rewrite(0, "t", &base_columns, &query, &[(
             0,
             suite.index.to_string(),
             index,

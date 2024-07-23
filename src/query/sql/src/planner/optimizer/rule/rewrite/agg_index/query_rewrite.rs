@@ -13,40 +13,373 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use itertools::Itertools;
 use log::info;
 
-use crate::binder::split_conjunctions;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
-use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::SortItem;
-use crate::plans::UDFCall;
-use crate::plans::VisitorMut;
+use crate::ColumnBinding;
 use crate::ColumnEntry;
-use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::Visibility;
+
+pub fn try_rewrite(
+    table_index: IndexType,
+    table_name: &str,
+    base_columns: &[ColumnEntry],
+    s_expr: &SExpr,
+    index_plans: &[(u64, String, SExpr)],
+) -> Result<Option<SExpr>> {
+    if index_plans.is_empty() {
+        return Ok(None);
+    }
+
+    let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;
+    let agg_index_rewriter = AggIndexRewriter::new(query_info);
+
+    for (index_id, sql, view_s_expr) in index_plans.iter() {
+        let view_info = ViewInfo::new(table_index, table_name, base_columns, view_s_expr)?;
+        if let Some(result) =
+            agg_index_rewriter.try_rewrite_index(s_expr, *index_id, sql, &view_info)?
+        {
+            return Ok(Some(result));
+        }
+    }
+
+    Ok(None)
+}
+
+struct QueryInfo {
+    table_index: usize,
+
+    equi_classes: EquivalenceClasses,
+    range_classes: RangeClasses,
+    residual_classes: ResidualClasses,
+    sort_items: Option<Vec<SortItem>>,
+    aggregate: Option<Aggregate>,
+    column_map: HashMap<IndexType, ScalarExpr>,
+    column_display_map: HashMap<String, IndexType>,
+    output_cols: Vec<ScalarItem>,
+}
+
+impl QueryInfo {
+    fn new(
+        table_index: IndexType,
+        table_name: &str,
+        base_columns: &[ColumnEntry],
+        s_expr: &SExpr,
+    ) -> Result<QueryInfo> {
+        if let RelOperator::EvalScalar(eval) = s_expr.plan() {
+            let selection = eval;
+
+            let mut predicates: std::option::Option<&[ScalarExpr]> = None;
+            let mut sort_items = None;
+            let mut aggregate = None;
+            let mut column_map = HashMap::new();
+
+            for item in &eval.items {
+                column_map.insert(item.index, item.scalar.clone());
+            }
+
+            let mut s_expr = s_expr.child(0)?;
+            loop {
+                match s_expr.plan() {
+                    RelOperator::Aggregate(agg) => {
+                        if agg.grouping_sets.is_some() {
+                            return Err(ErrorCode::Internal("Grouping sets is not supported"));
+                        }
+
+                        aggregate = Some(agg.clone());
+                        for item in &agg.aggregate_functions {
+                            column_map.insert(item.index, item.scalar.clone());
+                        }
+                        for item in &agg.group_items {
+                            column_map.insert(item.index, item.scalar.clone());
+                        }
+                        let child = s_expr.child(0)?;
+                        if let RelOperator::EvalScalar(eval) = child.plan() {
+                            for item in &eval.items {
+                                column_map.insert(item.index, item.scalar.clone());
+                            }
+                            s_expr = child.child(0)?;
+                            continue;
+                        }
+                    }
+                    RelOperator::Sort(sort) => {
+                        sort_items = Some(sort.items.clone());
+                    }
+                    RelOperator::Filter(filter) => {
+                        predicates = Some(filter.predicates.as_ref());
+                    }
+                    RelOperator::Scan(scan) => {
+                        if let Some(prewhere) = &scan.prewhere {
+                            debug_assert!(predicates.is_none());
+                            predicates = Some(prewhere.predicates.as_ref());
+                        }
+                        // Finish the recursion.
+                        break;
+                    }
+                    _ => {}
+                }
+                s_expr = s_expr.child(0)?;
+            }
+
+            for base_column in base_columns {
+                let column_binding = ColumnBindingBuilder::new(
+                    base_column.name(),
+                    base_column.index(),
+                    Box::new(base_column.data_type()),
+                    Visibility::Visible,
+                )
+                .table_name(Some(table_name.to_string()))
+                .table_index(Some(table_index))
+                .build();
+
+                let column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                });
+                column_map.insert(base_column.index(), column);
+            }
+
+            let mut column_display_map = HashMap::new();
+            for (index, scalar) in column_map.iter() {
+                let display_name = format_scalar(scalar, &column_map);
+                if let Some(old_index) = column_display_map.get(&display_name) {
+                    if old_index < index {
+                        continue;
+                    }
+                }
+                column_display_map.insert(display_name, *index);
+            }
+
+            let mut preds_splitter = PredicatesSplitter::new();
+            let mut equi_classes = EquivalenceClasses::new();
+            let mut range_classes = RangeClasses::new();
+            let mut residual_classes = ResidualClasses::new();
+
+            if let Some(predicates) = predicates {
+                for pred in predicates {
+                    preds_splitter.split(pred, &column_map);
+                }
+
+                for equi_pred in &preds_splitter.equi_columns_preds {
+                    equi_classes.add_equivalence_class(&equi_pred.0, &equi_pred.1);
+                }
+                for range_pred in &preds_splitter.range_preds {
+                    range_classes.add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
+                }
+                for residual_pred in &preds_splitter.residual_preds {
+                    let display_name = format_scalar(residual_pred, &column_map);
+                    residual_classes.add_residual_pred(display_name, residual_pred);
+                }
+            }
+
+            let mut output_cols = Vec::with_capacity(selection.items.len());
+            for item in &selection.items {
+                let actual_scalar = actual_column_ref(&item.scalar, &column_map);
+                let actual_item = ScalarItem {
+                    index: item.index,
+                    scalar: actual_scalar.clone(),
+                };
+                output_cols.push(actual_item);
+            }
+
+            Ok(Self {
+                table_index,
+
+                equi_classes,
+                range_classes,
+                residual_classes,
+                aggregate,
+                sort_items,
+                column_map,
+                column_display_map,
+                output_cols,
+            })
+        } else {
+            unimplemented!();
+        }
+    }
+
+    // check whether the scalar can be computed from index columns.
+    fn check_output_cols(
+        &self,
+        scalar: &ScalarExpr,
+        index_output_cols: &HashMap<String, (ScalarExpr, bool)>,
+        new_selection: &mut HashSet<ScalarItem>,
+    ) -> Result<Option<ScalarExpr>> {
+        let display_name = format_scalar(scalar, &self.column_map);
+
+        if let Some((new_scalar, is_agg)) = index_output_cols.get(&display_name) {
+            if let Some(index) = self.column_display_map.get(&display_name) {
+                let new_item = ScalarItem {
+                    index: *index,
+                    scalar: new_scalar.clone(),
+                };
+                new_selection.insert(new_item);
+            }
+            // agg function can't used
+            if *is_agg {
+                return Ok(None);
+            } else {
+                return Ok(Some(new_scalar.clone()));
+            }
+        }
+
+        let new_scalar = match scalar {
+            ScalarExpr::BoundColumnRef(_) => {
+                let actual_column = actual_column_ref(scalar, &self.column_map);
+                if !matches!(actual_column, ScalarExpr::BoundColumnRef(_)) {
+                    return self.check_output_cols(actual_column, index_output_cols, new_selection);
+                }
+                return Err(ErrorCode::Internal("Can't found column from index"));
+            }
+            ScalarExpr::ConstantExpr(_) => scalar.clone(),
+            ScalarExpr::FunctionCall(func) => {
+                let mut valid = true;
+                let mut new_args = Vec::with_capacity(func.arguments.len());
+                for arg in &func.arguments {
+                    if let Some(new_arg) =
+                        self.check_output_cols(arg, index_output_cols, new_selection)?
+                    {
+                        new_args.push(new_arg);
+                    } else {
+                        valid = false;
+                    }
+                }
+                if !valid {
+                    return Ok(None);
+                }
+                let mut new_func = func.clone();
+                new_func.arguments = new_args;
+                ScalarExpr::FunctionCall(new_func)
+            }
+            ScalarExpr::CastExpr(cast) => {
+                if let Some(new_arg) =
+                    self.check_output_cols(&cast.argument, index_output_cols, new_selection)?
+                {
+                    let mut new_cast = cast.clone();
+                    new_cast.argument = Box::new(new_arg);
+                    ScalarExpr::CastExpr(new_cast)
+                } else {
+                    return Ok(None);
+                }
+            }
+            ScalarExpr::AggregateFunction(func) => {
+                // agg function can't push down
+                for arg in &func.args {
+                    self.check_output_cols(arg, index_output_cols, new_selection)?;
+                }
+                return Ok(None);
+            }
+            ScalarExpr::UDFCall(udf) => {
+                let mut valid = true;
+                let mut new_args = Vec::with_capacity(udf.arguments.len());
+                for arg in &udf.arguments {
+                    if let Some(new_arg) =
+                        self.check_output_cols(arg, index_output_cols, new_selection)?
+                    {
+                        new_args.push(new_arg);
+                    } else {
+                        valid = false;
+                    }
+                }
+                if !valid {
+                    return Ok(None);
+                }
+                let mut new_udf = udf.clone();
+                new_udf.arguments = new_args;
+                ScalarExpr::UDFCall(new_udf)
+            }
+            _ => unreachable!(), // Window function and subquery will not appear in index.
+        };
+
+        if let Some(index) = self.column_display_map.get(&display_name) {
+            let new_item = ScalarItem {
+                index: *index,
+                scalar: new_scalar.clone(),
+            };
+            new_selection.insert(new_item);
+            return Ok(None);
+        }
+
+        Ok(Some(new_scalar))
+    }
+}
+
+// Record information of Aggregate index plan.
+struct ViewInfo {
+    query_info: QueryInfo,
+    index_fields: Vec<TableField>,
+    index_output_cols: HashMap<String, (ScalarExpr, bool)>,
+}
+
+impl ViewInfo {
+    fn new(
+        table_index: IndexType,
+        table_name: &str,
+        base_columns: &[ColumnEntry],
+        s_expr: &SExpr,
+    ) -> Result<ViewInfo> {
+        let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;
+
+        let mut index_fields = Vec::with_capacity(query_info.output_cols.len());
+        let mut index_output_cols = HashMap::with_capacity(query_info.output_cols.len());
+        for (index, item) in query_info.output_cols.iter().enumerate() {
+            let display_name = format_scalar(&item.scalar, &query_info.column_map);
+
+            let mut is_agg = false;
+            if let Some(ref aggregate) = query_info.aggregate {
+                for agg_func in &aggregate.aggregate_functions {
+                    if item.index == agg_func.index {
+                        is_agg = true;
+                        break;
+                    }
+                }
+            }
+            let data_type = if is_agg {
+                DataType::Binary
+            } else {
+                item.scalar.data_type().unwrap()
+            };
+
+            let name = format!("{index}");
+            let table_ty = infer_schema_type(&data_type)?;
+            let index_field = TableField::new(&name, table_ty);
+            index_fields.push(index_field);
+
+            let index_scalar = to_index_scalar(index, &data_type);
+            index_output_cols.insert(display_name, (index_scalar, is_agg));
+        }
+
+        Ok(Self {
+            query_info,
+            index_fields,
+            index_output_cols,
+        })
+    }
+}
 
 struct PredicatesSplitter {
     equi_columns_preds: Vec<(BoundColumnRef, BoundColumnRef)>,
@@ -63,18 +396,21 @@ impl PredicatesSplitter {
         }
     }
 
-    fn split(&mut self, pred: &ScalarExpr) {
+    fn split(&mut self, pred: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr>) {
         if let ScalarExpr::FunctionCall(func) = pred {
             match func.func_name.as_str() {
                 "and" => {
-                    self.split(&func.arguments[0]);
-                    self.split(&func.arguments[1]);
+                    self.split(&func.arguments[0], column_map);
+                    self.split(&func.arguments[1], column_map);
                 }
                 "eq" if matches!(func.arguments[0], ScalarExpr::BoundColumnRef(_))
                     && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
                 {
-                    let col0 = BoundColumnRef::try_from(func.arguments[0].clone()).unwrap();
-                    let col1 = BoundColumnRef::try_from(func.arguments[1].clone()).unwrap();
+                    let arg0 = actual_column_ref(&func.arguments[0], column_map);
+                    let arg1 = actual_column_ref(&func.arguments[1], column_map);
+
+                    let col0 = BoundColumnRef::try_from(arg0.clone()).unwrap();
+                    let col1 = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.equi_columns_preds.push((col0, col1));
                 }
                 "eq" | "lt" | "lte" | "gt" | "gte"
@@ -82,7 +418,8 @@ impl PredicatesSplitter {
                         && matches!(func.arguments[1], ScalarExpr::ConstantExpr(_)) =>
                 {
                     let func_name = func.func_name.clone();
-                    let col = BoundColumnRef::try_from(func.arguments[0].clone()).unwrap();
+                    let arg0 = actual_column_ref(&func.arguments[0], column_map);
+                    let col = BoundColumnRef::try_from(arg0.clone()).unwrap();
                     let val = ConstantExpr::try_from(func.arguments[1].clone()).unwrap();
                     self.range_preds.push((func_name, col, val));
                 }
@@ -90,16 +427,11 @@ impl PredicatesSplitter {
                     if matches!(func.arguments[0], ScalarExpr::ConstantExpr(_))
                         && matches!(func.arguments[1], ScalarExpr::BoundColumnRef(_)) =>
                 {
-                    let func_name = match func.func_name.as_str() {
-                        "lt" => "gt".to_string(),
-                        "lte" => "gte".to_string(),
-                        "gt" => "lt".to_string(),
-                        "gte" => "lte".to_string(),
-                        "eq" => "eq".to_string(),
-                        _ => unreachable!(),
-                    };
+                    let func_name = reverse_op(func.func_name.as_str());
+
                     let val = ConstantExpr::try_from(func.arguments[0].clone()).unwrap();
-                    let col = BoundColumnRef::try_from(func.arguments[1].clone()).unwrap();
+                    let arg1 = actual_column_ref(&func.arguments[1], column_map);
+                    let col = BoundColumnRef::try_from(arg1.clone()).unwrap();
                     self.range_preds.push((func_name, col, val));
                 }
                 _ => {
@@ -126,18 +458,8 @@ impl EquivalenceClasses {
     fn add_equivalence_class(&mut self, col1: &BoundColumnRef, col2: &BoundColumnRef) {
         let mut equivalence_columns = HashSet::new();
 
-        let col1_name = match &col1.column.table_name {
-            Some(table_name) => {
-                format!("{}.{}", table_name, col1.column.column_name)
-            }
-            None => col1.column.column_name.clone(),
-        };
-        let col2_name = match &col2.column.table_name {
-            Some(table_name) => {
-                format!("{}.{}", table_name, col2.column.column_name)
-            }
-            None => col2.column.column_name.clone(),
-        };
+        let col1_name = format_col(&col1.column);
+        let col2_name = format_col(&col2.column);
 
         equivalence_columns.insert(col1_name.clone());
         equivalence_columns.insert(col2_name.clone());
@@ -207,7 +529,9 @@ impl PartialOrd for BoundValue {
                         let v2 = n2.integer_to_i128().unwrap();
                         v1.cmp(&v2)
                     } else {
-                        todo!()
+                        let v1 = n1.to_f64();
+                        let v2 = n2.to_f64();
+                        v1.cmp(&v2)
                     }
                 }
                 (_, _) => s1.cmp(s2),
@@ -287,7 +611,6 @@ struct RangeValues {
 // case 6                | new |
 //                       +-----+
 // lower >= orig_lower && lower <= orig_upper && upper >= orig_upper
-
 impl RangeValues {
     fn new() -> Self {
         Self {
@@ -338,23 +661,18 @@ impl RangeValues {
 }
 
 struct RangeClasses {
-    column_to_range_class: HashMap<String, RangeValues>,
+    column_to_range_class: BTreeMap<String, RangeValues>,
 }
 
 impl RangeClasses {
     fn new() -> Self {
         Self {
-            column_to_range_class: HashMap::new(),
+            column_to_range_class: BTreeMap::new(),
         }
     }
 
     fn add_range_class(&mut self, func_name: &str, col: &BoundColumnRef, val: &ConstantExpr) {
-        let col_name = match &col.column.table_name {
-            Some(table_name) => {
-                format!("{}.{}", table_name, col.column.column_name)
-            }
-            None => col.column.column_name.clone(),
-        };
+        let col_name = format_col(&col.column);
 
         let (lower_bound, upper_bound) = match func_name {
             "eq" => (
@@ -389,7 +707,23 @@ impl RangeClasses {
     }
 
     // Range subsumption test.
-    fn check(&self, view_range_classes: &RangeClasses) -> bool {
+    #[allow(clippy::type_complexity)]
+    fn check(
+        &self,
+        view_range_classes: &RangeClasses,
+    ) -> (bool, Option<BTreeMap<String, (BoundValue, BoundValue)>>) {
+        let mut extra_ranges = BTreeMap::new();
+        for (col, query_range_values) in self.column_to_range_class.iter() {
+            if !view_range_classes.column_to_range_class.contains_key(col) {
+                if let Some((query_lower_bound, query_upper_bound)) = &query_range_values.bounds {
+                    extra_ranges.insert(
+                        col.clone(),
+                        (query_lower_bound.clone(), query_upper_bound.clone()),
+                    );
+                }
+            }
+        }
+
         for (col, view_range_values) in view_range_classes.column_to_range_class.iter() {
             if let Some(query_range_values) = self.column_to_range_class.get(col) {
                 match (&query_range_values.bounds, &view_range_values.bounds) {
@@ -397,106 +731,166 @@ impl RangeClasses {
                         Some((query_lower_bound, query_upper_bound)),
                         Some((view_lower_bound, view_upper_bound)),
                     ) => {
-                        if view_lower_bound.cmp(query_lower_bound) == Ordering::Less
-                            || view_upper_bound.cmp(query_upper_bound) == Ordering::Greater
-                        {
-                            return false;
+                        let lower_res = view_lower_bound.cmp(query_lower_bound);
+                        let upper_res = view_upper_bound.cmp(query_upper_bound);
+
+                        match (lower_res, upper_res) {
+                            (Ordering::Equal, Ordering::Equal) => {
+                                continue;
+                            }
+                            (Ordering::Equal, Ordering::Greater) => {
+                                extra_ranges.insert(
+                                    col.clone(),
+                                    (BoundValue::NegativeInfinite, query_upper_bound.clone()),
+                                );
+                            }
+                            (Ordering::Less, Ordering::Equal) => {
+                                extra_ranges.insert(
+                                    col.clone(),
+                                    (query_lower_bound.clone(), BoundValue::PositiveInfinite),
+                                );
+                            }
+                            (Ordering::Less, Ordering::Greater) => {
+                                extra_ranges.insert(
+                                    col.clone(),
+                                    (query_lower_bound.clone(), query_upper_bound.clone()),
+                                );
+                            }
+                            (_, _) => {
+                                return (false, None);
+                            }
                         }
                     }
+                    (Some((query_lower_bound, query_upper_bound)), None) => {
+                        extra_ranges.insert(
+                            col.clone(),
+                            (query_lower_bound.clone(), query_upper_bound.clone()),
+                        );
+                    }
                     (_, _) => {
-                        return false;
+                        return (false, None);
                     }
                 }
             } else {
-                return false;
+                return (false, None);
             }
         }
-        true
+        if extra_ranges.is_empty() {
+            (true, None)
+        } else {
+            (true, Some(extra_ranges))
+        }
     }
 }
 
 struct ResidualClasses {
-    residual_preds: HashSet<ScalarExpr>,
+    residual_preds: BTreeMap<String, ScalarExpr>,
 }
 
 impl ResidualClasses {
     fn new() -> Self {
         Self {
-            residual_preds: HashSet::new(),
+            residual_preds: BTreeMap::new(),
         }
     }
 
-    fn add_residual_pred(&mut self, pred: &ScalarExpr) {
-        self.residual_preds.insert(pred.clone());
+    fn add_residual_pred(&mut self, pred_display: String, pred: &ScalarExpr) {
+        self.residual_preds.insert(pred_display, pred.clone());
     }
 
     // Residual subsumption test.
-    fn check(&self, view_residual_classes: &ResidualClasses) -> bool {
-        // TODO
-        for query_residual_pred in self.residual_preds.iter() {
+    fn check(&self, view_residual_classes: &ResidualClasses) -> (bool, Option<Vec<ScalarExpr>>) {
+        let mut extra_residual_preds = Vec::new();
+        for (view_residual_key, _) in view_residual_classes.residual_preds.iter() {
+            if !self.residual_preds.contains_key(view_residual_key) {
+                return (false, None);
+            }
+        }
+        // TODO: continue split residual predicates and check
+        for (query_residual_key, query_residual_pred) in self.residual_preds.iter() {
             if !view_residual_classes
                 .residual_preds
-                .contains(query_residual_pred)
+                .contains_key(query_residual_key)
             {
-                return false;
+                extra_residual_preds.push(query_residual_pred.clone());
             }
         }
-        true
+        if extra_residual_preds.is_empty() {
+            (true, None)
+        } else {
+            (true, Some(extra_residual_preds))
+        }
     }
 }
 
-struct MaterializedViewMatcher {
-    preds_splitter: PredicatesSplitter,
-    equi_classes: EquivalenceClasses,
-    range_classes: RangeClasses,
-    residual_classes: ResidualClasses,
-    output_rows: Vec<String>,
+// Aggregating index rewriting logic is based on "Optimizing Queries Using Materialized Views:
+// A Practical, Scalable Solution" by Goldstein and Larson."
+struct AggIndexRewriter {
+    query_info: QueryInfo,
 }
 
-impl MaterializedViewMatcher {
-    fn new() -> Self {
-        Self {
-            preds_splitter: PredicatesSplitter::new(),
-            equi_classes: EquivalenceClasses::new(),
-            range_classes: RangeClasses::new(),
-            residual_classes: ResidualClasses::new(),
-            output_rows: Vec::new(),
-        }
+impl AggIndexRewriter {
+    fn new(query_info: QueryInfo) -> Self {
+        Self { query_info }
     }
 
-    fn init(&mut self, query_info: &RewriteInfomartion) {
-        if let Some(predicates) = query_info.predicates {
-            for pred in predicates {
-                self.preds_splitter.split(pred);
-            }
+    fn try_rewrite_index(
+        &self,
+        s_expr: &SExpr,
+        index_id: u64,
+        sql: &str,
+        view_info: &ViewInfo,
+    ) -> Result<Option<SExpr>> {
+        let mut new_predicates = Vec::new();
+        let mut new_selection_set = HashSet::new();
 
-            for equi_pred in &self.preds_splitter.equi_columns_preds {
-                self.equi_classes
-                    .add_equivalence_class(&equi_pred.0, &equi_pred.1);
-            }
-            for range_pred in &self.preds_splitter.range_preds {
-                self.range_classes
-                    .add_range_class(&range_pred.0, &range_pred.1, &range_pred.2);
-            }
-            for residual_pred in &self.preds_splitter.residual_preds {
-                self.residual_classes.add_residual_pred(residual_pred);
-            }
+        if !self.check_predicates(view_info, &mut new_predicates, &mut new_selection_set) {
+            return Ok(None);
         }
 
-        for item in &query_info.selection.items {
-            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
-                let col_name = match &col.column.table_name {
-                    Some(table_name) => {
-                        format!("{}.{}", table_name, col.column.column_name)
-                    }
-                    None => col.column.column_name.clone(),
-                };
-                self.output_rows.push(col_name);
-            }
+        if !self.check_output_expressions(view_info, &mut new_selection_set) {
+            return Ok(None);
         }
+
+        if !self.check_aggregation(view_info, &mut new_selection_set) {
+            return Ok(None);
+        }
+
+        if !self.check_sort_items(view_info, &mut new_selection_set) {
+            return Ok(None);
+        }
+
+        let mut new_selection: Vec<_> = new_selection_set.into_iter().collect();
+        new_selection.sort_by_key(|i| i.index);
+
+        let is_agg = self.query_info.aggregate.is_some();
+        let num_agg_funcs = self
+            .query_info
+            .aggregate
+            .as_ref()
+            .map(|agg| agg.aggregate_functions.len())
+            .unwrap_or_default();
+
+        let result = push_down_index_scan(s_expr, AggIndexInfo {
+            index_id,
+            selection: new_selection,
+            predicates: new_predicates,
+            schema: TableSchemaRefExt::create(view_info.index_fields.clone()),
+            is_agg,
+            num_agg_funcs,
+        })?;
+
+        info!("Use aggregating index: {sql}");
+
+        Ok(Some(result))
     }
 
-    fn match_view(&self, view_matcher: &MaterializedViewMatcher) -> bool {
+    fn check_predicates(
+        &self,
+        view_info: &ViewInfo,
+        new_predicates: &mut Vec<ScalarExpr>,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
         // 3.1.2 Do all required rows exist in the view?
         // 1. Compute equivalence classes for the query and the view.
         // 2. Check that every view equivalence class is a subset of a
@@ -507,956 +901,298 @@ impl MaterializedViewMatcher {
         // 5. Check that every conjunct in the residual predicate of the
         //    view matches a conjunct in the residual predicate of the query.
         //    If not, reject the view.
-        if !self.equi_classes.check(&view_matcher.equi_classes) {
+        if !self
+            .query_info
+            .equi_classes
+            .check(&view_info.query_info.equi_classes)
+        {
             return false;
         }
-        if !self.range_classes.check(&view_matcher.range_classes) {
+        let (range_res, extra_ranges) = self
+            .query_info
+            .range_classes
+            .check(&view_info.query_info.range_classes);
+        if !range_res {
             return false;
         }
-        if !self.residual_classes.check(&view_matcher.residual_classes) {
+
+        let (residual_res, extra_residual_preds) = self
+            .query_info
+            .residual_classes
+            .check(&view_info.query_info.residual_classes);
+        if !residual_res {
             return false;
         }
 
         // 3.1.3 Can the required rows be selected?
 
+        // 1. Construct compensating column equality predicates
+        //    while comparing view equivalence classes against query equivalence classes as described in the previous section.
+        //    Try to map every column reference to an output column (using the view equivalence classes).
+        //    If this is not possible, reject the view.
+        // 2. Construct compensating range predicates by comparing column ranges as described in the previous section.
+        //    Try to map every column reference to an output column (using the query equivalence classes).
+        //    If this is not possible, reject the view.
+        // 3. Find the residual predicates of the query that are missing in the view.
+        //    Try to map every column reference to an output column (using the query equivalence classes).
+        //    If this is not possible, reject the view.
+
+        if let Some(extra_ranges) = extra_ranges {
+            for (col, (lower_bound, upper_bound)) in extra_ranges.iter() {
+                // materialized view output must contains the column
+                if let Some((new_scalar, _)) = view_info.index_output_cols.get(col) {
+                    let lower = match lower_bound {
+                        BoundValue::Closed(val) => Some((val.clone(), "gte")),
+                        BoundValue::Open(val) => Some((val.clone(), "gt")),
+                        BoundValue::NegativeInfinite => None,
+                        _ => unreachable!(),
+                    };
+                    let upper = match upper_bound {
+                        BoundValue::Closed(val) => Some((val.clone(), "lte")),
+                        BoundValue::Open(val) => Some((val.clone(), "lt")),
+                        BoundValue::PositiveInfinite => None,
+                        _ => unreachable!(),
+                    };
+
+                    if let (Some((lower_val, "gte")), Some((upper_val, "lte"))) = (&lower, &upper) {
+                        // if lower and upper value equal, convert to equal function
+                        if lower_val.eq(upper_val) {
+                            let lower_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: lower_val.clone(),
+                            });
+                            let pred = ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "eq".to_string(),
+                                params: vec![],
+                                arguments: vec![new_scalar.clone(), lower_val_scalar],
+                            });
+                            new_predicates.push(pred);
+                            continue;
+                        }
+                    }
+
+                    if let Some((lower_val, func_name)) = lower {
+                        let lower_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: None,
+                            value: lower_val,
+                        });
+                        let pred = ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: func_name.to_string(),
+                            params: vec![],
+                            arguments: vec![new_scalar.clone(), lower_val_scalar],
+                        });
+                        new_predicates.push(pred);
+                    }
+                    if let Some((upper_val, func_name)) = upper {
+                        let upper_val_scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: None,
+                            value: upper_val,
+                        });
+                        let pred = ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: func_name.to_string(),
+                            params: vec![],
+                            arguments: vec![new_scalar.clone(), upper_val_scalar],
+                        });
+                        new_predicates.push(pred);
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        if let Some(extra_residual_preds) = extra_residual_preds {
+            for extra_residual_pred in extra_residual_preds {
+                match self.query_info.check_output_cols(
+                    &extra_residual_pred,
+                    &view_info.index_output_cols,
+                    new_selection_set,
+                ) {
+                    Ok(Some(new_residual_pred)) => {
+                        new_predicates.push(new_residual_pred);
+                    }
+                    Ok(None) => {}
+                    Err(_) => {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
+    fn check_output_expressions(
+        &self,
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
         // 3.1.4 Can output expressions be computed?
 
+        // Checking whether all output expressions of the query can be computed from the view
+        // is similar to checking whether the additional predicates can be computed correctly.
+        for output_item in self.query_info.output_cols.iter() {
+            if self
+                .query_info
+                .check_output_cols(
+                    &output_item.scalar,
+                    &view_info.index_output_cols,
+                    new_selection_set,
+                )
+                .is_err()
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn check_aggregation(
+        &self,
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
         // 3.3 Aggregation queries and views
 
-        true
-    }
-}
+        // 1. The SPJ part of the view produces all rows needed by
+        //    the SPJ part of the query and with the right duplication factor.
+        // 2. All columns required by compensating predicates (if any) are available in the view output.
+        // 3. The view contains no aggregation or is less aggregated than the query,
+        //    i.e, the groups formed by the query can be computed by further aggregation of groups output by the view.
+        // 4. All columns required to perform further grouping (if necessary) are available in the view output.
+        // 5. All columns required to compute output expressions are available in the view output.
 
-// MaterializedViewRewriter is based on "Optimizing Queries Using Materialized Views:
-// A Practical, Scalable Solution" by Goldstein and Larson.
-#[allow(dead_code)]
-struct MaterializedViewRewriter {}
-
-impl MaterializedViewRewriter {
-    #[allow(dead_code)]
-    fn new() -> Self {
-        Self {}
-    }
-
-    #[allow(dead_code)]
-    fn rewrite(&self) {}
-}
-
-pub fn try_rewrite(
-    table_index: IndexType,
-    base_columns: &[ColumnEntry],
-    s_expr: &SExpr,
-    index_plans: &[(u64, String, SExpr)],
-) -> Result<Option<SExpr>> {
-    if index_plans.is_empty() {
-        return Ok(None);
-    }
-
-    let query_info = collect_information(s_expr)?;
-    if !query_info.can_apply_index() {
-        return Ok(None);
-    }
-
-    let mut query_matcher = MaterializedViewMatcher::new();
-    query_matcher.init(&query_info);
-
-    for (_, _, view_s_expr) in index_plans.iter() {
-        let view_info = collect_information(view_s_expr)?;
-
-        let mut view_matcher = MaterializedViewMatcher::new();
-        view_matcher.init(&view_info);
-
-        if !query_matcher.match_view(&view_matcher) {
-            continue;
-        }
-    }
-
-    let col_index_map = base_columns
-        .iter()
-        .map(|col| (col.name(), col.index()))
-        .collect::<HashMap<_, _>>();
-
-    let query_predicates = query_info.predicates.map(distinguish_predicates);
-    let query_sort_items = query_info.formatted_sort_items();
-    let query_group_items = query_info.formatted_group_items();
-
-    if query_info.aggregation.is_some() {
-        // if have agg funcs, check sort items are subset of group items.
-        if !query_sort_items
-            .iter()
-            .all(|item| query_group_items.contains(item))
-        {
-            return Ok(None);
-        }
-    }
-
-    // Search all index plans, find the first matched index to rewrite the query.
-    for (index_id, sql, plan) in index_plans.iter() {
-        let plan = rewrite_index_plan(table_index, &col_index_map, plan);
-
-        let index_info = collect_information(&plan)?;
-        debug_assert!(index_info.can_apply_index());
-
-        // 1. Check query output and try to rewrite it.
-        let index_selection = index_info.formatted_selection()?;
-
-        // group items should be in selection.
-        if !query_group_items
-            .iter()
-            .all(|item| index_selection.contains_key(item))
-        {
-            continue;
-        }
-
-        let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
-        let mut flag = true;
-        let mut is_agg = false;
-        let mut num_agg_funcs = 0;
-
-        match (&query_info.aggregation, &index_info.aggregation) {
-            (Some((query_agg, _)), Some(_)) => {
-                is_agg = true;
-                // Check if group items are the same.
-                let index_group_items = index_info.formatted_group_items();
-                if query_group_items != index_group_items {
-                    continue;
-                }
-                // If the query is an aggregation query, the index selection is to rewrite the input `EvalScalar` operator of `Aggregate` operators.
-                // In another word, is to rewrite the input items of the aggregation.
-                // The input of aggregation will only have the arguments of the aggregate functions and group by columns (expressions).
-                // So just need to find if the aggregate functions call and group by exprs exist in index selection.
-                for expr in query_agg.group_items.iter() {
-                    if let Some(rewritten) = try_create_column_binding(
-                        &index_selection,
-                        &query_info.format_scalar(&expr.scalar),
-                    ) {
-                        new_selection.push(ScalarItem {
-                            index: expr.index,
-                            scalar: rewritten.into(),
-                        });
-                    } else {
-                        flag = false;
-                        break;
-                    }
-                }
-                if flag {
-                    num_agg_funcs = query_agg.aggregate_functions.len();
-                    for agg in query_agg.aggregate_functions.iter() {
-                        if let Some(mut rewritten) = try_create_column_binding(
-                            &index_selection,
-                            &query_info.format_scalar(&agg.scalar),
-                        ) {
-                            rewritten.column.data_type = Box::new(DataType::Binary);
-                            new_selection.push(ScalarItem {
-                                index: agg.index,
-                                scalar: rewritten.into(),
-                            });
-                        } else {
-                            flag = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            (Some((_, input)), None) => {
-                // Check if we can use the output of the index as the input of the query's `Aggregate` operators.
-                for (index, scalar) in input {
-                    if let Some(rewritten) =
-                        rewrite_by_selection(&query_info, scalar, &index_selection)
-                    {
-                        new_selection.push(ScalarItem {
-                            index: *index,
-                            scalar: rewritten,
-                        });
-                    } else {
-                        flag = false;
-                        break;
-                    }
-                }
-            }
-
-            (None, Some(_)) => {
-                continue;
-            }
-            (None, None) => {
-                // If the query is not an aggregation query, the index selection is to rewrite the final output `EvalScalar` operator.
-                // In another word, is to rewrite `query_info.selection`.
-                for item in query_info.selection.items.iter() {
-                    if let Some(rewritten) =
-                        rewrite_by_selection(&query_info, &item.scalar, &index_selection)
-                    {
-                        new_selection.push(ScalarItem {
-                            index: item.index,
-                            scalar: rewritten,
-                        });
-                    } else {
-                        flag = false;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if !flag {
-            continue;
-        }
-
-        // 2. Check filter predicates.
-        let output_bound_cols = index_info.output_bound_cols();
-        let index_predicates = index_info.predicates.map(distinguish_predicates);
-        let mut new_predicates = Vec::new();
-        match (&query_predicates, &index_predicates) {
-            (Some((qe, qr, qo)), Some((ie, ir, io))) => {
-                if !check_predicates_equal(qe, ie) {
-                    continue;
-                }
-                if !check_predicates_other(qo, io) {
-                    continue;
-                }
-                if let Some(preds) =
-                    check_predicates_range(qr, ir, &output_bound_cols, &index_selection)
-                {
-                    new_predicates.extend(preds);
-                } else {
-                    continue;
-                }
-            }
-            (Some((qe, qr, qo)), None) => {
-                if !qe.is_empty() {
-                    let preds = qe
-                        .iter()
-                        .flat_map(|(left, right)| [(*left).clone(), (*right).clone()])
-                        .collect::<Vec<_>>();
-                    new_predicates.extend(preds);
-                }
-                if !qo.is_empty() {
-                    let preds = qo.iter().map(|p| (*p).clone()).collect::<Vec<_>>();
-                    new_predicates.extend(preds);
-                }
-                if let Some(preds) = check_predicates_range(
-                    qr,
-                    &HashMap::new(),
-                    &output_bound_cols,
-                    &index_selection,
-                ) {
-                    new_predicates.extend(preds);
-                } else {
-                    continue;
-                }
-            }
-            (None, Some(_)) => {
-                // Not matched.
-                continue;
-            }
-            (None, None) => { /* Matched */ }
-        }
-
-        // 3. Construct the index output schema
-        let agg_func_indices = index_info
-            .aggregation
-            .as_ref()
-            .map(|(agg, _)| {
-                agg.aggregate_functions
-                    .iter()
-                    .map(|f| f.index)
-                    .collect::<HashSet<_>>()
-            })
+        let query_group_items = self
+            .query_info
+            .aggregate
+            .clone()
+            .map(|agg| agg.group_items)
             .unwrap_or_default();
-        let index_fields = index_selection
-            .iter()
-            .sorted_by_key(|(_, (idx, _))| *idx)
-            .map(|(_, (idx, ty))| {
-                if let ScalarExpr::BoundColumnRef(col) = &index_info.selection.items[*idx].scalar {
-                    if agg_func_indices.contains(&col.column.index) {
-                        // If the item is an aggregation function,
-                        // the actual data in the index is the temp state of the function.
-                        // (E.g. `sum` function will store serialized `sum_state` in index data.)
-                        // So the data type will be `Binary`.
-                        return Ok(TableField::new(&idx.to_string(), TableDataType::Binary));
+
+        let view_group_items = view_info
+            .query_info
+            .aggregate
+            .clone()
+            .clone()
+            .map(|agg| agg.group_items)
+            .unwrap_or_default();
+
+        match (query_group_items.is_empty(), view_group_items.is_empty()) {
+            // both query and view have group, check for same group items.
+            (false, false) => {
+                // TODO: query can support continue group
+                if query_group_items.len() != view_group_items.len() {
+                    return false;
+                }
+                let mut query_group_names = HashSet::with_capacity(query_group_items.len());
+                for item in &query_group_items {
+                    let query_group_name = format_scalar(&item.scalar, &self.query_info.column_map);
+                    query_group_names.insert(query_group_name);
+                }
+                let mut view_group_names = HashSet::with_capacity(view_group_items.len());
+                for item in &view_group_items {
+                    let view_group_name =
+                        format_scalar(&item.scalar, &view_info.query_info.column_map);
+                    view_group_names.insert(view_group_name);
+                }
+                for query_group_name in query_group_names {
+                    if !view_group_names.contains(&query_group_name) {
+                        return false;
                     }
                 }
 
-                Ok(TableField::new(&idx.to_string(), infer_schema_type(ty)?))
-            })
-            .collect::<Result<Vec<_>>>()?;
+                for item in query_group_items {
+                    if self
+                        .query_info
+                        .check_output_cols(
+                            &item.scalar,
+                            &view_info.index_output_cols,
+                            new_selection_set,
+                        )
+                        .is_err()
+                    {
+                        return false;
+                    }
+                }
+            }
+            // query have group, but view don't have group,
+            // check group items in output rows.
+            (false, true) => {
+                for item in query_group_items {
+                    if self
+                        .query_info
+                        .check_output_cols(
+                            &item.scalar,
+                            &view_info.index_output_cols,
+                            new_selection_set,
+                        )
+                        .is_err()
+                    {
+                        return false;
+                    }
+                }
+            }
+            // both query and view don't have group, don't need check.
+            (true, true) => {}
+            // query don't have group, but view have group, impossibile to match.
+            (true, false) => {
+                return false;
+            }
+        }
 
-        new_selection.sort_by_key(|i| i.index);
-
-        let result = push_down_index_scan(s_expr, AggIndexInfo {
-            index_id: *index_id,
-            selection: new_selection,
-            predicates: new_predicates,
-            schema: TableSchemaRefExt::create(index_fields),
-            is_agg,
-            num_agg_funcs,
-        })?;
-
-        info!("Use aggregating index: {sql}");
-
-        return Ok(Some(result));
+        true
     }
 
-    Ok(None)
-}
+    fn check_sort_items(
+        &self,
+        view_info: &ViewInfo,
+        new_selection_set: &mut HashSet<ScalarItem>,
+    ) -> bool {
+        if let Some(sort_items) = &self.query_info.sort_items {
+            for item in sort_items {
+                if let Some(scalar) = self.query_info.column_map.get(&item.index) {
+                    if self
+                        .query_info
+                        .check_output_cols(scalar, &view_info.index_output_cols, new_selection_set)
+                        .is_err()
+                    {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
 
-/// Rewrite base column index in the original index plan by `columns`.
-fn rewrite_index_plan(
-    table_index: IndexType,
-    columns: &HashMap<String, IndexType>,
-    s_expr: &SExpr,
-) -> SExpr {
-    match s_expr.plan() {
-        RelOperator::EvalScalar(eval) => {
-            let mut new_expr = eval.clone();
-            for item in new_expr.items.iter_mut() {
-                rewrite_scalar_index(table_index, columns, &mut item.scalar);
-            }
-            SExpr::create_unary(
-                Arc::new(new_expr.into()),
-                Arc::new(rewrite_index_plan(
-                    table_index,
-                    columns,
-                    s_expr.child(0).unwrap(),
-                )),
-            )
-        }
-        RelOperator::Filter(filter) => {
-            let mut new_expr = filter.clone();
-            for pred in new_expr.predicates.iter_mut() {
-                rewrite_scalar_index(table_index, columns, pred);
-            }
-            SExpr::create_unary(
-                Arc::new(new_expr.into()),
-                Arc::new(rewrite_index_plan(
-                    table_index,
-                    columns,
-                    s_expr.child(0).unwrap(),
-                )),
-            )
-        }
-        RelOperator::Aggregate(agg) => {
-            let mut new_expr = agg.clone();
-            for item in new_expr.group_items.iter_mut() {
-                rewrite_scalar_index(table_index, columns, &mut item.scalar);
-            }
-            for item in new_expr.aggregate_functions.iter_mut() {
-                rewrite_scalar_index(table_index, columns, &mut item.scalar);
-            }
-            SExpr::create_unary(
-                Arc::new(new_expr.into()),
-                Arc::new(rewrite_index_plan(
-                    table_index,
-                    columns,
-                    s_expr.child(0).unwrap(),
-                )),
-            )
-        }
-        RelOperator::Scan(scan) => {
-            let mut new_expr = scan.clone();
-            new_expr.table_index = table_index;
-            SExpr::create_leaf(Arc::new(new_expr.into()))
-        } // Terminate the recursion.
-        _ => s_expr.replace_children(vec![Arc::new(rewrite_index_plan(
-            table_index,
-            columns,
-            s_expr.child(0).unwrap(),
-        ))]),
+        true
     }
 }
 
-fn rewrite_scalar_index(
-    table_index: IndexType,
-    columns: &HashMap<String, IndexType>,
-    scalar: &mut ScalarExpr,
-) {
-    struct RewriteVisitor<'a> {
-        table_index: IndexType,
-        columns: &'a HashMap<String, IndexType>,
-    }
-
-    impl<'a> VisitorMut<'a> for RewriteVisitor<'a> {
-        fn visit_bound_column_ref(&mut self, col: &'a mut BoundColumnRef) -> Result<()> {
-            if let Some(index) = self.columns.get(&col.column.column_name) {
-                col.column.table_index = Some(self.table_index);
-                col.column.index = *index;
-            }
-            Ok(())
-        }
-    }
-
-    let mut visitor = RewriteVisitor {
-        table_index,
-        columns,
+fn to_index_scalar(index: IndexType, data_type: &DataType) -> ScalarExpr {
+    let col = BoundColumnRef {
+        span: None,
+        column: ColumnBindingBuilder::new(
+            format!("index_col_{index}"),
+            index,
+            Box::new(data_type.clone()),
+            Visibility::Visible,
+        )
+        .build(),
     };
-    visitor.visit(scalar).unwrap();
-}
-
-/// [`Range`] is to represent the value range of a column according to the predicates.
-///
-/// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default, Debug)]
-struct Range<'a> {
-    min: Option<&'a Scalar>,
-    min_close: bool,
-    max: Option<&'a Scalar>,
-    max_close: bool,
-}
-
-impl<'a> PartialEq for Range<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        // We cannot compare Scalar directly because when the NumberScalar types
-        // are different but the internal values are the same, the comparison
-        // result is false.
-        // So we need to compare the internal values of the Scalar, for example,
-        // `NumberScalar(UInt8(1)) == NumberScalar(UInt32(1))` should return true.
-        fn scalar_equal(left: Option<&Scalar>, right: Option<&Scalar>) -> bool {
-            match (left, right) {
-                (Some(left), Some(right)) => {
-                    if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
-                        match (left.is_integer(), right.is_integer()) {
-                            (true, true) => {
-                                left.integer_to_i128().unwrap() == right.integer_to_i128().unwrap()
-                            }
-                            (false, false) => {
-                                left.float_to_f64().unwrap() == right.float_to_f64().unwrap()
-                            }
-                            _ => false,
-                        }
-                    } else {
-                        left == right
-                    }
-                }
-                (None, None) => true,
-                _ => false,
-            }
-        }
-
-        if self.min_close != other.min_close
-            || self.max_close != other.max_close
-            || !scalar_equal(self.min, other.min)
-            || !scalar_equal(self.max, other.max)
-        {
-            return false;
-        }
-
-        true
-    }
-}
-
-impl<'a> Eq for Range<'a> {}
-
-impl<'a> Range<'a> {
-    fn new(val: &'a Scalar, op: &str) -> Self {
-        let mut range = Range::default();
-        range.set_bound(val, op);
-        range
-    }
-
-    #[inline]
-    fn set_bound(&mut self, val: &'a Scalar, op: &str) {
-        match op {
-            "gt" => self.set_min(val, false),
-            "gte" => self.set_min(val, true),
-            "lt" => self.set_max(val, false),
-            "lte" => self.set_max(val, true),
-            _ => unreachable!(),
-        }
-    }
-
-    #[inline]
-    fn set_min(&mut self, val: &'a Scalar, close: bool) {
-        match self.min {
-            Some(min) if val < min => {
-                self.min = Some(val);
-                self.min_close = close;
-            }
-            Some(min) if val == min => {
-                self.min_close = self.min_close || close;
-            }
-            None => {
-                self.min = Some(val);
-                self.min_close = close;
-            }
-            _ => {}
-        }
-    }
-
-    #[inline]
-    fn set_max(&mut self, val: &'a Scalar, close: bool) {
-        match self.max {
-            Some(max) if val > max => {
-                self.max = Some(val);
-                self.max_close = close;
-            }
-            Some(max) if val == max => {
-                self.max_close = self.max_close || close;
-            }
-            None => {
-                self.max = Some(val);
-                self.max_close = close;
-            }
-            _ => {}
-        }
-    }
-
-    #[inline]
-    fn is_valid(&self) -> bool {
-        match (self.min, self.max) {
-            (Some(min), Some(max)) => min < max || (min == max && self.min_close && self.max_close),
-            _ => true,
-        }
-    }
-
-    /// If current range contains the other range.
-    #[inline]
-    fn contains(&self, other: &Range) -> bool {
-        if !self.is_valid() || !other.is_valid() {
-            return false;
-        }
-
-        // We need to compare the internal values of the Scalar, for example,
-        // `NumberScalar(UInt8(2)) > NumberScalar(UInt32(1))` should return true.
-        match (self.min, other.min) {
-            (Some(left), Some(right)) => {
-                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
-                    match (left.is_integer(), right.is_integer()) {
-                        (true, true) => {
-                            let left = left.integer_to_i128().unwrap();
-                            let right = right.integer_to_i128().unwrap();
-                            if left > right || (left == right && self.min_close && !other.min_close)
-                            {
-                                return false;
-                            }
-                        }
-                        (false, false) => {
-                            let left = left.float_to_f64().unwrap();
-                            let right = right.float_to_f64().unwrap();
-                            if left > right || (left == right && self.min_close && !other.min_close)
-                            {
-                                return false;
-                            }
-                        }
-                        _ => return false,
-                    }
-                } else if left > right || (left == right && self.min_close && !other.min_close) {
-                    return false;
-                }
-            }
-            (Some(_), None) => {
-                return false;
-            }
-            _ => {}
-        }
-
-        match (self.max, other.max) {
-            (Some(left), Some(right)) => {
-                if let (Scalar::Number(left), Scalar::Number(right)) = (left, right) {
-                    match (left.is_integer(), right.is_integer()) {
-                        (true, true) => {
-                            let left = left.integer_to_i128().unwrap();
-                            let right = right.integer_to_i128().unwrap();
-                            if left < right || (left == right && self.min_close && !other.min_close)
-                            {
-                                return false;
-                            }
-                        }
-                        (false, false) => {
-                            let left = left.float_to_f64().unwrap();
-                            let right = right.float_to_f64().unwrap();
-                            if left < right || (left == right && self.min_close && !other.min_close)
-                            {
-                                return false;
-                            }
-                        }
-                        _ => return false,
-                    }
-                } else if left < right || (left == right && self.min_close && !other.min_close) {
-                    return false;
-                }
-            }
-            (Some(_), None) => {
-                return false;
-            }
-            _ => {}
-        }
-
-        true
-    }
-
-    fn to_scalar(&self, index: IndexType, data_type: &DataType) -> Option<ScalarExpr> {
-        let col = BoundColumnRef {
-            span: None,
-            column: ColumnBindingBuilder::new(
-                format!("index_col_{index}"),
-                index,
-                Box::new(data_type.clone()),
-                Visibility::Visible,
-            )
-            .build(),
-        };
-        match (self.min, self.max) {
-            (Some(min), Some(max)) => Some(
-                FunctionCall {
-                    span: None,
-                    func_name: "and".to_string(),
-                    params: vec![],
-                    arguments: vec![
-                        FunctionCall {
-                            span: None,
-                            func_name: if self.min_close {
-                                "gte".to_string()
-                            } else {
-                                "gt".to_string()
-                            },
-                            params: vec![],
-                            arguments: vec![
-                                col.clone().into(),
-                                ConstantExpr {
-                                    span: None,
-                                    value: min.clone(),
-                                }
-                                .into(),
-                            ],
-                        }
-                        .into(),
-                        FunctionCall {
-                            span: None,
-                            func_name: if self.max_close {
-                                "lte".to_string()
-                            } else {
-                                "lt".to_string()
-                            },
-                            params: vec![],
-                            arguments: vec![
-                                col.into(),
-                                ConstantExpr {
-                                    span: None,
-                                    value: max.clone(),
-                                }
-                                .into(),
-                            ],
-                        }
-                        .into(),
-                    ],
-                }
-                .into(),
-            ),
-            (Some(min), None) => Some(
-                FunctionCall {
-                    span: None,
-                    func_name: if self.min_close {
-                        "gte".to_string()
-                    } else {
-                        "gt".to_string()
-                    },
-                    params: vec![],
-                    arguments: vec![
-                        col.into(),
-                        ConstantExpr {
-                            span: None,
-                            value: min.clone(),
-                        }
-                        .into(),
-                    ],
-                }
-                .into(),
-            ),
-            (None, Some(max)) => Some(
-                FunctionCall {
-                    span: None,
-                    func_name: if self.max_close {
-                        "lte".to_string()
-                    } else {
-                        "lt".to_string()
-                    },
-                    params: vec![],
-                    arguments: vec![
-                        col.into(),
-                        ConstantExpr {
-                            span: None,
-                            value: max.clone(),
-                        }
-                        .into(),
-                    ],
-                }
-                .into(),
-            ),
-            _ => None,
-        }
-    }
-}
-
-/// Each element is the operands of each equal predicate.
-type EqualPredicates<'a> = Vec<(&'a ScalarExpr, &'a ScalarExpr)>;
-/// Each element is the operands and the operator of each range predicate.
-/// Currently, range predicates should have one column and one constant.
-type RangePredicates<'a> = HashMap<IndexType, Range<'a>>;
-/// Each element is the full expression of each other predicate .
-type OtherPredicates<'a> = Vec<&'a ScalarExpr>;
-
-type Predicates<'a> = (
-    EqualPredicates<'a>,
-    RangePredicates<'a>,
-    OtherPredicates<'a>,
-);
-
-type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
-
-/// The data structure to record the selection.
-///
-/// - Key: the formatted expression.
-/// - Value: (index, data type) of the expression
-type SelectionMap<'a> = HashMap<String, (IndexType, DataType)>;
-
-// Record information helping to rewrite the query plan.
-pub struct RewriteInfomartion<'a> {
-    table_index: IndexType,
-    pub selection: &'a EvalScalar,
-    pub predicates: Option<&'a [ScalarExpr]>,
-    pub sort_items: Option<&'a [SortItem]>,
-    pub aggregation: Option<AggregationInfo<'a>>,
-}
-
-impl RewriteInfomartion<'_> {
-    fn output_bound_cols(&self) -> ColumnSet {
-        let mut cols = ColumnSet::new();
-        for item in self.selection.items.iter() {
-            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
-                cols.insert(col.column.index);
-            }
-        }
-
-        cols
-    }
-
-    fn can_apply_index(&self) -> bool {
-        if let Some((agg, _)) = self.aggregation {
-            if agg.grouping_sets.is_some() {
-                // Grouping sets is not supported.
-                return false;
-            }
-        }
-
-        true
-    }
-
-    fn formatted_group_items(&self) -> Vec<String> {
-        if let Some((agg, _)) = self.aggregation {
-            let mut cols = Vec::with_capacity(agg.group_items.len());
-            for item in agg.group_items.iter() {
-                cols.push(self.format_scalar(&item.scalar));
-            }
-            cols.sort();
-            return cols;
-        }
-        vec![]
-    }
-
-    fn formatted_sort_items(&self) -> Vec<String> {
-        if let Some(sorts) = self.sort_items {
-            let mut cols = Vec::with_capacity(sorts.len());
-            for item in sorts {
-                cols.push(format_col_name(item.index));
-            }
-            cols.sort();
-            return cols;
-        }
-        vec![]
-    }
-
-    fn formatted_selection(&self) -> Result<SelectionMap<'_>> {
-        let mut outputs = HashMap::with_capacity(self.selection.items.len());
-        for (index, item) in self.selection.items.iter().enumerate() {
-            let ty = item.scalar.data_type()?;
-            let key = self.format_scalar(&item.scalar);
-            outputs.insert(key, (index, ty));
-        }
-        Ok(outputs)
-    }
-
-    // If the column ref is already rewritten, recover it.
-    fn actual_column_ref<'a>(&'a self, col: &'a ScalarExpr) -> &'a ScalarExpr {
-        if let ScalarExpr::BoundColumnRef(col) = col {
-            if let Some((agg, args)) = &self.aggregation {
-                // Check if the col is an aggregation function.
-                if let Some(func) = agg
-                    .aggregate_functions
-                    .iter()
-                    .find(|item| item.index == col.column.index)
-                {
-                    return &func.scalar;
-                }
-                // Check if the col is an argument of aggregation function.
-                if let Some(arg) = args.get(&col.column.index) {
-                    return arg;
-                }
-            }
-        }
-        col
-    }
-
-    fn format_scalar(&self, scalar: &ScalarExpr) -> String {
-        match scalar {
-            ScalarExpr::BoundColumnRef(_) => match self.actual_column_ref(scalar) {
-                ScalarExpr::BoundColumnRef(col) => format_col_name(col.column.index),
-                s => self.format_scalar(s),
-            },
-            ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
-            ScalarExpr::FunctionCall(func) => format!(
-                "{}({})",
-                &func.func_name,
-                func.arguments
-                    .iter()
-                    .map(|arg| { self.format_scalar(arg) })
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-            ScalarExpr::CastExpr(cast) => format!(
-                "CAST({} AS {})",
-                self.format_scalar(&cast.argument),
-                cast.target_type
-            ),
-            ScalarExpr::AggregateFunction(agg) => {
-                format!(
-                    "{}<{}>({})",
-                    &agg.func_name,
-                    agg.params
-                        .iter()
-                        .map(|i| i.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    agg.args
-                        .iter()
-                        .map(|arg| { self.format_scalar(arg) })
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            ScalarExpr::UDFCall(udf) => format!(
-                "{}({})",
-                &udf.func_name,
-                udf.arguments
-                    .iter()
-                    .map(|arg| { self.format_scalar(arg) })
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            ),
-
-            _ => unreachable!(), // Window function and subquery will not appear in index.
-        }
-    }
-}
-
-fn collect_information(s_expr: &SExpr) -> Result<RewriteInfomartion<'_>> {
-    // The plan tree should be started with [`EvalScalar`].
-    if let RelOperator::EvalScalar(eval) = s_expr.plan() {
-        let mut info = RewriteInfomartion {
-            table_index: 0,
-            selection: eval,
-            predicates: None,
-            sort_items: None,
-            aggregation: None,
-        };
-        collect_information_impl(s_expr.child(0)?, &mut info)?;
-        return Ok(info);
-    }
-
-    unreachable!()
-}
-
-fn collect_information_impl<'a>(
-    s_expr: &'a SExpr,
-    info: &mut RewriteInfomartion<'a>,
-) -> Result<()> {
-    match s_expr.plan() {
-        RelOperator::Aggregate(agg) => {
-            let child = s_expr.child(0)?;
-            if let RelOperator::EvalScalar(eval) = child.plan() {
-                // This eval scalar hold aggregation's arguments.
-                let inputs = eval
-                    .items
-                    .iter()
-                    .map(|item| (item.index, &item.scalar))
-                    .collect();
-                info.aggregation.replace((agg, inputs));
-                collect_information_impl(child.child(0)?, info)
-            } else {
-                collect_information_impl(child, info)
-            }
-        }
-        RelOperator::Sort(sort) => {
-            info.sort_items.replace(&sort.items);
-            collect_information_impl(s_expr.child(0)?, info)
-        }
-        RelOperator::Filter(filter) => {
-            info.predicates.replace(&filter.predicates);
-            collect_information_impl(s_expr.child(0)?, info)
-        }
-        RelOperator::Scan(scan) => {
-            if let Some(prewhere) = &scan.prewhere {
-                debug_assert!(info.predicates.is_none());
-                info.predicates.replace(&prewhere.predicates);
-            }
-            info.table_index = scan.table_index;
-            // Finish the recursion.
-            Ok(())
-        }
-        _ => collect_information_impl(s_expr.child(0)?, info),
-    }
-}
-
-/// Collect three kinds of predicates:
-/// 1. `Equal`. Such as `column = constant`.
-/// 2. `Range`. Such as `column op constant`m `op` should be `gt`, `gte`, `lt` or `lte`.
-/// 3. `Other`. Predicates except `Equal` and `Range`.
-fn distinguish_predicates(predicates: &[ScalarExpr]) -> Predicates<'_> {
-    let mut equal_predicates = vec![];
-    let mut range_predicates = HashMap::new();
-    let mut other_predicates = vec![];
-
-    for pred in predicates {
-        match pred {
-            ScalarExpr::FunctionCall(FunctionCall {
-                func_name,
-                arguments,
-                ..
-            }) => match func_name.as_str() {
-                "eq" => {
-                    let left = &arguments[0];
-                    let right = &arguments[1];
-                    equal_predicates.push((left, right));
-                }
-                "gt" | "gte" | "lt" | "lte" => {
-                    let left = &arguments[0];
-                    let right = &arguments[1];
-                    match (left, right) {
-                        (ScalarExpr::BoundColumnRef(col), ScalarExpr::ConstantExpr(val)) => {
-                            range_predicates
-                                .entry(col.column.index)
-                                .and_modify(|v: &mut Range| v.set_bound(&val.value, func_name))
-                                .or_insert(Range::new(&val.value, func_name));
-                        }
-                        (ScalarExpr::ConstantExpr(val), ScalarExpr::BoundColumnRef(col)) => {
-                            range_predicates
-                                .entry(col.column.index)
-                                .and_modify(|v: &mut Range| v.set_bound(&val.value, func_name))
-                                .or_insert(Range::new(&val.value, &reverse_op(func_name)));
-                        }
-                        _ => other_predicates.push(pred),
-                    }
-                }
-                _ => other_predicates.push(pred),
-            },
-            _ => other_predicates.push(pred),
-        }
-    }
-
-    (equal_predicates, range_predicates, other_predicates)
+    ScalarExpr::BoundColumnRef(col)
 }
 
 #[inline(always)]
-fn format_col_name(index: IndexType) -> String {
-    format!("col_{index}")
+fn format_col(column: &ColumnBinding) -> String {
+    match &column.table_name {
+        Some(table_name) => {
+            format!("{}.{}", table_name, column.column_name)
+        }
+        None => column.column_name.clone(),
+    }
 }
 
 #[inline(always)]
@@ -1466,196 +1202,77 @@ fn reverse_op(op: &str) -> String {
         "gte" => "lte".to_string(),
         "lt" => "gt".to_string(),
         "lte" => "gte".to_string(),
-        _ => op.to_string(),
+        "eq" => "eq".to_string(),
+        _ => unreachable!(),
     }
 }
 
-/// Check if equal predicates of the index fit the query.
-///
-/// For each predicate of index, it should be in the query.
-fn check_predicates_equal(query: &EqualPredicates, index: &EqualPredicates) -> bool {
-    // TBD: if there is a better way.
-    for (left, right) in index {
-        if !query
-            .iter()
-            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
-        {
-            return false;
+fn actual_column_ref<'a>(
+    col: &'a ScalarExpr,
+    column_map: &'a HashMap<IndexType, ScalarExpr>,
+) -> &'a ScalarExpr {
+    if let ScalarExpr::BoundColumnRef(col) = col {
+        if let Some(arg) = column_map.get(&col.column.index) {
+            return arg;
         }
     }
-    true
+    col
 }
 
-/// Check if range predicates of the index fit the query.
-///
-/// For each predicate of query, the column side should be found in the index.
-/// And the range of the predicate in index should be more wide than the one in query.
-///
-/// For example:
-///
-/// - Valid: query predicate: `a > 1`, index predicate: `a > 0`
-/// - Invalid: query predicate: `a > 1`, index predicate: `a > 2`
-///
-/// Returns an [`Option`]:
-///
-/// - If not matched, returns [None].
-/// - If matched, returns columns need to be filtered.
-fn check_predicates_range(
-    query: &RangePredicates,
-    index: &RangePredicates,
-    index_output_bound_cols: &ColumnSet,
-    index_selection: &SelectionMap<'_>,
-) -> Option<Vec<ScalarExpr>> {
-    let mut out = Vec::new();
-    for (col, query_range) in query {
-        if let Some(index_range) = index.get(col) {
-            if !index_range.contains(query_range) {
-                return None;
-            }
-            // If query range is not equal to index range,
-            // we need to filter the index data.
-            // So we need to check if the columns in query predicates exist in index output columns.
-            if index_range != query_range {
-                if !index_output_bound_cols.contains(col) {
-                    return None;
-                }
-                let (new_index, ty) = &index_selection[&format_col_name(*col)];
-                out.push((*col, *new_index, ty))
-            }
-        } else if !index_output_bound_cols.contains(col) {
-            // If the column is not in index predicates, it should be in index output columns.
-            return None;
-        } else {
-            let (new_index, ty) = &index_selection[&format_col_name(*col)];
-            out.push((*col, *new_index, ty))
-        }
-    }
-
-    Some(
-        out.iter()
-            .filter_map(|(col, new_index, ty)| {
-                let range = &query[col];
-                Some(split_conjunctions(&range.to_scalar(*new_index, ty)?))
-            })
-            .flatten()
-            .collect(),
-    )
-}
-
-/// Check if other predicates of the index fit the query.
-///
-/// For each predicate of index, it should be in the query.
-fn check_predicates_other(query: &OtherPredicates, index: &OtherPredicates) -> bool {
-    // TBD: if there is a better way.
-    for pred in index {
-        if !query.iter().any(|p| p == pred) {
-            return false;
-        }
-    }
-    true
-}
-
-fn try_create_column_binding(
-    index_selection: &SelectionMap<'_>,
-    formatted_scalar: &str,
-) -> Option<BoundColumnRef> {
-    if let Some((index, ty)) = index_selection.get(formatted_scalar) {
-        Some(BoundColumnRef {
-            span: None,
-            column: ColumnBindingBuilder::new(
-                format!("index_col_{index}"),
-                *index,
-                Box::new(ty.clone()),
-                Visibility::Visible,
-            )
-            .build(),
-        })
-    } else {
-        None
-    }
-}
-
-fn rewrite_by_selection(
-    query_info: &RewriteInfomartion<'_>,
-    scalar: &ScalarExpr,
-    index_selection: &SelectionMap<'_>,
-) -> Option<ScalarExpr> {
-    if let Some(col) = try_create_column_binding(index_selection, &query_info.format_scalar(scalar))
-    {
-        Some(col.into())
-    } else {
-        rewrite_query_item(query_info, scalar, index_selection)
-    }
-}
-
-/// Check if `query_item` scalar contains output from index,
-/// and rewrite scalar with output from index.
-///
-/// If `query_item` contains items that are not in index outputs,
-/// returns [None];
-/// else returns the rewritten scalar.
-fn rewrite_query_item(
-    query_info: &RewriteInfomartion<'_>,
-    query_item: &ScalarExpr,
-    index_selection: &SelectionMap<'_>,
-) -> Option<ScalarExpr> {
-    // Every call will format the scalars,
-    // a more efficient way to be determined.
-    match query_item {
-        ScalarExpr::BoundColumnRef(col) => Some(
-            try_create_column_binding(index_selection, &format_col_name(col.column.index))?.into(),
+fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<IndexType, ScalarExpr>) -> String {
+    match scalar {
+        ScalarExpr::BoundColumnRef(_) => match actual_column_ref(scalar, column_map) {
+            ScalarExpr::BoundColumnRef(col) => format_col(&col.column),
+            s => format_scalar(s, column_map),
+        },
+        ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
+        ScalarExpr::FunctionCall(func) => format!(
+            "{}({})",
+            &func.func_name,
+            func.arguments
+                .iter()
+                .map(|arg| { format_scalar(arg, column_map) })
+                .collect::<Vec<String>>()
+                .join(", ")
         ),
-        ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
         ScalarExpr::CastExpr(cast) => {
-            let new_arg = rewrite_by_selection(query_info, &cast.argument, index_selection)?;
-            Some(
-                CastExpr {
-                    span: None,
-                    is_try: cast.is_try,
-                    argument: Box::new(new_arg),
-                    target_type: cast.target_type.clone(),
-                }
-                .into(),
+            let func_name = if cast.is_try { "try_cast" } else { "cast" };
+            format!(
+                "{}({} as {})",
+                func_name,
+                format_scalar(&cast.argument, column_map),
+                cast.target_type
             )
         }
-        ScalarExpr::FunctionCall(func) => {
-            let mut new_args = Vec::with_capacity(func.arguments.len());
-            for arg in func.arguments.iter() {
-                let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
-                new_args.push(new_arg);
+        ScalarExpr::AggregateFunction(agg) => {
+            let params = agg
+                .params
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let args = agg
+                .args
+                .iter()
+                .map(|arg| format_scalar(arg, column_map))
+                .collect::<Vec<_>>()
+                .join(", ");
+            if !params.is_empty() {
+                format!("{}<{}>({})", &agg.func_name, params, args)
+            } else {
+                format!("{}({})", &agg.func_name, args)
             }
-            Some(
-                FunctionCall {
-                    span: None,
-                    func_name: func.func_name.clone(),
-                    params: func.params.clone(),
-                    arguments: new_args,
-                }
-                .into(),
-            )
         }
-        ScalarExpr::UDFCall(udf) => {
-            let mut new_args = Vec::with_capacity(udf.arguments.len());
-            for arg in udf.arguments.iter() {
-                let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
-                new_args.push(new_arg);
-            }
-            Some(
-                UDFCall {
-                    span: udf.span,
-                    name: udf.name.clone(),
-                    func_name: udf.func_name.clone(),
-                    display_name: udf.display_name.clone(),
-                    udf_type: udf.udf_type.clone(),
-                    arg_types: udf.arg_types.clone(),
-                    return_type: udf.return_type.clone(),
-                    arguments: new_args,
-                }
-                .into(),
-            )
-        }
-        // TODO UDF interpreter
-        ScalarExpr::AggregateFunction(_) => None, /* Aggregate function must appear in index selection. */
+        ScalarExpr::UDFCall(udf) => format!(
+            "{}({})",
+            &udf.func_name,
+            udf.arguments
+                .iter()
+                .map(|arg| { format_scalar(arg, column_map) })
+                .collect::<Vec<String>>()
+                .join(", ")
+        ),
+
         _ => unreachable!(), // Window function and subquery will not appear in index.
     }
 }
