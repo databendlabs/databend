@@ -267,7 +267,8 @@ impl InternalColumn {
                     .unwrap_or("")
                     .split('_')
                     .collect::<Vec<&str>>();
-                let uuid = file_strs[0];
+                // TODO(Sky): reduce duplicated code
+                let uuid = file_strs[0].strip_prefix('g').unwrap_or(file_strs[0]);
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
                     for i in offsets {
