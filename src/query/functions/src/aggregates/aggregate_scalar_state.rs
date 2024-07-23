@@ -72,12 +72,10 @@ pub struct CmpMin;
 impl<T> ChangeIf<T> for CmpMin
 where
     T: ValueType,
-    for<'a> T::ScalarRef<'a>: PartialOrd,
+    for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
     #[inline]
     fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
-        let l = T::upcast_gat(l);
-        let r = T::upcast_gat(r);
         l.partial_cmp(&r).unwrap_or(Ordering::Equal) == Ordering::Greater
     }
 }
@@ -88,12 +86,10 @@ pub struct CmpMax;
 impl<T> ChangeIf<T> for CmpMax
 where
     T: ValueType,
-    for<'a> T::ScalarRef<'a>: PartialOrd,
+    for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
     #[inline]
     fn change_if<'a>(l: T::ScalarRef<'_>, r: T::ScalarRef<'_>) -> bool {
-        let l = T::upcast_gat(l);
-        let r = T::upcast_gat(r);
         l.partial_cmp(&r).unwrap_or(Ordering::Equal) == std::cmp::Ordering::Less
     }
 }

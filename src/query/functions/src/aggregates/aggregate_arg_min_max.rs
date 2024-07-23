@@ -62,7 +62,7 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
         validity: Option<&Bitmap>,
     ) -> Result<()>;
 
-    fn into_merge(&mut self, rhs: Self) -> Result<()>;
+    fn merge_from(&mut self, rhs: Self) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&self, column: &mut ColumnBuilder) -> Result<()>;
 }
@@ -152,7 +152,7 @@ where
         Ok(())
     }
 
-    fn into_merge(&mut self, rhs: Self) -> Result<()> {
+    fn merge_from(&mut self, rhs: Self) -> Result<()> {
         if let Some((r_val, r_arg)) = rhs.data {
             if self.change(V::to_scalar_ref(&r_val)) {
                 self.data = Some((r_val, r_arg));
@@ -281,7 +281,7 @@ where
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
-        state.into_merge(rhs)
+        state.merge_from(rhs)
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
