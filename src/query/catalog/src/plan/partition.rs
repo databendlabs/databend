@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -93,6 +96,8 @@ pub enum PartitionsShuffleKind {
     Seq,
     // Bind the Partition to executor by partition.hash()%executor_nums order.
     Mod,
+    // Bind the Partition to executor by ConsistentHash(partition.hash()) order.
+    ConsistentHash,
     // Bind the Partition to executor by partition.rand() order.
     Rand,
     // Bind the Partition to executor by broadcast
@@ -135,6 +140,49 @@ impl Partitions {
                 parts.sort_by(|a, b| a.0.cmp(&b.0));
                 parts.into_iter().map(|x| x.1).collect()
             }
+            PartitionsShuffleKind::ConsistentHash => {
+                let mut scale = 0;
+                let num_executors = executors_sorted.len();
+                const EXPECT_NODES: usize = 100;
+                while num_executors << scale < EXPECT_NODES {
+                    scale += 1;
+                }
+
+                let mut executor_part = executors_sorted
+                    .iter()
+                    .map(|e| (e.clone(), Partitions::default()))
+                    .collect::<HashMap<_, _>>();
+
+                let mut ring = executors_sorted
+                    .iter()
+                    .flat_map(|e| {
+                        let mut s = DefaultHasher::new();
+                        e.hash(&mut s);
+                        (0..1 << scale).map(move |i| {
+                            i.hash(&mut s);
+                            (e, s.finish())
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
+
+                for p in self.partitions.iter() {
+                    let k = p.hash();
+                    let idx = match ring.binary_search_by(|&(_, h)| h.cmp(&k)) {
+                        Err(i) => i,
+                        Ok(i) => i,
+                    };
+                    let executor = if idx == ring.len() {
+                        ring[0].0
+                    } else {
+                        ring[idx].0
+                    };
+                    let part = executor_part.get_mut(executor).unwrap();
+                    part.partitions.push(p.clone());
+                }
+                return Ok(executor_part);
+            }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
                 let mut parts = self.partitions.clone();
@@ -142,15 +190,15 @@ impl Partitions {
                 parts
             }
             PartitionsShuffleKind::Broadcast => {
-                let mut executor_part = HashMap::default();
-                for executor in executors_sorted.iter() {
-                    executor_part.insert(
-                        executor.clone(),
-                        Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
-                    );
-                }
-
-                return Ok(executor_part);
+                return Ok(executors_sorted
+                    .into_iter()
+                    .map(|executor| {
+                        (
+                            executor,
+                            Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
+                        )
+                    })
+                    .collect());
             }
         };
 
