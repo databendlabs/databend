@@ -89,12 +89,14 @@ impl FuseTable {
         // The max number of segments to be reclustered.
         let max_seg_num = limit.min(max_threads * 2);
 
-        let number_segments = segment_locations.len();
-        let mut segment_idx = 0;
         let mut recluster_seg_num = 0;
         let mut recluster_blocks_count = 0;
         let mut parts = ReclusterParts::new_recluster_parts();
+
+        let number_segments = segment_locations.len();
+        let mut segment_idx = 0;
         for chunk in segment_locations.chunks(chunk_size) {
+            let mut selected_seg_num = 0;
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
@@ -129,12 +131,12 @@ impl FuseTable {
                 let result =
                     Self::generate_recluster_parts(mutator.clone(), compact_segments).await?;
                 if let Some((seg_num, block_num, recluster_parts)) = result {
-                    recluster_seg_num = seg_num;
+                    selected_seg_num = seg_num;
                     recluster_blocks_count = block_num;
                     parts = recluster_parts;
                 }
             } else {
-                recluster_seg_num = selected_segs.len() as u64;
+                selected_seg_num = selected_segs.len() as u64;
                 let selected_segments = selected_segs
                     .into_iter()
                     .map(|i| compact_segments[i].clone())
@@ -145,6 +147,7 @@ impl FuseTable {
             }
 
             if !parts.is_empty() {
+                recluster_seg_num = selected_seg_num;
                 break;
             }
         }

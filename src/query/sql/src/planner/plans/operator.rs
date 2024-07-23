@@ -35,7 +35,6 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::r_cte_scan::RecursiveCteScan;
-use crate::plans::recluster_table::Recluster;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
@@ -43,6 +42,7 @@ use crate::plans::CteScan;
 use crate::plans::Exchange;
 use crate::plans::MergeInto;
 use crate::plans::ProjectSet;
+use crate::plans::Recluster;
 use crate::plans::Udf;
 use crate::plans::Window;
 
