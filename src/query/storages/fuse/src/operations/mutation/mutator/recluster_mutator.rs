@@ -566,18 +566,18 @@ impl ReclusterMutator {
     ) -> Result<IndexSet<usize>> {
         let mut max_depth = 0;
         let mut max_point = 0;
-        let mut block_depths = HashMap::new();
+        let mut interval_depths = HashMap::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
-        let mut unfinished_parts = HashMap::new();
+        let mut unfinished_intervals = HashMap::new();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let indices = compare_scalars(keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {
             let start = &values[idx as usize].0;
             let end = &values[idx as usize].1;
-            let point_depth = if unfinished_parts.len() == 1 && Self::check_point(start, end) {
+            let point_depth = if unfinished_intervals.len() == 1 && Self::check_point(start, end) {
                 1
             } else {
-                unfinished_parts.len() + start.len()
+                unfinished_intervals.len() + start.len()
             };
 
             if point_depth > max_depth {
@@ -585,36 +585,38 @@ impl ReclusterMutator {
                 max_point = i;
             }
 
-            unfinished_parts
+            unfinished_intervals
                 .values_mut()
                 .for_each(|val| *val = cmp::max(*val, point_depth));
 
             start.iter().for_each(|&idx| {
-                unfinished_parts.insert(idx, point_depth);
+                unfinished_intervals.insert(idx, point_depth);
             });
 
-            point_overlaps.push(unfinished_parts.keys().cloned().collect());
+            point_overlaps.push(unfinished_intervals.keys().cloned().collect());
 
             end.iter().for_each(|idx| {
-                if let Some(v) = unfinished_parts.remove(idx) {
-                    block_depths.insert(*idx, v);
+                if let Some(v) = unfinished_intervals.remove(idx) {
+                    interval_depths.insert(*idx, v);
                 }
             });
         }
 
         let mut selected_idx = IndexSet::new();
-        if !unfinished_parts.is_empty() {
-            warn!("Recluster: unfinished_parts is not empty after calculate the blocks overlaps");
-            // re-sort the unfinished parts firstly.
-            unfinished_parts.keys().for_each(|idx| {
+        if !unfinished_intervals.is_empty() {
+            warn!(
+                "Recluster: unfinished_intervals is not empty after calculate the blocks overlaps"
+            );
+            // re-sort the unfinished unfinished_intervals firstly.
+            unfinished_intervals.keys().for_each(|idx| {
                 selected_idx.insert(*idx);
             });
         }
 
-        let sum_depth: usize = block_depths.values().sum();
+        let sum_depth: usize = interval_depths.values().sum();
         // round the float to 4 decimal places.
         let average_depth =
-            (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
+            (10000.0 * sum_depth as f64 / interval_depths.len() as f64).round() / 10000.0;
         debug!("recluster: average_depth: {}", average_depth);
 
         // find the max point, gather the indices.
@@ -628,12 +630,15 @@ impl ReclusterMutator {
             while selected_idx.len() < max_len {
                 let left_depth = if left > 0 {
                     let point_overlap = &point_overlaps[left - 1];
+                    // Calculate the depth of the point.
                     let depth = point_overlap.len();
-                    if depth <= 2
-                        && point_overlap
-                            .iter()
-                            .all(|v| block_depths.get(v) == Some(&1))
+                    if point_overlap
+                        .iter()
+                        .all(|v| interval_depths.get(v) == Some(&1))
                     {
+                        // If all overlapping intervals have a depth of 1,
+                        // it indicates that these intervals donot overlap significantly.
+                        // Set left to indicate that the traversal on the left side is complete.
                         left = 0;
                         0.0
                     } else {
@@ -646,11 +651,13 @@ impl ReclusterMutator {
                 let right_depth = if right < point_overlaps.len() - 1 {
                     let point_overlap = &point_overlaps[right + 1];
                     let depth = point_overlap.len();
-                    if depth <= 2
-                        && point_overlap
-                            .iter()
-                            .all(|v| block_depths.get(v) == Some(&1))
+                    if point_overlap
+                        .iter()
+                        .all(|v| interval_depths.get(v) == Some(&1))
                     {
+                        // If all overlapping intervals have a depth of 1,
+                        // it indicates that these intervals donot overlap significantly.
+                        // Set right to indicate that the traversal on the left side is complete.
                         right = point_overlaps.len() - 1;
                         0.0
                     } else {
