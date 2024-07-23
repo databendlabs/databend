@@ -791,15 +791,8 @@ pub fn check_child_expr_in_subquery(
     op: &ComparisonOp,
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
-        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
-        ScalarExpr::FunctionCall(func) => {
-            if func.func_name.eq("tuple") {
-                return Ok((child_expr.clone(), op != &ComparisonOp::Equal));
-            }
-            Err(ErrorCode::Internal(format!(
-                "Invalid child expr in subquery: {:?}",
-                child_expr
-            )))
+        ScalarExpr::BoundColumnRef(_) | ScalarExpr::FunctionCall(_) => {
+            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {
