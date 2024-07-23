@@ -246,6 +246,8 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
             *offsets.get_unchecked_mut(0) = 0;
             for (i, index) in indices.iter().enumerate() {
                 let start = *col_offset.get_unchecked(index.to_usize()) as usize;
@@ -254,8 +256,6 @@ impl Column {
                 *items.get_unchecked_mut(i) = (col_data_ptr.add(start) as u64, len);
                 *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
@@ -303,30 +303,27 @@ impl Column {
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut builder_len = 0;
         let mut unset_bits = 0;
         let mut value = 0;
         let mut i = 0;
 
+        for index in indices.iter() {
+            if col.get_bit(index.to_usize()) {
+                value |= BIT_MASK[i % 8];
+            } else {
+                unset_bits += 1;
+            }
+            i += 1;
+            if i % 8 == 0 {
+                builder.push(value);
+                value = 0;
+            }
+        }
+        if i % 8 != 0 {
+            builder.push(value);
+        }
+
         unsafe {
-            for index in indices.iter() {
-                if col.get_bit_unchecked(index.to_usize()) {
-                    value |= BIT_MASK[i % 8];
-                } else {
-                    unset_bits += 1;
-                }
-                i += 1;
-                if i % 8 == 0 {
-                    *builder.get_unchecked_mut(builder_len) = value;
-                    builder_len += 1;
-                    value = 0;
-                }
-            }
-            if i % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = value;
-                builder_len += 1;
-            }
-            builder.set_len(builder_len);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()
