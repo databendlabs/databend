@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
@@ -234,6 +235,7 @@ where TablesTable<T, U>: HistoryAware
         for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
             let mut tables_names: Vec<String> = Vec::new();
+            let mut invalid_tables_ids = false;
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
                 let mut tables_ids: Vec<String> = Vec::new();
@@ -250,6 +252,15 @@ where TablesTable<T, U>: HistoryAware
                             if let Scalar::String(tid) = scalar {
                                 if !tables_ids.contains(tid) {
                                     tables_ids.push(tid.clone());
+                                }
+                            } else if let Scalar::Number(n) = scalar {
+                                match n {
+                                    NumberScalar::UInt64(n) => tables_ids.push(n.to_string()),
+                                    NumberScalar::UInt8(n) => tables_ids.push(n.to_string()),
+                                    NumberScalar::UInt16(n) => tables_ids.push(n.to_string()),
+                                    NumberScalar::UInt32(n) => tables_ids.push(n.to_string()),
+                                    // if n is int or float, invalid tables_ids
+                                    _ => invalid_tables_ids = true,
                                 }
                             }
                         } else if col_name == "name" {
@@ -323,7 +334,11 @@ where TablesTable<T, U>: HistoryAware
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
-                let tables = if tables_names.is_empty() || tables_names.len() > 10 || T {
+                let tables = if tables_names.is_empty()
+                    || tables_names.len() > 10
+                    || T
+                    || invalid_tables_ids
+                {
                     match Self::list_tables(ctl, &tenant, db_name, T, U).await {
                         Ok(tables) => tables,
                         Err(err) => {
