@@ -803,17 +803,14 @@ impl Column {
         let mut data_size = 0;
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
-            *offsets.get_unchecked_mut(0) = 0;
-            for (i, row_ptr) in indices.iter().enumerate() {
-                let item =
-                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize);
-                data_size += item.len() as u64;
-                *items.get_unchecked_mut(i) = (item.as_ptr() as u64, item.len());
-                *offsets.get_unchecked_mut(i + 1) = data_size;
-            }
+        offsets.push(0);
+        for row_ptr in indices {
+            let item = col[row_ptr.chunk_index as usize]
+                .index(row_ptr.row_index as usize)
+                .unwrap();
+            data_size += item.len() as u64;
+            items.push((item.as_ptr() as u64, item.len()));
+            offsets.push(data_size);
         }
 
         // Build [`data`].
