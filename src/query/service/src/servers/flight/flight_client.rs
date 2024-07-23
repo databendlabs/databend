@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
 use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -25,6 +26,8 @@ use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::StreamExt;
@@ -32,6 +35,7 @@ use futures_util::future::Either;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
@@ -336,31 +340,76 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<Result<FlightData, Status>>,
+    tx: Mutex<Sender<Result<FlightData, Status>>>,
+    seq_num: AtomicUsize,
+    buffer: Mutex<VecDeque<FlightData>>,
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
-        FlightSender { tx }
+        FlightSender {
+            tx: Mutex::new(tx),
+            seq_num: AtomicUsize::new(0),
+            buffer: Mutex::new(VecDeque::with_capacity(3)),
+        }
     }
 
     pub fn is_closed(&self) -> bool {
-        self.tx.is_closed()
+        self.tx.lock().is_closed()
     }
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
+        self.seq_num.fetch_add(1, Ordering::Acquire);
+        let flight_data = FlightData::try_from(data)?;
+        self.update_buffer(flight_data.clone());
+        let sender = self.tx.lock().clone();
+        if let Err(_cause) = sender.send(Ok(flight_data)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
         }
+        Ok(())
+    }
 
+    fn update_buffer(&self, data: FlightData) {
+        let mut buffer = self.buffer.lock();
+        if buffer.len() == buffer.capacity() {
+            buffer.pop_front();
+        }
+        buffer.push_back(data);
+    }
+
+    pub fn replace_tx(
+        &self,
+        new_tx: Sender<Result<FlightData, Status>>,
+        continue_from: usize,
+    ) -> Result<()> {
+        *self.tx.lock() = new_tx;
+        let buffer = self.buffer.lock().clone();
+        let sender = self.tx.lock().clone();
+        let seq_num = self.seq_num.load(Ordering::Acquire);
+        Runtime::with_worker_threads(1, Some(String::from("ReconnectSender")))?.spawn(async move {
+            if seq_num - continue_from < buffer.len() {
+                for data in buffer.iter().skip(seq_num - continue_from) {
+                    if let Err(_cause) = sender.send(Ok(data.clone())).await {
+                        break;
+                    }
+                }
+            } else {
+                let _res = sender
+                    .send(Err(ErrorCode::AbortedQuery(
+                        "Aborted query, because the remote flight channel is closed.",
+                    )
+                    .into()))
+                    .await;
+            }
+        });
         Ok(())
     }
 
     pub fn close(&self) {
-        self.tx.close();
+        self.tx.lock().close();
     }
 }
 
@@ -421,7 +470,11 @@ impl FlightExchange {
 
     pub fn convert_to_sender(self) -> FlightSender {
         match self {
-            FlightExchange::Sender(tx) => FlightSender { tx },
+            FlightExchange::Sender(tx) => FlightSender {
+                tx: Mutex::new(tx),
+                seq_num: AtomicUsize::new(0),
+                buffer: Mutex::new(VecDeque::with_capacity(3)),
+            },
             _ => unreachable!(),
         }
     }

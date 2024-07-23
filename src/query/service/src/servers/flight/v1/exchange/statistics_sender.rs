@@ -150,7 +150,10 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSenderWrapper) -> Result<()> {
+    async fn send_copy_status(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSenderWrapper,
+    ) -> Result<()> {
         let copy_status = ctx.get_copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
@@ -229,5 +232,4 @@ impl StatisticsSender {
 
         progress_info
     }
-
 }
