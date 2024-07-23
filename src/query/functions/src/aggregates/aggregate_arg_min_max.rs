@@ -53,7 +53,8 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
     BorshSerialize + BorshDeserialize + Send + Sync + 'static
 {
     fn new() -> Self;
-    fn add(&mut self, value: V::ScalarRef<'_>, data: A::ScalarRef<'_>);
+    fn change(&self, other: V::ScalarRef<'_>) -> bool;
+    fn update(&mut self, other: V::ScalarRef<'_>, arg: A::ScalarRef<'_>);
     fn add_batch(
         &mut self,
         data_column: &A::Column,
@@ -61,8 +62,9 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
         validity: Option<&Bitmap>,
     ) -> Result<()>;
 
+    fn into_merge(&mut self, rhs: Self) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn merge_result(&mut self, column: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(&self, column: &mut ColumnBuilder) -> Result<()>;
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -93,17 +95,15 @@ where
         }
     }
 
-    fn add(&mut self, other: V::ScalarRef<'_>, data: A::ScalarRef<'_>) {
+    fn change(&self, other: V::ScalarRef<'_>) -> bool {
         match &self.data {
-            Some((val, _)) => {
-                if C::change_if(V::to_scalar_ref(val), other.clone()) {
-                    self.data = Some((V::to_owned_scalar(other), A::to_owned_scalar(data)));
-                }
-            }
-            None => {
-                self.data = Some((V::to_owned_scalar(other), A::to_owned_scalar(data)));
-            }
+            Some((val, _)) => C::change_if(V::to_scalar_ref(val), other),
+            None => true,
         }
+    }
+
+    fn update(&mut self, other: V::ScalarRef<'_>, arg: A::ScalarRef<'_>) {
+        self.data = Some((V::to_owned_scalar(other), A::to_owned_scalar(arg)));
     }
 
     fn add_batch(
@@ -145,19 +145,32 @@ where
         };
 
         if let Some((row, val)) = acc {
-            self.add(val, unsafe { A::index_column_unchecked(arg_col, row) });
+            if self.change(val.clone()) {
+                self.update(val, A::index_column(arg_col, row).unwrap())
+            }
+        }
+        Ok(())
+    }
+
+    fn into_merge(&mut self, rhs: Self) -> Result<()> {
+        if let Some((r_val, r_arg)) = rhs.data {
+            if self.change(V::to_scalar_ref(&r_val)) {
+                self.data = Some((r_val, r_arg));
+            }
         }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
         if let Some((r_val, r_arg)) = &rhs.data {
-            self.add(V::to_scalar_ref(r_val), A::to_scalar_ref(r_arg));
+            if self.change(V::to_scalar_ref(r_val)) {
+                self.data = Some((r_val.to_owned(), r_arg.to_owned()));
+            }
         }
         Ok(())
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
         match &self.data {
             Some((_, arg)) => {
                 if let Some(inner) = A::try_downcast_builder(builder) {
@@ -233,16 +246,17 @@ where
     ) -> Result<()> {
         let arg_col = A::try_downcast_column(&columns[0]).unwrap();
         let val_col = V::try_downcast_column(&columns[1]).unwrap();
-        let arg_col_iter = A::iter_column(&arg_col);
         let val_col_iter = V::iter_column(&val_col);
 
         val_col_iter
-            .zip(arg_col_iter)
+            .enumerate()
             .zip(places.iter())
-            .for_each(|((val, arg), place)| {
+            .for_each(|((row, val), place)| {
                 let addr = place.next(offset);
                 let state = addr.get::<State>();
-                state.add(val, arg);
+                if state.change(val.clone()) {
+                    state.update(val, A::index_column(&arg_col, row).unwrap())
+                }
             });
         Ok(())
     }
@@ -252,9 +266,10 @@ where
         let val_col = V::try_downcast_column(&columns[1]).unwrap();
         let state = place.get::<State>();
 
-        let arg = unsafe { A::index_column_unchecked(&arg_col, row) };
         let val = unsafe { V::index_column_unchecked(&val_col, row) };
-        state.add(val, arg);
+        if state.change(val.clone()) {
+            state.update(val, A::index_column(&arg_col, row).unwrap())
+        }
         Ok(())
     }
 
@@ -266,8 +281,7 @@ where
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
-
-        state.merge(&rhs)
+        state.into_merge(rhs)
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
