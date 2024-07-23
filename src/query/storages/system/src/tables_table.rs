@@ -117,9 +117,8 @@ where TablesTable<T, U>: HistoryAware
         let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
-        Ok(self
-            .get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
-            .await)
+        self.get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
+            .await
     }
 }
 
@@ -219,7 +218,7 @@ where TablesTable<T, U>: HistoryAware
         push_downs: Option<PushDownInfo>,
         catalogs: Vec<Arc<dyn Catalog>>,
         visibility_checker: GrantObjectVisibilityChecker,
-    ) -> DataBlock {
+    ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
         let ctls: Vec<(String, Arc<dyn Catalog>)> =
@@ -234,8 +233,10 @@ where TablesTable<T, U>: HistoryAware
 
         for (ctl_name, ctl) in ctls.iter() {
             let mut dbs = Vec::new();
+            let mut tables_names: Vec<String> = Vec::new();
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
+                let mut tables_ids: Vec<String> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
@@ -245,6 +246,18 @@ where TablesTable<T, U>: HistoryAware
                                     db_name.push(database.clone());
                                 }
                             }
+                        } else if col_name == "table_id" {
+                            if let Scalar::String(tid) = scalar {
+                                if !tables_ids.contains(tid) {
+                                    tables_ids.push(tid.clone());
+                                }
+                            }
+                        } else if col_name == "name" {
+                            if let Scalar::String(t_name) = scalar {
+                                if !tables_names.contains(t_name) {
+                                    tables_names.push(t_name.clone());
+                                }
+                            }
                         }
                     });
                     for db in db_name {
@@ -252,6 +265,27 @@ where TablesTable<T, U>: HistoryAware
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+                            }
+                        }
+                    }
+
+                    if !T {
+                        let mut ids: Vec<u64> = Vec::new();
+                        for id in tables_ids {
+                            // table id is u64 type. Therefore, an error can be reported if the table ID fails to be converted
+                            let id = id.parse::<u64>()?;
+                            ids.push(id);
+                        }
+                        match ctl.mget_table_names_by_ids(&tenant, &ids).await {
+                            Ok(tables) => {
+                                for table in tables.into_iter().flatten() {
+                                    tables_names.push(table);
+                                }
+                            }
+                            Err(err) => {
+                                let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
                                 warn!("{}", msg);
                                 ctx.push_warning(msg);
                             }
@@ -289,23 +323,44 @@ where TablesTable<T, U>: HistoryAware
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
-                let tables = match Self::list_tables(ctl, &tenant, db_name, T, U).await {
-                    Ok(tables) => tables,
-                    Err(err) => {
-                        // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
-                        // these databases might be:
-                        // - sharing database
-                        // - hive database
-                        // - iceberg database
-                        // - others
-                        // TODO(liyz): return the warnings in the HTTP query protocol.
-                        let msg =
-                            format!("Failed to list tables in database: {}, {}", db_name, err);
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+                let tables = if tables_names.is_empty() || tables_names.len() > 10 || T {
+                    match Self::list_tables(ctl, &tenant, db_name, T, U).await {
+                        Ok(tables) => tables,
+                        Err(err) => {
+                            // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
+                            // these databases might be:
+                            // - sharing database
+                            // - hive database
+                            // - iceberg database
+                            // - others
+                            // TODO(liyz): return the warnings in the HTTP query protocol.
+                            let msg =
+                                format!("Failed to list tables in database: {}, {}", db_name, err);
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
 
-                        continue;
+                            continue;
+                        }
                     }
+                } else {
+                    // Only without history can call get_table
+                    let mut tables = Vec::new();
+                    for table_name in &tables_names {
+                        match ctl.get_table(&tenant, db_name, table_name).await {
+                            Ok(t) => tables.push(t),
+                            Err(err) => {
+                                let msg = format!(
+                                    "Failed to list tables in database: {}, {}",
+                                    db_name, err
+                                );
+                                warn!("{}", msg);
+                                ctx.push_warning(msg);
+
+                                continue;
+                            }
+                        }
+                    }
+                    tables
                 };
 
                 for table in tables {
@@ -466,7 +521,7 @@ where TablesTable<T, U>: HistoryAware
             .collect();
 
         if U {
-            DataBlock::new_from_columns(vec![
+            Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
                 StringType::from_data(names),
@@ -486,9 +541,9 @@ where TablesTable<T, U>: HistoryAware
                 UInt64Type::from_opt_data(number_of_blocks),
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
-            ])
+            ]))
         } else {
-            DataBlock::new_from_columns(vec![
+            Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
                 StringType::from_data(names),
@@ -501,7 +556,7 @@ where TablesTable<T, U>: HistoryAware
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
                 StringType::from_data(view_query),
-            ])
+            ]))
         }
     }
 
