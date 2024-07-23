@@ -218,7 +218,14 @@ impl Interpreter for AnalyzeTableInterpreter {
                 })
                 .collect::<Vec<_>>();
             let mut histogram_info_receivers = HashMap::new();
-            for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
+            for (id, (sql, (col_id, _))) in histogram_sqls
+                .into_iter()
+                .zip(index_cols.iter())
+                .enumerate()
+            {
+                if id > 0 {
+                    break;
+                }
                 info!("Analyze histogram via sql {:?}", sql);
                 let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
                 if !self.ctx.get_cluster().is_empty() {
