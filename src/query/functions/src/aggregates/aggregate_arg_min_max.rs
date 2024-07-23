@@ -53,7 +53,7 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
     BorshSerialize + BorshDeserialize + Send + Sync + 'static
 {
     fn new() -> Self;
-    fn add(&mut self, value: V::ScalarRef<'_>, data: Scalar);
+    fn add(&mut self, value: V::ScalarRef<'_>, data: A::ScalarRef<'_>);
     fn add_batch(
         &mut self,
         data_column: &A::Column,
@@ -70,42 +70,38 @@ struct ArgMinMaxState<A, V, C>
 where
     V: ValueType,
     V::Scalar: BorshSerialize + BorshDeserialize,
+    A: ValueType,
+    A::Scalar: BorshSerialize + BorshDeserialize,
 {
-    pub value: Option<V::Scalar>,
-    pub data: Scalar,
-    #[borsh(skip)]
-    _a: PhantomData<A>,
+    pub data: Option<(V::Scalar, A::Scalar)>,
     #[borsh(skip)]
     _c: PhantomData<C>,
 }
 
 impl<A, V, C> AggregateArgMinMaxState<A, V> for ArgMinMaxState<A, V, C>
 where
-    A: ValueType + Send + Sync,
+    A: ValueType,
+    A::Scalar: Send + Sync + BorshSerialize + BorshDeserialize,
     V: ValueType,
     V::Scalar: Send + Sync + BorshSerialize + BorshDeserialize,
     C: ChangeIf<V> + Default,
 {
     fn new() -> Self {
         Self {
-            value: None,
-            data: Scalar::Null,
-            _a: PhantomData,
+            data: None,
             _c: PhantomData,
         }
     }
 
-    fn add(&mut self, other: V::ScalarRef<'_>, data: Scalar) {
-        match &self.value {
-            Some(v) => {
-                if C::change_if(V::to_scalar_ref(v), other.clone()) {
-                    self.value = Some(V::to_owned_scalar(other));
-                    self.data = data;
+    fn add(&mut self, other: V::ScalarRef<'_>, data: A::ScalarRef<'_>) {
+        match &self.data {
+            Some((val, _)) => {
+                if C::change_if(V::to_scalar_ref(val), other.clone()) {
+                    self.data = Some((V::to_owned_scalar(other), A::to_owned_scalar(data)));
                 }
             }
             None => {
-                self.value = Some(V::to_owned_scalar(other));
-                self.data = data;
+                self.data = Some((V::to_owned_scalar(other), A::to_owned_scalar(data)));
             }
         }
     }
@@ -120,78 +116,64 @@ where
         if column_len == 0 {
             return Ok(());
         }
-        let val_col_iter = V::iter_column(val_col);
-
-        if let Some(bit) = validity {
+        let acc = if let Some(bit) = validity {
             if bit.unset_bits() == column_len {
                 return Ok(());
             }
-            // V::ScalarRef doesn't derive Default, so take the first value as default.
-            let mut v = unsafe { V::index_column_unchecked(val_col, 0) };
-            let mut has_v = bit.get_bit(0);
-            let mut data_value = if has_v {
-                let arg = unsafe { A::index_column_unchecked(arg_col, 0) };
-                A::upcast_scalar(A::to_owned_scalar(arg))
-            } else {
-                Scalar::Null
-            };
 
-            for ((row, val), valid) in val_col_iter.enumerate().skip(1).zip(bit.iter().skip(1)) {
-                if !valid {
-                    continue;
-                }
-                if !has_v {
-                    has_v = true;
-                    v = val.clone();
-                    let arg = unsafe { A::index_column_unchecked(arg_col, row) };
-                    data_value = A::upcast_scalar(A::to_owned_scalar(arg));
-                } else if C::change_if(v.clone(), val.clone()) {
-                    v = val.clone();
-                    let arg = unsafe { A::index_column_unchecked(arg_col, row) };
-                    data_value = A::upcast_scalar(A::to_owned_scalar(arg));
-                }
-            }
-
-            if has_v {
-                self.add(v, data_value);
-            }
+            V::iter_column(val_col)
+                .enumerate()
+                .zip(bit.iter())
+                .filter_map(|(item, valid)| if valid { Some(item) } else { None })
+                .reduce(|acc, (row, val)| {
+                    if C::change_if(acc.1.clone(), val.clone()) {
+                        (row, val)
+                    } else {
+                        acc
+                    }
+                })
         } else {
-            let v = val_col_iter.enumerate().reduce(|acc, (row, val)| {
-                if C::change_if(acc.1.clone(), val.clone()) {
-                    (row, val)
-                } else {
-                    acc
-                }
-            });
-
-            if let Some((row, val)) = v {
-                let arg = unsafe { A::index_column_unchecked(arg_col, row) };
-                self.add(val, A::upcast_scalar(A::to_owned_scalar(arg)));
-            }
+            V::iter_column(val_col)
+                .enumerate()
+                .reduce(|acc, (row, val)| {
+                    if C::change_if(acc.1.clone(), val.clone()) {
+                        (row, val)
+                    } else {
+                        acc
+                    }
+                })
         };
+
+        if let Some((row, val)) = acc {
+            self.add(val, unsafe { A::index_column_unchecked(arg_col, row) });
+        }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        if let Some(v) = &rhs.value {
-            self.add(V::to_scalar_ref(v), rhs.data.clone());
+        if let Some((r_val, r_arg)) = &rhs.data {
+            self.add(V::to_scalar_ref(r_val), A::to_scalar_ref(r_arg));
         }
         Ok(())
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        if self.value.is_some() {
-            if let Some(inner) = A::try_downcast_builder(builder) {
-                A::push_item(inner, A::try_downcast_scalar(&self.data.as_ref()).unwrap());
-            } else {
-                builder.push(self.data.as_ref());
+        match &self.data {
+            Some((_, arg)) => {
+                if let Some(inner) = A::try_downcast_builder(builder) {
+                    A::push_item(inner, A::to_scalar_ref(arg));
+                } else {
+                    builder.push(A::upcast_scalar(arg.clone()).as_ref());
+                }
             }
-        } else if let Some(inner) = A::try_downcast_builder(builder) {
-            A::push_default(inner);
-        } else {
-            builder.push_default();
+            None => {
+                if let Some(inner) = A::try_downcast_builder(builder) {
+                    A::push_default(inner);
+                } else {
+                    builder.push_default();
+                }
+            }
         }
-
         Ok(())
     }
 }
@@ -260,10 +242,7 @@ where
             .for_each(|((val, arg), place)| {
                 let addr = place.next(offset);
                 let state = addr.get::<State>();
-                state.add(
-                    val.clone(),
-                    A::upcast_scalar(A::to_owned_scalar(arg.clone())),
-                );
+                state.add(val, arg);
             });
         Ok(())
     }
@@ -275,7 +254,7 @@ where
 
         let arg = unsafe { A::index_column_unchecked(&arg_col, row) };
         let val = unsafe { V::index_column_unchecked(&val_col, row) };
-        state.add(val, A::upcast_scalar(A::to_owned_scalar(arg.clone())));
+        state.add(val, arg);
         Ok(())
     }
 
