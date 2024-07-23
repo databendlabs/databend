@@ -68,7 +68,7 @@ impl BlockThresholds {
 
     pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
         let mut block_num = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
-        let mut rows_per_block = (total_rows + block_num - 1) / block_num;
+        let mut rows_per_block = total_rows.div_ceil(block_num);
 
         let max_bytes_per_block = if rows_per_block < self.max_rows_per_block / 10 {
             // If block rows < 100_000, max_bytes_per_block set to 200M
@@ -85,7 +85,7 @@ impl BlockThresholds {
 
         if block_num > 1 && max_bytes_per_block > self.max_bytes_per_block {
             block_num = std::cmp::max(total_bytes / max_bytes_per_block, 1);
-            rows_per_block = (total_rows + block_num - 1) / block_num;
+            rows_per_block = total_rows.div_ceil(block_num);
         }
 
         rows_per_block.min(self.max_rows_per_block)

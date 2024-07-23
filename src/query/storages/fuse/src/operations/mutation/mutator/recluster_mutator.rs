@@ -428,14 +428,17 @@ impl ReclusterMutator {
         total_bytes: usize,
         level: i32,
     ) -> ReclusterTask {
-        let locations = block_metas
-            .iter()
-            .map(|v| &v.1.location.0)
-            .collect::<Vec<_>>();
-        debug!(
-            "recluster: generate recluster task, the selected blocks: {:?}, level: {}",
-            locations, level
-        );
+        if log::log_enabled!(log::Level::Debug) {
+            let locations = block_metas
+                .iter()
+                .map(|v| &v.1.location.0)
+                .collect::<Vec<_>>();
+            debug!(
+                "recluster: generate recluster task, the selected blocks: {:?}, level: {}",
+                locations, level
+            );
+        }
+
         let (stats, parts) =
             FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
         self.recluster_blocks_count += block_metas.len() as u64;
