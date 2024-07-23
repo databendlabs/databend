@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use databend_client::auth::SensitiveString;
+use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ConnectionArgs {
@@ -34,7 +35,8 @@ impl ConnectionArgs {
         dsn.set_host(Some(&self.host))?;
         _ = dsn.set_port(self.port);
         _ = dsn.set_username(&self.user);
-        _ = dsn.set_password(Some(self.password.inner()));
+        let password = utf8_percent_encode(self.password.inner(), NON_ALPHANUMERIC).to_string();
+        _ = dsn.set_password(Some(&password));
         if let Some(database) = self.database {
             dsn.set_path(&database);
         }
@@ -63,7 +65,9 @@ impl ConnectionArgs {
         let host = u.host_str().ok_or(anyhow!("missing host"))?.to_string();
         let port = u.port();
         let user = u.username().to_string();
-        let password = SensitiveString::from(u.password().unwrap_or_default());
+        let password = u.password().unwrap_or_default();
+        let password = percent_decode_str(password).decode_utf8()?.to_string();
+        let password = SensitiveString::from(password);
         let database = u.path().strip_prefix('/').map(|s| s.to_string());
         Ok(Self {
             host,
@@ -83,13 +87,15 @@ mod test {
 
     #[test]
     fn parse_dsn() -> Result<()> {
-        let dsn = "databend://username:3a%40SC(nYE1k%3D%7B%7BR@app.databend.com/test?wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&warehouse=wh&sslmode=disable";
+        let dsn = "databend://username:3a%40SC%28nYE%25a1k%3D%7B%7BR@app.databend.com/test?wait_time_secs=10&max_rows_in_buffer=5000000&max_rows_per_page=10000&warehouse=wh&sslmode=disable";
         let args = ConnectionArgs::from_dsn(dsn)?;
+        let password_str = "3a@SC(nYE%a1k={{R";
+        assert_eq!(args.password.inner(), password_str);
         let expected = ConnectionArgs {
             host: "app.databend.com".to_string(),
             port: None,
             user: "username".to_string(),
-            password: SensitiveString::from("3a@SC(nYE1k={{R"),
+            password: SensitiveString::from(password_str),
             database: Some("test".to_string()),
             flight: false,
             args: {
@@ -108,11 +114,12 @@ mod test {
 
     #[test]
     fn format_dsn() -> Result<()> {
+        let password_str = "3a@SC(nYE%a1k={{R";
         let args = ConnectionArgs {
             host: "app.databend.com".to_string(),
             port: Some(443),
             user: "username".to_string(),
-            password: SensitiveString::from("3a@SC(nYE1k={{R"),
+            password: SensitiveString::from(password_str),
             database: Some("test".to_string()),
             flight: false,
             args: {
@@ -126,7 +133,7 @@ mod test {
             },
         };
         let dsn = args.get_dsn()?;
-        let expected = "databend://username:3a%40SC(nYE1k%3D%7B%7BR@app.databend.com:443/test?max_rows_in_buffer=5000000&max_rows_per_page=10000&sslmode=disable&wait_time_secs=10&warehouse=wh";
+        let expected = "databend://username:3a%40SC%28nYE%25a1k%3D%7B%7BR@app.databend.com:443/test?max_rows_in_buffer=5000000&max_rows_per_page=10000&sslmode=disable&wait_time_secs=10&warehouse=wh";
         assert_eq!(dsn, expected);
         Ok(())
     }
