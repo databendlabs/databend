@@ -351,12 +351,19 @@ impl DataExchangeManager {
         &self,
         id: String,
         target: String,
+        continue_from: usize,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
+            Entry::Occupied(mut v) => {
+                if continue_from == 0 {
+                    v.get_mut().add_statistics_exchange(target)
+                } else {
+                    v.get_mut().replace_sender(target, None, continue_from)
+                }
+            }
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
                 .add_statistics_exchange(target),
@@ -369,12 +376,20 @@ impl DataExchangeManager {
         query: String,
         target: String,
         fragment: usize,
+        continue_from: usize,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(target, fragment),
+            Entry::Occupied(mut v) => {
+                if continue_from == 0 {
+                    v.get_mut().add_fragment_exchange(target, fragment)
+                } else {
+                    v.get_mut()
+                        .replace_sender(target, Some(fragment), continue_from)
+                }
+            }
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
                 .add_fragment_exchange(target, fragment),
@@ -641,6 +656,33 @@ impl QueryCoordinator {
         Ok(())
     }
 
+    pub fn replace_sender(
+        &mut self,
+        target: String,
+        fragment: Option<usize>,
+        continue_from: usize,
+    ) -> Result<Receiver<Result<FlightData, Status>>> {
+        let (tx, rx) = async_channel::bounded(8);
+        let flight_sender = if let Some(fragment) = fragment {
+            self.senders_map
+                .get_mut(&(target, fragment, FRAGMENT_SENDER))
+        } else {
+            self.senders_map.get_mut(&(target, 0, STATISTICS_SENDER))
+        };
+        match flight_sender {
+            None => {
+                return Err(ErrorCode::Internal(
+                    "Reconnection failed: cannot replace the sender",
+                ));
+            }
+            Some(sender) => {
+                sender.replace_tx(tx, continue_from)?;
+            }
+        }
+
+        Ok(rx)
+    }
+
     pub fn get_flight_senders(
         &mut self,
         params: &ExchangeParams,
@@ -893,9 +935,7 @@ impl QueryCoordinator {
         let ctx = query_ctx.clone();
         let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
 
-        let flight_sender = Arc::new(
-            request_server_exchange.convert_to_sender()
-        );
+        let flight_sender = Arc::new(request_server_exchange.convert_to_sender());
         self.senders_map.insert(
             (query_id.clone(), 0, STATISTICS_SENDER),
             flight_sender.clone(),
