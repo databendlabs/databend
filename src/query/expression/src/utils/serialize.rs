@@ -36,7 +36,8 @@ pub fn read_decimal_with_size<T: Decimal>(
     rounding_mode: bool,
 ) -> Result<(T, usize)> {
     // Read one more digit for round
-    let (n, d, e, n_read) = read_decimal::<T>(buf, (size.precision + 1) as u32, exact)?;
+    let (n, d, e, n_read) =
+        read_decimal::<T>(buf, (size.precision + 1) as u32, size.scale as _, exact)?;
     if d as i32 + e > (size.precision - size.scale).into() {
         return Err(decimal_overflow_error());
     }
@@ -80,7 +81,7 @@ pub fn read_decimal_with_size<T: Decimal>(
 ///   value = n * 10^exponent.
 ///   n has n_digits digits, with no leading or fraction trailing zero.
 ///   Excessive digits in a fraction are discarded (not rounded)
-/// no information is lost except excessive digits cut due to max_digits.
+/// no information is lost except excessive digits cut due to max_digits and max_scales.
 /// e.g '010.010' return (1001, 4 -2, 7)
 /// usage:
 ///   used directly: for example 'select 1.1' should return a decimal
@@ -88,6 +89,7 @@ pub fn read_decimal_with_size<T: Decimal>(
 pub fn read_decimal<T: Decimal>(
     buf: &[u8],
     max_digits: u32,
+    max_scales: u32,
     exact: bool,
 ) -> Result<(T, u8, i32, usize)> {
     if buf.is_empty() {
@@ -111,9 +113,11 @@ pub fn read_decimal<T: Decimal>(
     };
 
     let mut digits = 0;
+    let mut scales = 0;
     let mut leading_zero = false;
     let mut leading_digits = 0;
     let mut zeros = 0;
+
     let mut has_point = false;
     let mut has_e = false;
     let mut stop = -1;
@@ -177,7 +181,8 @@ pub fn read_decimal<T: Decimal>(
         while pos < len {
             match buf[pos] {
                 b'0' => {
-                    if digits >= max_digits {
+                    scales += 1;
+                    if digits >= max_digits || scales > max_scales + 1 {
                         // cut and consume excessive digits.
                         pos += 1;
                         continue;
@@ -187,7 +192,8 @@ pub fn read_decimal<T: Decimal>(
                 }
 
                 b'1'..=b'9' => {
-                    if digits >= max_digits {
+                    scales += 1;
+                    if digits >= max_digits || scales > max_scales + 1 {
                         // cut and consume excessive digits.
                         pos += 1;
                         continue;
