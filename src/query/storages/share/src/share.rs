@@ -96,12 +96,12 @@ pub async fn remove_share_table_object(
 ) -> Result<()> {
     for share_object in revoke_share_object {
         match share_object {
-            ShareObject::Table((db_id, table_id, _share_table)) => {
+            ShareObject::Table(_share_table, db_id, table_id) => {
                 let location = share_table_info_location(tenant, share_name, *db_id, *table_id);
 
                 operator.delete(&location).await?;
             }
-            ShareObject::Db(db_id) => {
+            ShareObject::Database(_db_name, db_id) => {
                 let dir = get_share_database_dir(tenant, share_name, *db_id);
                 operator.remove_all(&dir).await?;
             }
@@ -191,7 +191,7 @@ mod ext {
         tenants: Vec<String>,
         db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
         comment: Option<String>,
-        share_on: Option<DateTime<Utc>>,
+        create_on: DateTime<Utc>,
     }
 
     impl ShareSpecExt {
@@ -219,7 +219,7 @@ mod ext {
                 tenants: spec.tenants,
                 db_privileges: spec.db_privileges,
                 comment: spec.comment.clone(),
-                share_on: spec.share_on,
+                create_on: spec.create_on,
             }
         }
     }

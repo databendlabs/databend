@@ -382,6 +382,7 @@ build_exceptions! {
 
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
+    WrongSharePrivileges(3112),
 }
 
 // Storage errors [3001, 4000].

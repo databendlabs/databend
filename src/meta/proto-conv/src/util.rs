@@ -34,7 +34,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (2, "2022-07-13: Add: share.proto", ),
     (3, "2022-07-29: Add: user.proto/UserOption::default_role", ),
     (4, "2022-08-22: Add: config.proto/GcsStorageConfig", ),
-    (5, "2022-08-25: Add: ShareMeta::share_from_db_ids; DatabaseMeta::from_share", ),
+    (5, "2022-08-25: Add: ShareMetaV1::share_from_db_ids; DatabaseMeta::from_share", ),
     (6, "2022-09-08: Add: users.proto/CopyOptions::purge", ),
     (7, "2022-09-09: Add: table.proto/{TableCopiedFileInfo,TableCopiedFileLock} type", ),
     (8, "2022-09-16: Add: users.proto/StageFile::entity_tag", ),

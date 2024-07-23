@@ -61,7 +61,7 @@ fn test_decode_v5_share_meta() -> anyhow::Result<()> {
         );
         entries.insert(entry.to_string().clone(), entry);
 
-        share::ShareMeta {
+        share::ShareMetaV1 {
             database: Some(db_entry),
             entries,
             accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),

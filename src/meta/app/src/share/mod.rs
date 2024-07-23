@@ -14,6 +14,8 @@
 
 #[allow(clippy::module_inception)]
 mod share;
+mod share_meta_v1;
+mod share_meta_v2;
 
 pub mod share_consumer_ident;
 pub mod share_end_point_ident;
@@ -54,7 +56,6 @@ pub use share::ShareDatabaseSpec;
 pub use share::ShareEndpointId;
 pub use share::ShareEndpointIdToName;
 pub use share::ShareEndpointMeta;
-pub use share::ShareGrantEntry;
 pub use share::ShareGrantObject;
 pub use share::ShareGrantObjectName;
 pub use share::ShareGrantObjectPrivilege;
@@ -64,8 +65,6 @@ pub use share::ShareId;
 pub use share::ShareIdToName;
 pub use share::ShareIdent;
 pub use share::ShareInfo;
-pub use share::ShareMeta;
-pub use share::ShareObject;
 pub use share::ShareSpec;
 pub use share::ShareTableSpec;
 pub use share::ShareVecTableInfo;
@@ -76,3 +75,10 @@ pub use share::UpsertShareEndpointReply;
 pub use share::UpsertShareEndpointReq;
 pub use share_consumer_ident::ShareConsumerIdent;
 pub use share_end_point_ident::ShareEndpointIdent;
+pub use share_meta_v1::ShareGrantEntry;
+pub use share_meta_v1::ShareMetaV1;
+pub use share_meta_v2::ShareDatabase;
+pub use share_meta_v2::ShareMetaV2 as ShareMeta;
+pub use share_meta_v2::ShareMetaV2;
+pub use share_meta_v2::ShareObject;
+pub use share_meta_v2::ShareTable;

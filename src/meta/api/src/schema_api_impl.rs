@@ -183,8 +183,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObject;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_app::share::ShareGrantObjectSeqAndId;
 use databend_common_meta_app::share::ShareId;
 use databend_common_meta_app::share::ShareIdToName;
@@ -237,10 +235,10 @@ use crate::kv_pb_api::KVPbApi;
 use crate::list_keys;
 use crate::list_u64_value;
 use crate::remove_db_from_share;
-use crate::revoke_object_privileges;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
+use crate::share_api_impl::rename_share_object;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
@@ -668,9 +666,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // check if database if shared
             let share_spec = if !db_meta.shared_by.is_empty() {
-                let seq_and_id =
-                    ShareGrantObjectSeqAndId::Database(db_meta_seq, old_db_id, db_meta.clone());
-                let object = ShareGrantObject::new(&seq_and_id);
+                let seq_and_id = ShareGrantObjectSeqAndId::Database(
+                    tenant_dbname.database_name().to_string(),
+                    db_meta_seq,
+                    old_db_id,
+                    db_meta.clone(),
+                );
+                let object = ShareObject::new(&seq_and_id);
                 let update_on = Utc::now();
                 let mut share_spec_vec = vec![];
                 for share_id in &db_meta.shared_by {
@@ -681,12 +683,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     )
                     .await?;
 
-                    let _ = revoke_object_privileges(
+                    let _ = rename_share_object(
                         self,
                         &mut share_meta,
                         object.clone(),
                         *share_id,
-                        ShareGrantObjectPrivilege::Usage,
                         update_on,
                         &mut condition,
                         &mut if_then,
@@ -721,7 +722,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_meta.shared_by.clear();
                 let db_id_key = DatabaseId { db_id: old_db_id };
                 if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
-                Some((share_spec_vec, ShareObject::Db(old_db_id)))
+                Some((
+                    share_spec_vec,
+                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id),
+                ))
             } else {
                 None
             };
@@ -2108,7 +2112,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                                     self,
                                     *share_id,
                                     table_id,
-                                    tenant_dbname_tbname.tenant(),
                                     &mut condition,
                                     &mut then_ops,
                                 )
@@ -2145,11 +2148,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
                             then_ops.push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
 
-                            let share_object = ShareObject::Table((
+                            let share_object = ShareObject::Table(
+                                tenant_dbname_tbname.table_name.clone(),
                                 db_id,
                                 table_id,
-                                tenant_dbname_tbname.table_name.clone(),
-                            ));
+                            );
                             Some((spec_vec, share_object))
                         } else {
                             None
@@ -4447,8 +4450,7 @@ async fn construct_drop_table_txn_operations(
     // remove table from share
     let mut spec_vec = Vec::with_capacity(db_meta.shared_by.len());
     for share_id in &db_meta.shared_by {
-        let res =
-            remove_table_from_share(kv_api, *share_id, table_id, tenant, condition, if_then).await;
+        let res = remove_table_from_share(kv_api, *share_id, table_id, condition, if_then).await;
 
         match res {
             Ok((share_name, share_meta)) => {

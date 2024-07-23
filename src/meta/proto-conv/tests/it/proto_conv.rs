@@ -81,7 +81,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
     }
 }
 
-fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
+fn new_share_meta_share_from_db_ids() -> share::ShareMetaV1 {
     let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
@@ -98,7 +98,7 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
     );
     entries.insert(entry.to_string().clone(), entry);
 
-    share::ShareMeta {
+    share::ShareMetaV1 {
         database: Some(db_entry),
         entries,
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
@@ -109,7 +109,7 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
     }
 }
 
-fn new_share_meta() -> share::ShareMeta {
+fn new_share_meta() -> share::ShareMetaV1 {
     let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
@@ -126,7 +126,7 @@ fn new_share_meta() -> share::ShareMeta {
     );
     entries.insert(entry.to_string().clone(), entry);
 
-    share::ShareMeta {
+    share::ShareMetaV1 {
         database: Some(db_entry),
         entries,
         accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
@@ -368,7 +368,7 @@ fn test_pb_from_to() -> anyhow::Result<()> {
 
     let share = new_share_meta();
     let p = share.to_pb()?;
-    let got = share::ShareMeta::from_pb(p)?;
+    let got = share::ShareMetaV1::from_pb(p)?;
     assert_eq!(share, got);
 
     let share_account_meta = new_share_account_meta();
@@ -471,7 +471,7 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("table:{:?}", buf);
     }
 
-    // ShareMeta
+    // ShareMetaV1
     {
         let tbl = new_share_meta_share_from_db_ids();
 

@@ -1,0 +1,54 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+message ShareDatabase {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 privileges = 1;
+  string name = 2;
+  uint64 db_id = 3;
+  string grant_on = 4;
+}
+
+message ShareTable {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 privileges = 1;
+  string name = 2;
+  uint64 db_id = 3;
+  uint64 table_id = 4;
+  string grant_on = 5;
+  string engine = 6;
+}
+
+message ShareMetaV2 {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  repeated string accounts = 1;
+  optional string comment = 2;
+  string create_on = 3;
+  string update_on = 4;
+
+  optional ShareDatabase use_database = 5;
+  repeated ShareDatabase reference_database = 6;
+  repeated ShareTable table = 7;
+  repeated ShareTable reference_table = 8;
+}
