@@ -20,11 +20,11 @@ explain select * from t1 where s like 'abcd%' order by s;
 Sort
 ├── output columns: [t1.s (#0)]
 ├── sort keys: [s ASC NULLS LAST]
-├── estimated rows: 0.80
+├── estimated rows: 0.16
 └── Filter
     ├── output columns: [t1.s (#0)]
     ├── filters: [is_true(t1.s (#0) >= 'abcd'), is_true(t1.s (#0) < 'abce')]
-    ├── estimated rows: 0.80
+    ├── estimated rows: 0.16
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [s (#0)]

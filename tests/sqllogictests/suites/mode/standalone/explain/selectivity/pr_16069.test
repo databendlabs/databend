@@ -10,7 +10,7 @@ explain select * from t where 10 < number or 20 < number;
 Filter
 ├── output columns: [t.number (#0)]
 ├── filters: [10 < t.number (#0) OR 20 < t.number (#0)]
-├── estimated rows: 97.64
+├── estimated rows: 97.96
 └── TableScan
     ├── table: default.default.t
     ├── output columns: [number (#0)]

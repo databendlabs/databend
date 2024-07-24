@@ -346,11 +346,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 9.00
+├── estimated rows: 8.78
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) > 1)]
-│   ├── estimated rows: 8.18
+│   ├── estimated rows: 8.89
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -364,7 +364,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) > 1)]
-    ├── estimated rows: 8.18
+    ├── estimated rows: 8.89
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -385,11 +385,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 0.83
+├── estimated rows: 0.62
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) < 1)]
-│   ├── estimated rows: 0.91
+│   ├── estimated rows: 1.11
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -403,7 +403,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) < 1)]
-    ├── estimated rows: 0.91
+    ├── estimated rows: 1.11
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -463,11 +463,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 10.00
+├── estimated rows: 8.78
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) >= 1)]
-│   ├── estimated rows: 9.09
+│   ├── estimated rows: 8.89
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -481,7 +481,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) >= 1)]
-    ├── estimated rows: 9.09
+    ├── estimated rows: 8.89
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -502,11 +502,11 @@ HashJoin
 ├── build keys: [t1.a (#1)]
 ├── probe keys: [t.a (#0)]
 ├── filters: []
-├── estimated rows: 1.65
+├── estimated rows: 0.62
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#1)]
 │   ├── filters: [is_true(t1.a (#1) <= 1)]
-│   ├── estimated rows: 1.82
+│   ├── estimated rows: 1.11
 │   └── TableScan
 │       ├── table: default.eliminate_outer_join.t
 │       ├── output columns: [a (#1)]
@@ -520,7 +520,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t.a (#0)]
     ├── filters: [is_true(t.a (#0) <= 1)]
-    ├── estimated rows: 1.82
+    ├── estimated rows: 1.11
     └── TableScan
         ├── table: default.eliminate_outer_join.t
         ├── output columns: [a (#0)]
@@ -539,7 +539,7 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or t.a < 1
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
 ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) < 1)]
-├── estimated rows: 3.31
+├── estimated rows: 2.10
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: LEFT OUTER
@@ -574,18 +574,18 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
 ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t1.a (#1) > 1)]
-├── estimated rows: 7.15
+├── estimated rows: 6.61
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: INNER
     ├── build keys: [t1.a (#1)]
     ├── probe keys: [t.a (#0)]
     ├── filters: []
-    ├── estimated rows: 8.51
+    ├── estimated rows: 8.12
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#1)]
     │   ├── filters: [is_true(t1.a (#1) <= 1 OR t1.a (#1) > 1)]
-    │   ├── estimated rows: 8.51
+    │   ├── estimated rows: 9.01
     │   └── TableScan
     │       ├── table: default.eliminate_outer_join.t
     │       ├── output columns: [a (#1)]
@@ -599,7 +599,7 @@ Filter
     └── Filter(Probe)
         ├── output columns: [t.a (#0)]
         ├── filters: [is_true(t.a (#0) <= 1 OR t.a (#0) > 1)]
-        ├── estimated rows: 8.51
+        ├── estimated rows: 9.01
         └── TableScan
             ├── table: default.eliminate_outer_join.t
             ├── output columns: [a (#0)]
@@ -617,7 +617,7 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
 ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t.a (#0) < 2)]
-├── estimated rows: 4.05
+├── estimated rows: 2.87
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: LEFT OUTER
