@@ -51,10 +51,37 @@ pub fn monotonically_increased_timestamp(
 }
 
 pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
+    // only in this range, the order of timestamps is preserved in UUIDs
+    // out of range is unlikely to happen, this is just a safe guard
+    let range = 0..=0xFFFF_FFFF_FFFF;
+    assert!(range.contains(&ts.timestamp_millis()));
     let seconds = ts.timestamp();
     let nanos = ts.timestamp_subsec_nanos();
-    assert!(ts >= DateTime::<Utc>::default());
-    assert!(ts.timestamp_millis() < 1 << 42);
     let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
     Uuid::new_v7(uuid_ts)
+}
+
+#[cfg(test)]
+mod tests {
+    fn assert_order_preserved(
+        ts1: chrono::DateTime<chrono::Utc>,
+        ts2: chrono::DateTime<chrono::Utc>,
+    ) {
+        let uuid1 = super::uuid_from_date_time(ts1);
+        let uuid2 = super::uuid_from_date_time(ts2);
+        assert_eq!(ts1.cmp(&ts2), uuid1.cmp(&uuid2));
+    }
+
+    #[test]
+    fn test_uuid_from_date_time() {
+        let now = chrono::Utc::now();
+        assert_order_preserved(now, now + chrono::Duration::milliseconds(1));
+        assert_order_preserved(now, now - chrono::Duration::milliseconds(1));
+        assert_order_preserved(now, chrono::DateTime::default());
+
+        let ms = 0xFFFF_FFFF_FFFF;
+        let ts = chrono::DateTime::from_timestamp_millis(ms).unwrap();
+        assert_order_preserved(now, ts);
+        assert_order_preserved(ts - chrono::Duration::milliseconds(1), ts);
+    }
 }
