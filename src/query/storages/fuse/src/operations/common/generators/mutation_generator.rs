@@ -101,7 +101,10 @@ impl SnapshotGenerator for MutationGenerator {
                         previous.table_statistics_location(),
                     );
 
-                    if matches!(self.mutation_kind, MutationKind::Compact) {
+                    if matches!(
+                        self.mutation_kind,
+                        MutationKind::Compact | MutationKind::Recluster
+                    ) {
                         // for compaction, a basic but very important verification:
                         // the number of rows should be the same
                         assert_eq!(
