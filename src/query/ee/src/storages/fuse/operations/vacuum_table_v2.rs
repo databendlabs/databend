@@ -28,6 +28,7 @@ use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -93,9 +94,14 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         .into_iter()
         .filter(|b| !gc_root_blocks.contains(b))
         .collect();
-    println!("snapshots_to_gc: {:?}", snapshots_to_gc);
-    println!("segments_to_gc: {:?}", segments_to_gc);
-    println!("blocks_to_gc: {:?}", blocks_to_gc);
+    let files_to_gc = snapshots_to_gc
+        .iter()
+        .chain(segments_to_gc.iter())
+        .chain(blocks_to_gc.iter())
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>();
+    let op = Files::create(ctx, fuse_table.get_operator());
+    op.remove_file_in_batch(files_to_gc).await?;
     Ok(())
 }
 
