@@ -83,8 +83,8 @@ pub fn decorate_snapshot(
     // both of them are allowed to be committed here.
     if base_snapshot_timestamp
         .as_ref()
-        // safe to unwrap, least_base_snapshot_timestamp of newly generated snapshot must be some
-        .is_some_and(|base| base < snapshot.least_base_snapshot_timestamp.as_ref().unwrap())
+        // safe to unwrap, least_visiable_timestamp of newly generated snapshot must be some
+        .is_some_and(|base| base < snapshot.least_visiable_timestamp.as_ref().unwrap())
     {
         return Err(ErrorCode::TransactionTimeout(format!(
             "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",

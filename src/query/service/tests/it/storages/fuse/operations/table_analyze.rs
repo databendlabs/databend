@@ -208,7 +208,7 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let snapshot_1 = TableSnapshot::from_previous(
         &snapshot_0,
         None,
-        ctx.get_settings().get_transaction_time_limit_in_hours()?,
+        ctx.get_settings().get_data_retention_time_in_days()?,
     );
     let snapshot_loc_1 = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
@@ -226,7 +226,7 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     let mut snapshot_2 = TableSnapshot::from_previous(
         &snapshot_1,
         None,
-        ctx.get_settings().get_transaction_time_limit_in_hours()?,
+        ctx.get_settings().get_data_retention_time_in_days()?,
     );
     snapshot_2.table_statistics_location = Some(table_statistics_location);
     FuseTable::commit_to_meta_server(

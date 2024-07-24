@@ -94,7 +94,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         let orphan_snapshot = TableSnapshot::from_previous(
             current_snapshot.as_ref(),
             None,
-            ctx.get_settings().get_transaction_time_limit_in_hours()?,
+            ctx.get_settings().get_data_retention_time_in_days()?,
         );
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)

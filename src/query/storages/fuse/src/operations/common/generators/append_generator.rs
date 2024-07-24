@@ -225,24 +225,20 @@ impl SnapshotGenerator for AppendGenerator {
                 .set_compaction_num_block_hint(compact_num_block_hint);
         }
 
-        let transaction_time_limit_in_hours = self
-            .ctx
-            .get_settings()
-            .get_transaction_time_limit_in_hours()?;
+        let data_retention_time_in_days =
+            self.ctx.get_settings().get_data_retention_time_in_days()?;
 
         Ok(TableSnapshot::new(
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
-            &previous
-                .as_ref()
-                .and_then(|v| v.least_base_snapshot_timestamp),
+            &previous.as_ref().and_then(|v| v.least_visiable_timestamp),
             schema,
             new_summary,
             new_segments,
             cluster_key_meta,
             table_statistics_location,
-            transaction_time_limit_in_hours,
+            data_retention_time_in_days,
         ))
     }
 }

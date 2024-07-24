@@ -40,7 +40,7 @@ use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
-/// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_base_snapshot_timestamp` is added.
+/// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_visiable_timestamp` is added.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot meta data
@@ -90,8 +90,8 @@ pub struct TableSnapshot {
 
     /// Some segments and blocks are generated in a transaction, the base snapshot is the latest snapshot committed before the transaction.
     ///
-    /// If timestamp of the base snapshot is less than the `least_base_snapshot_timestamp` of newly generated snapshot, the newly generated snapshot can't be committed.
-    pub least_base_snapshot_timestamp: Option<DateTime<Utc>>,
+    /// If timestamp of the base snapshot is less than the `least_visiable_timestamp` of newly generated snapshot, the newly generated snapshot can't be committed.
+    pub least_visiable_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
@@ -99,13 +99,13 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        prev_least_base_snapshot_timestamp: &Option<DateTime<Utc>>,
+        prev_least_visiable_timestamp: &Option<DateTime<Utc>>,
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        transaction_time_limit_in_hours: u64,
+        data_retention_time_in_days: u64,
     ) -> Self {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
@@ -115,8 +115,8 @@ impl TableSnapshot {
         let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
 
-        let candidate = trimmed_timestamp - Duration::hours(transaction_time_limit_in_hours as i64);
-        let least_base_snapshot_timestamp = match prev_least_base_snapshot_timestamp {
+        let candidate = trimmed_timestamp - Duration::days(data_retention_time_in_days as i64);
+        let least_visiable_timestamp = match prev_least_visiable_timestamp {
             // UUIDv7 values are created by allocating a Unix timestamp in milliseconds in the most significant 48 bits
             // https://www.ietf.org/rfc/rfc9562.html#section-5.7
             Some(prev) => candidate.max(*prev + Duration::milliseconds(1)),
@@ -134,7 +134,7 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
-            least_base_snapshot_timestamp: Some(least_base_snapshot_timestamp),
+            least_visiable_timestamp: Some(least_visiable_timestamp),
         }
     }
 
@@ -156,7 +156,7 @@ impl TableSnapshot {
     pub fn from_previous(
         previous: &TableSnapshot,
         prev_table_seq: Option<u64>,
-        transaction_time_limit_in_hours: u64,
+        data_retention_time_in_days: u64,
     ) -> Self {
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
@@ -164,13 +164,13 @@ impl TableSnapshot {
             prev_table_seq,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),
-            &previous.least_base_snapshot_timestamp,
+            &previous.least_visiable_timestamp,
             clone.schema,
             clone.summary,
             clone.segments,
             clone.cluster_key_meta,
             clone.table_statistics_location,
-            transaction_time_limit_in_hours,
+            data_retention_time_in_days,
         )
     }
 
@@ -256,7 +256,7 @@ where T: Into<v4::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_base_snapshot_timestamp: None,
+            least_visiable_timestamp: None,
         }
     }
 }

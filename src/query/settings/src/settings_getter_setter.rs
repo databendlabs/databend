@@ -661,12 +661,4 @@ impl Settings {
     pub fn get_enable_loser_tree_merge_sort(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_loser_tree_merge_sort")? == 1)
     }
-
-    pub fn get_transaction_time_limit_in_hours(&self) -> Result<u64> {
-        self.try_get_u64("transaction_time_limit_in_hours")
-    }
-
-    pub fn set_transaction_time_limit_in_hours(&self, val: u64) -> Result<()> {
-        self.try_set_u64("transaction_time_limit_in_hours", val)
-    }
 }

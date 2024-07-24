@@ -158,7 +158,7 @@ pub(crate) async fn generate_new_snapshot(
             let mut new_snapshot = TableSnapshot::from_previous(
                 snapshot.as_ref(),
                 Some(fuse_table.get_table_info().ident.seq),
-                ctx.get_settings().get_transaction_time_limit_in_hours()?,
+                ctx.get_settings().get_data_retention_time_in_days()?,
             );
 
             // replace schema

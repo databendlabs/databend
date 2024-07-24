@@ -75,17 +75,13 @@ impl SnapshotGenerator for TruncateGenerator {
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
-            &previous
-                .as_ref()
-                .and_then(|v| v.least_base_snapshot_timestamp),
+            &previous.as_ref().and_then(|v| v.least_visiable_timestamp),
             schema,
             Default::default(),
             vec![],
             cluster_key_meta,
             None,
-            self.ctx
-                .get_settings()
-                .get_transaction_time_limit_in_hours()?,
+            self.ctx.get_settings().get_data_retention_time_in_days()?,
         );
         Ok(new_snapshot)
     }

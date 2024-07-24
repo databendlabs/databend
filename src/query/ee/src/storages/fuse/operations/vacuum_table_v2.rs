@@ -54,7 +54,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     else {
         return Ok(());
     };
-    let least_base_snapshot_timestamp = gc_root.least_base_snapshot_timestamp.unwrap();
+    let least_visiable_timestamp = gc_root.least_visiable_timestamp.unwrap();
 
     let gc_root_segments = gc_root
         .segments
@@ -64,7 +64,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let segments_before_gc_root = list_until_timestamp(
         fuse_table,
         &fuse_table.meta_location_generator().segment_dir(),
-        least_base_snapshot_timestamp,
+        least_visiable_timestamp,
         false,
     )
     .await?;
@@ -85,7 +85,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let blocks_before_gc_root = list_until_timestamp(
         fuse_table,
         &fuse_table.meta_location_generator().block_dir(),
-        least_base_snapshot_timestamp,
+        least_visiable_timestamp,
         false,
     )
     .await?;

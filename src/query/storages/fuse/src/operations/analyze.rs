@@ -178,9 +178,7 @@ impl SinkAnalyzeState {
         let mut new_snapshot = TableSnapshot::from_previous(
             &snapshot,
             Some(table.get_table_info().ident.seq),
-            self.ctx
-                .get_settings()
-                .get_transaction_time_limit_in_hours()?,
+            self.ctx.get_settings().get_data_retention_time_in_days()?,
         );
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;

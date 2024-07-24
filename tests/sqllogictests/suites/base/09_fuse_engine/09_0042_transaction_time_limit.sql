@@ -11,7 +11,7 @@ statement ok
 insert into t09_0042 values (5);
 
 statement ok
-set transaction_time_limit_in_hours=0;
+set data_retention_time_in_days=0;
 
 statement error 4003
 alter table t09_0042 recluster;
@@ -71,4 +71,4 @@ select * from t09_0042 order by a;
 5
 
 statement ok
-set transaction_time_limit_in_hours=24;
+set data_retention_time_in_days=1;

@@ -57,9 +57,7 @@ impl PipelineBuilder {
         let snapshot_gen = MutationGenerator::new(
             plan.snapshot.clone(),
             plan.mutation_kind,
-            self.ctx
-                .get_settings()
-                .get_transaction_time_limit_in_hours()?,
+            self.ctx.get_settings().get_data_retention_time_in_days()?,
         );
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
