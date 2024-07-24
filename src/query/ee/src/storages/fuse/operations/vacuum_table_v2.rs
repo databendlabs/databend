@@ -101,10 +101,6 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
 
 /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).
 ///
-/// Lvt is equal or less than the latest snapshot timestamp, so latest snapshot is always safe, which means `fuse_vacuum2()` and other operations based on the latest snapshot can be executed concurrently.
-///
-/// If table has no snapshot yet, we don't know if files belong to a running transaction, so we can't do vacuum work.
-///
 /// Return `None` means we stop vacuumming, but don't want to report error to user.
 async fn set_lvt(fuse_table: &FuseTable, ctx: &dyn TableContext) -> Result<Option<DateTime<Utc>>> {
     let Some(latest_snapshot) = fuse_table.read_table_snapshot().await? else {
