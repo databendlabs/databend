@@ -14,13 +14,13 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use http::StatusCode;
 use log::warn;
 use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
-use time::Instant;
 
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
@@ -85,7 +85,7 @@ impl HttpQueryContext {
             if expected_node_id != &self.node_id {
                 let manager = HttpQueryManager::instance();
                 let start_time = manager.server_info.start_time.clone();
-                let uptime = (Instant::now() - manager.start_instant).as_seconds_f32();
+                let uptime = (Instant::now() - manager.start_instant).as_secs_f32();
                 let msg = format!(
                     "route error: query {query_id} SHOULD be on server {expected_node_id}, but current server is {}, which started at {start_time}({uptime} secs ago)",
                     self.node_id

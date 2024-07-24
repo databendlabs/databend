@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
-#![feature(lazy_cell)]
 
 mod background_config;
 mod builtin;
