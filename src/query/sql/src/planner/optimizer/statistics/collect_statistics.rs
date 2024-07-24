@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use log::info;
 
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
@@ -84,6 +85,9 @@ impl CollectStatisticsOptimizer {
                                 column_stats.insert(*column_index, col_stat.cloned());
                                 let histogram =
                                     column_statistics_provider.histogram(col_id as ColumnId);
+                                if histogram.is_some() {
+                                    info!("column {} has accurate histogram", col_id);
+                                }
                                 histograms.insert(*column_index, histogram);
                             }
                         }

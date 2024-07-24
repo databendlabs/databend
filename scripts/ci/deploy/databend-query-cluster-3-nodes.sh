@@ -51,19 +51,19 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 sleep 1
 
 echo 'Start databend-query node-1'
-nohup  target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo 'Start databend-query node-2'
- nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
 
 echo 'Start databend-query node-3'
- nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml --internal-enable-sandbox-tenant >./.databend/query-3.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-3.toml --internal-enable-sandbox-tenant >./.databend/query-3.out 2>&1 &
 
 echo "Waiting on node-3..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9093

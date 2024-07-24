@@ -190,12 +190,16 @@ impl Interpreter for AnalyzeTableInterpreter {
             let (physical_plan, bind_context) = self.plan_sql(sql).await?;
             let mut build_res =
                 build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-
-            let histogram_sqls = index_cols
-                .iter()
-                .map(|c| {
-                    format!(
-                        "SELECT quantile,
+            // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
+            // It's possible to OOM if the table is too large and spilling isn't enabled.
+            // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
+            let mut histogram_info_receivers = HashMap::new();
+            if self.ctx.get_settings().get_enable_analyze_histogram()? {
+                let histogram_sqls = index_cols
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "SELECT quantile,
                             COUNT(DISTINCT {}) AS ndv,
                             MAX({}) AS max_value,
                             MIN({}) AS min_value,
@@ -205,56 +209,48 @@ impl Interpreter for AnalyzeTableInterpreter {
                             FROM {}.{} WHERE {} IS DISTINCT FROM NULL
                         )
                         GROUP BY quantile ORDER BY quantile \n",
-                        c.1,
-                        c.1,
-                        c.1,
-                        c.1,
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                        c.1,
-                        plan.database,
-                        plan.table,
-                        c.1,
+                            c.1,
+                            c.1,
+                            c.1,
+                            c.1,
+                            DEFAULT_HISTOGRAM_BUCKETS,
+                            c.1,
+                            plan.database,
+                            plan.table,
+                            c.1,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
+                    info!("Analyze histogram via sql {:?}", sql);
+                    let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
+                    if !self.ctx.get_cluster().is_empty() {
+                        histogram_plan = remove_exchange(histogram_plan);
+                    }
+                    let mut histogram_build_res = build_query_pipeline(
+                        &QueryContext::create_from(self.ctx.clone()),
+                        &bind_context.columns,
+                        &histogram_plan,
+                        false,
                     )
-                })
-                .collect::<Vec<_>>();
-            let mut histogram_info_receivers = HashMap::new();
-            for (id, (sql, (col_id, _))) in histogram_sqls
-                .into_iter()
-                .zip(index_cols.iter())
-                .enumerate()
-            {
-                if id > 0 {
-                    break;
-                }
-                info!("Analyze histogram via sql {:?}", sql);
-                let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
-                if !self.ctx.get_cluster().is_empty() {
-                    histogram_plan = remove_exchange(histogram_plan);
-                }
-                let mut histogram_build_res = build_query_pipeline(
-                    &QueryContext::create_from(self.ctx.clone()),
-                    &bind_context.columns,
-                    &histogram_plan,
-                    false,
-                )
-                .await?;
-                let (tx, rx) = async_channel::unbounded();
-                histogram_build_res.main_pipeline.add_sink(|input_port| {
-                    Ok(ProcessorPtr::create(HistogramInfoSink::create(
-                        Some(tx.clone()),
-                        input_port.clone(),
-                    )))
-                })?;
+                    .await?;
+                    let (tx, rx) = async_channel::unbounded();
+                    histogram_build_res.main_pipeline.add_sink(|input_port| {
+                        Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                            Some(tx.clone()),
+                            input_port.clone(),
+                        )))
+                    })?;
 
-                build_res
-                    .sources_pipelines
-                    .push(histogram_build_res.main_pipeline.finalize());
-                build_res
-                    .sources_pipelines
-                    .extend(histogram_build_res.sources_pipelines);
-                histogram_info_receivers.insert(*col_id, rx);
+                    build_res
+                        .sources_pipelines
+                        .push(histogram_build_res.main_pipeline.finalize());
+                    build_res
+                        .sources_pipelines
+                        .extend(histogram_build_res.sources_pipelines);
+                    histogram_info_receivers.insert(*col_id, rx);
+                }
             }
-
             FuseTable::do_analyze(
                 self.ctx.clone(),
                 bind_context.output_schema(),
