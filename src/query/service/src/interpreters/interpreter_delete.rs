@@ -330,6 +330,7 @@ impl DeleteInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
+            recluster_info: None,
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)

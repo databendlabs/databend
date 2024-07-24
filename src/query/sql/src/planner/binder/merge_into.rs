@@ -114,7 +114,7 @@ impl Binder {
             )
             .await?;
 
-        let mut merge_into_plan = s_expr.plan().clone().try_into()?;
+        let merge_into_plan = s_expr.plan().clone().try_into()?;
         if merge_type == MergeIntoType::InsertOnly && !insert_only(&merge_into_plan) {
             return Err(ErrorCode::SemanticError(
                 "for unmatched clause, then condition and exprs can only have source fields",
