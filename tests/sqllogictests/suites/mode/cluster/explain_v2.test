@@ -19,7 +19,7 @@ Exchange
 └── Filter
     ├── output columns: [t1.a (#0)]
     ├── filters: [t1.a (#0) > 0]
-    ├── estimated rows: 99.01
+    ├── estimated rows: 99.00
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [a (#0)]
@@ -40,21 +40,21 @@ Exchange
 └── Filter
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-    ├── estimated rows: 99.69
+    ├── estimated rows: 99.76
     └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
         ├── filters: []
-        ├── estimated rows: 99.92
+        ├── estimated rows: 99.94
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
         │   ├── exchange type: Broadcast
         │   └── Filter
         │       ├── output columns: [t2.a (#2), t2.b (#3)]
         │       ├── filters: [t2.a (#2) > 3 OR t2.a (#2) > 1]
-        │       ├── estimated rows: 99.92
+        │       ├── estimated rows: 99.97
         │       └── TableScan
         │           ├── table: default.default.t2
         │           ├── output columns: [a (#2), b (#3)]
@@ -68,7 +68,7 @@ Exchange
         └── Filter(Probe)
             ├── output columns: [t1.a (#0), t1.b (#1)]
             ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
-            ├── estimated rows: 99.92
+            ├── estimated rows: 99.97
             └── TableScan
                 ├── table: default.default.t1
                 ├── output columns: [a (#0), b (#1)]
