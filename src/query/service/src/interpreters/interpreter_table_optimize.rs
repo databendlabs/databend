@@ -32,11 +32,11 @@ use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Recluster;
+use databend_common_sql::executor::physical_plans::ReclusterInfoSideCar;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::OptimizeTableAction;
 use databend_common_sql::plans::OptimizeTablePlan;
 use databend_common_storages_factory::NavigationPoint;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::Interpreter;
@@ -139,9 +139,7 @@ impl OptimizeTableInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
-            merged_blocks: vec![],
-            removed_segment_indexes: vec![],
-            removed_statistics: Statistics::default(),
+            recluster_info: None,
         })))
     }
 
@@ -227,9 +225,11 @@ impl OptimizeTableInterpreter {
                         merge_meta: false,
                         deduplicated_label: None,
                         plan_id: u32::MAX,
-                        merged_blocks: remained_blocks,
-                        removed_segment_indexes,
-                        removed_statistics: removed_segment_summary,
+                        recluster_info: Some(ReclusterInfoSideCar {
+                            merged_blocks: remained_blocks,
+                            removed_segment_indexes,
+                            removed_statistics: removed_segment_summary,
+                        }),
                     }))
                 }
                 ReclusterParts::Compact(parts) => {

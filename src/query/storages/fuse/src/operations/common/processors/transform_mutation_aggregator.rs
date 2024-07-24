@@ -70,7 +70,7 @@ pub struct TableMutationAggregator {
 
     base_segments: Vec<Location>,
     // Used for recluster.
-    merged_blocks: Vec<Arc<BlockMeta>>,
+    recluster_merged_blocks: Vec<Arc<BlockMeta>>,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
@@ -129,7 +129,7 @@ impl TableMutationAggregator {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
-        merged_blocks: Vec<Arc<BlockMeta>>,
+        recluster_merged_blocks: Vec<Arc<BlockMeta>>,
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
         kind: MutationKind,
@@ -146,7 +146,7 @@ impl TableMutationAggregator {
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
-            merged_blocks,
+            recluster_merged_blocks,
             appended_statistics: Statistics::default(),
             removed_segment_indexes,
             removed_statistics,
@@ -184,9 +184,9 @@ impl TableMutationAggregator {
                     }
                 }
             }
-            MutationLogEntry::AppendBlock { block_meta } => {
+            MutationLogEntry::ReclusterAppendBlock { block_meta } => {
                 metrics_inc_recluster_write_block_nums();
-                self.merged_blocks.push(block_meta);
+                self.recluster_merged_blocks.push(block_meta);
             }
             MutationLogEntry::DeletedBlock { index } => {
                 self.mutations
@@ -248,12 +248,12 @@ impl TableMutationAggregator {
         // safe to unwrap.
         let default_cluster_key_id = self.default_cluster_key_id.unwrap();
         // sort ascending.
-        self.merged_blocks.sort_by(|a, b| {
+        self.recluster_merged_blocks.sort_by(|a, b| {
             sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, default_cluster_key_id)
         });
 
         let mut tasks = Vec::new();
-        let merged_blocks = std::mem::take(&mut self.merged_blocks);
+        let merged_blocks = std::mem::take(&mut self.recluster_merged_blocks);
         let segments_num = (merged_blocks.len() / self.block_per_seg).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
         let default_cluster_key = Some(default_cluster_key_id);

@@ -20,8 +20,8 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::Statistics;
 
+use crate::executor::physical_plans::physical_commit_sink::ReclusterInfoSideCar;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::Exchange;
@@ -126,9 +126,11 @@ impl PhysicalPlanBuilder {
                     merge_meta: false,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
-                    merged_blocks: remained_blocks,
-                    removed_segment_indexes,
-                    removed_statistics: removed_segment_summary,
+                    recluster_info: Some(ReclusterInfoSideCar {
+                        merged_blocks: remained_blocks,
+                        removed_segment_indexes,
+                        removed_statistics: removed_segment_summary,
+                    }),
                 }))
             }
             ReclusterParts::Compact(parts) => {
@@ -160,9 +162,7 @@ impl PhysicalPlanBuilder {
                     merge_meta,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
-                    merged_blocks: vec![],
-                    removed_segment_indexes: vec![],
-                    removed_statistics: Statistics::default(),
+                    recluster_info: None,
                 }))
             }
         };

@@ -32,7 +32,6 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
@@ -490,9 +489,7 @@ impl PhysicalPlanBuilder {
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
-            merged_blocks: vec![],
-            removed_segment_indexes: vec![],
-            removed_statistics: Statistics::default(),
+            recluster_info: None,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

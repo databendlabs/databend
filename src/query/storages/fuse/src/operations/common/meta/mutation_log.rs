@@ -39,7 +39,7 @@ pub enum MutationLogEntry {
         format_version: FormatVersion,
         summary: Statistics,
     },
-    AppendBlock {
+    ReclusterAppendBlock {
         block_meta: Arc<BlockMeta>,
     },
     DeletedBlock {
