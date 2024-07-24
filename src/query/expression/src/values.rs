@@ -746,8 +746,8 @@ impl PartialEq for Scalar {
     }
 }
 
-impl PartialOrd for ScalarRef<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl<'a, 'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'a> {
+    fn partial_cmp(&self, other: &ScalarRef<'b>) -> Option<Ordering> {
         match (self, other) {
             (ScalarRef::Null, ScalarRef::Null) => Some(Ordering::Equal),
             (ScalarRef::EmptyArray, ScalarRef::EmptyArray) => Some(Ordering::Equal),
@@ -780,8 +780,8 @@ impl Ord for ScalarRef<'_> {
     }
 }
 
-impl PartialEq for ScalarRef<'_> {
-    fn eq(&self, other: &Self) -> bool {
+impl<'a, 'b> PartialEq<ScalarRef<'b>> for ScalarRef<'a> {
+    fn eq(&self, other: &ScalarRef<'b>) -> bool {
         self.partial_cmp(other) == Some(Ordering::Equal)
     }
 }

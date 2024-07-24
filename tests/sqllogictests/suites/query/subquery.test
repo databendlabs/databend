@@ -677,6 +677,26 @@ SELECT  *, (SELECT SUM(a) FROM t3 WHERE b IN (SELECT b FROM t1 WHERE a = t2.a ))
 ----
 
 
+# https://github.com/datafuselabs/databend/issues/16099
+statement ok
+drop table if exists t4
+
+statement ok
+create table t4(id int, name string, payload json);
+
+statement ok
+insert into t4 values(1, 'test', '{"test":11,"test2":22}'),(2, 'test', '{"test":31,"test2":42}');
+
+query ITT
+SELECT * FROM t4 WHERE payload:test IN (SELECT payload:test FROM t4 where name = 'test');
+----
+1 test {"test":11,"test2":22}
+2 test {"test":31,"test2":42}
+
+query ITT
+SELECT * FROM t4 WHERE payload:test IN (SELECT payload:test2 FROM t4 where name = 'test');
+----
+
 
 statement ok
 drop table t1
@@ -686,6 +706,9 @@ drop table t2
 
 statement ok
 drop table t3
+
+statement ok
+drop table t4
 
 # https://github.com/datafuselabs/databend/pull/14353
 statement ok
