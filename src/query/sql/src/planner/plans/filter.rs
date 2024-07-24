@@ -110,9 +110,16 @@ impl Operator for Filter {
         // Derive cardinality
         let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
         let mut selectivity = MAX_SELECTIVITY;
-        for pred in self.predicates.iter() {
-            // Compute selectivity for each conjunction
-            selectivity *= sb.compute_selectivity(pred, true)?;
+        if self.predicates.len() > 3 {
+            for pred in self.predicates.iter() {
+                // Compute selectivity for each conjunction
+                selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
+            }
+        } else {
+            for pred in self.predicates.iter() {
+                // Compute selectivity for each conjunction
+                selectivity *= sb.compute_selectivity(pred, true)?;
+            }
         }
         // Update other columns's statistic according to selectivity.
         sb.update_other_statistic_by_selectivity(selectivity);
