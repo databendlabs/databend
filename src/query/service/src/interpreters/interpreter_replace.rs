@@ -353,6 +353,7 @@ impl ReplaceInterpreter {
             merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))
