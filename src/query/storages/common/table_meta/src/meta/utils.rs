@@ -53,15 +53,8 @@ pub fn monotonically_increased_timestamp(
 pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
     let seconds = ts.timestamp();
     let nanos = ts.timestamp_subsec_nanos();
-    // `DateTime::<Utc>::default()` is used as the minimum timestamp
-    // This assertion is to avoid mistakenly using a negative timestamp
     assert!(ts >= DateTime::<Utc>::default());
-    // avoid overflow silently in release mode
-    let _ = (seconds as u64)
-        .checked_mul(1000)
-        .unwrap()
-        .checked_add(nanos as u64 / 1_000_000)
-        .unwrap();
+    assert!(ts.timestamp_millis() < 1 << 42);
     let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
     Uuid::new_v7(uuid_ts)
 }
