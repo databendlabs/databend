@@ -58,11 +58,11 @@ Filter
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
     ├── output columns: [c (#0)]
-    ├── read rows: 0
-    ├── read size: 0
+    ├── read rows: 5
+    ├── read size: < 1 KiB
     ├── partitions total: 1
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
     └── estimated rows: 5.00
 
@@ -185,6 +185,7 @@ query I
 select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
 ----
 0 0
+0 1
 
 # re-generate other bloom index
 query TT

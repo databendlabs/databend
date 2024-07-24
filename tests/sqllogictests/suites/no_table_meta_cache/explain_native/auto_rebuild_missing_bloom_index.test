@@ -15,7 +15,7 @@ create or replace stage rebuild_missing_bloom_index_stage 'fs:///tmp/test_auto_r
 query TT
 select name, value from system.configs where  name = 'enable_table_meta_cache';
 ----
-enable_table_meta_cache true
+enable_table_meta_cache false
 
 statement ok
 insert into t values(1), (3), (5), (7), (9);
@@ -50,11 +50,11 @@ explain select * from t where c = 6;
 TableScan
 ├── table: default.test_auto_rebuild_missing.t
 ├── output columns: [c (#0)]
-├── read rows: 0
-├── read size: 0
+├── read rows: 5
+├── read size: < 1 KiB
 ├── partitions total: 1
-├── partitions scanned: 0
-├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 0>]
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
 ├── push downs: [filters: [is_true(t.c (#0) = 6)], limit: NONE]
 └── estimated rows: 1.00
 
@@ -160,6 +160,7 @@ query I
 select is_null(`bloom(0)`) as b1, is_null(`bloom(1)`)  as b2 from t_index order by b2;
 ----
 0 0
+0 1
 
 
 # re-generate other bloom index
