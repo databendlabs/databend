@@ -32,6 +32,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::StreamExt;
 use futures_util::future::Either;
+use log::info;
 use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
@@ -307,8 +308,13 @@ impl FlightReceiver {
         match receiver.recv().await {
             Err(_) => Ok(None),
             Ok(Err(error)) => {
-                self.retry().await?;
-                Err(error) // TODO
+                info!("Error while receiving data from flight : {:?}", error);
+                if error.code() == ErrorCode::UNKNOWN_EXCEPTION {
+                    self.retry().await?;
+                    info!("Reconnect Successfully");
+                    return Ok(Some(DataPacket::RetryConnect));
+                }
+                Err(error)
             }
             Ok(Ok(message)) => {
                 self.seq_num.fetch_add(1, Ordering::Acquire);

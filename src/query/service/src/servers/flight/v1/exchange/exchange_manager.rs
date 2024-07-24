@@ -585,7 +585,7 @@ struct QueryCoordinator {
     fragment_exchanges: HashMap<(String, usize, u8), FlightExchange>,
 
     // FlightSender in senders_map also have a reference in exchange writer
-    // key of `senders_map` is (query_id, fragment_id, sender/receiver)
+    // key of `senders_map` is (query_id, fragment_id, fragment/statistics)
     senders_map: HashMap<(String, usize, u8), Arc<FlightSender>>,
 }
 
