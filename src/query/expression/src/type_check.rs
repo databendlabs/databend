@@ -579,13 +579,12 @@ pub fn can_auto_cast_to(
             }
             (_, _) => unreachable!(),
         },
-        (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
-            if src_tys.len() == dest_tys.len() =>
-        {
-            src_tys
-                .iter()
-                .zip(dest_tys)
-                .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
+        (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
+            src_tys.len() == dest_tys.len()
+                && src_tys
+                    .iter()
+                    .zip(dest_tys)
+                    .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
         (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => {
