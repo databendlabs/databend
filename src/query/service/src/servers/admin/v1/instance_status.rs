@@ -19,12 +19,15 @@ use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct InstanceStatus {
     // the active sessions count with running queries
     pub running_queries_count: u64,
+    // the length of query queue
+    pub queuing_queries_count: u64,
     // the active sessions count, have active connections, but may not have any query running
     pub active_sessions_count: u64,
     // the timestamp on last query started
@@ -43,10 +46,12 @@ pub struct InstanceStatus {
 #[async_backtrace::framed]
 pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
     let session_manager = SessionManager::instance();
+    let queue_manager = QueriesQueueManager::instance();
     let status = session_manager.get_current_session_status();
     let status = InstanceStatus {
         running_queries_count: status.running_queries_count,
         active_sessions_count: status.active_sessions_count,
+        queuing_queries_count: queue_manager.length() as u64,
         last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),
         last_query_finished_at: status.last_query_finished_at.map(unix_timestamp_secs),
         instance_started_at: unix_timestamp_secs(status.instance_started_at),
