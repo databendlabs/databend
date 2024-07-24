@@ -488,6 +488,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
+    pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
+    }
+
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
