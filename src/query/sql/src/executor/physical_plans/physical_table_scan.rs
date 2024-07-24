@@ -269,7 +269,6 @@ impl PhysicalPlanBuilder {
                 plan,
                 scan.table_index,
                 table.get_table_info().ident.seq,
-                false,
             )?));
         }
 

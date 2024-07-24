@@ -50,7 +50,6 @@ impl AddStreamColumn {
         input: PhysicalPlan,
         table_index: usize,
         table_version: u64,
-        is_delete: bool,
     ) -> Result<Self> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
@@ -154,13 +153,8 @@ impl AddStreamColumn {
             }
         }
 
-        let stream_columns = if is_delete {
-            // ORIGIN_BLOCK_ID.
-            vec![stream_columns[1].clone()]
-        } else {
-            // ORIGIN_BLOCK_ROW_NUM, ORIGIN_BLOCK_ID.
-            vec![stream_columns[2].clone(), stream_columns[1].clone()]
-        };
+        // ORIGIN_BLOCK_ROW_NUM, ORIGIN_BLOCK_ID.
+        let stream_columns = vec![stream_columns[2].clone(), stream_columns[1].clone()];
 
         Ok(Self {
             plan_id: 0,
