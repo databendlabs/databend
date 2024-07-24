@@ -1095,6 +1095,11 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 -1 -1 -1
 -1 -1 -1
 
+query TTT
+select CAST('0.185415880519528430000000000099999993232' AS Decimal(38, 10)),  CAST('0.185415880519528430000000000099999993232' AS Decimal(38, 9));
+----
+0.1854158805 0.185415880
+
 statement ok
 set numeric_cast_option = 'rounding'
 
@@ -1118,6 +1123,11 @@ select cast(b as int), cast(c as int), cast(d as int) from t
 2 2 2
 -1 -1 -1
 -2 -2 -2
+
+query TTT
+select CAST('0.185415880519528430000000000099999993232' AS Decimal(38, 10)),  CAST('0.185415880519528430000000000099999993232' AS Decimal(38, 9));
+----
+0.1854158805 0.185415881
 
 statement ok
 create table decimal_test2(a decimal(28,8), b decimal(24,16));
