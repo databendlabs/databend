@@ -88,7 +88,16 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 &settings,
             )
             .await
-            .unwrap_or("".to_string());
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "show create query of {}.{}.{} failed(ignored): {}",
+                    catalog.name(),
+                    database.name(),
+                    table.name(),
+                    e
+                );
+                "".to_owned()
+            });
 
             let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;
