@@ -80,8 +80,8 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::insert::Insert;
-use crate::sql::plans::insert::InsertInputSource;
+use crate::sql::plans::Insert;
+use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
