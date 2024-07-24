@@ -45,7 +45,7 @@ HashJoin
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
     ├── filters: [is_true(t1.a (#0) > 3)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
         ├── output columns: [a (#0), b (#1)]
@@ -64,14 +64,14 @@ explain select * from t1 inner join t2 on t1.a = t2.a where t2.a <= 2 or (t1.a >
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── filters: [is_true(t2.a (#2) <= 2 OR t1.a (#0) > 1 AND t2.a (#2) > 1)]
-├── estimated rows: 3.50
+├── estimated rows: 3.33
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
-    ├── estimated rows: 3.50
+    ├── estimated rows: 3.33
     ├── Filter(Build)
     │   ├── output columns: [t2.a (#2), t2.b (#3)]
     │   ├── filters: [is_true(t2.a (#2) <= 2 OR t2.a (#2) > 1)]
@@ -89,7 +89,7 @@ Filter
     └── Filter(Probe)
         ├── output columns: [t1.a (#0), t1.b (#1)]
         ├── filters: [is_true(t1.a (#0) <= 2 OR t1.a (#0) > 1)]
-        ├── estimated rows: 3.50
+        ├── estimated rows: 3.33
         └── TableScan
             ├── table: default.default.t1
             ├── output columns: [a (#0), b (#1)]
