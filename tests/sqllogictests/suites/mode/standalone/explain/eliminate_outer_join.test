@@ -574,7 +574,7 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
 ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t1.a (#1) > 1)]
-├── estimated rows: 5.05
+├── estimated rows: 6.13
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: INNER
@@ -617,7 +617,7 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or (t.a > 1
 Filter
 ├── output columns: [t.a (#0), t1.a (#1)]
 ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) > 1 AND t.a (#0) < 2)]
-├── estimated rows: 2.44
+├── estimated rows: 2.80
 └── HashJoin
     ├── output columns: [t.a (#0), t1.a (#1)]
     ├── join type: LEFT OUTER

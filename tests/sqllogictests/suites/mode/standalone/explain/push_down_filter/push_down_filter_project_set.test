@@ -14,19 +14,19 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
 ├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
-├── estimated rows: 0.04
+├── estimated rows: 0.12
 └── Filter
     ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
     ├── filters: [is_true(TRY_CAST(get(1)(json_path_query (#2)) AS String NULL) = '512GB')]
-    ├── estimated rows: 0.04
+    ├── estimated rows: 0.12
     └── ProjectSet
         ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
-        ├── estimated rows: 0.20
+        ├── estimated rows: 0.60
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
         └── Filter
             ├── output columns: [products.name (#0), products.details (#1)]
             ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')]
-            ├── estimated rows: 0.20
+            ├── estimated rows: 0.60
             └── TableScan
                 ├── table: default.default.products
                 ├── output columns: [name (#0), details (#1)]
@@ -49,15 +49,15 @@ explain select name, json_path_query(details, '$.features.*') as all_features, j
 EvalScalar
 ├── output columns: [products.name (#0), all_features (#3), first_feature (#4)]
 ├── expressions: [get(1)(json_path_query (#2)), json_path_query_first(products.details (#1), '$.features.*')]
-├── estimated rows: 0.20
+├── estimated rows: 0.60
 └── ProjectSet
     ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
-    ├── estimated rows: 0.20
+    ├── estimated rows: 0.60
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
     └── Filter
         ├── output columns: [products.name (#0), products.details (#1)]
         ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')]
-        ├── estimated rows: 0.20
+        ├── estimated rows: 0.60
         └── TableScan
             ├── table: default.default.products
             ├── output columns: [name (#0), details (#1)]

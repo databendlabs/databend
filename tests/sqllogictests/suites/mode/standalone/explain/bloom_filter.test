@@ -320,11 +320,11 @@ explain select 1 from bloom_test_nullable_t where c1 = 5 and c2 > 1;
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 0.83
+├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(bloom_test_nullable_t.c1 (#0) = 5), is_true(bloom_test_nullable_t.c2 (#1) > 1)]
-    ├── estimated rows: 0.83
+    ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_nullable_t
         ├── output columns: [c1 (#0), c2 (#1)]

@@ -84,7 +84,7 @@ impl<'a> SelectivityEstimator<'a> {
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
                 let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
                 let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
-                left_selectivity * right_selectivity
+                left_selectivity.min(right_selectivity)
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
