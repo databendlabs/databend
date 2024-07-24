@@ -203,3 +203,18 @@ select * from t where b not like 'databend%cloud%data%warehouse';
 2  databend query
 3 query databend
 4 query databend, query
+
+statement ok
+create or replace table t(a int) change_tracking = true;
+
+statement ok
+insert into t values(1),(2);
+
+query I
+select * from t where _origin_version is null;
+----
+1
+2
+
+statement ok
+drop table if exists t;
