@@ -38,7 +38,6 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::LagLeadFunction;
 use crate::plans::NtileFunction;
 use crate::plans::Operator;
@@ -177,44 +176,7 @@ impl Operator for Window {
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
-        let cardinality = if self.partition_by.is_empty() {
-            // Scalar aggregation
-            1.0
-        } else if self.partition_by.iter().any(|item| {
-            input_stat_info
-                .statistics
-                .column_stats
-                .get(&item.index)
-                .is_none()
-        }) {
-            input_stat_info.cardinality
-        } else {
-            // A upper bound
-            let res = self.partition_by.iter().fold(1.0, |acc, item| {
-                let item_stat = input_stat_info
-                    .statistics
-                    .column_stats
-                    .get(&item.index)
-                    .unwrap();
-                acc * item_stat.ndv
-            });
-            // To avoid res is very large
-            f64::min(res, input_stat_info.cardinality)
-        };
-
-        let precise_cardinality = if self.partition_by.is_empty() {
-            Some(1)
-        } else {
-            None
-        };
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: input_stat_info.statistics.column_stats.clone(),
-            },
-        }))
+        rel_expr.derive_cardinality_child(0)
     }
 }
 

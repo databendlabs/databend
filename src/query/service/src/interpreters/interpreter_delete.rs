@@ -323,7 +323,7 @@ impl DeleteInterpreter {
         }
         let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
-            snapshot,
+            snapshot: Some(snapshot),
             table_info,
             mutation_kind: MutationKind::Delete,
             update_stream_meta: vec![],
