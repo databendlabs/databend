@@ -90,7 +90,7 @@ impl CollectStatisticsOptimizer {
                                 let histogram =
                                     column_statistics_provider.histogram(col_id as ColumnId);
                                 if histogram.is_none() {
-                                    info!("column {} doesn't accurate histogram", col_id);
+                                    info!("column {} doesn't have accurate histogram", col_id);
                                 }
                                 histograms.insert(*column_index, histogram);
                             }

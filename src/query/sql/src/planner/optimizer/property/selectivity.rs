@@ -330,28 +330,28 @@ impl<'a> SelectivityEstimator<'a> {
                         if numeric_literal == max {
                             1.0 - 1.0 / ndv
                         } else {
-                            (numeric_literal - min) / (max - min)
+                            (numeric_literal - min) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::LTE => {
                         if numeric_literal == min {
                             1.0 / ndv
                         } else {
-                            (numeric_literal - min) / (max - min)
+                            (numeric_literal - min) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::GT => {
                         if numeric_literal == min {
                             1.0 - 1.0 / ndv
                         } else {
-                            (max - numeric_literal) / (max - min)
+                            (max - numeric_literal) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::GTE => {
                         if numeric_literal == max {
                             1.0 / ndv
                         } else {
-                            (max - numeric_literal) / (max - min)
+                            (max - numeric_literal) / (max - min + 1.0)
                         }
                     }
                     _ => unreachable!(),
