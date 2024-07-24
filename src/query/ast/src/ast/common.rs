@@ -155,13 +155,12 @@ impl Display for TableRef {
     }
 }
 
-// 引用数据库中的字典
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DictionaryRef {
-    pub catalog: Option<Identifier>,//目录名
-    pub database: Option<Identifier>,//数据库名
-    pub dictionary: Identifier,//字典名
-    //应该再加一个用于表示数据源的字段
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    //An additional field should be added to represent the data source.
 }
 impl Display for DictionaryRef {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -173,7 +172,7 @@ impl Display for DictionaryRef {
             write!(f, "{}.", database)?;
         }
         write!(f, "{}", self.dictionary)?;
-        //write!数据源信息
+        //write!---->Data Source Information
         Ok(())
     }
 }
