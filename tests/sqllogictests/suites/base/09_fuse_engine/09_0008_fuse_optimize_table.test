@@ -63,6 +63,9 @@ set data_retention_time_in_days = 0
 statement ok
 optimize table `t` purge
 
+statement ok
+set data_retention_time_in_days = 1
+
 # Flaky Tests
 # query B
 # select count(*)<5 from fuse_snapshot('db_09_0008', 't')
@@ -123,7 +126,13 @@ statement ok
 optimize table m all
 
 statement ok
+set data_retention_time_in_days = 0
+
+statement ok
 optimize table m purge
+
+statement ok
+set data_retention_time_in_days = 1
 
 statement ok
 optimize table m compact
@@ -144,7 +153,13 @@ statement ok
 optimize table m all
 
 statement ok
+set data_retention_time_in_days = 0
+
+statement ok
 optimize table m purge
+
+statement ok
+set data_retention_time_in_days = 1
 
 statement ok
 optimize table m compact
@@ -588,7 +603,13 @@ select average_depth from clustering_information('db_09_0008','t10')
 1.0
 
 statement ok
+set data_retention_time_in_days = 0
+
+statement ok
 optimize table t10 purge limit 2
+
+statement ok
+set data_retention_time_in_days = 1
 
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
