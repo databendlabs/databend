@@ -13,6 +13,44 @@ EvalScalar
 ├── estimated rows: 1.00
 └── DummyTableScan
 
+query T
+explain select count(*) from (select * from t limit 10 offset 3)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#1)]
+├── expressions: [10]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from (select * from t limit 10 offset 999)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#1)]
+├── expressions: [1]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+
+query T
+explain select count(*) from (select floor(row_number() over (order by number)) from t)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#3)]
+├── expressions: [1000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+query T
+explain select count(*) from (select number, floor(row_number() over (order by number)) from t)
+----
+EvalScalar
+├── output columns: [COUNT(*) (#3)]
+├── expressions: [1000]
+├── estimated rows: 1.00
+└── DummyTableScan
+
+
 statement ok
 insert into t values(1)
 

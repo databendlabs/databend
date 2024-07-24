@@ -20,11 +20,8 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
 use databend_storages_common_txn::TxnManagerRef;
@@ -408,17 +405,7 @@ async fn execute(
     block_sender: SizedChannelSender<DataBlock>,
     executor: Arc<RwLock<Executor>>,
 ) -> Result<()> {
-    let data_stream_res = interpreter.execute(ctx.clone()).await;
-    if let Err(err) = data_stream_res {
-        // duplicate codes, but there is an async call
-        let data = BlockEntry::new(
-            DataType::String,
-            databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
-        );
-        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
-        return Err(err);
-    }
-    let mut data_stream = data_stream_res.unwrap();
+    let mut data_stream = interpreter.execute(ctx.clone()).await?;
     match data_stream.next().await {
         None => {
             let block = DataBlock::empty_with_schema(schema);
@@ -427,12 +414,6 @@ async fn execute(
             block_sender.close();
         }
         Some(Err(err)) => {
-            // duplicate codes, but there is an async call
-            let data = BlockEntry::new(
-                DataType::String,
-                databend_common_expression::Value::Scalar(Scalar::String(err.to_string())),
-            );
-            block_sender.send(DataBlock::new(vec![data], 1), 1).await;
             Executor::stop(&executor, Err(err)).await;
             block_sender.close();
         }
@@ -445,14 +426,6 @@ async fn execute(
                         block_sender.send(block.clone(), block.num_rows()).await;
                     }
                     Err(err) => {
-                        // duplicate codes, but there is an async call
-                        let data = BlockEntry::new(
-                            DataType::String,
-                            databend_common_expression::Value::Scalar(Scalar::String(
-                                err.to_string(),
-                            )),
-                        );
-                        block_sender.send(DataBlock::new(vec![data], 1), 1).await;
                         block_sender.close();
                         return Err(err);
                     }

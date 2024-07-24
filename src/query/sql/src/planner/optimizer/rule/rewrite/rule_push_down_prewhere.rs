@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::is_internal_column;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -85,6 +86,12 @@ impl RulePushDownPrewhere {
                             return Err(ErrorCode::StorageUnsupported(
                                 "Prewhere don't support search functions".to_string(),
                             ));
+                        }
+                        if is_internal_column(&column.column.column_name) {
+                            return Err(ErrorCode::StorageUnsupported(format!(
+                                "Prewhere don't support internal column {}",
+                                column.column.column_name
+                            )));
                         }
                         self.columns.insert(column.column.index);
                         return Ok(());

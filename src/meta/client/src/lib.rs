@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![feature(lazy_cell)]
 
 extern crate core;
 

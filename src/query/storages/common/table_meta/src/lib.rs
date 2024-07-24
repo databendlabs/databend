@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_into_inner)]
-#![feature(lazy_cell)]
 
 pub mod meta;
 pub mod readers;
