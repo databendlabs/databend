@@ -20,13 +20,15 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -238,7 +240,7 @@ where TablesTable<T, U>: HistoryAware
             let mut invalid_tables_ids = false;
             if let Some(push_downs) = &push_downs {
                 let mut db_name: Vec<String> = Vec::new();
-                let mut tables_ids: Vec<String> = Vec::new();
+                let mut tables_ids: Vec<u64> = Vec::new();
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
@@ -249,19 +251,18 @@ where TablesTable<T, U>: HistoryAware
                                 }
                             }
                         } else if col_name == "table_id" {
-                            if let Scalar::String(tid) = scalar {
-                                if !tables_ids.contains(tid) {
-                                    tables_ids.push(tid.clone());
-                                }
-                            } else if let Scalar::Number(n) = scalar {
-                                match n {
-                                    NumberScalar::UInt64(n) => tables_ids.push(n.to_string()),
-                                    NumberScalar::UInt8(n) => tables_ids.push(n.to_string()),
-                                    NumberScalar::UInt16(n) => tables_ids.push(n.to_string()),
-                                    NumberScalar::UInt32(n) => tables_ids.push(n.to_string()),
-                                    // if n is int or float, invalid tables_ids
-                                    _ => invalid_tables_ids = true,
-                                }
+                            match check_number::<_, u64>(
+                                None,
+                                &FunctionContext::default(),
+                                &Expr::<usize>::Constant {
+                                    span: None,
+                                    scalar: scalar.clone(),
+                                    data_type: scalar.as_ref().infer_data_type(),
+                                },
+                                &BUILTIN_FUNCTIONS,
+                            ) {
+                                Ok(id) => tables_ids.push(id),
+                                Err(_) => invalid_tables_ids = true,
                             }
                         } else if col_name == "name" {
                             if let Scalar::String(t_name) = scalar {
@@ -270,6 +271,7 @@ where TablesTable<T, U>: HistoryAware
                                 }
                             }
                         }
+                        Ok(())
                     });
                     for db in db_name {
                         match ctl.get_database(&tenant, db.as_str()).await {
@@ -283,13 +285,7 @@ where TablesTable<T, U>: HistoryAware
                     }
 
                     if !T {
-                        let mut ids: Vec<u64> = Vec::new();
-                        for id in tables_ids {
-                            // table id is u64 type. Therefore, an error can be reported if the table ID fails to be converted
-                            let id = id.parse::<u64>()?;
-                            ids.push(id);
-                        }
-                        match ctl.mget_table_names_by_ids(&tenant, &ids).await {
+                        match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
                                     tables_names.push(table);
@@ -368,9 +364,8 @@ where TablesTable<T, U>: HistoryAware
                                     "Failed to list tables in database: {}, {}",
                                     db_name, err
                                 );
+                                // warn no need to pad in ctx
                                 warn!("{}", msg);
-                                ctx.push_warning(msg);
-
                                 continue;
                             }
                         }

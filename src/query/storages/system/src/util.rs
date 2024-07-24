@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::Result;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 
-pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
     match expr {
         Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
         Expr::Cast { expr, .. } => find_eq_filter(expr, visitor),
@@ -27,7 +28,7 @@ pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
                 match args.as_slice() {
                     [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
                     | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
-                        visitor(id, scalar);
+                        let _ = visitor(id, scalar);
                     }
                     _ => {}
                 }

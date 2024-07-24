@@ -260,6 +260,7 @@ pub(crate) async fn dump_tables(
                         }
                     }
                 }
+                Ok(())
             });
         }
     }
