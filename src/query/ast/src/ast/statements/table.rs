@@ -196,6 +196,103 @@ impl Display for CreateTableStmt {
     }
 }
 
+//create dictionary语句的抽象语法树
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateDictionaryStmt{
+    pub create_option: CreateOption,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    // 创建字典的来源，是直接建立列的定义和索引还是根据已有的字典
+    pub source: Option<CreateDictionarySource>,
+    //可以加一个数据源字段，这样能够指字典对应的数据来源（MySQL、PostgreSQL、csv、https等）
+    //pub data_source: Option<DictionaryDataSource>,//或者设置一个默认的数据源，不对应该是一个必要的选项
+    pub engine: Option<Engine>,//存储引擎
+    pub uri_location: Option<UriLocation>,
+    pub cluster_by: Vec<Expr>,
+    pub dictionary_options: BTreeMap<String, String>,//字典选项（这些字典选项应该包括什么），以键值对形式存储
+    pub as_query: Option<Box<Query>>,
+    pub transient: bool,
+}
+impl Display for CreateDictionaryStmt {
+    fn fmt(&self , f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f,"OR REPLACE ")?;
+        }
+        if self.transient {
+            write!(f, "TRANSIENT ")?;
+        }
+        write!(f, "DICTIONARY ");
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write_dot_separated_list(
+            f, 
+            self.catalog
+                    .iter()
+                    .chain(&self.database)
+                    .chain(Some(&self.dictionary)),
+        )?;
+        if let Some(source) = &self.source {
+            write!(f, " {source}")?;
+        }
+        if let Some(engine) = &self.engine {
+            write!(f," ENGINE = {engine}")?;
+        }
+        if let Some(uri_location) = &self.uri_location {
+            write!(f," {uri_location}")?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(f," CLUSTER BY (")?;
+            write_comma_separated_list(f, &self.cluster_by)?;
+            write!(f,")")?;
+        }
+        if !self.dictionary_options.is_empty() {
+            write!(f," ")?;
+            write_space_separated_string_map(f, &self.dictionary_options);
+        }
+        if let Some(as_query) = &self.as_query {
+            write!(f, " AS {as_query}")?;
+        }
+        Ok(())
+    }
+}
+
+//创建字典的来源
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum CreateDictionarySource {
+    Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
+    Like {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        dictionary: Identifier,
+    },
+}
+impl Display for CreateDictionarySource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            CreateDictionarySource::Columns(columns, inverted_indexes) => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, columns)?;
+                if let Some(inverted_indexes) = inverted_indexes {
+                    write!(f,", ")?;
+                    write_comma_separated_list(f, inverted_indexes)?;
+                }
+                write!(f,")")
+            }
+            CreateDictionarySource::Like { 
+                catalog, 
+                database, 
+                dictionary 
+            } => {
+                write!(f,"LIKE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(dictionary)))
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AttachTableStmt {
     pub catalog: Option<Identifier>,

@@ -155,6 +155,29 @@ impl Display for TableRef {
     }
 }
 
+// 引用数据库中的字典
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct DictionaryRef {
+    pub catalog: Option<Identifier>,//目录名
+    pub database: Option<Identifier>,//数据库名
+    pub dictionary: Identifier,//字典名
+    //应该再加一个用于表示数据源的字段
+}
+impl Display for DictionaryRef {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
+        if let Some(catalog) = &self.catalog {
+            write!(f, "{}.", catalog)?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        write!(f, "{}", self.dictionary)?;
+        //write!数据源信息
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnRef {
     pub database: Option<Identifier>,

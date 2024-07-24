@@ -30,6 +30,8 @@ use crate::ast::CreateTableSource;
 use crate::ast::CreateTableStmt;
 use crate::ast::CreateViewStmt;
 use crate::ast::TimeTravelPoint;
+use crate::ast::CreateDictionaryStmt;
+use crate::ast::CreateDictionarySource;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
     RcDoc::text("CREATE")
@@ -152,6 +154,119 @@ fn pretty_table_source(source: CreateTableSource) -> RcDoc<'static> {
                 RcDoc::nil()
             })
             .append(RcDoc::text(table.to_string())),
+    }
+}
+
+pub(crate) fn pretty_create_dictionary(stmt: CreateDictionaryStmt) -> RcDoc<'static>{
+    RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option{
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::space().append(RcDoc::text("DICTIONARY")))
+        .append(match stmt.create_option {
+            CreateOption::Create => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
+        .append(
+            RcDoc::space()
+                    .append(if let Some(catalog) = stmt.catalog {
+                        RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                    } else {
+                        RcDoc::nil()
+                    })
+                    .append(if let Some(database) = stmt.database {
+                        RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                    } else {
+                        RcDoc::nil()
+                    })
+                    .append(RcDoc::text(stmt.dictionary.to_string())),
+
+        )
+        .append(if let Some(source) = stmt.source {
+            pretty_dictionary_source(source)
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(engine) = stmt.engine {
+            RcDoc::space()
+                .append(RcDoc::text("ENGINE ="))
+                .append(RcDoc::space())
+                .append(engine.to_string())
+        } else {
+            RcDoc::nil()
+        })
+        .append(if !stmt.cluster_by.is_empty(){
+            RcDoc::line()
+                .append(RcDoc::text("CLUSTER BY "))
+                .append(parenthesized(
+                    interweave_comma(stmt.cluster_by.into_iter().map(pretty_expr)).group(),
+                ))
+        } else {
+            RcDoc::nil()
+        })
+        .append(if !stmt.dictionary_options.is_empty() {
+            RcDoc::line()
+            .append(interweave_comma(stmt.dictionary_options.iter().map(|(k,v)|{
+                RcDoc::text(k.clone())
+                        .append(RcDoc::space())
+                        .append(RcDoc::text("="))
+                        .append(RcDoc::space())
+                        .append(RcDoc::text("'"))
+                        .append(RcDoc::text(v.clone()))
+                        .append(RcDoc::text("'"))
+            })))
+            .group()
+        } else {
+            RcDoc::nil()
+        })
+        .append(if let Some(as_query) = stmt.as_query {
+            RcDoc::line().append(RcDoc::text("AS")).append(
+                RcDoc::line().nest(NEST_FACTOR)
+                .append(pretty_query(*as_query).nest(NEST_FACTOR).group()),
+            )
+        } else {
+            RcDoc::nil()
+        })
+}
+fn pretty_dictionary_source(source: CreateDictionarySource) -> RcDoc<'static>{
+    match source {
+        CreateDictionarySource::Columns(columns, inverted_indexes) => RcDoc::space()
+                .append(parenthesized(
+                    interweave_comma(
+                        columns.into_iter().map(|column| RcDoc::text(column.to_string())),
+                    )
+                    .group(),
+                ))
+                .append(if let Some(inverted_indexes) = inverted_indexes {
+                    parenthesized(
+                        interweave_comma(
+                                inverted_indexes.into_iter().map(|inverted_index| RcDoc::text(inverted_index.to_string())),
+                        )
+                        .group(),
+                    )
+                } else {
+                    RcDoc::nil()
+                }),
+        CreateDictionarySource::Like { 
+            catalog,
+            database, 
+            dictionary } => RcDoc::space()
+                                        .append(RcDoc::text("LIKE"))
+                                        .append(RcDoc::space())
+                                        .append(if let Some(catalog) = catalog{
+                                            RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
+                                        } else {
+                                            RcDoc::nil()
+                                        })
+                                        .append(if let Some(database) = database {
+                                            RcDoc::text(database.to_string()).append(RcDoc::text("."))
+                                        } else {
+                                            RcDoc::nil()
+                                        })
+                                        .append(RcDoc::text(dictionary.to_string())),
     }
 }
 
