@@ -339,6 +339,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::AddStreamColumn(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
+        | PhysicalPlan::Recluster(_)
         | PhysicalPlan::ReclusterSource(_)
         | PhysicalPlan::ReclusterSink(_)
         | PhysicalPlan::Duplicate(_)

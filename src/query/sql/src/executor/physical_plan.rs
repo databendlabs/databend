@@ -60,8 +60,7 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::ReclusterSink;
-use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
@@ -131,8 +130,10 @@ pub enum PhysicalPlan {
     CommitSink(Box<CommitSink>),
 
     /// Recluster
-    ReclusterSource(Box<ReclusterSource>),
-    ReclusterSink(Box<ReclusterSink>),
+    Recluster(Box<Recluster>),
+
+    /// Update
+    UpdateSource(Box<UpdateSource>),
 
     /// Multi table insert
     Duplicate(Box<Duplicate>),
@@ -345,14 +346,13 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
-            PhysicalPlan::ReclusterSource(plan) => {
+            PhysicalPlan::Recluster(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
-            PhysicalPlan::ReclusterSink(plan) => {
+            PhysicalPlan::Recluster(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::Duplicate(plan) => {
                 plan.plan_id = *next_id;
@@ -443,8 +443,7 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
             PhysicalPlan::CompactSource(v) => v.plan_id,
-            PhysicalPlan::ReclusterSource(v) => v.plan_id,
-            PhysicalPlan::ReclusterSink(v) => v.plan_id,
+            PhysicalPlan::Recluster(v) => v.plan_id,
             PhysicalPlan::Duplicate(v) => v.plan_id,
             PhysicalPlan::Shuffle(v) => v.plan_id,
             PhysicalPlan::ChunkFilter(v) => v.plan_id,
@@ -499,8 +498,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::Recluster(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
@@ -559,8 +557,7 @@ impl PhysicalPlan {
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
-            PhysicalPlan::ReclusterSource(_) => "ReclusterSource".to_string(),
-            PhysicalPlan::ReclusterSink(_) => "ReclusterSink".to_string(),
+            PhysicalPlan::Recluster(_) => "Recluster".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
@@ -584,7 +581,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
-            | PhysicalPlan::ReclusterSource(_)
+            | PhysicalPlan::Recluster(_)
             | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -628,7 +625,6 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::ReclusterSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -686,8 +682,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::RecursiveCteScan(_)
-            | PhysicalPlan::ReclusterSource(_)
-            | PhysicalPlan::ReclusterSink(_)
+            | PhysicalPlan::Recluster(_)
             | PhysicalPlan::Duplicate(_)
             | PhysicalPlan::Shuffle(_)
             | PhysicalPlan::ChunkFilter(_)

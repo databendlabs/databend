@@ -30,6 +30,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -223,7 +224,15 @@ impl FuseTable {
         if is_lazy {
             pipeline.try_resize(1)?;
             pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact)
+                TableMutationAggregator::create(
+                    self,
+                    ctx.clone(),
+                    vec![],
+                    vec![],
+                    vec![],
+                    Statistics::default(),
+                    MutationKind::Compact,
+                )
             });
         }
         Ok(())

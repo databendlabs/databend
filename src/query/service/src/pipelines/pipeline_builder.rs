@@ -210,12 +210,7 @@ impl PipelineBuilder {
             PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
 
             // Recluster.
-            PhysicalPlan::ReclusterSource(recluster_source) => {
-                self.build_recluster_source(recluster_source)
-            }
-            PhysicalPlan::ReclusterSink(recluster_sink) => {
-                self.build_recluster_sink(recluster_sink)
-            }
+            PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
 
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),

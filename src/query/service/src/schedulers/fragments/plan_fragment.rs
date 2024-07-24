@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::ReclusterTask;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -28,6 +29,7 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReclusterSource;
 use databend_common_sql::executor::physical_plans::ReclusterTask;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -321,7 +323,7 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
         let recluster = match exchange_sink.input.as_ref() {
-            PhysicalPlan::ReclusterSource(plan) => plan,
+            PhysicalPlan::Recluster(plan) => plan,
             _ => unreachable!("logic error"),
         };
 
@@ -338,7 +340,7 @@ impl PlanFragment {
         let task_reshuffle = Self::reshuffle(executors, tasks)?;
         for (executor, tasks) in task_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
-            let mut replace_recluster = ReplaceReclusterSource { tasks };
+            let mut replace_recluster = ReplaceRecluster { tasks };
             plan = replace_recluster.replace(&plan)?;
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -520,13 +522,13 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 }
 
-struct ReplaceReclusterSource {
+struct ReplaceRecluster {
     pub tasks: Vec<ReclusterTask>,
 }
 
-impl PhysicalPlanReplacer for ReplaceReclusterSource {
-    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
+impl PhysicalPlanReplacer for ReplaceRecluster {
+    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::Recluster(Box::new(Recluster {
             tasks: self.tasks.clone(),
             ..plan.clone()
         })))

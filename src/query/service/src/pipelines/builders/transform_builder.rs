@@ -38,6 +38,7 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Statistics;
 
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::InputPort;
@@ -140,8 +141,15 @@ impl PipelineBuilder {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let aggregator =
-                TableMutationAggregator::new(fuse_table, ctx.clone(), vec![], MutationKind::Insert);
+            let aggregator = TableMutationAggregator::create(
+                fuse_table,
+                ctx.clone(),
+                vec![],
+                vec![],
+                vec![],
+                Statistics::default(),
+                MutationKind::Insert,
+            );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))

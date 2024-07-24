@@ -131,6 +131,7 @@ impl PhysicalPlanBuilder {
             RelOperator::DataMutation(merge_into) => {
                 self.build_merge_into(s_expr, merge_into, required).await
             }
+            RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
         }
     }
 
