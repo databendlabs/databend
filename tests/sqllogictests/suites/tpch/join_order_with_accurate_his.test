@@ -83,19 +83,19 @@ HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.region (#4) (read rows: 5)
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── Scan: default.tpch_test.region (#4) (read rows: 5)
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpch_test.nation (#3) (read rows: 25)
 │       │       └── Probe
-│       │           └── Scan: default.tpch_test.nation (#3) (read rows: 25)
+│       │           └── Scan: default.tpch_test.supplier (#1) (read rows: 1000)
 │       └── Probe
 │           └── HashJoin: INNER
 │               ├── Build
-│               │   └── HashJoin: INNER
-│               │       ├── Build
-│               │       │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
-│               │       └── Probe
-│               │           └── Scan: default.tpch_test.partsupp (#2) (read rows: 80000)
+│               │   └── Scan: default.tpch_test.part (#0) (read rows: 20000)
 │               └── Probe
-│                   └── Scan: default.tpch_test.supplier (#1) (read rows: 1000)
+│                   └── Scan: default.tpch_test.partsupp (#2) (read rows: 80000)
 └── Probe
     └── HashJoin: INNER
         ├── Build
@@ -706,13 +706,13 @@ MaterializedCte: 0
         ├── Build
         │   └── CTEScan
         │       ├── CTE index: 0, sub index: 2
-        │       └── estimated rows: 36.00
+        │       └── estimated rows: 85.00
         └── Probe
             └── HashJoin: INNER
                 ├── Build
                 │   └── CTEScan
                 │       ├── CTE index: 0, sub index: 1
-                │       └── estimated rows: 36.00
+                │       └── estimated rows: 85.00
                 └── Probe
                     └── Scan: default.tpch_test.supplier (#0) (read rows: 1000)
 

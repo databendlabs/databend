@@ -316,11 +316,11 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 2.67
+├── estimated rows: 3.56
 ├── Filter(Build)
 │   ├── output columns: [b.x (#1), b.y (#2)]
 │   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-│   ├── estimated rows: 2.00
+│   ├── estimated rows: 2.67
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── output columns: [x (#1), y (#2)]
@@ -387,39 +387,39 @@ query T
 explain select * from onecolumn as a right join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 HashJoin
-├── output columns: [a.x (#0), b.x (#1), b.y (#2)]
-├── join type: RIGHT OUTER
-├── build keys: [b.x (#1)]
-├── probe keys: [a.x (#0)]
+├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── join type: LEFT OUTER
+├── build keys: [a.x (#0)]
+├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 2.67
+├── estimated rows: 3.56
 ├── Filter(Build)
-│   ├── output columns: [b.x (#1), b.y (#2)]
-│   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-│   ├── estimated rows: 2.00
+│   ├── output columns: [a.x (#0)]
+│   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
+│   ├── estimated rows: 2.67
 │   └── TableScan
-│       ├── table: default.default.twocolumn
-│       ├── output columns: [x (#1), y (#2)]
+│       ├── table: default.default.onecolumn
+│       ├── output columns: [x (#0)]
 │       ├── read rows: 4
 │       ├── read size: < 1 KiB
 │       ├── partitions total: 1
 │       ├── partitions scanned: 1
 │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
+│       ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
 │       └── estimated rows: 4.00
 └── Filter(Probe)
-    ├── output columns: [a.x (#0)]
-    ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
+    ├── output columns: [b.x (#1), b.y (#2)]
+    ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
     ├── estimated rows: 2.67
     └── TableScan
-        ├── table: default.default.onecolumn
-        ├── output columns: [x (#0)]
+        ├── table: default.default.twocolumn
+        ├── output columns: [x (#1), y (#2)]
         ├── read rows: 4
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(onecolumn.x (#0) > 42, onecolumn.x (#0) < 45)], limit: NONE]
+        ├── push downs: [filters: [and_filters(twocolumn.x (#1) > 42, twocolumn.x (#1) < 45)], limit: NONE]
         └── estimated rows: 4.00
 
 statement ok
