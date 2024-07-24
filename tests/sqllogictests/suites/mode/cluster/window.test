@@ -65,7 +65,7 @@ Charlie Marketing 55000.00 1
 David Marketing 50000.00 2
 
 
-query 
+query
 explain SELECT e.name AS EmployeeName,
     d.department_name AS DepartmentName,
     e.salary AS Salary,
@@ -86,43 +86,46 @@ Exchange
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
     └── WindowPartition
         ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-        ├── hash keys: [department_id]
-        ├── estimated rows: 8.00
-        └── Exchange
+        ├── sort keys: [department_id ASC NULLS LAST, salary DESC NULLS LAST]
+        ├── estimated rows: 10.00
+        └── LocalShuffle
             ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
             ├── exchange type: Hash(d.department_id (#4))
             └── HashJoin
                 ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-                ├── join type: INNER
-                ├── build keys: [d.department_id (#4)]
-                ├── probe keys: [e.department_id (#2)]
-                ├── filters: []
-                ├── estimated rows: 8.00
-                ├── Exchange(Build)
-                │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
-                │   ├── exchange type: Broadcast
-                │   └── TableScan
-                │       ├── table: default.default.departments
-                │       ├── output columns: [department_id (#4), department_name (#5)]
-                │       ├── read rows: 4
-                │       ├── read size: < 1 KiB
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                │       ├── push downs: [filters: [], limit: NONE]
-                │       └── estimated rows: 4.00
-                └── TableScan(Probe)
-                    ├── table: default.default.employees
-                    ├── output columns: [name (#1), department_id (#2), salary (#3)]
-                    ├── read rows: 10
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 10.00
+                ├── exchange type: Hash(d.department_id (#4))
+                └── HashJoin
+                    ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
+                    ├── join type: INNER
+                    ├── build keys: [d.department_id (#4)]
+                    ├── probe keys: [e.department_id (#2)]
+                    ├── filters: []
+                    ├── estimated rows: 10.00
+                    ├── Exchange(Build)
+                    │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
+                    │   ├── exchange type: Broadcast
+                    │   └── TableScan
+                    │       ├── table: default.default.departments
+                    │       ├── output columns: [department_id (#4), department_name (#5)]
+                    │       ├── read rows: 4
+                    │       ├── read size: < 1 KiB
+                    │       ├── partitions total: 1
+                    │       ├── partitions scanned: 1
+                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    │       ├── push downs: [filters: [], limit: NONE]
+                    │       └── estimated rows: 4.00
+                    └── TableScan(Probe)
+                        ├── table: default.default.employees
+                        ├── output columns: [name (#1), department_id (#2), salary (#3)]
+                        ├── read rows: 10
+                        ├── read size: < 1 KiB
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 10.00
 
-query 
+query
 explain select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1),
     lead(number,2, 0) over (partition by number % 3 order by number + 1)
     from numbers(50);
@@ -177,7 +180,7 @@ CREATE OR REPLACE TABLE sales (
     net_paid DECIMAL(10, 2) NOT NULL
 );
 
-query 
+query
 explain SELECT customer_id,
     ROUND(AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS customer_avg,
     ROUND(AVG(net_paid) OVER () - AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS diff_from_overall_avg
