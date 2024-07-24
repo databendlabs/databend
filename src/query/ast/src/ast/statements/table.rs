@@ -196,21 +196,19 @@ impl Display for CreateTableStmt {
     }
 }
 
-//create dictionary语句的抽象语法树
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDictionaryStmt{
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub dictionary: Identifier,
-    // 创建字典的来源，是直接建立列的定义和索引还是根据已有的字典
     pub source: Option<CreateDictionarySource>,
-    //可以加一个数据源字段，这样能够指字典对应的数据来源（MySQL、PostgreSQL、csv、https等）
-    //pub data_source: Option<DictionaryDataSource>,//或者设置一个默认的数据源，不对应该是一个必要的选项
-    pub engine: Option<Engine>,//存储引擎
+    //A "data source field" can be added to specify the origin of the dictionary's corresponding data (e.g., MySQL, PostgreSQL, CSV, HTTPS, etc.).
+    //pub data_source: Option<DataSource>,//DataSource is an enumeration structure that includes various data sources.
+    pub engine: Option<Engine>,
     pub uri_location: Option<UriLocation>,
     pub cluster_by: Vec<Expr>,
-    pub dictionary_options: BTreeMap<String, String>,//字典选项（这些字典选项应该包括什么），以键值对形式存储
+    pub dictionary_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
     pub transient: bool,
 }
@@ -259,7 +257,6 @@ impl Display for CreateDictionaryStmt {
     }
 }
 
-//创建字典的来源
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum CreateDictionarySource {
     Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
