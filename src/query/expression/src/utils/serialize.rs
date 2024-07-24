@@ -89,7 +89,7 @@ pub fn read_decimal_with_size<T: Decimal>(
 pub fn read_decimal<T: Decimal>(
     buf: &[u8],
     max_digits: u32,
-    max_scales: u32,
+    mut max_scales: u32,
     exact: bool,
 ) -> Result<(T, u8, i32, usize)> {
     if buf.is_empty() {
@@ -119,14 +119,69 @@ pub fn read_decimal<T: Decimal>(
     let mut zeros = 0;
 
     let mut has_point = false;
-    let mut has_e = false;
     let mut stop = -1;
+    let mut stop_of_e = -1;
 
     // ignore leading zeros
     while pos < len && buf[pos] == b'0' {
         pos += 1;
         leading_zero = true
     }
+
+    // fetch the e number
+    let mut e_pos = pos;
+    let mut e_sign = 1;
+    let mut e_num = 0;
+    while e_pos < len {
+        match buf[e_pos] {
+            b'e' | b'E' => {
+                e_pos += 1;
+                if e_pos < len {
+                    match buf[e_pos] {
+                        b'+' => {
+                            e_pos += 1;
+                        }
+                        b'-' => {
+                            e_pos += 1;
+                            e_sign = -1;
+                        }
+                        _ => {}
+                    };
+                }
+
+                while e_pos < len {
+                    match buf[e_pos] {
+                        b'0'..=b'9' => {
+                            e_pos += 1;
+                            e_num = e_num * 10 + (buf[e_pos - 1] - b'0') as i32 * e_sign;
+                        }
+                        _ => {
+                            if exact {
+                                return Err(decimal_parse_error("unexpected char"));
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                stop_of_e = e_pos as i32;
+                break;
+            }
+            b'.' | b'-' | b'+' | b'0'..=b'9' => e_pos += 1,
+            _ => {
+                if exact {
+                    return Err(decimal_parse_error("unexpected char"));
+                } else {
+                    stop_of_e = e_pos as i32;
+                    break;
+                }
+            }
+        }
+    }
+
+    // 0.011111e3 --> we need to fetch e_num as 3 to calculate the max_scales scale
+    max_scales = ((max_scales as i32) + e_num).max(0) as u32;
 
     // use 3 separate loops make code more clear and each loop is more tight.
     while pos < len {
@@ -154,7 +209,7 @@ pub fn read_decimal<T: Decimal>(
                 break;
             }
             b'e' | b'E' => {
-                has_e = true;
+                stop = stop_of_e;
                 pos += 1;
                 break;
             }
@@ -209,9 +264,9 @@ pub fn read_decimal<T: Decimal>(
                         zeros = 0;
                     }
                 }
+                // already handled
                 b'e' | b'E' => {
-                    has_e = true;
-                    pos += 1;
+                    stop = stop_of_e;
                     break;
                 }
                 _ => {
@@ -238,47 +293,7 @@ pub fn read_decimal<T: Decimal>(
         0i32
     };
 
-    if has_e && stop < 0 {
-        let mut exp = 0i32;
-        if pos >= len {
-            return Err(decimal_parse_error("empty exponent"));
-        }
-
-        let exp_sign = match buf[pos] {
-            b'+' => {
-                pos += 1;
-                1
-            }
-            b'-' => {
-                pos += 1;
-                -1
-            }
-            _ => 1,
-        };
-
-        if pos >= len {
-            return Err(decimal_parse_error("bad exponent"));
-        }
-
-        for (i, v) in buf[pos..].iter().enumerate() {
-            match v {
-                b'0'..=b'9' => {
-                    exp *= 10;
-                    exp += (v - b'0') as i32
-                }
-                c => {
-                    if exact {
-                        return Err(decimal_parse_error(&format!("unexpected char: {c}")));
-                    } else {
-                        stop = (pos + i) as i32;
-                        break;
-                    }
-                }
-            }
-        }
-        exponent += exp * exp_sign;
-    }
-
+    exponent += e_num;
     let n = n.checked_mul(sign).ok_or_else(decimal_overflow_error)?;
     let n_read = if stop > 0 { stop as usize } else { len };
     Ok((n, digits as u8, exponent, n_read))
