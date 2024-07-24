@@ -16,7 +16,6 @@
 //! Iceberg offered support for tables, that meaning the catalog and database data
 //! should be managed by ourselves.
 
-#![feature(lazy_cell)]
 #![feature(impl_trait_in_assoc_type)]
 #![allow(clippy::diverging_sub_expression)]
 

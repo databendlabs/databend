@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
@@ -79,6 +80,30 @@ pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
 pub const ORIGIN_BLOCK_ROW_NUM_COL_NAME: &str = "_origin_block_row_num";
 pub const ROW_VERSION_COL_NAME: &str = "_row_version";
 
+// The change$row_id might be expended to the computation of
+// the ORIGIN_BLOCK_ROW_NUM_COL_NAME and BASE_ROW_ID_COL_NAME.
+pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    HashSet::from([
+        ROW_ID_COL_NAME,
+        SNAPSHOT_NAME_COL_NAME,
+        SEGMENT_NAME_COL_NAME,
+        BLOCK_NAME_COL_NAME,
+        BASE_ROW_ID_COL_NAME,
+        BASE_BLOCK_IDS_COL_NAME,
+        SEARCH_MATCHED_COL_NAME,
+        SEARCH_SCORE_COL_NAME,
+        CHANGE_ACTION_COL_NAME,
+        CHANGE_IS_UPDATE_COL_NAME,
+        CHANGE_ROW_ID_COL_NAME,
+        ROW_NUMBER_COL_NAME,
+        PREDICATE_COLUMN_NAME,
+        ORIGIN_VERSION_COL_NAME,
+        ORIGIN_BLOCK_ID_COL_NAME,
+        ORIGIN_BLOCK_ROW_NUM_COL_NAME,
+        ROW_VERSION_COL_NAME,
+    ])
+});
+
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= SEARCH_SCORE_COLUMN_ID
@@ -86,25 +111,7 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 
 #[inline]
 pub fn is_internal_column(column_name: &str) -> bool {
-    matches!(
-        column_name,
-        ROW_ID_COL_NAME
-            | SNAPSHOT_NAME_COL_NAME
-            | SEGMENT_NAME_COL_NAME
-            | BLOCK_NAME_COL_NAME
-            | BASE_BLOCK_IDS_COL_NAME
-            | ROW_NUMBER_COL_NAME
-            | PREDICATE_COLUMN_NAME
-            | CHANGE_ACTION_COL_NAME
-            | CHANGE_IS_UPDATE_COL_NAME
-            | CHANGE_ROW_ID_COL_NAME
-            // change$row_id might be expended
-            // to the computation of the two following internal columns
-            | ORIGIN_BLOCK_ROW_NUM_COL_NAME
-            | BASE_ROW_ID_COL_NAME
-            | SEARCH_MATCHED_COL_NAME
-            | SEARCH_SCORE_COL_NAME
-    )
+    INTERNAL_COLUMNS.contains(column_name)
 }
 
 #[inline]
