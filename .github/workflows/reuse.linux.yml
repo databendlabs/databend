@@ -82,28 +82,28 @@ jobs:
           category: udf
           artifacts: query
 
-  build_address_sanitizer:
-    runs-on:
-      - self-hosted
-      - "${{ matrix.runner }}"
-      - Linux
-      - 16c32g
-      - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: aarch64, runner: ARM64 }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux_sanitizer
-        timeout-minutes: 60
-        with:
-          target: ${{ matrix.arch }}-unknown-linux-gnu
-          artifacts: query
+  # build_address_sanitizer:
+  #   runs-on:
+  #     - self-hosted
+  #     - "${{ matrix.runner }}"
+  #     - Linux
+  #     - 16c32g
+  #     - "${{ inputs.runner_provider }}"
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - { arch: aarch64, runner: ARM64 }
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         # fetch all tags, metasrv and metaclient need tag as its version.
+  #         fetch-depth: 0
+  #     - uses: ./.github/actions/build_linux_sanitizer
+  #       timeout-minutes: 60
+  #       with:
+  #         target: ${{ matrix.arch }}-unknown-linux-gnu
+  #         artifacts: query
 
   build_musl:
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]

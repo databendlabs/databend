@@ -202,27 +202,20 @@ impl Column {
         num_rows: usize,
     ) -> BinaryColumn {
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut offsets_len = 0;
         let mut data_size = 0;
 
         let value_data = values.data().as_slice();
         let values_offset = values.offsets().as_slice();
         // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            *offsets.get_unchecked_mut(offsets_len) = 0;
-            offsets_len += 1;
-            for range in ranges {
-                let mut offset_start = values_offset[range.start as usize];
-                for offset_end in
-                    values_offset[range.start as usize + 1..range.end as usize + 1].iter()
-                {
-                    data_size += offset_end - offset_start;
-                    offset_start = *offset_end;
-                    *offsets.get_unchecked_mut(offsets_len) = data_size;
-                    offsets_len += 1;
-                }
+        offsets.push(0);
+        for range in ranges {
+            let mut offset_start = values_offset[range.start as usize];
+            for offset_end in values_offset[range.start as usize + 1..range.end as usize + 1].iter()
+            {
+                data_size += offset_end - offset_start;
+                offset_start = *offset_end;
+                offsets.push(data_size);
             }
-            offsets.set_len(offsets_len);
         }
 
         // Build [`data`].
