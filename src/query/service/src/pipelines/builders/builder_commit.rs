@@ -46,13 +46,17 @@ impl PipelineBuilder {
                 } else {
                     plan.snapshot.segments().to_vec()
                 };
+
+                // extract re-cluster related mutations from physical plan
+                let recluster_info = plan.recluster_info.clone().unwrap_or_default();
+
                 TableMutationAggregator::create(
                     table,
                     self.ctx.clone(),
                     base_segments,
-                    plan.merged_blocks.clone(),
-                    plan.removed_segment_indexes.clone(),
-                    plan.removed_statistics.clone(),
+                    recluster_info.merged_blocks,
+                    recluster_info.removed_segment_indexes,
+                    recluster_info.removed_statistics,
                     plan.mutation_kind,
                 )
             });

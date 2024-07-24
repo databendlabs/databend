@@ -37,6 +37,12 @@ pub struct CommitSink {
     pub deduplicated_label: Option<String>,
 
     // Used for recluster.
+    pub recluster_info: Option<ReclusterInfoSideCar>,
+}
+
+// TODO refine this
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ReclusterInfoSideCar {
     pub merged_blocks: Vec<Arc<BlockMeta>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_statistics: Statistics,
