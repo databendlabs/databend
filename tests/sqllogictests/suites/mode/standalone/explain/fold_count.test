@@ -40,7 +40,7 @@ AggregateFinal
     └── Filter
         ├── output columns: []
         ├── filters: [t.number (#0) > 10]
-        ├── estimated rows: 990.98
+        ├── estimated rows: 989.99
         └── TableScan
             ├── table: default.default.t
             ├── output columns: [number (#0)]
