@@ -87,7 +87,8 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 table.as_ref(),
                 &settings,
             )
-            .await?;
+            .await
+            .unwrap_or("".to_string());
 
             let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;
