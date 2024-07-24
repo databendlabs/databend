@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod compact_source;
-mod recluster_aggregator;
 
 pub use compact_source::CompactSource;
-pub use recluster_aggregator::ReclusterAggregator;

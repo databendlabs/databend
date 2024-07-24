@@ -132,9 +132,6 @@ pub enum PhysicalPlan {
     /// Recluster
     Recluster(Box<Recluster>),
 
-    /// Update
-    UpdateSource(Box<UpdateSource>),
-
     /// Multi table insert
     Duplicate(Box<Duplicate>),
     Shuffle(Box<Shuffle>),
@@ -343,10 +340,6 @@ impl PhysicalPlan {
                 plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::CompactSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::Recluster(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }

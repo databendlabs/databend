@@ -123,8 +123,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::Recluster(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
             PhysicalPlan::Shuffle(_) => "Shuffle".fmt(f)?,
@@ -546,24 +544,6 @@ impl Display for AddStreamColumn {
 impl Display for Recluster {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Recluster")
-    }
-}
-
-impl Display for Recluster {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSource")
-    }
-}
-
-impl Display for ReclusterSink {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSink")
-    }
-}
-
-impl Display for Recluster {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSink")
     }
 }
 

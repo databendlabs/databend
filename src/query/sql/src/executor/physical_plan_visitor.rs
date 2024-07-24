@@ -106,8 +106,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
-            PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
-            PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
             PhysicalPlan::Shuffle(plan) => self.replace_shuffle(plan),
