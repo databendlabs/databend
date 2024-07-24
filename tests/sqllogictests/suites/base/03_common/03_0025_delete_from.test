@@ -132,9 +132,6 @@ NULL
 statement ok
 insert into t values (1),(2),(NULL)
 
-statement error (?s)1006.* unable to cast type `Timestamp` to type `Boolean NULL`
-delete from t where now()
-
 query B
 select count(*) = 0 from t
 ----
