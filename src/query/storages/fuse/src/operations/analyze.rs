@@ -53,6 +53,13 @@ use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
 use crate::FuseTable;
 
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq)]
+enum AnalyzeStep {
+    CollectNDV,
+    CollectHistogram,
+    CommitStatistics,
+}
+
 impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     pub fn do_analyze(
@@ -92,10 +99,10 @@ struct SinkAnalyzeState {
     snapshot_id: SnapshotId,
     histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
-    finished: bool,
     commited: bool,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Histogram>,
+    step: AnalyzeStep,
 }
 
 impl SinkAnalyzeState {
@@ -120,10 +127,10 @@ impl SinkAnalyzeState {
             snapshot_id,
             histogram_info_receivers,
             input_data: None,
-            finished: false,
             commited: false,
             ndv_states: Default::default(),
             histograms: Default::default(),
+            step: AnalyzeStep::CollectNDV,
         })))
     }
 
@@ -282,10 +289,6 @@ impl Processor for SinkAnalyzeState {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if !self.finished {
-            return Ok(Event::Async);
-        }
-
         if self.input_data.is_some() {
             if !self.input_port.has_data() {
                 self.input_port.set_need_data();
@@ -294,11 +297,22 @@ impl Processor for SinkAnalyzeState {
         }
 
         if self.input_port.is_finished() {
-            if !self.commited {
-                return Ok(Event::Async);
+            match self.step {
+                AnalyzeStep::CollectNDV => {
+                    self.step = AnalyzeStep::CollectHistogram;
+                    return Ok(Event::Async);
+                }
+                AnalyzeStep::CollectHistogram => {
+                    return Ok(Event::Async);
+                }
+                AnalyzeStep::CommitStatistics => {
+                    if self.commited {
+                        return Ok(Event::Finished);
+                    } else {
+                        return Ok(Event::Async);
+                    }
+                }
             }
-
-            return Ok(Event::Finished);
         }
 
         if self.input_port.has_data() {
@@ -312,36 +326,41 @@ impl Processor for SinkAnalyzeState {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if !self.finished {
-            let mut finished_count = 0;
-            let receivers = self.histogram_info_receivers.clone();
-            for (id, receiver) in receivers.iter() {
-                if let Ok(res) = receiver.recv().await {
-                    self.create_histogram(*id, res).await?;
-                } else {
-                    finished_count += 1;
+        match self.step {
+            AnalyzeStep::CollectNDV => {
+                if let Some(data_block) = self.input_data.take() {
+                    self.merge_analyze_states(data_block.clone()).await?;
                 }
             }
-            if finished_count == self.histogram_info_receivers.len() {
-                self.finished = true;
-            }
-        }
-        if let Some(data_block) = self.input_data.take() {
-            self.merge_analyze_states(data_block.clone()).await?;
-        } else {
-            let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
-            loop {
-                if let Err(e) = self.commit_statistics().await {
-                    if e.code() == mismatch_code {
-                        log::warn!("Retry after got TableVersionMismatched");
-                        continue;
+            AnalyzeStep::CollectHistogram => {
+                let mut finished_count = 0;
+                let receivers = self.histogram_info_receivers.clone();
+                for (id, receiver) in receivers.iter() {
+                    if let Ok(res) = receiver.recv().await {
+                        self.create_histogram(*id, res).await?;
                     } else {
-                        return Err(e);
+                        finished_count += 1;
                     }
                 }
-                break;
+                if finished_count == self.histogram_info_receivers.len() {
+                    self.step = AnalyzeStep::CommitStatistics;
+                }
             }
-            self.commited = true;
+            AnalyzeStep::CommitStatistics => {
+                let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
+                loop {
+                    if let Err(e) = self.commit_statistics().await {
+                        if e.code() == mismatch_code {
+                            log::warn!("Retry after got TableVersionMismatched");
+                            continue;
+                        } else {
+                            return Err(e);
+                        }
+                    }
+                    break;
+                }
+                self.commited = true;
+            }
         }
         return Ok(());
     }

@@ -82,11 +82,14 @@ impl CollectStatisticsOptimizer {
                             if let Some(col_id) = *leaf_index {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(col_id as ColumnId);
+                                if col_stat.is_none() {
+                                    info!("column {} doesn't have global statistics", col_id);
+                                }
                                 column_stats.insert(*column_index, col_stat.cloned());
                                 let histogram =
                                     column_statistics_provider.histogram(col_id as ColumnId);
-                                if histogram.is_some() {
-                                    info!("column {} has accurate histogram", col_id);
+                                if histogram.is_none() {
+                                    info!("column {} doesn't accurate histogram", col_id);
                                 }
                                 histograms.insert(*column_index, histogram);
                             }
