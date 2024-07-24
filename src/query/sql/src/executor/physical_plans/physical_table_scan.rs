@@ -44,6 +44,7 @@ use itertools::Itertools;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -252,14 +253,27 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        Ok(PhysicalPlan::TableScan(TableScan {
+        let mut plan = PhysicalPlan::TableScan(TableScan {
             plan_id: 0,
             name_mapping,
             source: Box::new(source),
             table_index: Some(scan.table_index),
             stat_info: Some(stat_info),
             internal_column,
-        }))
+        });
+
+        // Update stream columns if needed.
+        if scan.update_stream_columns {
+            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+                &self.metadata,
+                plan,
+                scan.table_index,
+                table.get_table_info().ident.seq,
+                false,
+            )?));
+        }
+
+        Ok(plan)
     }
 
     pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {

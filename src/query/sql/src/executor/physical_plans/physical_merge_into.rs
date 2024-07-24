@@ -44,7 +44,6 @@ use crate::binder::wrap_cast;
 use crate::binder::DataMutationInputType;
 use crate::binder::DataMutationType;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -135,13 +134,6 @@ impl PhysicalPlanBuilder {
         } = merge_into;
 
         let settings = self.ctx.get_settings();
-
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
-        let table_info = table.get_table_info();
-        let table_name = table_name.clone();
 
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, required).await?;
@@ -236,17 +228,6 @@ impl PhysicalPlanBuilder {
             });
         }
 
-        // Update stream columns if needed.
-        if table.change_tracking_enabled() {
-            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
-                &self.metadata,
-                plan,
-                *target_table_index,
-                table_info.ident.seq,
-                false,
-            )?));
-        }
-
         if let Some(merge_into_split_idx) = merge_into_split_idx {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
@@ -317,6 +298,13 @@ impl PhysicalPlanBuilder {
                 stat_info: None,
             });
         }
+
+        let table = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        let table_info = table.get_table_info();
+        let table_name = table_name.clone();
 
         let output_schema = plan.output_schema()?;
 
