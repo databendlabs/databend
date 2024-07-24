@@ -535,7 +535,15 @@ pub trait VisitorMut: Sized {
         }
     }
 
+    fn visit_create_dictionary(&mut self,stmt: &mut CreateDictionaryStmt) {
+        if let Some(query) = stmt.as_query.as_deref_mut() {
+            self.visit_query(query)
+        }
+    }
+
     fn visit_create_table_source(&mut self, _source: &mut CreateTableSource) {}
+
+    fn visit_create_dictionary_source(&mut self,_source: &mut CreateDictionarySource){}
 
     fn visit_column_definition(&mut self, _column_definition: &mut ColumnDefinition) {}
 

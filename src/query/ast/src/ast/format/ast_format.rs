@@ -1478,6 +1478,109 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         }
     }
 
+    fn visit_create_dictionary(&mut self, stmt: &'ast CreateDictionaryStmt) {
+        let mut children = Vec::new();
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary);
+        children.push(self.children.pop().unwrap());
+        if let Some(source) = &stmt.source {
+            self.visit_create_dictionary_source(source);
+            children.push(self.children.pop().unwrap());
+        }
+        if let Some(engine) = &stmt.engine {
+            let engine_name = format!("DictionaryEngine {}",engine);
+            let engine_format_ctx = AstFormatContext::new(engine_name);
+            let engine_node = FormatTreeNode::new(engine_format_ctx);
+            children.push(engine_node);
+        }
+        if !stmt.cluster_by.is_empty(){
+            let mut cluster_by_children = Vec::with_capacity(stmt.cluster_by.len());
+            for cluster_by in stmt.cluster_by.iter(){
+                self.visit_expr(cluster_by);
+                cluster_by_children.push(self.children.pop().unwrap());
+            }
+            let cluster_by_name = "ClusterByList".to_string();
+            let cluster_by_format_ctx = AstFormatContext::with_children(cluster_by_name, cluster_by_children.len());
+            let cluster_by_node = FormatTreeNode::with_children(cluster_by_format_ctx, cluster_by_children);
+            children.push(cluster_by_node);
+        }
+        if !stmt.dictionary_options.is_empty(){
+            let mut dictionary_options_children = Vec::with_capacity(stmt.dictionary_options.len());
+            for (k,v) in stmt.dictionary_options.iter(){
+                let dictionary_option_name = format!("DictionaryOption {} = {:?}",k,v);
+                let dictionary_option_format_ctx = AstFormatContext::new(dictionary_option_name);
+                let dictionary_option_node = FormatTreeNode::new(dictionary_option_format_ctx);
+                dictionary_options_children.push(dictionary_option_node);
+            }
+            let dictionary_options_format_name = "DictionaryOptions".to_string();
+            let dictionary_options_format_ctx = AstFormatContext::with_children(dictionary_options_format_name, dictionary_options_children.len());
+            let dictionary_options_node = FormatTreeNode::with_children(dictionary_options_format_ctx, dictionary_options_children);
+            children.push(dictionary_options_node);
+        }
+        if let Some(as_query) = &stmt.as_query {
+            self.visit_query(as_query);
+            children.push(self.children.pop().unwrap());
+        }
+        let name = "CreateDictionary".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+    
+    fn visit_create_dictionary_source(&mut self,_source: &'ast CreateDictionarySource) {
+        match _source {
+            CreateDictionarySource::Columns(columns, inverted_indexes ) => {
+                let mut children = Vec::with_capacity(columns.len());
+                for column in columns.iter() {
+                    self.visit_column_definition(column);
+                    children.push(self.children.pop().unwrap());
+                }
+                if let Some(inverted_indexes) = inverted_indexes {
+                    for inverted_index in inverted_indexes {
+                        self.visit_inverted_index_definition(&inverted_index);
+                        children.push(self.children.pop().unwrap());
+                    }
+                }
+                let name = "ColumnsDefinition".to_string();
+                let format_ctx = AstFormatContext::with_children(name, children.len());
+                let node = FormatTreeNode::with_children(format_ctx, children);
+                self.children.push(node);
+            }
+            CreateDictionarySource::Like { 
+                catalog, 
+                database, 
+                dictionary
+            } => {
+                self.visit_dictionary_ref(&catalog, &database, &dictionary);
+                let child = self.children.pop().unwrap();
+                let name = "LikeDictionary".to_string();
+                let format_ctx = AstFormatContext::with_children(name, 1);
+                let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+                self.children.push(node);
+            }
+        }
+    }
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        dictionary: &'ast Identifier,
+    ) {
+        let mut name = String::new();
+        name.push_str("DictionaryIdentifier");
+        if let Some(catalog) = catalog {
+            name.push_str(&catalog.to_string());
+            name.push('.');
+        }
+        if let Some(database) = database {
+            name.push_str(&database.to_string());
+            name.push('.');
+        }
+        name.push_str(&dictionary.to_string());
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_column_definition(&mut self, column_definition: &'ast ColumnDefinition) {
         let type_name = format!("DataType {}", column_definition.data_type);
         let type_format_ctx = AstFormatContext::new(type_name);

@@ -711,6 +711,52 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             }))
         },
     );
+
+     //create_dictionary
+     let create_dictionary = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ TRANSIENT? ~ DICTIONARY ~ (IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ #create_dictionary_source?
+            ~ ( #engine )?
+            ~ ( #uri_location )?
+            ~ ( CLUSTER ~ ^BY ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")")?
+            ~ ( #dictionary_option )?
+            ~ (AS ~ ^#query )?
+        },
+        |(
+            _,
+            opt_or_replace,
+            opt_transient,
+            _,
+            opt_if_not_exists,
+            (catalog, database, dictionary),
+            source,
+            engine,
+            uri_location,
+            opt_cluster_by,
+            opt_dictionary_options,
+            opt_as_query,
+        )| {
+            let create_option = parse_create_option(opt_or_replace.is_some(),opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateDictionary(CreateDictionaryStmt{
+                create_option,
+                catalog,
+                database,
+                dictionary,
+                source,
+                engine,
+                uri_location,
+                cluster_by: opt_cluster_by
+                        .map(|(_,_,_,exprs,_)|exprs)
+                        .unwrap_or_default(),
+                dictionary_options:opt_dictionary_options.unwrap_or_default(),
+                as_query:opt_as_query.map(|(_,query)| Box::new(query)),
+                transient: opt_transient.is_some(),
+            }))
+        },
+    );
+
     let drop_table = map(
         rule! {
             DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ALL?
@@ -3152,7 +3198,61 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         | #like
     )(i)
 }
+fn create_dictionary_source(i:Input) -> IResult<CreateDictionarySource> {
+    let columns = map(
+        rule! {
+            "(" ~ ^#comma_separated_list1(create_def) ~ ^")"
+        },
+        |(_, create_defs, _)| {
+            let mut columns = Vec::with_capacity(create_defs.len());
+            let mut inverted_indexes = Vec::new();
+            for create_def in create_defs {
+                match create_def {
+                    CreateDefinition::Column(column) => {
+                        columns.push(column);
+                    }
+                    CreateDefinition::InvertedIndex(inverted_index) => {
+                        inverted_indexes.push(inverted_index);
+                    }
+                }
+            }
+            let opt_inverted_indexes = if !inverted_indexes.is_empty() {
+                Some(inverted_indexes)
+            } else {
+                None
+            };
+            CreateDictionarySource::Columns(columns, opt_inverted_indexes)
+        },
+    );
+    let like = map(
+        rule! {
+            LIKE ~ #dot_separated_idents_1_to_3
+        },
+        |(_, (catalog, database, dictionary))| CreateDictionarySource::Like {
+            catalog,
+            database,
+            dictionary,
+        },
+    );
 
+    rule!(
+        #columns
+        | #like
+    )(i)
+}
+pub fn dictionary_option(i: Input) ->IResult<BTreeMap<String,String>> {
+    map(
+        rule! {
+           ( #ident ~ "=" ~ #option_to_string )*
+        },
+        |opts| {
+            BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
+            )
+        },
+    )(i)
+}
 pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     let mut rename_database = map(
         rule! {

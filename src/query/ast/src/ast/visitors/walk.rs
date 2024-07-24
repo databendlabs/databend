@@ -458,6 +458,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowTablesStatus(stmt) => visitor.visit_show_tables_status(stmt),
         Statement::ShowDropTables(stmt) => visitor.visit_show_drop_tables(stmt),
         Statement::CreateTable(stmt) => visitor.visit_create_table(stmt),
+        Statement::CreateDictionary(stmt) => visitor.visit_create_dictionary(stmt),
         Statement::DropTable(stmt) => visitor.visit_drop_table(stmt),
         Statement::UndropTable(stmt) => visitor.visit_undrop_table(stmt),
         Statement::AlterTable(stmt) => visitor.visit_alter_table(stmt),

@@ -142,6 +142,9 @@ pub enum Statement {
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
 
+    // Dictionary
+    CreateDictionary(CreateDictionaryStmt),
+
     // Columns
     ShowColumns(ShowColumnsStmt),
 
@@ -520,6 +523,7 @@ impl Display for Statement {
             Statement::ShowDropTables(stmt) => write!(f, "{stmt}")?,
             Statement::AttachTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateTable(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateDictionary(stmt) => write!(f,"{stmt}")?,
             Statement::DropTable(stmt) => write!(f, "{stmt}")?,
             Statement::UndropTable(stmt) => write!(f, "{stmt}")?,
             Statement::AlterTable(stmt) => write!(f, "{stmt}")?,

@@ -1080,6 +1080,8 @@ pub enum TokenKind {
     #[token("TABLES", ignore(ascii_case))]
     TABLES,
     #[token("TARGET_LAG", ignore(ascii_case))]
+    DICTIONARY,
+    #[token("DICTIONARY",ignore(ascii_case))]
     TARGET_LAG,
     #[token("TEXT", ignore(ascii_case))]
     TEXT,

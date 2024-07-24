@@ -197,6 +197,100 @@ impl Display for CreateTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CreateDictionaryStmt{
+    pub create_option: CreateOption,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    pub source: Option<CreateDictionarySource>,
+    //A "data source field" can be added to specify the origin of the dictionary's corresponding data (e.g., MySQL, PostgreSQL, CSV, HTTPS, etc.).
+    //pub data_source: Option<DataSource>,//DataSource is an enumeration structure that includes various data sources.
+    pub engine: Option<Engine>,
+    pub uri_location: Option<UriLocation>,
+    pub cluster_by: Vec<Expr>,
+    pub dictionary_options: BTreeMap<String, String>,
+    pub as_query: Option<Box<Query>>,
+    pub transient: bool,
+}
+impl Display for CreateDictionaryStmt {
+    fn fmt(&self , f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "CREATE ")?;
+        if let CreateOption::CreateOrReplace = self.create_option {
+            write!(f,"OR REPLACE ")?;
+        }
+        if self.transient {
+            write!(f, "TRANSIENT ")?;
+        }
+        write!(f, "DICTIONARY ");
+        if let CreateOption::CreateIfNotExists = self.create_option {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write_dot_separated_list(
+            f, 
+            self.catalog
+                    .iter()
+                    .chain(&self.database)
+                    .chain(Some(&self.dictionary)),
+        )?;
+        if let Some(source) = &self.source {
+            write!(f, " {source}")?;
+        }
+        if let Some(engine) = &self.engine {
+            write!(f," ENGINE = {engine}")?;
+        }
+        if let Some(uri_location) = &self.uri_location {
+            write!(f," {uri_location}")?;
+        }
+        if !self.cluster_by.is_empty() {
+            write!(f," CLUSTER BY (")?;
+            write_comma_separated_list(f, &self.cluster_by)?;
+            write!(f,")")?;
+        }
+        if !self.dictionary_options.is_empty() {
+            write!(f," ")?;
+            write_space_separated_string_map(f, &self.dictionary_options);
+        }
+        if let Some(as_query) = &self.as_query {
+            write!(f, " AS {as_query}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub enum CreateDictionarySource {
+    Columns(Vec<ColumnDefinition>, Option<Vec<InvertedIndexDefinition>>),
+    Like {
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        dictionary: Identifier,
+    },
+}
+impl Display for CreateDictionarySource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            CreateDictionarySource::Columns(columns, inverted_indexes) => {
+                write!(f, "(")?;
+                write_comma_separated_list(f, columns)?;
+                if let Some(inverted_indexes) = inverted_indexes {
+                    write!(f,", ")?;
+                    write_comma_separated_list(f, inverted_indexes)?;
+                }
+                write!(f,")")
+            }
+            CreateDictionarySource::Like { 
+                catalog, 
+                database, 
+                dictionary 
+            } => {
+                write!(f,"LIKE ")?;
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(dictionary)))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct AttachTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

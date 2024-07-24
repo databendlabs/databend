@@ -220,6 +220,16 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
     })(i)
 }
 
+pub fn dictionary_ref(i: Input) -> IResult<DictionaryRef> {
+    map(dot_separated_idents_1_to_3,|(catalog,database,dictionary)| {
+        DictionaryRef {
+            catalog,
+            database,
+            dictionary,
+        }
+    })(i)
+}
+
 pub fn column_id(i: Input) -> IResult<ColumnID> {
     alt((
         map_res(rule! { ColumnPosition }, |token| {

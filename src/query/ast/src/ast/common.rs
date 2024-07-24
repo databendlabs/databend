@@ -156,6 +156,28 @@ impl Display for TableRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+pub struct DictionaryRef {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub dictionary: Identifier,
+    //An additional field should be added to represent the data source.
+}
+impl Display for DictionaryRef {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        assert!(self.catalog.is_none() || (self.catalog.is_some() && self.database.is_some()));
+        if let Some(catalog) = &self.catalog {
+            write!(f, "{}.", catalog)?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, "{}.", database)?;
+        }
+        write!(f, "{}", self.dictionary)?;
+        //write!---->Data Source Information
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ColumnRef {
     pub database: Option<Identifier>,
     pub table: Option<Identifier>,

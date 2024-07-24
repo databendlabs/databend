@@ -525,6 +525,29 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
 
+     fn visit_create_dictionary(&mut self, stmt: &'ast CreateDictionaryStmt){
+        if let Some(query) = stmt.as_query.as_deref() {
+            self.visit_query(query)
+        }
+    }
+    
+    fn visit_create_dictionary_source(&mut self,_source: &'ast CreateDictionarySource) {}
+    
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        dictionary: &'ast Identifier,
+    ){
+        if let Some(catalog) = catalog {
+            walk_identifier(self, catalog);
+        }
+        if let Some(database) = database {
+            walk_identifier(self, database);
+        }
+        walk_identifier(self, &dictionary);
+    }
+
     fn visit_column_definition(&mut self, _column_definition: &'ast ColumnDefinition) {}
 
     fn visit_inverted_index_definition(
