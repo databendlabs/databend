@@ -525,7 +525,6 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
 
-     //添加
      fn visit_create_dictionary(&mut self, stmt: &'ast CreateDictionaryStmt){
         if let Some(query) = stmt.as_query.as_deref() {
             self.visit_query(query)
