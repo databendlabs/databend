@@ -713,6 +713,9 @@ set data_retention_time_in_days = 0
 statement ok
 vacuum drop table from test_stream
 
+statement ok
+set data_retention_time_in_days = 1
+
 statement error 1025
 show create table replace_s
 
