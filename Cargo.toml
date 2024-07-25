@@ -222,7 +222,7 @@ arrow-udf-python = "0.2.1"
 arrow-udf-wasm = "0.2.2"
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77", package = "async-trait-fn" }
-backtrace = "0.3"
+backtrace = "0.3.73"
 base64 = "0.22"
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 borsh = { version = "1.2.1", features = ["derive"] }
@@ -275,11 +275,9 @@ opendal = { version = "0.47.1", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-openraft = { version = "0.9.13", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.2", features = [
     "serde",
     "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 orc-rust = "0.3"
@@ -413,7 +411,8 @@ arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev =
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
+color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }
