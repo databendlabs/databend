@@ -354,8 +354,6 @@ mutable_key_type = "allow"
 # TODO(andylokandy): Remove these once we have fixed all the issues.
 missing_transmute_annotations = "allow"
 multiple_bound_locations = "allow"
-to_string_in_format_args = "allow"
-manual_inspect = "allow"
 doc_lazy_continuation = "allow"
 manual_pattern_char_comparison = "allow"
 legacy_numeric_constants = "allow"

@@ -53,8 +53,8 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
         // - Set the `current` node in endpoints to the leader if the request is forwarded by a follower to a leader.
         // - Store the error if received an error.
 
-        self.map(|response| {
-            let forwarded_leader = GrpcHelper::get_response_meta_leader(&response);
+        self.inspect(|response| {
+            let forwarded_leader = GrpcHelper::get_response_meta_leader(response);
 
             // `leader` is set iff the request is forwarded by a follower to a leader
             if let Some(leader) = forwarded_leader {
@@ -80,12 +80,9 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
                     leader, update_leader_res,
                 );
             }
-
-            response
         })
-        .map_err(|status| {
+        .inspect_err(|status| {
             client.set_error(status.clone());
-            status
         })
     }
 }
