@@ -159,6 +159,7 @@ impl PipelineBuilder {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
+                base_snapshot_timestamp,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,

@@ -168,7 +168,7 @@ impl PipelineBuilder {
                             table,
                             cluster_stats_gen.clone(),
                             MutationKind::Recluster,
-                            recluster_source.base_snapshot_timestamp,
+                            recluster.base_snapshot_timestamp,
                         )?;
                         proc.into_processor()
                     })

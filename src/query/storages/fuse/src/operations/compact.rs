@@ -232,6 +232,7 @@ impl FuseTable {
                     vec![],
                     Statistics::default(),
                     MutationKind::Compact,
+                    base_snapshot_timestamp,
                 )
             });
         }

@@ -195,6 +195,11 @@ impl OptimizeTableInterpreter {
             else {
                 return Ok(PipelineBuildResult::create());
             };
+            let base_snapshot_timestamp = self
+                .ctx
+                .txn_mgr()
+                .lock()
+                .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
             if parts.is_empty() {
                 return Ok(PipelineBuildResult::create());
             }
@@ -211,6 +216,7 @@ impl OptimizeTableInterpreter {
                         tasks,
                         table_info: table_info.clone(),
                         plan_id: u32::MAX,
+                        base_snapshot_timestamp,
                     }));
 
                     if is_distributed {
@@ -232,6 +238,7 @@ impl OptimizeTableInterpreter {
                         merge_meta: false,
                         deduplicated_label: None,
                         plan_id: u32::MAX,
+                        base_snapshot_timestamp,
                         recluster_info: Some(ReclusterInfoSideCar {
                             merged_blocks: remained_blocks,
                             removed_segment_indexes,
@@ -239,9 +246,13 @@ impl OptimizeTableInterpreter {
                         }),
                     }))
                 }
-                ReclusterParts::Compact(parts) => {
-                    Self::build_physical_plan(parts, table_info, snapshot, is_distributed)?
-                }
+                ReclusterParts::Compact(parts) => Self::build_physical_plan(
+                    self.ctx.as_ref(),
+                    parts,
+                    table_info,
+                    snapshot,
+                    is_distributed,
+                )?,
             }
         } else {
             let res = table
@@ -252,7 +263,13 @@ impl OptimizeTableInterpreter {
                 && self.ctx.get_settings().get_enable_distributed_compact()?;
 
             if let Some((parts, snapshot)) = res {
-                Self::build_physical_plan(parts, table_info, snapshot, compact_is_distributed)?
+                Self::build_physical_plan(
+                    self.ctx.as_ref(),
+                    parts,
+                    table_info,
+                    snapshot,
+                    compact_is_distributed,
+                )?
             } else {
                 return Ok(PipelineBuildResult::create());
             }

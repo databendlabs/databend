@@ -148,6 +148,7 @@ impl PipelineBuilder {
                     vec![],
                     Statistics::default(),
                     MutationKind::Delete,
+                    delete.base_snapshot_timestamp,
                 )
             });
         }

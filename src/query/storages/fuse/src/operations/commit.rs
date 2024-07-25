@@ -104,6 +104,7 @@ impl FuseTable {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
+                base_snapshot_timestamp,
             )
         });
 
