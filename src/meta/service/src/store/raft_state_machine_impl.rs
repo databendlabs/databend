@@ -17,7 +17,6 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
-use databend_common_meta_sled_store::openraft::StorageIOError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Entry;
@@ -79,7 +78,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
         let db = ss_store
             .new_temp()
-            .map_err(|e| StorageIOError::write_snapshot(None, &e))?;
+            .map_err(|e| StorageError::write_snapshot(None, &e))?;
         Ok(Box::new(db))
     }
 
@@ -103,10 +102,10 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         let final_path = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path, meta.snapshot_id.clone())
-            .map_err(|e| StorageIOError::write_snapshot(Some(sig.clone()), &e))?;
+            .map_err(|e| StorageError::write_snapshot(Some(sig.clone()), &e))?;
 
         let db = DB::open_snapshot(final_path, meta.snapshot_id.clone(), &self.inner.config)
-            .map_err(|e| StorageIOError::read_snapshot(Some(sig.clone()), &e))?;
+            .map_err(|e| StorageError::read_snapshot(Some(sig.clone()), &e))?;
 
         info!("snapshot meta: {:?}", meta);
 

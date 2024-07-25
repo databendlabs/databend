@@ -275,11 +275,9 @@ opendal = { version = "0.47.1", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-openraft = { version = "0.9.13", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.2", features = [
     "serde",
     "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 orc-rust = "0.3"

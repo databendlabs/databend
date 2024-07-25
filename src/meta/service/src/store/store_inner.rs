@@ -46,7 +46,6 @@ use databend_common_meta_types::NodeId;
 use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotMeta;
 use databend_common_meta_types::StorageError;
-use databend_common_meta_types::StorageIOError;
 use databend_common_meta_types::Vote;
 use futures::TryStreamExt;
 use log::debug;
@@ -201,7 +200,7 @@ impl StoreInner {
         let (sys_data, mut strm) = compactor
             .compact()
             .await
-            .map_err(|e| StorageIOError::read_snapshot(None, &e))?;
+            .map_err(|e| StorageError::read_snapshot(None, &e))?;
 
         let last_applied = *sys_data.last_applied_ref();
         let last_membership = sys_data.last_membership_ref().clone();
@@ -216,7 +215,7 @@ impl StoreInner {
         let ss_store = self.snapshot_store();
         let writer = ss_store
             .new_writer()
-            .map_err(|e| StorageIOError::write_snapshot(Some(signature.clone()), &e))?;
+            .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
 
         let context = format!("build snapshot: {:?}", last_applied);
         let (tx, th) = writer.spawn_writer_thread(context);
@@ -228,16 +227,16 @@ impl StoreInner {
             while let Some(ent) = strm
                 .try_next()
                 .await
-                .map_err(|e| StorageIOError::read_snapshot(None, &e))?
+                .map_err(|e| StorageError::read_snapshot(None, &e))?
             {
                 tx.send(WriteEntry::Data(ent))
                     .await
-                    .map_err(|e| StorageIOError::write_snapshot(Some(signature.clone()), &e))?;
+                    .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
             }
 
             tx.send(WriteEntry::Finish(sys_data))
                 .await
-                .map_err(|e| StorageIOError::write_snapshot(Some(signature.clone()), &e))?;
+                .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
         }
 
         // Get snapshot write result
@@ -245,18 +244,18 @@ impl StoreInner {
             .await
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
-                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+                StorageError::write_snapshot(Some(signature.clone()), &e)
             })?
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
-                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+                StorageError::write_snapshot(Some(signature.clone()), &e)
             })?;
 
         let db = temp_snapshot_data
             .move_to_final_path(snapshot_id.to_string())
             .map_err(|e| {
                 error!(error :% = e; "move temp snapshot to final path error");
-                StorageIOError::write_snapshot(Some(signature.clone()), &e)
+                StorageError::write_snapshot(Some(signature.clone()), &e)
             })?;
 
         info!(
