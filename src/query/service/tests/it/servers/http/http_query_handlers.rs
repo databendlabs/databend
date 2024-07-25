@@ -75,7 +75,7 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
-fn unwrap_data<'a>(data: &'a Vec<Vec<Option<String>>>, null_as: &'a str) -> Vec<Vec<&'a str>> {
+fn unwrap_data<'a>(data: &'a [Vec<Option<String>>], null_as: &'a str) -> Vec<Vec<&'a str>> {
     data.iter()
         .map(|x| {
             x.iter()
@@ -712,7 +712,7 @@ async fn test_system_tables() -> Result<()> {
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(!data.is_empty(), "{:?}", result);
 
-    let table_names = data.iter().flatten().map(|j| *j).collect::<Vec<_>>();
+    let table_names = data.into_iter().flatten().collect::<Vec<_>>();
 
     let skipped = [
         "credits", // slow for ci (> 1s) and maybe flaky
