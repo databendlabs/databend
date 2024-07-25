@@ -67,57 +67,52 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let plan: OptimizeCompactBlock = self.s_expr.plan().clone().try_into()?;
+        let OptimizeCompactBlock {
+            catalog,
+            database,
+            table,
+            limit,
+        } = self.s_expr.plan().clone().try_into()?;
+
         // try add lock table.
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
+            .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
             .await?;
 
+        let mut build_res = PipelineBuildResult::create();
         let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
         match builder.build(&self.s_expr, HashSet::new()).await {
             Ok(physical_plan) => {
-                let mut build_res =
+                build_res =
                     build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
                         .await?;
-                if self.need_purge {
-                    let ctx = self.ctx.clone();
-                    build_res.main_pipeline.set_on_finished(
-                        move |info: &ExecutionInfo| match &info.res {
-                            Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                                purge(
-                                    ctx,
-                                    &plan.catalog,
-                                    &plan.database,
-                                    &plan.table,
-                                    plan.limit.segment_limit,
-                                    None,
-                                )
-                                .await
-                            }),
-                            Err(error_code) => Err(error_code.clone()),
-                        },
-                    );
-                }
                 build_res.main_pipeline.add_lock_guard(lock_guard);
-                Ok(build_res)
             }
-            Err(e) if e.code() == ErrorCode::NO_NEED_TO_COMPACT => {
-                if self.need_purge {
-                    purge(
-                        self.ctx.clone(),
-                        &plan.catalog,
-                        &plan.database,
-                        &plan.table,
-                        plan.limit.segment_limit,
-                        None,
-                    )
-                    .await?;
+            Err(e) => {
+                if e.code() != ErrorCode::NO_NEED_TO_COMPACT {
+                    return Err(e);
                 }
-                Ok(PipelineBuildResult::create())
             }
-            Err(e) => Err(e),
         }
+
+        if self.need_purge {
+            let ctx = self.ctx.clone();
+            let num_snapshot_limit = limit.segment_limit;
+            if build_res.main_pipeline.is_empty() {
+                purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await?;
+            } else {
+                build_res
+                    .main_pipeline
+                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                        Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                            purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await
+                        }),
+                        Err(error_code) => Err(error_code.clone()),
+                    });
+            }
+        }
+        Ok(build_res)
     }
 }
