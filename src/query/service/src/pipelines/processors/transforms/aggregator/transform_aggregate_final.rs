@@ -161,13 +161,13 @@ where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformFinalAggregate";
 
-    fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<DataBlock> {
+    fn transform(&mut self, meta: AggregateMeta<Method, usize>) -> Result<Vec<DataBlock>> {
         if self.reach_limit {
-            return Ok(self.params.empty_result_block());
+            return Ok(vec![self.params.empty_result_block()]);
         }
 
         if self.params.enable_experimental_aggregate_hashtable {
-            return self.transform_agg_hashtable(meta);
+            return Ok(vec![self.transform_agg_hashtable(meta)?]);
         }
 
         if let AggregateMeta::Partitioned { bucket, data } = meta {
@@ -333,7 +333,7 @@ where Method: HashMethodBounds
             let group_columns = group_columns_builder.finish()?;
             columns.extend_from_slice(&group_columns);
 
-            return Ok(DataBlock::new_from_columns(columns));
+            return Ok(vec![DataBlock::new_from_columns(columns)]);
         }
 
         Err(ErrorCode::Internal(

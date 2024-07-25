@@ -66,7 +66,7 @@ impl TransformWindowPartitionSort {
 impl BlockMetaTransform<WindowPartitionMeta> for TransformWindowPartitionSort {
     const NAME: &'static str = "TransformWindowPartitionSort";
 
-    fn transform(&mut self, meta: WindowPartitionMeta) -> Result<DataBlock> {
+    fn transform(&mut self, meta: WindowPartitionMeta) -> Result<Vec<DataBlock>> {
         if let WindowPartitionMeta::Partitioned { bucket, data } = meta {
             let mut sort_blocks = Vec::with_capacity(data.len());
             for bucket_data in data {
@@ -93,7 +93,7 @@ impl BlockMetaTransform<WindowPartitionMeta> for TransformWindowPartitionSort {
                 self.have_order_col,
             )?;
 
-            return DataBlock::concat(&sort_blocks);
+            return Ok(sort_blocks);
         }
 
         Err(ErrorCode::Internal(

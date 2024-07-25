@@ -95,13 +95,14 @@ impl Processor for TransformWindowPartitionSpillReader {
                 .get_meta()
                 .and_then(WindowPartitionMeta::downcast_ref_from)
             {
-                for meta in data {
-                    if matches!(meta, WindowPartitionMeta::BucketSpilled(_)) {
-                        self.input.set_not_need_data();
-                        let block_meta = data_block.take_meta().unwrap();
-                        self.reading_meta = WindowPartitionMeta::downcast_from(block_meta);
-                        return Ok(Event::Async);
-                    }
+                if data
+                    .iter()
+                    .any(|meta| matches!(meta, WindowPartitionMeta::BucketSpilled(_)))
+                {
+                    self.input.set_not_need_data();
+                    let block_meta = data_block.take_meta().unwrap();
+                    self.reading_meta = WindowPartitionMeta::downcast_from(block_meta);
+                    return Ok(Event::Async);
                 }
             }
 
