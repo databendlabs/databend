@@ -1777,3 +1777,32 @@ async fn test_max_size_per_page() -> Result<()> {
     assert!(len > target - 2000);
     Ok(())
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_null_response() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    {
+        let sql = "select NULL";
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": 1}}});
+        let mut req = TestHttpQueryRequest::new(json);
+        let resp = req.fetch_total().await?.data();
+
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0].len(), 1);
+        assert_eq!(resp[0][0].clone().unwrap_or_default(), "NULL");
+    }
+
+    {
+        let sql = "select NULL";
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": 0}}});
+        let mut req = TestHttpQueryRequest::new(json);
+        let resp = req.fetch_total().await?.data();
+
+        assert_eq!(resp[0].len(), 1);
+        assert_eq!(resp.len(), 1);
+        assert_eq!(resp[0][0], None);
+    }
+
+    Ok(())
+}
