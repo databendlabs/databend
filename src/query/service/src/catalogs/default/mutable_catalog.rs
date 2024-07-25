@@ -409,7 +409,8 @@ impl Catalog for MutableCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
+        let allow_staled = false;
+        db.get_table(table_name, allow_staled).await
     }
 
     #[async_backtrace::framed]

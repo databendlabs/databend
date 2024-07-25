@@ -294,7 +294,8 @@ impl Catalog for IcebergCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
+        let allow_staled = false;
+        db.get_table(table_name, allow_staled).await
     }
 
     #[async_backtrace::framed]
@@ -340,7 +341,8 @@ impl Catalog for IcebergCatalog {
     #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
         let db = self.get_database(tenant, db_name).await?;
-        match db.get_table(table_name).await {
+        let allow_staled = false;
+        match db.get_table(table_name, allow_staled).await {
             Ok(_) => Ok(true),
             Err(e) => match e.code() {
                 ErrorCode::UNKNOWN_TABLE => Ok(false),

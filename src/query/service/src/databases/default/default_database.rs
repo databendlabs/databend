@@ -109,7 +109,7 @@ impl Database for DefaultDatabase {
 
     // Get one table by db and table name.
     #[async_backtrace::framed]
-    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, table_name: &str, allow_staled: bool) -> Result<Arc<dyn Table>> {
         let table_info = self
             .ctx
             .meta
@@ -120,11 +120,14 @@ impl Database for DefaultDatabase {
             ))
             .await?;
 
-        let table_info_refreshed = self
-            .ctx
-            .storage_factory
-            .refresh_table_info(table_info)
-            .await?;
+        let table_info_refreshed = if !allow_staled {
+            self.ctx
+                .storage_factory
+                .refresh_table_info(table_info)
+                .await?
+        } else {
+            table_info
+        };
 
         self.get_table_by_info(table_info_refreshed.as_ref())
     }

@@ -88,7 +88,7 @@ pub trait Database: DynClone + Sync + Send {
 
     // Get one table by db and table name.
     #[async_backtrace::framed]
-    async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, _table_name: &str, _allow_staled: bool) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table in {} Database",
             self.name()
