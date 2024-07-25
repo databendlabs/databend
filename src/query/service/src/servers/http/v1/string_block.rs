@@ -27,6 +27,14 @@ pub struct StringBlock {
 
 pub type StringBlockRef = Arc<StringBlock>;
 
+fn data_is_null(column: &Column, row_index: usize) -> bool {
+    match column {
+        Column::Null { .. } => true,
+        Column::Nullable(box inner) => !inner.validity.get_bit(row_index),
+        _ => false,
+    }
+}
+
 pub fn block_to_strings(
     block: &DataBlock,
     format: &FormatSettings,
@@ -49,7 +57,7 @@ pub fn block_to_strings(
     for row_index in 0..rows_size {
         let mut row: Vec<Option<String>> = Vec::with_capacity(block.num_columns());
         for column in &columns {
-            if !format.format_null_as_str && column.is_null(row_index) {
+            if !format.format_null_as_str && data_is_null(column, row_index) {
                 row.push(None);
                 continue;
             }
