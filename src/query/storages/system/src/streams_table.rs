@@ -116,6 +116,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                 }
                             }
                         }
+                        Ok(())
                     });
                     for db in db_name {
                         match ctl.get_database(&tenant, db.as_str()).await {
