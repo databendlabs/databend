@@ -289,8 +289,21 @@ impl<'a> SelectivityEstimator<'a> {
             if !self.updated_column_indexes.contains(index) {
                 let new_ndv = (column_stat.ndv * selectivity).ceil();
                 column_stat.ndv = new_ndv;
-                if selectivity < 0.8 {
-                    column_stat.histogram = None;
+                if let Some(histogram) = &mut column_stat.histogram {
+                    if histogram.accuracy {
+                        // Todo: find a better way to update histogram.
+                        if selectivity < 0.8 {
+                            column_stat.histogram = None;
+                        }
+                        continue;
+                    }
+                    if new_ndv as u64 <= 2 {
+                        column_stat.histogram = None;
+                    } else {
+                        for bucket in histogram.buckets.iter_mut() {
+                            bucket.update(selectivity);
+                        }
+                    }
                 }
             }
         }
@@ -527,6 +540,7 @@ fn update_statistic(
         new_max = Datum::Float(F64::from(new_max.to_double()?));
     }
     if selectivity < 0.8 {
+        // Todo: support unfixed buckets number for histogram and prune the histogram.
         column_stat.histogram = None;
     }
     column_stat.min = new_min.clone();

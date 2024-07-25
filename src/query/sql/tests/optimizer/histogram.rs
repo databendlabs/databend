@@ -23,7 +23,7 @@ fn test_histogram() {
         HistogramBucket::new(Datum::UInt(1), Datum::UInt(2), 2.0, 1.0),
     ];
 
-    let histogram = Histogram::new(buckets);
+    let histogram = Histogram::new(buckets, false);
     assert_eq!(histogram.num_buckets(), 2);
     assert_eq!(histogram.num_values(), 4.0);
     assert_eq!(histogram.num_distinct_values(), 2.0);

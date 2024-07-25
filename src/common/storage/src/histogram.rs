@@ -36,12 +36,13 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 /// which brings the assumption that the data is uniformly distributed.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Histogram {
+    pub accuracy: bool,
     pub buckets: Vec<HistogramBucket>,
 }
 
 impl Histogram {
-    pub fn new(buckets: Vec<HistogramBucket>) -> Self {
-        Self { buckets }
+    pub fn new(buckets: Vec<HistogramBucket>, accuracy: bool) -> Self {
+        Self { accuracy, buckets }
     }
 
     /// Get number of buckets

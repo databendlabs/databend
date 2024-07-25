@@ -231,7 +231,7 @@ impl SinkAnalyzeState {
             self.histograms
                 .entry(col_id)
                 .and_modify(|histogram| histogram.add_bucket(bucket.clone()))
-                .or_insert(Histogram::new(vec![bucket]));
+                .or_insert(Histogram::new(vec![bucket], true));
         }
         Ok(())
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -20,10 +21,13 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::F64;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 
+use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Distribution;
@@ -246,6 +250,8 @@ impl Join {
     ) -> Result<f64> {
         let mut join_card = *left_cardinality * *right_cardinality;
         let mut join_card_updated = false;
+        let mut left_column_index = 0;
+        let mut right_column_index = 0;
         for condition in self.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -291,7 +297,7 @@ impl Join {
                             *right_cardinality,
                             &mut new_ndv,
                         );
-                        update_statistic(
+                        let (left_index, right_index) = update_statistic(
                             left_statistics,
                             right_statistics,
                             left_condition,
@@ -305,6 +311,8 @@ impl Join {
                         if card < join_card {
                             join_card = card;
                             join_card_updated = true;
+                            left_column_index = left_index;
+                            right_column_index = right_index;
                         }
                         continue;
                     }
@@ -323,7 +331,7 @@ impl Join {
                             &mut new_ndv,
                         ),
                     };
-                    update_statistic(
+                    let (left_index, right_index) = update_statistic(
                         left_statistics,
                         right_statistics,
                         left_condition,
@@ -337,20 +345,72 @@ impl Join {
                     if card < join_card {
                         join_card = card;
                         join_card_updated = true;
+                        left_column_index = left_index;
+                        right_column_index = right_index;
                     }
                 }
                 _ => continue,
             }
         }
         if join_card_updated {
-            for (_idx, left) in left_statistics.column_stats.iter_mut() {
+            for (idx, left) in left_statistics.column_stats.iter_mut() {
+                if *idx == left_column_index {
+                    if let Some(his) = &left.histogram {
+                        if his.accuracy {
+                            // Todo: find a better way to update accuracy histogram
+                            left.histogram = None;
+                            continue;
+                        }
+                        left.histogram = if left.ndv as u64 <= 2 {
+                            None
+                        } else {
+                            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
+                            {
+                                left.min = Datum::Float(F64::from(left.min.to_double()?));
+                                left.max = Datum::Float(F64::from(left.max.to_double()?));
+                            }
+                            Some(histogram_from_ndv(
+                                left.ndv as u64,
+                                max(join_card as u64, left.ndv as u64),
+                                Some((left.min.clone(), left.max.clone())),
+                                DEFAULT_HISTOGRAM_BUCKETS,
+                            )?)
+                        };
+                    }
+                    continue;
+                }
+                // Other columns' histograms are inaccurate, so make them None
                 left.histogram = None;
             }
-            for (_idx, right) in right_statistics.column_stats.iter_mut() {
+            for (idx, right) in right_statistics.column_stats.iter_mut() {
+                if *idx == right_column_index {
+                    if let Some(his) = &right.histogram {
+                        if his.accuracy {
+                            // Todo: find a better way to update accuracy histogram
+                            right.histogram = None;
+                            continue;
+                        }
+                        right.histogram = if right.ndv as u64 <= 2 {
+                            None
+                        } else {
+                            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
+                            {
+                                right.min = Datum::Float(F64::from(right.min.to_double()?));
+                                right.max = Datum::Float(F64::from(right.max.to_double()?));
+                            }
+                            Some(histogram_from_ndv(
+                                right.ndv as u64,
+                                max(join_card as u64, right.ndv as u64),
+                                Some((right.min.clone(), right.max.clone())),
+                                DEFAULT_HISTOGRAM_BUCKETS,
+                            )?)
+                        };
+                    }
+                    continue;
+                }
                 right.histogram = None;
             }
         }
-
         Ok(join_card)
     }
 
@@ -854,5 +914,8 @@ fn trim_buckets(
 ) -> Result<(Histogram, Histogram)> {
     let left_buckets = trim_histogram_buckets(left_hist, min, max);
     let right_buckets = trim_histogram_buckets(right_hist, min, max);
-    Ok((Histogram::new(left_buckets), Histogram::new(right_buckets)))
+    Ok((
+        Histogram::new(left_buckets, left_hist.accuracy),
+        Histogram::new(right_buckets, right_hist.accuracy),
+    ))
 }

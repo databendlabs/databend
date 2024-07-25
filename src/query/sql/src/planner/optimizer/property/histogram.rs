@@ -40,7 +40,10 @@ pub fn histogram_from_ndv(
                 ndv, num_rows
             ))
         } else {
-            Ok(Histogram { buckets: vec![] })
+            Ok(Histogram {
+                buckets: vec![],
+                accuracy: false,
+            })
         };
     }
 
@@ -90,7 +93,10 @@ pub fn histogram_from_ndv(
         buckets.push(bucket);
     }
 
-    Ok(Histogram { buckets })
+    Ok(Histogram {
+        buckets,
+        accuracy: false,
+    })
 }
 
 trait SampleSet {
