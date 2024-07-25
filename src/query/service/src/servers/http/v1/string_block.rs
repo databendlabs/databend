@@ -22,12 +22,15 @@ use databend_common_io::prelude::FormatSettings;
 
 #[derive(Debug, Clone, Default)]
 pub struct StringBlock {
-    pub(crate) data: Vec<Vec<String>>,
+    pub(crate) data: Vec<Vec<Option<String>>>,
 }
 
 pub type StringBlockRef = Arc<StringBlock>;
 
-pub fn block_to_strings(block: &DataBlock, format: &FormatSettings) -> Result<Vec<Vec<String>>> {
+pub fn block_to_strings(
+    block: &DataBlock,
+    format: &FormatSettings,
+) -> Result<Vec<Vec<Option<String>>>> {
     if block.is_empty() {
         return Ok(vec![]);
     }
@@ -44,11 +47,15 @@ pub fn block_to_strings(block: &DataBlock, format: &FormatSettings) -> Result<Ve
         FieldEncoderValues::create_for_http_handler(format.timezone, format.geometry_format);
     let mut buf = vec![];
     for row_index in 0..rows_size {
-        let mut row: Vec<String> = Vec::with_capacity(block.num_columns());
+        let mut row: Vec<Option<String>> = Vec::with_capacity(block.num_columns());
         for column in &columns {
+            if !format.format_null_as_str && column.is_null(row_index) {
+                row.push(None);
+                continue;
+            }
             buf.clear();
             encoder.write_field(column, row_index, &mut buf, false);
-            row.push(String::from_utf8_lossy(&buf).into_owned());
+            row.push(Some(String::from_utf8_lossy(&buf).into_owned()));
         }
         res.push(row)
     }
@@ -83,12 +90,22 @@ impl StringBlock {
         self.data.is_empty()
     }
 
-    pub fn data(&self) -> &Vec<Vec<String>> {
-        &self.data
+    pub fn as_data<'n>(&'n self, null_as: &'n str) -> Vec<Vec<&'n str>> {
+        self.data
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|v| match v {
+                        Some(v) => v,
+                        None => null_as,
+                    })
+                    .collect()
+            })
+            .collect()
     }
 }
 
-impl From<StringBlock> for Vec<Vec<String>> {
+impl From<StringBlock> for Vec<Vec<Option<String>>> {
     fn from(block: StringBlock) -> Self {
         block.data
     }

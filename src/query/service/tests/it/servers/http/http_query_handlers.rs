@@ -75,6 +75,19 @@ use crate::tests::tls_constants::*;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
+fn unwrap_data<'a>(data: &'a Vec<Vec<Option<String>>>, null_as: &'a str) -> Vec<Vec<&'a str>> {
+    data.iter()
+        .map(|x| {
+            x.iter()
+                .map(|y| match y {
+                    Some(y) => y.as_str(),
+                    None => null_as,
+                })
+                .collect()
+        })
+        .collect()
+}
+
 struct TestHttpQueryRequest {
     ep: EndpointType,
     json: serde_json::Value,
@@ -199,7 +212,7 @@ impl TestHttpQueryFetchReply {
         self.resps.last().unwrap().clone()
     }
 
-    fn data(&self) -> Vec<Vec<String>> {
+    fn data(&self) -> Vec<Vec<Option<String>>> {
         let mut result = vec![];
         for (_, resp) in &self.resps {
             result.extend(resp.data.clone());
@@ -629,10 +642,11 @@ async fn test_http_session() -> Result<()> {
 
     let json = serde_json::json!({"sql": "select database()", "session_id": session_id});
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
+    let data = unwrap_data(&result.data, "");
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert_eq!(result.data[0][0], "system", "{:?}", result);
+    assert_eq!(data.len(), 1, "{:?}", result);
+    assert_eq!(data[0][0], "system", "{:?}", result);
 
     let json = serde_json::json!({"sql": "select * from x", "session_id": session_id});
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
@@ -694,15 +708,11 @@ async fn test_system_tables() -> Result<()> {
     let sql = "select name from system.tables where database='system' order by name";
 
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
-    assert!(!result.data.is_empty(), "{:?}", result);
+    assert!(!data.is_empty(), "{:?}", result);
 
-    let table_names = result
-        .data
-        .iter()
-        .flatten()
-        .map(|j| j.to_string())
-        .collect::<Vec<_>>();
+    let table_names = data.iter().flatten().map(|j| *j).collect::<Vec<_>>();
 
     let skipped = [
         "credits", // slow for ci (> 1s) and maybe flaky
@@ -714,7 +724,7 @@ async fn test_system_tables() -> Result<()> {
         "tracing",      // Could be very large.
     ];
     for table_name in table_names {
-        if skipped.contains(&table_name.as_str()) {
+        if skipped.contains(&table_name) {
             continue;
         };
         let sql = format!("select * from system.{}", table_name);
@@ -793,37 +803,35 @@ async fn test_query_log() -> Result<()> {
 
     let sql = "select query_text, query_duration_ms from system.query_log where log_type=2";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(
-        result.data[0][1].to_string(),
+        data[0][1].to_string(),
         result_type_2.stats.running_time_ms.to_string(),
     );
 
     let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
-        result.data[0][0]
+        data[0][0]
             .to_string()
             .to_lowercase()
             .contains("create table"),
         "{:?}",
         result
     );
-    assert!(
-        result.data[0][2].to_lowercase().contains("exist"),
-        "{:?}",
-        result
-    );
+    assert!(data[0][2].to_lowercase().contains("exist"), "{:?}", result);
     assert_eq!(
-        result.data[0][1],
+        data[0][1],
         ErrorCode::TABLE_ALREADY_EXISTS.to_string(),
         "{:?}",
         result
     );
     assert_eq!(
-        result.data[0][4],
+        data[0][4],
         result_type_3.stats.running_time_ms.to_string(),
         "{:?}",
         result
@@ -856,16 +864,13 @@ async fn test_query_log_killed() -> Result<()> {
 
     let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=4";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let data = unwrap_data(&result.data, "");
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
-    assert!(result.data[0][0].contains("sleep"), "{:?}", result);
-    assert!(
-        result.data[0][2].to_lowercase().contains("killed"),
-        "{:?}",
-        result
-    );
+    assert!(data[0][0].contains("sleep"), "{:?}", result);
+    assert!(data[0][2].to_lowercase().contains("killed"), "{:?}", result);
     assert_eq!(
-        result.data[0][1],
+        data[0][1],
         ErrorCode::ABORTED_QUERY.to_string(),
         "{:?}",
         result
@@ -1079,7 +1084,7 @@ async fn assert_auth_current_user(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(
@@ -1116,7 +1121,7 @@ async fn assert_auth_current_role(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
@@ -1151,7 +1156,7 @@ async fn assert_auth_current_role_with_role(
         .unwrap();
 
     let (_, resp) = check_response(response).await?;
-    let v = resp.data;
+    let v = unwrap_data(&resp.data, "");
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
     assert_eq!(v[0][0], serde_json::Value::String(role_name.to_string()));
@@ -1618,7 +1623,8 @@ async fn test_auth_configured_user() -> Result<()> {
 
     let mut req = TestHttpQueryRequest::new(serde_json::json!({"sql": "select current_user()"}))
         .with_basic_auth(user_name, pass_word);
-    let v = req.fetch_total().await?.data();
+    let resp = req.fetch_total().await?.data();
+    let v = unwrap_data(&resp, "");
 
     assert_eq!(v.len(), 1);
     assert_eq!(v[0].len(), 1);
