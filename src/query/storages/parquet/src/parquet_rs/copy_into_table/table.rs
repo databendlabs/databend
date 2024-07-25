@@ -141,22 +141,21 @@ impl ParquetTableForCopy {
             let part = part.as_any().downcast_ref::<ParquetPart>().unwrap();
             match part {
                 ParquetPart::ParquetRSRowGroup(part) => {
-                    if readers.get(&part.schema_index).is_none() {
+                    if let std::collections::hash_map::Entry::Vacant(e) =
+                        readers.entry(part.schema_index)
+                    {
                         // TODO: temporary solution, need at least key_value_metadata.
                         let file_meta_data =
                             FileMetaData::new(0, 0, None, None, part.meta.schema_descr_ptr(), None);
-                        readers.insert(
-                            part.schema_index,
-                            RowGroupReaderForCopy::try_create(
-                                &part.location,
-                                ctx.clone(),
-                                operator.clone(),
-                                &file_meta_data,
-                                stage_table_info.schema.clone(),
-                                stage_table_info.default_values.clone(),
-                                &fmt.missing_field_as,
-                            )?,
-                        );
+                        e.insert(RowGroupReaderForCopy::try_create(
+                            &part.location,
+                            ctx.clone(),
+                            operator.clone(),
+                            &file_meta_data,
+                            stage_table_info.schema.clone(),
+                            stage_table_info.default_values.clone(),
+                            &fmt.missing_field_as,
+                        )?);
                     }
                 }
                 _ => unreachable!(),
