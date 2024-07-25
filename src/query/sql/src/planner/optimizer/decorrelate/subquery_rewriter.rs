@@ -188,7 +188,8 @@ impl SubqueryRewriter {
             | RelOperator::CacheScan(_)
             | RelOperator::Exchange(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::MergeInto(_) => Ok(s_expr.clone()),
+            | RelOperator::MergeInto(_)
+            | RelOperator::Recluster(_) => Ok(s_expr.clone()),
         }
     }
 
@@ -793,13 +794,10 @@ pub fn check_child_expr_in_subquery(
     match child_expr {
         ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
         ScalarExpr::FunctionCall(func) => {
-            if func.func_name.eq("tuple") {
-                return Ok((child_expr.clone(), op != &ComparisonOp::Equal));
+            for arg in &func.arguments {
+                let _ = check_child_expr_in_subquery(arg, op)?;
             }
-            Err(ErrorCode::Internal(format!(
-                "Invalid child expr in subquery: {:?}",
-                child_expr
-            )))
+            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {

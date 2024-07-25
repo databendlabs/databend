@@ -129,6 +129,7 @@ impl PhysicalPlanBuilder {
                     .await
             }
             RelOperator::MergeInto(merge_into) => self.build_merge_into(s_expr, merge_into).await,
+            RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
         }
     }
 
@@ -139,6 +140,6 @@ impl PhysicalPlanBuilder {
 
 #[derive(Clone)]
 pub struct MergeIntoBuildInfo {
-    pub table_snapshot: Arc<TableSnapshot>,
+    pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
 }

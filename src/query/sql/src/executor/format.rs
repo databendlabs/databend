@@ -55,7 +55,6 @@ use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
-use crate::executor::physical_plans::ReclusterSink;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -234,8 +233,7 @@ fn to_format_tree(
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
-        PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
-        PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::Recluster(_) => Ok(FormatTreeNode::new("Recluster".to_string())),
         PhysicalPlan::UpdateSource(_) => Ok(FormatTreeNode::new("UpdateSource".to_string())),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
@@ -1487,18 +1485,6 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
-        children,
-    ))
-}
-
-fn recluster_sink_to_format_tree(
-    plan: &ReclusterSink,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, profs)?];
-    Ok(FormatTreeNode::with_children(
-        "ReclusterSink".to_string(),
         children,
     ))
 }

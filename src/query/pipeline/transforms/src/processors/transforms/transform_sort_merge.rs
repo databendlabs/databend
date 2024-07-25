@@ -30,7 +30,6 @@ use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::CommonRows;
-use super::sort::Cursor;
 use super::sort::DateConverter;
 use super::sort::DateRows;
 use super::sort::Rows;
@@ -88,7 +87,7 @@ impl<R: Rows> TransformSortMerge<R> {
 impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
-    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<()> {
+    fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
         if unlikely(self.aborting.load(Ordering::Relaxed)) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
@@ -101,7 +100,7 @@ impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
 
         self.num_bytes += block.memory_size();
         self.num_rows += block.num_rows();
-        self.buffer.push(Some((block, init_cursor.to_column())));
+        self.buffer.push(Some((block, init_rows.to_column())));
 
         Ok(())
     }

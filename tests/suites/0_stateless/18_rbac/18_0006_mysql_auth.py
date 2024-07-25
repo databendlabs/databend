@@ -167,4 +167,3 @@ try:
     cursor.execute("select 123;")
 except mysql.connector.errors.OperationalError:
     print("u4 is timeout")
-

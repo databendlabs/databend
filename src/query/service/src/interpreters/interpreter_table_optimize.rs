@@ -19,30 +19,28 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::CompactTarget;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::Recluster;
+use databend_common_sql::executor::physical_plans::ReclusterInfoSideCar;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::OptimizeTableAction;
 use databend_common_sql::plans::OptimizeTablePlan;
 use databend_common_storages_factory::NavigationPoint;
-use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
-use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -76,24 +74,33 @@ impl Interpreter for OptimizeTableInterpreter {
 
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        match self.plan.action.clone() {
-            OptimizeTableAction::CompactBlocks(limit) => {
-                self.build_pipeline(catalog, CompactTarget::Blocks(limit), false)
-                    .await
-            }
-            OptimizeTableAction::CompactSegments => {
-                self.build_pipeline(catalog, CompactTarget::Segments, false)
-                    .await
-            }
+        let compact_target = match self.plan.action.clone() {
+            OptimizeTableAction::CompactBlocks(limit) => CompactTarget::Blocks(limit),
+            OptimizeTableAction::CompactSegments => CompactTarget::Segments,
             OptimizeTableAction::Purge(point) => {
                 purge(ctx, catalog, plan, point).await?;
-                Ok(PipelineBuildResult::create())
+                return Ok(PipelineBuildResult::create());
             }
-            OptimizeTableAction::All => {
-                self.build_pipeline(catalog, CompactTarget::Blocks(None), true)
-                    .await
+            OptimizeTableAction::All => CompactTarget::Blocks(None),
+        };
+
+        let mut build_res = self.build_pipeline(catalog.clone(), compact_target).await?;
+        let ctx = self.ctx.clone();
+        let plan = self.plan.clone();
+        if matches!(self.plan.action, OptimizeTableAction::All) {
+            if build_res.main_pipeline.is_empty() {
+                purge(ctx, catalog, plan, None).await?;
+            } else {
+                build_res
+                    .main_pipeline
+                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                        Ok(_) => GlobalIORuntime::instance()
+                            .block_on(async move { purge(ctx, catalog, plan, None).await }),
+                        Err(error_code) => Err(error_code.clone()),
+                    });
             }
         }
+        Ok(build_res)
     }
 }
 
@@ -126,12 +133,13 @@ impl OptimizeTableInterpreter {
         Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             table_info,
-            snapshot,
+            snapshot: Some(snapshot),
             mutation_kind: MutationKind::Compact,
             update_stream_meta: vec![],
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
+            recluster_info: None,
         })))
     }
 
@@ -139,7 +147,6 @@ impl OptimizeTableInterpreter {
         &self,
         catalog: Arc<dyn Catalog>,
         target: CompactTarget,
-        need_purge: bool,
     ) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let lock_guard = self
@@ -153,7 +160,7 @@ impl OptimizeTableInterpreter {
             )
             .await?;
 
-        let mut table = catalog
+        let table = catalog
             .get_table(&tenant, &self.plan.database, &self.plan.table)
             .await?;
         // check mutability
@@ -172,109 +179,97 @@ impl OptimizeTableInterpreter {
             }
         };
 
-        let res = table
-            .compact_blocks(self.ctx.clone(), compaction_limits)
-            .await?;
-
-        let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
-            && self.ctx.get_settings().get_enable_distributed_compact()?;
-
-        // build the compact pipeline.
-        let mut compact_pipeline = if let Some((parts, snapshot)) = res {
-            let physical_plan = Self::build_physical_plan(
-                parts,
-                table.get_table_info().clone(),
-                snapshot,
-                compact_is_distributed,
-            )?;
-
-            let build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            build_res.main_pipeline
-        } else {
-            Pipeline::create()
-        };
-
-        // build the recluster pipeline.
-        let mut build_res = PipelineBuildResult::create();
-        let settings = self.ctx.get_settings();
-        // check if the table need recluster, defined by cluster keys.
-        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
-        if need_recluster {
-            if !compact_pipeline.is_empty() {
-                compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);
-
-                let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
-                let executor =
-                    PipelineCompleteExecutor::try_create(compact_pipeline, executor_settings)?;
-
-                self.ctx.set_executor(executor.get_inner())?;
-                executor.execute()?;
-                // Make sure the executor is dropped before recluster.
-                drop(executor);
-
-                // refresh table.
-                table = catalog
-                    .get_table(&tenant, &self.plan.database, &self.plan.table)
-                    .await?;
+        let table_info = table.get_table_info().clone();
+        let do_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
+        let mut physical_plan = if do_recluster {
+            let Some((parts, snapshot)) = table
+                .recluster(self.ctx.clone(), None, self.plan.limit)
+                .await?
+            else {
+                return Ok(PipelineBuildResult::create());
+            };
+            if parts.is_empty() {
+                return Ok(PipelineBuildResult::create());
             }
 
-            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            if let Some(mutator) = fuse_table
-                .build_recluster_mutator(self.ctx.clone(), None, self.plan.limit)
-                .await?
-            {
-                if !mutator.tasks.is_empty() {
-                    let is_distributed = mutator.is_distributed();
-                    let reclustered_block_count = mutator.recluster_blocks_count;
-                    let physical_plan = build_recluster_physical_plan(
-                        mutator.tasks,
-                        table.get_table_info().clone(),
-                        mutator.snapshot,
-                        is_distributed,
-                    )?;
+            let is_distributed = parts.is_distributed(self.ctx.clone());
+            match parts {
+                ReclusterParts::Recluster {
+                    tasks,
+                    remained_blocks,
+                    removed_segment_indexes,
+                    removed_segment_summary,
+                } => {
+                    let mut root = PhysicalPlan::Recluster(Box::new(Recluster {
+                        tasks,
+                        table_info: table_info.clone(),
+                        plan_id: u32::MAX,
+                    }));
 
-                    build_res =
-                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
-                            .await?;
-
-                    let ctx = self.ctx.clone();
-                    let plan = self.plan.clone();
-                    let start = SystemTime::now();
-                    build_res.main_pipeline.set_on_finished(
-                        move |info: &ExecutionInfo| match &info.res {
-                            Ok(_) => InterpreterClusteringHistory::write_log(
-                                &ctx,
-                                start,
-                                &plan.database,
-                                &plan.table,
-                                reclustered_block_count,
-                            ),
-                            Err(error_code) => Err(error_code.clone()),
-                        },
-                    );
+                    if is_distributed {
+                        root = PhysicalPlan::Exchange(Exchange {
+                            plan_id: 0,
+                            input: Box::new(root),
+                            kind: FragmentKind::Merge,
+                            keys: vec![],
+                            allow_adjust_parallelism: true,
+                            ignore_exchange: false,
+                        });
+                    }
+                    PhysicalPlan::CommitSink(Box::new(CommitSink {
+                        input: Box::new(root),
+                        table_info,
+                        snapshot: Some(snapshot),
+                        mutation_kind: MutationKind::Recluster,
+                        update_stream_meta: vec![],
+                        merge_meta: false,
+                        deduplicated_label: None,
+                        plan_id: u32::MAX,
+                        recluster_info: Some(ReclusterInfoSideCar {
+                            merged_blocks: remained_blocks,
+                            removed_segment_indexes,
+                            removed_statistics: removed_segment_summary,
+                        }),
+                    }))
+                }
+                ReclusterParts::Compact(parts) => {
+                    Self::build_physical_plan(parts, table_info, snapshot, is_distributed)?
                 }
             }
         } else {
-            build_res.main_pipeline = compact_pipeline;
-        }
+            let res = table
+                .compact_blocks(self.ctx.clone(), compaction_limits)
+                .await?;
 
-        let ctx = self.ctx.clone();
-        let plan = self.plan.clone();
-        if need_purge {
-            if build_res.main_pipeline.is_empty() {
-                purge(ctx, catalog, plan, None).await?;
+            let compact_is_distributed = (!self.ctx.get_cluster().is_empty())
+                && self.ctx.get_settings().get_enable_distributed_compact()?;
+
+            if let Some((parts, snapshot)) = res {
+                Self::build_physical_plan(parts, table_info, snapshot, compact_is_distributed)?
             } else {
-                build_res
-                    .main_pipeline
-                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                        Ok(_) => GlobalIORuntime::instance()
-                            .block_on(async move { purge(ctx, catalog, plan, None).await }),
-                        Err(error_code) => Err(error_code.clone()),
-                    });
+                return Ok(PipelineBuildResult::create());
             }
-        }
+        };
+        physical_plan.adjust_plan_id(&mut 0);
 
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        if do_recluster {
+            let start = SystemTime::now();
+            let database = self.plan.database.clone();
+            let table = self.plan.table.clone();
+            let ctx = self.ctx.clone();
+            build_res
+                .main_pipeline
+                .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                    Ok(_) => {
+                        let _ =
+                            InterpreterClusteringHistory::write_log(&ctx, start, &database, &table);
+                        Ok(())
+                    }
+                    Err(error_code) => Err(error_code.clone()),
+                });
+        }
         build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }

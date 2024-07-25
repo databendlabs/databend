@@ -673,7 +673,7 @@ jobs:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
           category: default
-          artifacts: meta,metactl
+          artifacts: metactl,meta,query
       - uses: ./.github/actions/test_share_integration
         timeout-minutes: 10
       - name: Upload failure

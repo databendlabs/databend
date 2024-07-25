@@ -16,7 +16,7 @@ explain select t1.a from t1 where a > 0
 Filter
 ├── output columns: [t1.a (#0)]
 ├── filters: [t1.a (#0) > 0]
-├── estimated rows: 0.20
+├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
     ├── output columns: [a (#0)]
@@ -34,18 +34,18 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
 ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-├── estimated rows: 0.13
+├── estimated rows: 0.00
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
     ├── filters: []
-    ├── estimated rows: 0.35
+    ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
     │   ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
-    │   ├── estimated rows: 0.36
+    │   ├── estimated rows: 0.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
@@ -620,18 +620,18 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-├── estimated rows: 0.54
+├── estimated rows: 2.78
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 1.50
+    ├── estimated rows: 4.17
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
     │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
-    │   ├── estimated rows: 0.36
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
@@ -663,18 +663,18 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 Filter
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
-├── estimated rows: 0.65
+├── estimated rows: 3.33
 └── HashJoin
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 1.80
+    ├── estimated rows: 5.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
     │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2]
-    │   ├── estimated rows: 0.36
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── output columns: [a (#0), b (#1)]
@@ -759,22 +759,22 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 4.42
+├── estimated rows: 22.73
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 │   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-│   ├── estimated rows: 0.54
+│   ├── estimated rows: 2.78
 │   └── HashJoin
 │       ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 │       ├── join type: CROSS
 │       ├── build keys: []
 │       ├── probe keys: []
 │       ├── filters: []
-│       ├── estimated rows: 1.50
+│       ├── estimated rows: 4.17
 │       ├── Filter(Build)
 │       │   ├── output columns: [t1.a (#0), t1.b (#1)]
 │       │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
-│       │   ├── estimated rows: 0.36
+│       │   ├── estimated rows: 1.00
 │       │   └── TableScan
 │       │       ├── table: default.default.t1
 │       │       ├── output columns: [a (#0), b (#1)]
@@ -821,26 +821,26 @@ Limit
 ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
 ├── limit: 3
 ├── offset: 0
-├── estimated rows: 0.99
+├── estimated rows: 3.00
 └── Sort
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── sort keys: [a DESC NULLS LAST]
-    ├── estimated rows: 0.99
+    ├── estimated rows: 3.47
     └── Filter
         ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
         ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-        ├── estimated rows: 0.99
+        ├── estimated rows: 3.47
         └── HashJoin
             ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
             ├── join type: CROSS
             ├── build keys: []
             ├── probe keys: []
             ├── filters: []
-            ├── estimated rows: 2.03
+            ├── estimated rows: 4.17
             ├── Filter(Build)
             │   ├── output columns: [t1.a (#0), t1.b (#1)]
             │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3]
-            │   ├── estimated rows: 0.49
+            │   ├── estimated rows: 1.00
             │   └── TableScan
             │       ├── table: default.default.t1
             │       ├── output columns: [a (#0), b (#1)]
@@ -875,11 +875,11 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── filters: []
-├── estimated rows: 1.80
+├── estimated rows: 5.00
 ├── Filter(Build)
 │   ├── output columns: [t1.a (#0), t1.b (#1)]
 │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2]
-│   ├── estimated rows: 0.36
+│   ├── estimated rows: 1.00
 │   └── TableScan
 │       ├── table: default.default.t1
 │       ├── output columns: [a (#0), b (#1)]
@@ -1116,18 +1116,18 @@ Limit
 ├── output columns: [b.id (#2), b.c1 (#3), a.c1 (#1), a.id (#0)]
 ├── limit: 1
 ├── offset: 0
-├── estimated rows: 0.08
+├── estimated rows: 1.00
 └── HashJoin
     ├── output columns: [b.id (#2), b.c1 (#3), a.c1 (#1), a.id (#0)]
     ├── join type: INNER
     ├── build keys: [a.id (#0)]
     ├── probe keys: [b.id (#2)]
     ├── filters: []
-    ├── estimated rows: 0.08
+    ├── estimated rows: 1.00
     ├── Filter(Build)
     │   ├── output columns: [a.id (#0), a.c1 (#1)]
     │   ├── filters: [is_true(a.c1 (#1) >= 1683648000), is_true(a.c1 (#1) <= 1683734400)]
-    │   ├── estimated rows: 0.20
+    │   ├── estimated rows: 1.00
     │   └── TableScan
     │       ├── table: default.default.a
     │       ├── output columns: [id (#0), c1 (#1)]
@@ -1141,7 +1141,7 @@ Limit
     └── Filter(Probe)
         ├── output columns: [b.id (#2), b.c1 (#3)]
         ├── filters: [is_true(b.c1 (#3) >= 1683648000), is_true(b.c1 (#3) <= 1683734400)]
-        ├── estimated rows: 0.40
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.b
             ├── output columns: [id (#2), c1 (#3)]

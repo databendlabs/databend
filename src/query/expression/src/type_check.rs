@@ -325,20 +325,21 @@ pub fn check_function<Index: ColumnIndex>(
 
     let mut msg = if params.is_empty() {
         format!(
-            "no overload satisfies `{name}({})`",
+            "no function matches signature `{name}({})`, you might need to add explicit type casts.",
             args.iter()
                 .map(|arg| arg.data_type().to_string())
                 .join(", ")
         )
     } else {
         format!(
-            "no overload satisfies `{name}({})({})`",
+            "no function matches signature `{name}({})({})`, you might need to add explicit type casts.",
             params.iter().join(", "),
             args.iter()
                 .map(|arg| arg.data_type().to_string())
                 .join(", ")
         )
     };
+
     if !candidates.is_empty() {
         let candidates_sig: Vec<_> = candidates
             .iter()
@@ -347,16 +348,23 @@ pub fn check_function<Index: ColumnIndex>(
 
         let max_len = candidates_sig.iter().map(|s| s.len()).max().unwrap_or(0);
 
+        let candidates_len = candidates_sig.len();
+        let take_len = candidates_len.min(3);
         let candidates_fail_reason = candidates_sig
             .into_iter()
+            .take(3)
             .zip(fail_reasons)
             .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 
+        let shorten_msg = if candidates_len > take_len {
+            format!("\n... and {} more", candidates_len - take_len)
+        } else {
+            "".to_string()
+        };
         write!(
             &mut msg,
-            "\n\nhas tried possible overloads:\n{}",
-            candidates_fail_reason
+            "\n\ncandidate functions:\n{candidates_fail_reason}{shorten_msg}",
         )
         .unwrap();
     };
@@ -571,13 +579,12 @@ pub fn can_auto_cast_to(
             }
             (_, _) => unreachable!(),
         },
-        (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
-            if src_tys.len() == dest_tys.len() =>
-        {
-            src_tys
-                .iter()
-                .zip(dest_tys)
-                .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
+        (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
+            src_tys.len() == dest_tys.len()
+                && src_tys
+                    .iter()
+                    .zip(dest_tys)
+                    .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
         (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => {

@@ -27,13 +27,9 @@ use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::ReclusterSink;
-use databend_common_sql::executor::physical_plans::ReclusterSource;
+use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::CommitSink;
-use databend_common_storages_fuse::operations::MutationGenerator;
-use databend_common_storages_fuse::operations::ReclusterAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -43,19 +39,16 @@ use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_recluster_source(
-        &mut self,
-        recluster_source: &ReclusterSource,
-    ) -> Result<()> {
-        match recluster_source.tasks.len() {
+    pub(crate) fn build_recluster(&mut self, recluster: &Recluster) -> Result<()> {
+        match recluster.tasks.len() {
             0 => self.main_pipeline.add_source(EmptySource::create, 1),
             1 => {
                 let table = self
                     .ctx
-                    .build_table_by_table_info(&recluster_source.table_info, None)?;
+                    .build_table_by_table_info(&recluster.table_info, None)?;
                 let table = FuseTable::try_from_table(table.as_ref())?;
 
-                let task = &recluster_source.tasks[0];
+                let task = &recluster.tasks[0];
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
@@ -90,7 +83,7 @@ impl PipelineBuilder {
                 self.ctx.set_partitions(plan.parts.clone())?;
 
                 // ReadDataKind to avoid OOM.
-                table.do_read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
+                table.read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {
@@ -123,15 +116,8 @@ impl PipelineBuilder {
                 }
 
                 // merge sort
-                let block_num = std::cmp::max(
-                    task.total_bytes * 80 / (block_thresholds.max_bytes_per_block * 100),
-                    1,
-                );
-                let final_block_size = std::cmp::min(
-                    // estimate block_size based on max_bytes_per_block.
-                    task.total_rows / block_num,
-                    block_thresholds.max_rows_per_block,
-                );
+                let final_block_size =
+                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
                 let partial_block_size = if self.main_pipeline.output_len() > 1 {
                     std::cmp::min(
                         final_block_size,
@@ -186,41 +172,5 @@ impl PipelineBuilder {
                 "A node can only execute one recluster task".to_string(),
             )),
         }
-    }
-
-    pub(crate) fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {
-        self.build_pipeline(&recluster_sink.input)?;
-
-        let table = self
-            .ctx
-            .build_table_by_table_info(&recluster_sink.table_info, None)?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-
-        self.main_pipeline.try_resize(1)?;
-        self.main_pipeline.add_async_accumulating_transformer(|| {
-            ReclusterAggregator::new(
-                table,
-                self.ctx.clone(),
-                recluster_sink.remained_blocks.clone(),
-                recluster_sink.removed_segment_indexes.clone(),
-                recluster_sink.removed_segment_summary.clone(),
-            )
-        });
-
-        let snapshot_gen =
-            MutationGenerator::new(recluster_sink.snapshot.clone(), MutationKind::Recluster);
-        self.main_pipeline.add_sink(|input| {
-            CommitSink::try_create(
-                table,
-                self.ctx.clone(),
-                None,
-                vec![],
-                snapshot_gen.clone(),
-                input,
-                None,
-                None,
-                None,
-            )
-        })
     }
 }

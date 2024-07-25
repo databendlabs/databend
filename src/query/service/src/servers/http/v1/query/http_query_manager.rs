@@ -18,6 +18,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use chrono::SecondsFormat;
 use dashmap::DashMap;
@@ -30,7 +31,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
-use time::Instant;
 use tokio::task;
 
 use super::expiring_map::ExpiringMap;

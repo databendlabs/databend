@@ -190,20 +190,20 @@ LIMIT 10;
 EvalScalar
 ├── output columns: [sales.customer_id (#2), diff_from_overall_avg (#9), customer_avg (#8)]
 ├── expressions: [round(3)(AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), 3)]
-├── estimated rows: 1.00
+├── estimated rows: 0.00
 └── Limit
     ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
     ├── limit: 10
     ├── offset: 0
-    ├── estimated rows: 1.00
+    ├── estimated rows: 0.00
     └── Sort
         ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
         ├── sort keys: [diff_from_overall_avg DESC NULLS LAST, customer_id ASC NULLS LAST]
-        ├── estimated rows: 1.00
+        ├── estimated rows: 0.00
         └── EvalScalar
             ├── output columns: [sales.customer_id (#2), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), diff_from_overall_avg (#9)]
             ├── expressions: [round(3)(AVG(net_paid) OVER ( ) (#7) - AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), 3)]
-            ├── estimated rows: 1.00
+            ├── estimated rows: 0.00
             └── Window
                 ├── output columns: [sales.customer_id (#2), sales.net_paid (#5), AVG(net_paid) OVER ( PARTITION BY customer_id ) (#6), AVG(net_paid) OVER ( ) (#7)]
                 ├── aggregate function: [avg(net_paid)]
