@@ -503,6 +503,7 @@ impl PhysicalPlanBuilder {
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
             base_snapshot_timestamp: base_table_snapshot_timestamp,
+            recluster_info: None,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

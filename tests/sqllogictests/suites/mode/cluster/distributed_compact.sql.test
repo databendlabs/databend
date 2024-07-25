@@ -64,7 +64,7 @@ optimize table t_compact_0 compact
 query I
 select count() from fuse_snapshot('default', 't_compact_0')
 ----
-7
+6
 
 query II
 select count(),sum(a) from t_compact_0

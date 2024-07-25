@@ -46,6 +46,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::ReclusterParts;
 use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
@@ -372,9 +373,8 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<u64> {
-        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
+        let (_, _, _) = (ctx, push_downs, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",

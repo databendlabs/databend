@@ -381,23 +381,17 @@ impl Column {
         // [`BinaryColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `BinaryColumn::new(data.into(), offsets.into())` to create [`BinaryColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut offsets_len = 0;
         let mut data_size = 0;
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
-        unsafe {
-            *offsets.get_unchecked_mut(offsets_len) = 0;
-            offsets_len += 1;
-            for col in cols.clone() {
-                let mut start = col.offsets()[0];
-                for end in col.offsets()[1..].iter() {
-                    data_size += end - start;
-                    start = *end;
-                    *offsets.get_unchecked_mut(offsets_len) = data_size;
-                    offsets_len += 1;
-                }
+        offsets.push(0);
+        for col in cols.clone() {
+            let mut start = col.offsets()[0];
+            for end in col.offsets()[1..].iter() {
+                data_size += end - start;
+                start = *end;
+                offsets.push(data_size);
             }
-            offsets.set_len(offsets_len);
         }
 
         // Build [`data`].

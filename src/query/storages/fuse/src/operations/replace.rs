@@ -19,21 +19,15 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransformer;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use rand::prelude::SliceRandom;
 
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
-use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::MergeIntoOperationAggregator;
 use crate::FuseTable;
@@ -147,33 +141,6 @@ impl FuseTable {
             }
         }
         chunks
-    }
-
-    pub fn chain_mutation_aggregator(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        base_snapshot: Arc<TableSnapshot>,
-        mutation_kind: MutationKind,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
-    ) -> Result<()> {
-        pipeline.try_resize(1)?;
-
-        pipeline.add_transform(|input, output| {
-            let base_segments = base_snapshot.segments.clone();
-            let mutation_aggregator = TableMutationAggregator::new(
-                self,
-                ctx.clone(),
-                base_segments,
-                mutation_kind,
-                base_snapshot_timestamp,
-            );
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input,
-                output,
-                mutation_aggregator,
-            )))
-        })
     }
 
     // choose the bloom filter columns (from on-conflict fields).

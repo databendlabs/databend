@@ -107,7 +107,10 @@ impl SnapshotGenerator for MutationGenerator {
                         self.data_retention_time_in_days,
                     );
 
-                    if matches!(self.mutation_kind, MutationKind::Compact) {
+                    if matches!(
+                        self.mutation_kind,
+                        MutationKind::Compact | MutationKind::Recluster
+                    ) {
                         // for compaction, a basic but very important verification:
                         // the number of rows should be the same
                         assert_eq!(

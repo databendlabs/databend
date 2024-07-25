@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
-#![feature(lazy_cell)]
 
 //! This crate defines data types used in meta data storage service.
 

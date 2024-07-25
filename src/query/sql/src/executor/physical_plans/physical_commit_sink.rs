@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
@@ -34,4 +36,15 @@ pub struct CommitSink {
     pub merge_meta: bool,
     pub deduplicated_label: Option<String>,
     pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+
+    // Used for recluster.
+    pub recluster_info: Option<ReclusterInfoSideCar>,
+}
+
+// TODO refine this
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ReclusterInfoSideCar {
+    pub merged_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_statistics: Statistics,
 }

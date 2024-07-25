@@ -339,6 +339,7 @@ impl DeleteInterpreter {
             deduplicated_label: None,
             plan_id: u32::MAX,
             base_snapshot_timestamp,
+            recluster_info: None,
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)

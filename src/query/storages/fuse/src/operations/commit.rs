@@ -96,12 +96,14 @@ impl FuseTable {
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {
-            TableMutationAggregator::new(
+            TableMutationAggregator::create(
                 self,
                 ctx.clone(),
                 vec![],
+                vec![],
+                vec![],
+                Statistics::default(),
                 MutationKind::Insert,
-                base_snapshot_timestamp,
             )
         });
 
