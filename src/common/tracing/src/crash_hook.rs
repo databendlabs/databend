@@ -48,7 +48,7 @@ impl CrashHandler {
         write_error(format_args!("Timestamp(Local): {}", chrono::Local::now()));
         write_error(format_args!("QueryId: {:?}", current_query_id));
         write_error(format_args!("{}", signal_message(sig, info, uc)));
-        write_error(format_args!("Backtrace:\n{}", backtrace()));
+        write_error(format_args!("Backtrace:\n{}", backtrace(50)));
     }
 }
 
