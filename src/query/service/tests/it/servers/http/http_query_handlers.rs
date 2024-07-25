@@ -1784,7 +1784,7 @@ async fn test_null_response() -> Result<()> {
 
     {
         let sql = "select NULL";
-        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": 1}}});
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": "1"}}});
         let mut req = TestHttpQueryRequest::new(json);
         let resp = req.fetch_total().await?.data();
 
@@ -1795,7 +1795,7 @@ async fn test_null_response() -> Result<()> {
 
     {
         let sql = "select NULL";
-        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": 0}}});
+        let json = serde_json::json!({"sql": sql.to_string(), "session": {"settings": {"format_null_as_str": "0"}}});
         let mut req = TestHttpQueryRequest::new(json);
         let resp = req.fetch_total().await?.data();
 
