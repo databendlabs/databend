@@ -234,52 +234,57 @@ where TablesTable<T, U>: HistoryAware
         let mut owner: Vec<Option<String>> = Vec::new();
         let user_api = UserApiProvider::instance();
 
-        for (ctl_name, ctl) in ctls.iter() {
-            let mut dbs = Vec::new();
-            let mut tables_names: Vec<String> = Vec::new();
-            let mut invalid_tables_ids = false;
-            if let Some(push_downs) = &push_downs {
-                let mut db_name: Vec<String> = Vec::new();
-                let mut tables_ids: Vec<u64> = Vec::new();
-                if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-                    let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                    find_eq_filter(&expr, &mut |col_name, scalar| {
-                        if col_name == "database" {
-                            if let Scalar::String(database) = scalar {
-                                if !db_name.contains(database) {
-                                    db_name.push(database.clone());
-                                }
-                            }
-                        } else if col_name == "table_id" {
-                            match check_number::<_, u64>(
-                                None,
-                                &FunctionContext::default(),
-                                &Expr::<usize>::Constant {
-                                    span: None,
-                                    scalar: scalar.clone(),
-                                    data_type: scalar.as_ref().infer_data_type(),
-                                },
-                                &BUILTIN_FUNCTIONS,
-                            ) {
-                                Ok(id) => tables_ids.push(id),
-                                Err(_) => invalid_tables_ids = true,
-                            }
-                        } else if col_name == "name" {
-                            if let Scalar::String(t_name) = scalar {
-                                if !tables_names.contains(t_name) {
-                                    tables_names.push(t_name.clone());
-                                }
+        let mut dbs = Vec::new();
+        let mut tables_names: Vec<String> = Vec::new();
+        let mut invalid_tables_ids = false;
+        let mut tables_ids: Vec<u64> = Vec::new();
+        let mut db_name: Vec<String> = Vec::new();
+
+        if let Some(push_downs) = &push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !db_name.contains(database) {
+                                db_name.push(database.clone());
                             }
                         }
-                        Ok(())
-                    });
-                    for db in db_name {
+                    } else if col_name == "table_id" {
+                        match check_number::<_, u64>(
+                            None,
+                            &FunctionContext::default(),
+                            &Expr::<usize>::Constant {
+                                span: None,
+                                scalar: scalar.clone(),
+                                data_type: scalar.as_ref().infer_data_type(),
+                            },
+                            &BUILTIN_FUNCTIONS,
+                        ) {
+                            Ok(id) => tables_ids.push(id),
+                            Err(_) => invalid_tables_ids = true,
+                        }
+                    } else if col_name == "name" {
+                        if let Scalar::String(t_name) = scalar {
+                            if !tables_names.contains(t_name) {
+                                tables_names.push(t_name.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        for (ctl_name, ctl) in ctls.iter() {
+            if let Some(push_downs) = &push_downs {
+                if push_downs.filters.as_ref().map(|f| &f.filter).is_some() {
+                    for db in &db_name {
                         match ctl.get_database(&tenant, db.as_str()).await {
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
                                 warn!("{}", msg);
-                                ctx.push_warning(msg);
                             }
                         }
                     }
@@ -294,7 +299,6 @@ where TablesTable<T, U>: HistoryAware
                             Err(err) => {
                                 let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
                                 warn!("{}", msg);
-                                ctx.push_warning(msg);
                             }
                         }
                     }
@@ -316,6 +320,7 @@ where TablesTable<T, U>: HistoryAware
             }
 
             let final_dbs = dbs
+                .clone()
                 .into_iter()
                 .filter(|db| {
                     visibility_checker.check_database_visibility(
