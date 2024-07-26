@@ -108,9 +108,6 @@ impl PipelineBuilder {
     pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         match plan {
             PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
-            PhysicalPlan::MergeInto(v) if v.mutation_type != DataMutationType::FullOperation => {
-                Ok(None)
-            }
 
             // hided plans in profile
             PhysicalPlan::Shuffle(_) => Ok(None),
