@@ -77,6 +77,9 @@ impl BlockMetaTransform<WindowPartitionMeta> for TransformWindowPartitionSort {
                     WindowPartitionMeta::Spilling(_) => unreachable!(),
                     WindowPartitionMeta::Payload(p) => {
                         debug_assert!(bucket == p.bucket);
+                        if p.data.is_empty() {
+                            return Err(ErrorCode::Internal("data is empty"));
+                        }
                         let sort_block = DataBlock::sort(&p.data, &self.sort_desc, None)?;
                         sort_blocks.push(sort_block);
                     }
@@ -93,7 +96,8 @@ impl BlockMetaTransform<WindowPartitionMeta> for TransformWindowPartitionSort {
                 self.have_order_col,
             )?;
 
-            return Ok(sort_blocks);
+            // return Ok(sort_blocks);
+            return Ok(vec![DataBlock::concat(&sort_blocks)?]);
         }
 
         Err(ErrorCode::Internal(
