@@ -88,11 +88,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         let val = unsafe { val_arg.index_unchecked(row) };
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                         if let ScalarRef::Variant(val) = val {
-                                            selector.select(
-                                                val,
-                                                &mut builder.data,
-                                                &mut builder.offsets,
-                                            );
+                                            if selector
+                                                .select(
+                                                    val,
+                                                    &mut builder.data,
+                                                    &mut builder.offsets,
+                                                )
+                                                .is_err()
+                                            {
+                                                ctx.set_error(
+                                                    0,
+                                                    format!(
+                                                        "Invalid JSONB value '0x{}'",
+                                                        hex::encode(val)
+                                                    ),
+                                                );
+                                                break;
+                                            }
                                         }
                                         let array =
                                             Column::Variant(builder.build()).wrap_nullable(None);
@@ -123,11 +135,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                                             if let ScalarRef::Variant(val) = val {
                                                 let selector =
                                                     Selector::new(json_path, SelectorMode::All);
-                                                selector.select(
-                                                    val,
-                                                    &mut builder.data,
-                                                    &mut builder.offsets,
-                                                );
+                                                if selector
+                                                    .select(
+                                                        val,
+                                                        &mut builder.data,
+                                                        &mut builder.offsets,
+                                                    )
+                                                    .is_err()
+                                                {
+                                                    ctx.set_error(
+                                                        0,
+                                                        format!(
+                                                            "Invalid JSONB value '0x{}'",
+                                                            hex::encode(val)
+                                                        ),
+                                                    );
+                                                    break;
+                                                }
                                             }
                                         }
                                         Err(_) => {
@@ -400,11 +424,19 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     Some((path, ref selector)) => {
                                         // get inner input values by path
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
-                                        selector.select(
-                                            val,
-                                            &mut builder.data,
-                                            &mut builder.offsets,
-                                        );
+                                        if selector
+                                            .select(val, &mut builder.data, &mut builder.offsets)
+                                            .is_err()
+                                        {
+                                            ctx.set_error(
+                                                0,
+                                                format!(
+                                                    "Invalid JSONB value '0x{}'",
+                                                    hex::encode(val)
+                                                ),
+                                            );
+                                            break;
+                                        }
                                         let inner_val = builder.pop().unwrap_or_default();
                                         generator.generate(
                                             (row + 1) as u64,

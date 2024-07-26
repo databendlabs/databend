@@ -39,3 +39,6 @@ gzip = ["flate2/rust_backend"]
 gzip_zlib_ng = ["flate2/zlib-ng"]
 serde_types = ["serde"]
 snappy = ["snap"]
+
+[lints]
+workspace = true

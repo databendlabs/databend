@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::Histogram;
 use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -46,6 +47,7 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::plan::ReclusterParts;
 use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
@@ -370,9 +372,8 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<u64> {
-        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
+        let (_, _, _) = (ctx, push_downs, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",
@@ -518,6 +519,11 @@ pub trait ColumnStatisticsProvider: Send {
 
     // returns the num rows of the table, if any.
     fn num_rows(&self) -> Option<u64>;
+
+    // return histogram if any
+    fn histogram(&self, _column_id: ColumnId) -> Option<Histogram> {
+        None
+    }
 }
 
 pub struct DummyColumnStatisticsProvider;

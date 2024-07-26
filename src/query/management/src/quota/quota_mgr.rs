@@ -100,7 +100,7 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
             let value = serde_json::to_vec(quota)?;
             let res = self
                 .kv_api
-                .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
+                .upsert_kv(UpsertKV::update(self.key(), &value).with(seq))
                 .await?;
             match res.result {
                 Some(SeqV { seq: s, .. }) => Ok(s),

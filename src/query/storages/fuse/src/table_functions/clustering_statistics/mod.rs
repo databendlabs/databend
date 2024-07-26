@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_app::tenant::Tenant;
+mod clustering_stat;
+mod clustering_stat_table;
 
-use crate::plans::ScalarExpr;
-use crate::MetadataRef;
-
-#[derive(Clone, Debug)]
-pub struct ReclusterTablePlan {
-    pub tenant: Tenant,
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub is_final: bool,
-    pub metadata: MetadataRef,
-    pub push_downs: Option<ScalarExpr>,
-    pub limit: Option<usize>,
-}
+pub use clustering_stat::ClusteringStatistics;
+pub use clustering_stat_table::ClusteringStatisticsTable;

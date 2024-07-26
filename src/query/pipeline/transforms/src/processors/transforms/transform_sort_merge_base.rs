@@ -31,7 +31,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
-use super::sort::Cursor;
 use super::sort::RowConverter;
 use super::sort::Rows;
 use super::sort::SimpleRowConverter;
@@ -68,8 +67,8 @@ pub trait MergeSort<R: Rows> {
 
     /// Add a block to the merge sort processor.
     /// `block` is the input data block.
-    /// `init_cursor` is the initial sorting cursor of this `block`.
-    fn add_block(&mut self, block: DataBlock, init_cursor: Cursor<R>) -> Result<()>;
+    /// `init_rows` is the initial sorting rows of this `block`.
+    fn add_block(&mut self, block: DataBlock, init_rows: R, input_index: usize) -> Result<()>;
 
     /// Return buffered data size.
     fn num_bytes(&self) -> usize;
@@ -234,10 +233,8 @@ where
             rows
         };
 
-        let cursor = Cursor::new(self.next_index, rows);
+        self.inner.add_block(block, rows, self.next_index)?;
         self.next_index += 1;
-
-        self.inner.add_block(block, cursor)?;
         let blocks = if self.may_spill
             && (self.inner.num_bytes() * MERGE_RATIO >= self.spilling_bytes_threshold
                 || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.max_memory_usage)

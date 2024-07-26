@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
-#![feature(lazy_cell)]
 
 //! This crate defines data types used in meta data storage service.
 
@@ -152,7 +151,6 @@ pub use crate::raft_types::SnapshotMeta;
 pub use crate::raft_types::SnapshotMismatch;
 pub use crate::raft_types::SnapshotResponse;
 pub use crate::raft_types::StorageError;
-pub use crate::raft_types::StorageIOError;
 pub use crate::raft_types::StoredMembership;
 pub use crate::raft_types::StreamingError;
 pub use crate::raft_types::Term;

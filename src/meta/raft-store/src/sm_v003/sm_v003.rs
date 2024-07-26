@@ -31,7 +31,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::SeqValue;
-use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::StorageError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
@@ -189,7 +189,7 @@ impl SMV003 {
     pub async fn apply_entries(
         &mut self,
         entries: impl IntoIterator<Item = Entry>,
-    ) -> Result<Vec<AppliedState>, StorageIOError> {
+    ) -> Result<Vec<AppliedState>, StorageError> {
         let mut applier = Applier::new(self);
 
         let mut res = vec![];
@@ -199,7 +199,7 @@ impl SMV003 {
             let r = applier
                 .apply(&ent)
                 .await
-                .map_err(|e| StorageIOError::apply(log_id, &e))?;
+                .map_err(|e| StorageError::apply(log_id, &e))?;
             res.push(r);
         }
         Ok(res)

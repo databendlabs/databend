@@ -50,7 +50,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(BlockMetaTransformer::create(
+        Ok(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalGroupBy::<Method> {
@@ -59,7 +59,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                 flush_state: PayloadFlushState::default(),
                 reach_limit: false,
             },
-        )))
+        ))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
@@ -154,13 +154,13 @@ where Method: HashMethodBounds
 {
     const NAME: &'static str = "TransformFinalGroupBy";
 
-    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {
+    fn transform(&mut self, meta: AggregateMeta<Method, ()>) -> Result<Vec<DataBlock>> {
         if self.reach_limit {
-            return Ok(self.params.empty_result_block());
+            return Ok(vec![self.params.empty_result_block()]);
         }
 
         if self.params.enable_experimental_aggregate_hashtable {
-            return self.transform_agg_hashtable(meta);
+            return Ok(vec![self.transform_agg_hashtable(meta)?]);
         }
 
         if let AggregateMeta::Partitioned { bucket, data } = meta {
@@ -220,7 +220,9 @@ where Method: HashMethodBounds
                 group_columns_builder.append_value(group_entity.key());
             }
 
-            return Ok(DataBlock::new_from_columns(group_columns_builder.finish()?));
+            return Ok(vec![DataBlock::new_from_columns(
+                group_columns_builder.finish()?,
+            )]);
         }
 
         Err(ErrorCode::Internal(

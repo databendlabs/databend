@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -23,6 +24,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::ColumnStatisticsProvider;
@@ -791,12 +793,14 @@ impl Table for FuseTable {
             if let Some(table_statistics) = table_statistics {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    table_statistics.histograms.clone(),
                     Some(table_statistics.column_distinct_values()),
                     snapshot.summary.row_count,
                 )
             } else {
                 FuseTableColumnStatisticsProvider::new(
                     stats.clone(),
+                    HashMap::new(),
                     None,
                     snapshot.summary.row_count,
                 )
@@ -899,6 +903,16 @@ impl Table for FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         self.do_compact_blocks(ctx, limits).await
+    }
+
+    #[async_backtrace::framed]
+    async fn recluster(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
+        self.do_recluster(ctx, push_downs, limit).await
     }
 
     #[async_backtrace::framed]

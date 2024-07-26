@@ -145,7 +145,7 @@ SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
 
 # cume_dist
 query I
-SELECT CAST(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as INT) FROM tenk1 WHERE unique2 < 10 order by four, ten
+SELECT CAST(cume_dist() OVER (PARTITION BY four ORDER BY ten RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)*10 as INT) FROM tenk1 WHERE unique2 < 10 order by four, ten
 ----
 7
 7

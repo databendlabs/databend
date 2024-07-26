@@ -40,7 +40,7 @@ use crate::table_functions::TableFunction;
 use crate::FuseTable;
 use crate::Table;
 
-const FUSE_FUNC_CLUSTERING: &str = "clustering_information";
+const FUSE_FUNC_CLUSTERING_INFO: &str = "clustering_information";
 
 pub struct ClusteringInformationTable {
     table_info: TableInfo,
@@ -57,9 +57,9 @@ impl ClusteringInformationTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let (arg_database_name, arg_table_name, arg_cluster_key) =
-            parse_db_tb_opt_args(&table_args, FUSE_FUNC_CLUSTERING)?;
+            parse_db_tb_opt_args(&table_args, FUSE_FUNC_CLUSTERING_INFO)?;
 
-        let engine = FUSE_FUNC_CLUSTERING.to_owned();
+        let engine = FUSE_FUNC_CLUSTERING_INFO.to_owned();
 
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),

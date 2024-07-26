@@ -20,12 +20,15 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -117,9 +120,8 @@ where TablesTable<T, U>: HistoryAware
         let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
-        Ok(self
-            .get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
-            .await)
+        self.get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
+            .await
     }
 }
 
@@ -219,7 +221,7 @@ where TablesTable<T, U>: HistoryAware
         push_downs: Option<PushDownInfo>,
         catalogs: Vec<Arc<dyn Catalog>>,
         visibility_checker: GrantObjectVisibilityChecker,
-    ) -> DataBlock {
+    ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
         let ctls: Vec<(String, Arc<dyn Catalog>)> =
@@ -232,28 +234,71 @@ where TablesTable<T, U>: HistoryAware
         let mut owner: Vec<Option<String>> = Vec::new();
         let user_api = UserApiProvider::instance();
 
-        for (ctl_name, ctl) in ctls.iter() {
-            let mut dbs = Vec::new();
-            if let Some(push_downs) = &push_downs {
-                let mut db_name: Vec<String> = Vec::new();
-                if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-                    let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                    find_eq_filter(&expr, &mut |col_name, scalar| {
-                        if col_name == "database" {
-                            if let Scalar::String(database) = scalar {
-                                if !db_name.contains(database) {
-                                    db_name.push(database.clone());
-                                }
+        let mut dbs = Vec::new();
+        let mut tables_names: Vec<String> = Vec::new();
+        let mut invalid_tables_ids = false;
+        let mut tables_ids: Vec<u64> = Vec::new();
+        let mut db_name: Vec<String> = Vec::new();
+
+        if let Some(push_downs) = &push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !db_name.contains(database) {
+                                db_name.push(database.clone());
                             }
                         }
-                    });
-                    for db in db_name {
+                    } else if col_name == "table_id" {
+                        match check_number::<_, u64>(
+                            None,
+                            &FunctionContext::default(),
+                            &Expr::<usize>::Constant {
+                                span: None,
+                                scalar: scalar.clone(),
+                                data_type: scalar.as_ref().infer_data_type(),
+                            },
+                            &BUILTIN_FUNCTIONS,
+                        ) {
+                            Ok(id) => tables_ids.push(id),
+                            Err(_) => invalid_tables_ids = true,
+                        }
+                    } else if col_name == "name" {
+                        if let Scalar::String(t_name) = scalar {
+                            if !tables_names.contains(t_name) {
+                                tables_names.push(t_name.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        for (ctl_name, ctl) in ctls.iter() {
+            if let Some(push_downs) = &push_downs {
+                if push_downs.filters.as_ref().map(|f| &f.filter).is_some() {
+                    for db in &db_name {
                         match ctl.get_database(&tenant, db.as_str()).await {
                             Ok(database) => dbs.push(database),
                             Err(err) => {
                                 let msg = format!("Failed to get database: {}, {}", db, err);
                                 warn!("{}", msg);
-                                ctx.push_warning(msg);
+                            }
+                        }
+                    }
+
+                    if !T {
+                        match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
+                            Ok(tables) => {
+                                for table in tables.into_iter().flatten() {
+                                    tables_names.push(table);
+                                }
+                            }
+                            Err(err) => {
+                                let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
+                                warn!("{}", msg);
                             }
                         }
                     }
@@ -275,6 +320,7 @@ where TablesTable<T, U>: HistoryAware
             }
 
             let final_dbs = dbs
+                .clone()
                 .into_iter()
                 .filter(|db| {
                     visibility_checker.check_database_visibility(
@@ -289,23 +335,47 @@ where TablesTable<T, U>: HistoryAware
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
-                let tables = match Self::list_tables(ctl, &tenant, db_name, T, U).await {
-                    Ok(tables) => tables,
-                    Err(err) => {
-                        // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
-                        // these databases might be:
-                        // - sharing database
-                        // - hive database
-                        // - iceberg database
-                        // - others
-                        // TODO(liyz): return the warnings in the HTTP query protocol.
-                        let msg =
-                            format!("Failed to list tables in database: {}, {}", db_name, err);
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+                let tables = if tables_names.is_empty()
+                    || tables_names.len() > 10
+                    || T
+                    || invalid_tables_ids
+                {
+                    match Self::list_tables(ctl, &tenant, db_name, T, U).await {
+                        Ok(tables) => tables,
+                        Err(err) => {
+                            // swallow the errors related with remote database or tables, avoid ANY of bad table config corrupt ALL of the results.
+                            // these databases might be:
+                            // - sharing database
+                            // - hive database
+                            // - iceberg database
+                            // - others
+                            // TODO(liyz): return the warnings in the HTTP query protocol.
+                            let msg =
+                                format!("Failed to list tables in database: {}, {}", db_name, err);
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
 
-                        continue;
+                            continue;
+                        }
                     }
+                } else {
+                    // Only without history can call get_table
+                    let mut tables = Vec::new();
+                    for table_name in &tables_names {
+                        match ctl.get_table(&tenant, db_name, table_name).await {
+                            Ok(t) => tables.push(t),
+                            Err(err) => {
+                                let msg = format!(
+                                    "Failed to list tables in database: {}, {}",
+                                    db_name, err
+                                );
+                                // warn no need to pad in ctx
+                                warn!("{}", msg);
+                                continue;
+                            }
+                        }
+                    }
+                    tables
                 };
 
                 for table in tables {
@@ -466,7 +536,7 @@ where TablesTable<T, U>: HistoryAware
             .collect();
 
         if U {
-            DataBlock::new_from_columns(vec![
+            Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
                 StringType::from_data(names),
@@ -486,9 +556,9 @@ where TablesTable<T, U>: HistoryAware
                 UInt64Type::from_opt_data(number_of_blocks),
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
-            ])
+            ]))
         } else {
-            DataBlock::new_from_columns(vec![
+            Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(catalogs),
                 StringType::from_data(databases),
                 StringType::from_data(names),
@@ -501,7 +571,7 @@ where TablesTable<T, U>: HistoryAware
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
                 StringType::from_data(view_query),
-            ])
+            ]))
         }
     }
 

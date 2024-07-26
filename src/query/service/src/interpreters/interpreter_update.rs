@@ -294,13 +294,14 @@ impl UpdateInterpreter {
         }
         let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
-            snapshot,
+            snapshot: Some(snapshot),
             table_info,
             mutation_kind: MutationKind::Update,
             update_stream_meta: vec![],
             merge_meta,
             deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            recluster_info: None,
         }));
         plan.adjust_plan_id(&mut 0);
         Ok(plan)

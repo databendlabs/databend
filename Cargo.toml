@@ -222,7 +222,7 @@ arrow-udf-python = "0.2.1"
 arrow-udf-wasm = "0.2.2"
 async-backtrace = "0.2"
 async-trait = { version = "0.1.77", package = "async-trait-fn" }
-backtrace = "0.3"
+backtrace = "0.3.73"
 base64 = "0.22"
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 borsh = { version = "1.2.1", features = ["derive"] }
@@ -252,7 +252,7 @@ geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", 
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
-jsonb = "0.4.0"
+jsonb = "0.4.1"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 once_cell = "1.15.0"
@@ -275,11 +275,9 @@ opendal = { version = "0.47.1", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-openraft = { version = "0.9.13", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.2", features = [
     "serde",
     "tracing-log",
-    "generic-snapshot-data",
-    "storage-v2",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 orc-rust = "0.3"
@@ -344,8 +342,23 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
 
+# TODO(andylokandy): Remove these once we have fixed all the issues.
+unexpected_cfgs = "allow"
+dead_code = "allow"
+for_loops_over_fallibles = "allow"
+
 [workspace.lints.clippy]
 useless_format = "allow"
+mutable_key_type = "allow"
+
+# TODO(andylokandy): Remove these once we have fixed all the issues.
+missing_transmute_annotations = "allow"
+multiple_bound_locations = "allow"
+doc_lazy_continuation = "allow"
+manual_pattern_char_comparison = "allow"
+legacy_numeric_constants = "allow"
+unused_enumerate_index = "allow"
+to_string_trait_impl = "allow"
 
 [profile.release]
 debug = 1
@@ -396,7 +409,8 @@ arrow-udf-python = { git = "https://github.com/datafuse-extras/arrow-udf", rev =
 arrow-udf-wasm = { git = "https://github.com/datafuse-extras/arrow-udf", rev = "dfa1390" }
 async-backtrace = { git = "https://github.com/zhang2014/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", rev = "a353334" }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "6145fe6b" }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
+color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }

@@ -238,7 +238,7 @@ impl Operator for Aggregate {
         } else if self
             .group_items
             .iter()
-            .any(|item| statistics.column_stats.get(&item.index).is_none())
+            .any(|item| !statistics.column_stats.contains_key(&item.index))
         {
             cardinality
         } else {

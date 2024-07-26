@@ -23,6 +23,7 @@ use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::testing::StoreBuilder;
+use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_types::new_log_id;
 use databend_common_meta_types::snapshot_db::DB;

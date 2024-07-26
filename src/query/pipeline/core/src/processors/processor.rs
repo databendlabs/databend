@@ -203,38 +203,3 @@ impl ProcessorPtr {
         (*self.inner.get()).details_status()
     }
 }
-
-#[async_trait::async_trait]
-impl<T: Processor + ?Sized> Processor for Box<T> {
-    fn name(&self) -> String {
-        (**self).name()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        (**self).as_any()
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        (**self).event()
-    }
-
-    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
-        (**self).event_with_cause(cause)
-    }
-
-    fn interrupt(&self) {
-        (**self).interrupt()
-    }
-
-    fn process(&mut self) -> Result<()> {
-        (**self).process()
-    }
-
-    async fn async_process(&mut self) -> Result<()> {
-        (**self).async_process().await
-    }
-
-    fn details_status(&self) -> Option<String> {
-        (**self).details_status()
-    }
-}
