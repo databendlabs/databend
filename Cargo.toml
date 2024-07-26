@@ -352,12 +352,8 @@ useless_format = "allow"
 mutable_key_type = "allow"
 
 # TODO(andylokandy): Remove these once we have fixed all the issues.
-missing_transmute_annotations = "allow"
 multiple_bound_locations = "allow"
 doc_lazy_continuation = "allow"
-manual_pattern_char_comparison = "allow"
-legacy_numeric_constants = "allow"
-unused_enumerate_index = "allow"
 to_string_trait_impl = "allow"
 
 [profile.release]
