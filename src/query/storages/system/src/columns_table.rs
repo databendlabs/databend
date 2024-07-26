@@ -260,6 +260,7 @@ pub(crate) async fn dump_tables(
                         }
                     }
                 }
+                Ok(())
             });
         }
     }
@@ -294,11 +295,7 @@ pub(crate) async fn dump_tables(
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
-            if let Ok(table) = catalog.list_tables(&tenant, &database).await {
-                table
-            } else {
-                vec![]
-            }
+            (catalog.list_tables(&tenant, &database).await).unwrap_or_default()
         } else {
             let mut res = Vec::new();
             for table in &tables {

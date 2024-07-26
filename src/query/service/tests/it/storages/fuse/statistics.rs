@@ -539,7 +539,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval()
 
         if meaningless_to_collect_max {
             // no stats will be collected
-            assert!(stats_of_columns.get(&0).is_none())
+            assert!(!stats_of_columns.contains_key(&0))
         } else {
             // Finally:
             // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"

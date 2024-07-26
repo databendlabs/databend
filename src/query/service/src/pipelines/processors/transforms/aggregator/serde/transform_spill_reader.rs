@@ -106,14 +106,14 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                 }
 
                 if let AggregateMeta::Partitioned { data, .. } = block_meta {
-                    for meta in data {
-                        if matches!(meta, AggregateMeta::BucketSpilled(_)) {
-                            self.input.set_not_need_data();
-                            let block_meta = data_block.take_meta().unwrap();
-                            self.reading_meta =
-                                AggregateMeta::<Method, V>::downcast_from(block_meta);
-                            return Ok(Event::Async);
-                        }
+                    if data
+                        .iter()
+                        .any(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
+                    {
+                        self.input.set_not_need_data();
+                        let block_meta = data_block.take_meta().unwrap();
+                        self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
+                        return Ok(Event::Async);
                     }
                 }
             }

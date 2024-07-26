@@ -693,7 +693,7 @@ impl<T: Number> TransformWindow<T> {
                     cur = if advance {
                         let advance_cur = self.advance_row(cur);
                         if advance_cur.block != cur.block {
-                            block_entry = &self
+                            block_entry = self
                                 .blocks
                                 .get(advance_cur.block - self.first_block)
                                 .unwrap()
@@ -706,7 +706,7 @@ impl<T: Number> TransformWindow<T> {
                     } else {
                         let back_cur = self.goback_row(cur);
                         if back_cur.block != cur.block {
-                            block_entry = &self
+                            block_entry = self
                                 .blocks
                                 .get(back_cur.block - self.first_block)
                                 .unwrap()

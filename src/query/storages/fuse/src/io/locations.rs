@@ -49,6 +49,9 @@ static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
 static SNAPSHOT_STATISTICS_V2: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V2(PhantomData);
 
+static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
+    TableSnapshotStatisticsVersion::V3(PhantomData);
+
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
@@ -162,8 +165,13 @@ impl TableMetaLocationGenerator {
             .ends_with(SNAPSHOT_STATISTICS_V0.suffix().as_str())
         {
             SNAPSHOT_STATISTICS_V0.version()
-        } else {
+        } else if table_statistics_location
+            .as_ref()
+            .ends_with(SNAPSHOT_STATISTICS_V2.suffix().as_str())
+        {
             SNAPSHOT_STATISTICS_V2.version()
+        } else {
+            SNAPSHOT_STATISTICS_V3.version()
         }
     }
 
@@ -260,6 +268,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
             TableSnapshotStatisticsVersion::V2(_) => "_ts_v2.json".to_string(),
+            TableSnapshotStatisticsVersion::V3(_) => "_ts_v3.json".to_string(),
         }
     }
 }

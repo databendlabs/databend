@@ -1181,7 +1181,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         let reply = self
             .upsert_kv(UpsertKVReq::new(
-                &index_id_key.to_string_key(),
+                index_id_key.to_string_key(),
                 MatchSeq::GE(1),
                 Operation::Update(serialize_struct(&req.index_meta)?),
                 None,

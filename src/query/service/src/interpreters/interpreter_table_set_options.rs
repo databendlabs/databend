@@ -68,14 +68,14 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_row_per_block(&self.plan.set_options)?;
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
-        if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
+        if self.plan.set_options.contains_key(OPT_KEY_STORAGE_FORMAT) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
-        if self.plan.set_options.get(OPT_KEY_DATABASE_ID).is_some() {
+        if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",

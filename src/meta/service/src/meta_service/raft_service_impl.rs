@@ -26,7 +26,6 @@ use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v00
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::MessageSummary;
-use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
@@ -44,7 +43,7 @@ use databend_common_meta_types::RaftError;
 use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::StorageError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
@@ -140,7 +139,7 @@ impl RaftServiceImpl {
         let sig = snapshot_meta.signature();
 
         let io_err_to_read_snap_err = |e: io::Error| {
-            let io_err = StorageIOError::read_snapshot(Some(sig.clone()), &e);
+            let io_err = StorageError::read_snapshot(Some(sig.clone()), &e);
             StorageError::from(io_err)
         };
 
@@ -243,9 +242,8 @@ impl RaftServiceImpl {
         let mut strm = request.into_inner();
 
         databend_common_base::runtime::spawn(async move {
-            while let Some(chunk) = strm.try_next().await.map_err(|e| {
-                error!("fail to receive binary snapshot chunk: {:?}", &e);
-                e
+            while let Some(chunk) = strm.try_next().await.inspect_err(|e| {
+                error!("fail to receive binary snapshot chunk: {:?}", e);
             })? {
                 let res = tx.send(chunk).await;
                 if res.is_err() {

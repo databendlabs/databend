@@ -108,12 +108,14 @@ impl SnapshotVersion {
 
 impl Versioned<0> for v1::TableSnapshotStatistics {}
 impl Versioned<2> for v2::TableSnapshotStatistics {}
+impl Versioned<3> for v3::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
     V2(PhantomData<v2::TableSnapshotStatistics>),
+    V3(PhantomData<v3::TableSnapshotStatistics>),
 }
 
 impl TableSnapshotStatisticsVersion {
@@ -121,6 +123,7 @@ impl TableSnapshotStatisticsVersion {
         match self {
             TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
             TableSnapshotStatisticsVersion::V2(a) => Self::ver(a),
+            TableSnapshotStatisticsVersion::V3(a) => Self::ver(a),
         }
     }
 
@@ -185,6 +188,9 @@ mod converters {
                     PhantomData,
                 ))),
                 2 => Ok(TableSnapshotStatisticsVersion::V2(testify_version::<_, 2>(
+                    PhantomData,
+                ))),
+                3 => Ok(TableSnapshotStatisticsVersion::V3(testify_version::<_, 3>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
