@@ -15,12 +15,12 @@ c=$(echo "select c from test_faketime.t" | $BENDSQL_CLIENT_CONNECT)
 faked=$(date -d "$c" +%s)
 current_timestamp=$(date +%s)
 time_diff=$((current_timestamp - faked))
-time_diff_days=$(echo "scale=2; $time_diff / 86400" | bc)
 
-# expects time difference is larger than 2 days
-if (( $(echo "$time_diff_days > 2" | bc -l) )); then
+time_diff_days=$(python3 -c "print($time_diff / 86400)")
+
+# Check if time difference is greater than 2 days
+if python3 -c "import sys; sys.exit(1 if $time_diff_days > 2 else 0)"; then
     echo "OK"
 else
     echo "assertion failure"
 fi
-
