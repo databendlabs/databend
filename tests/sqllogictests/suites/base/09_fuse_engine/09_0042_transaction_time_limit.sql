@@ -17,6 +17,21 @@ statement error 4003
 alter table t09_0042 recluster;
 
 statement error 4003
+truncate table t09_0042;
+
+statement error 4003
+alter table t09_0042 add column b int;
+
+statement error 4003
+alter table t09_0042 cluster by (a + 1);
+
+statement error 4003
+alter table t09_0042 drop cluster key;
+
+statement error 4003
+analyze table t09_0042;
+
+statement error 4003
 optimize table t09_0042 compact;
 
 statement error 4003
@@ -69,6 +84,21 @@ select * from t09_0042 order by a;
 3
 4
 5
+
+statement ok
+set data_retention_time_in_days=1;
+
+statement ok
+create or replace table t09_0042_1 (a int,b int) cluster by (a);
+
+statement ok
+insert into t09_0042_1 values (1,2);
+
+statement ok
+set data_retention_time_in_days=0;
+
+statement error 4003
+alter table t09_0042_1 drop column b;
 
 statement ok
 set data_retention_time_in_days=1;
