@@ -35,6 +35,7 @@ use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::GeometryDataType;
+use geo::Geometry;
 use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
@@ -337,7 +338,25 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
-        todo!()
+        let geog = unsafe { column.index_unchecked(row_index) };
+        let point = Geometry::Point(geog.to_point());
+
+        let s = match self.common_settings().geometry_format {
+            GeometryDataType::WKB => {
+                hex::encode_upper(point.to_wkb(CoordDimensions::xy()).unwrap().as_bytes())
+            }
+            GeometryDataType::WKT => point.to_wkt().unwrap(),
+            GeometryDataType::EWKB => {
+                hex::encode_upper(point.to_ewkb(CoordDimensions::xy(), Some(4326)).unwrap())
+            }
+            GeometryDataType::EWKT => {
+                let geos = point.to_geos().unwrap();
+                geos.to_ewkt(geos.srid()).unwrap()
+            }
+            GeometryDataType::GEOJSON => point.to_json().unwrap(),
+        };
+
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
     fn write_array<T: ValueType>(

@@ -136,7 +136,7 @@ impl Column {
                 .unwrap();
                 Column::Date(d)
             }
-            Column::Geography(column)=> {
+            Column::Geography(_column) => {
                 todo!()
             }
             Column::Array(column) => {

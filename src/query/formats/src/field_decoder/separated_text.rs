@@ -30,8 +30,10 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -46,6 +48,7 @@ use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_ewkt_point;
 use databend_common_io::parse_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
@@ -149,7 +152,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
-            ColumnBuilder::Geography(c) => Err(ErrorCode::Unimplemented("geography")),
+            ColumnBuilder::Geography(c) => self.read_geography(c, data),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -320,6 +323,12 @@ impl SeparatedTextDecoder {
         let geom = parse_to_ewkb(data, None)?;
         column.put_slice(geom.as_bytes());
         column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography(&self, column: &mut Vec<u8>, data: &[u8]) -> Result<()> {
+        let point = parse_ewkt_point(data)?;
+        GeographyType::push_item(column, point.try_into()?);
         Ok(())
     }
 

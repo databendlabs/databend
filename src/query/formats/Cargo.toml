@@ -24,6 +24,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 hex = "0.4.3"

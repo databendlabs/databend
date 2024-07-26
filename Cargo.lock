@@ -3444,6 +3444,7 @@ dependencies = [
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "geo",
  "geos",
  "geozero 0.13.0",
  "hex",

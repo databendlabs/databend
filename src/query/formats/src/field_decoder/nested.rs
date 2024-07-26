@@ -33,7 +33,9 @@ use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -48,6 +50,7 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::parse_ewkt_point;
 use databend_common_io::parse_to_ewkb;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -341,10 +344,14 @@ impl NestedValues {
 
     fn read_geography<R: AsRef<[u8]>>(
         &self,
-        _column: &mut Vec<u8>,
-        _reader: &mut Cursor<R>,
+        column: &mut Vec<u8>,
+        reader: &mut Cursor<R>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("todo"))
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let point = parse_ewkt_point(&buf)?;
+        GeographyType::push_item(column, point.try_into()?);
+        Ok(())
     }
 
     fn read_nullable<R: AsRef<[u8]>>(

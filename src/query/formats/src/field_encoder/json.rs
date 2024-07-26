@@ -19,6 +19,7 @@ use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
+use geo::Geometry;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 
@@ -83,8 +84,10 @@ impl FieldEncoderJSON {
                 let v = unsafe { c.index_unchecked(row_index) };
                 out_buf.extend_from_slice(Ewkb(v.to_vec()).to_json().unwrap().as_bytes())
             }
-            Column::Geography(c)=>{
-                todo!()
+            Column::Geography(c) => {
+                let v = unsafe { c.index_unchecked(row_index) };
+                out_buf
+                    .extend_from_slice(Geometry::Point(v.to_point()).to_json().unwrap().as_bytes())
             }
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),

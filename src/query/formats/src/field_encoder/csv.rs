@@ -148,7 +148,9 @@ impl FieldEncoderCSV {
             }
 
             Column::Geography(c) => {
-                todo!()
+                let geog = unsafe { c.index_unchecked(row_index) };
+                let s = format!("{geog}");
+                self.string_formatter.write_string(s.as_bytes(), out_buf);
             }
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {

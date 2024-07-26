@@ -22,6 +22,9 @@ use borsh::BorshSerialize;
 use databend_common_arrow::arrow;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_io::prelude::StatBuffer;
+use geo::Geometry;
+use geo::Point;
+use geozero::ToWkt;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
 use serde::Deserialize;
@@ -73,6 +76,10 @@ impl Geography {
             Err("geography is out of range".to_string())
         }
     }
+
+    pub fn to_point(&self) -> Point {
+        (self.longitude, self.latitude).into()
+    }
 }
 
 impl Hash for Geography {
@@ -92,12 +99,6 @@ impl Default for Geography {
 }
 
 impl Eq for Geography {}
-
-impl Display for Geography {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
 
 impl StatBuffer for Geography {
     type Buffer = [u8; Geography::ITEM_SIZE];
@@ -136,6 +137,19 @@ impl Unmarshal<Geography> for Geography {
 
 impl FixSize for Geography {
     const SIZE: usize = Geography::ITEM_SIZE;
+}
+
+impl TryFrom<Point> for Geography {
+    type Error = String;
+
+    fn try_from(p: Point) -> Result<Self, Self::Error> {
+        let geog = Geography {
+            longitude: p.0.x,
+            latitude: p.0.y,
+        };
+        geog.check()?;
+        Ok(geog)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
