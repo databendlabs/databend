@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -171,7 +172,7 @@ pub trait BlockMetaTransform<B: BlockMetaInfo>: Send + 'static {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Ignore;
     const NAME: &'static str;
 
-    fn transform(&mut self, meta: B) -> Result<DataBlock>;
+    fn transform(&mut self, meta: B) -> Result<Vec<DataBlock>>;
 
     fn on_start(&mut self) -> Result<()> {
         Ok(())
@@ -190,7 +191,7 @@ pub struct BlockMetaTransformer<B: BlockMetaInfo, T: BlockMetaTransform<B>> {
     called_on_start: bool,
     called_on_finish: bool,
     input_data: Option<B>,
-    output_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
     _phantom_data: PhantomData<B>,
 }
 
@@ -201,7 +202,7 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> BlockMetaTransformer<B, T> {
             output,
             transform: inner,
             input_data: None,
-            output_data: None,
+            output_data: VecDeque::with_capacity(1),
             called_on_start: false,
             called_on_finish: false,
             _phantom_data: Default::default(),
@@ -238,8 +239,8 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(output_data) = self.output_data.take() {
-            self.output.push_data(Ok(output_data));
+        if let Some(data_block) = self.output_data.pop_front() {
+            self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
 
@@ -302,7 +303,8 @@ impl<B: BlockMetaInfo, T: BlockMetaTransform<B>> Processor for BlockMetaTransfor
         }
 
         if let Some(block_meta) = self.input_data.take() {
-            self.output_data = Some(self.transform.transform(block_meta)?);
+            self.output_data
+                .extend(self.transform.transform(block_meta)?);
             return Ok(());
         }
 

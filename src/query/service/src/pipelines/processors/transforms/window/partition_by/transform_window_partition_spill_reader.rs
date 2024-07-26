@@ -35,29 +35,26 @@ use itertools::Itertools;
 use log::info;
 use opendal::Operator;
 
-use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use super::WindowPartitionMeta;
+use super::WindowPayload;
+use crate::pipelines::processors::transforms::window::partition_by::BucketSpilledWindowPayload;
 
-type DeserializingMeta<Method, V> = (AggregateMeta<Method, V>, VecDeque<Vec<u8>>);
+type DeserializingMeta = (WindowPartitionMeta, VecDeque<Vec<u8>>);
 
-pub struct TransformSpillReader<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub struct TransformWindowPartitionSpillReader {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     operator: Operator,
     deserialized_meta: Option<BlockMetaInfoPtr>,
-    reading_meta: Option<AggregateMeta<Method, V>>,
-    deserializing_meta: Option<DeserializingMeta<Method, V>>,
+    reading_meta: Option<WindowPartitionMeta>,
+    deserializing_meta: Option<DeserializingMeta>,
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
-    for TransformSpillReader<Method, V>
-{
+impl Processor for TransformWindowPartitionSpillReader {
     fn name(&self) -> String {
-        String::from("TransformSpillReader")
+        String::from("TransformWindowPartitionSpillReader")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -94,27 +91,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
 
-            if let Some(block_meta) = data_block
+            if let Some(WindowPartitionMeta::Partitioned { data, .. }) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<Method, V>::downcast_ref_from)
+                .and_then(WindowPartitionMeta::downcast_ref_from)
             {
-                if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
+                if data
+                    .iter()
+                    .any(|meta| matches!(meta, WindowPartitionMeta::BucketSpilled(_)))
+                {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
+                    self.reading_meta = WindowPartitionMeta::downcast_from(block_meta);
                     return Ok(Event::Async);
-                }
-
-                if let AggregateMeta::Partitioned { data, .. } = block_meta {
-                    if data
-                        .iter()
-                        .any(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
-                    {
-                        self.input.set_not_need_data();
-                        let block_meta = data_block.take_meta().unwrap();
-                        self.reading_meta = AggregateMeta::<Method, V>::downcast_from(block_meta);
-                        return Ok(Event::Async);
-                    }
                 }
             }
 
@@ -134,26 +122,18 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     fn process(&mut self) -> Result<()> {
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::Spilling(_) => unreachable!(),
-                AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                AggregateMeta::HashTable(_) => unreachable!(),
-                AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
-                    debug_assert!(read_data.len() == 1);
-                    let data = read_data.pop_front().unwrap();
-
-                    self.deserialized_meta = Some(Box::new(Self::deserialize(payload, data)));
-                }
-                AggregateMeta::Partitioned { bucket, data } => {
+                WindowPartitionMeta::Spilled(_) => unreachable!(),
+                WindowPartitionMeta::Spilling(_) => unreachable!(),
+                WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
+                WindowPartitionMeta::Payload(_) => unreachable!(),
+                WindowPartitionMeta::Partitioned { bucket, data } => {
                     let mut new_data = Vec::with_capacity(data.len());
 
                     for meta in data {
-                        if matches!(&meta, AggregateMeta::BucketSpilled(_)) {
-                            if let AggregateMeta::BucketSpilled(payload) = meta {
+                        if matches!(&meta, WindowPartitionMeta::BucketSpilled(_)) {
+                            if let WindowPartitionMeta::BucketSpilled(p) = meta {
                                 let data = read_data.pop_front().unwrap();
-                                new_data.push(Self::deserialize(payload, data));
+                                new_data.push(Self::deserialize(p, data));
                             }
 
                             continue;
@@ -162,9 +142,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                         new_data.push(meta);
                     }
 
-                    self.deserialized_meta = Some(AggregateMeta::<Method, V>::create_partitioned(
-                        bucket, new_data,
-                    ));
+                    self.deserialized_meta =
+                        Some(WindowPartitionMeta::create_partitioned(bucket, new_data));
                 }
             }
         }
@@ -176,41 +155,21 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::Spilling(_) => unreachable!(),
-                AggregateMeta::HashTable(_) => unreachable!(),
-                AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
-                    let instant = Instant::now();
-                    let data = self
-                        .operator
-                        .read_with(&payload.location)
-                        .range(payload.data_range.clone())
-                        .await?
-                        .to_vec();
-
-                    info!(
-                        "Read aggregate spill {} successfully, elapsed: {:?}",
-                        &payload.location,
-                        instant.elapsed()
-                    );
-
-                    self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
-                }
-                AggregateMeta::Partitioned { data, .. } => {
-                    // For log progress.
+                WindowPartitionMeta::Spilled(_) => unreachable!(),
+                WindowPartitionMeta::Spilling(_) => unreachable!(),
+                WindowPartitionMeta::BucketSpilled(_) => unreachable!(),
+                WindowPartitionMeta::Payload(_) => unreachable!(),
+                WindowPartitionMeta::Partitioned { data, .. } => {
                     let mut total_elapsed = Duration::default();
                     let log_interval = 100;
                     let mut processed_count = 0;
 
                     let mut read_data = Vec::with_capacity(data.len());
                     for meta in data {
-                        if let AggregateMeta::BucketSpilled(payload) = meta {
-                            let location = payload.location.clone();
+                        if let WindowPartitionMeta::BucketSpilled(p) = meta {
+                            let location = p.location.clone();
                             let operator = self.operator.clone();
-                            let data_range = payload.data_range.clone();
+                            let data_range = p.data_range.clone();
                             read_data.push(databend_common_base::runtime::spawn(async move {
                                 let instant = Instant::now();
                                 let data = operator
@@ -241,7 +200,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                                 // log the progress
                                 if processed_count % log_interval == 0 {
                                     info!(
-                                        "Read aggregate {}/{} spilled buckets, elapsed: {:?}",
+                                        "Read window partition {}/{} spilled buckets, elapsed: {:?}",
                                         processed_count,
                                         data.len(),
                                         total_elapsed
@@ -266,7 +225,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     };
 
                     info!(
-                        "Read {} aggregate spills successfully, total elapsed: {:?}",
+                        "Read {} window partition spills successfully, total elapsed: {:?}",
                         processed_count, total_elapsed
                     );
                 }
@@ -277,26 +236,25 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     }
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Method, V> {
+impl TransformWindowPartitionSpillReader {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         operator: Operator,
     ) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Box::new(TransformSpillReader::<
-            Method,
-            V,
-        > {
-            input,
-            output,
-            operator,
-            deserialized_meta: None,
-            reading_meta: None,
-            deserializing_meta: None,
-        })))
+        Ok(ProcessorPtr::create(Box::new(
+            TransformWindowPartitionSpillReader {
+                input,
+                output,
+                operator,
+                deserialized_meta: None,
+                reading_meta: None,
+                deserializing_meta: None,
+            },
+        )))
     }
 
-    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta<Method, V> {
+    fn deserialize(payload: BucketSpilledWindowPayload, data: Vec<u8>) -> WindowPartitionMeta {
         let mut begin = 0;
         let mut columns = Vec::with_capacity(payload.columns_layout.len());
 
@@ -305,13 +263,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformSpillReader<Me
             begin += column_layout as usize;
         }
 
-        AggregateMeta::<Method, V>::Serialized(SerializedPayload {
+        WindowPartitionMeta::Payload(WindowPayload {
             bucket: payload.bucket,
-            data_block: DataBlock::new_from_columns(columns),
-            max_partition_count: payload.max_partition_count,
+            data: DataBlock::new_from_columns(columns),
         })
     }
 }
-
-pub type TransformGroupBySpillReader<Method> = TransformSpillReader<Method, ()>;
-pub type TransformAggregateSpillReader<Method> = TransformSpillReader<Method, usize>;

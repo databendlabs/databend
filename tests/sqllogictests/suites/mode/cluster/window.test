@@ -84,49 +84,46 @@ Exchange
     ├── partition by: [department_id]
     ├── order by: [salary]
     ├── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Sort
+    └── WindowPartition
         ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-        ├── sort keys: [department_id ASC NULLS LAST, salary DESC NULLS LAST]
+        ├── hash keys: [department_id]
         ├── estimated rows: 8.00
-        └── LocalShuffle
+        └── Exchange
             ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-            ├── shuffle by: [department_id]
-            └── Exchange
+            ├── exchange type: Hash(d.department_id (#4))
+            └── HashJoin
                 ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-                ├── exchange type: Hash(d.department_id (#4))
-                └── HashJoin
-                    ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
-                    ├── join type: INNER
-                    ├── build keys: [d.department_id (#4)]
-                    ├── probe keys: [e.department_id (#2)]
-                    ├── filters: []
-                    ├── estimated rows: 8.00
-                    ├── Exchange(Build)
-                    │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
-                    │   ├── exchange type: Broadcast
-                    │   └── TableScan
-                    │       ├── table: default.default.departments
-                    │       ├── output columns: [department_id (#4), department_name (#5)]
-                    │       ├── read rows: 4
-                    │       ├── read size: < 1 KiB
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                    │       ├── push downs: [filters: [], limit: NONE]
-                    │       └── estimated rows: 4.00
-                    └── TableScan(Probe)
-                        ├── table: default.default.employees
-                        ├── output columns: [name (#1), department_id (#2), salary (#3)]
-                        ├── read rows: 10
-                        ├── read size: < 1 KiB
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 10.00
+                ├── join type: INNER
+                ├── build keys: [d.department_id (#4)]
+                ├── probe keys: [e.department_id (#2)]
+                ├── filters: []
+                ├── estimated rows: 8.00
+                ├── Exchange(Build)
+                │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
+                │   ├── exchange type: Broadcast
+                │   └── TableScan
+                │       ├── table: default.default.departments
+                │       ├── output columns: [department_id (#4), department_name (#5)]
+                │       ├── read rows: 4
+                │       ├── read size: < 1 KiB
+                │       ├── partitions total: 1
+                │       ├── partitions scanned: 1
+                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                │       ├── push downs: [filters: [], limit: NONE]
+                │       └── estimated rows: 4.00
+                └── TableScan(Probe)
+                    ├── table: default.default.employees
+                    ├── output columns: [name (#1), department_id (#2), salary (#3)]
+                    ├── read rows: 10
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 10.00
 
 query 
-explain select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1), 
+explain select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1),
     lead(number,2, 0) over (partition by number % 3 order by number + 1)
     from numbers(50);
 ----
@@ -149,29 +146,26 @@ Exchange
             ├── partition by: [lead_part_0]
             ├── order by: [lead_order_0]
             ├── frame: [Rows: Following(Some(Number(1_u64))) ~ Following(Some(Number(1_u64)))]
-            └── Sort
+            └── WindowPartition
                 ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3)]
-                ├── sort keys: [lead_part_0 ASC NULLS LAST, lead_order_0 ASC NULLS LAST]
+                ├── hash keys: [lead_part_0]
                 ├── estimated rows: 50.00
-                └── LocalShuffle
+                └── Exchange
                     ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3)]
-                    ├── shuffle by: [lead_part_0]
-                    └── Exchange
+                    ├── exchange type: Hash(numbers.number (#0) % 3)
+                    └── EvalScalar
                         ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3)]
-                        ├── exchange type: Hash(numbers.number (#0) % 3)
-                        └── EvalScalar
-                            ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3)]
-                            ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1]
-                            ├── estimated rows: 50.00
-                            └── TableScan
-                                ├── table: default.system.numbers
-                                ├── output columns: [number (#0)]
-                                ├── read rows: 50
-                                ├── read size: < 1 KiB
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                ├── push downs: [filters: [], limit: NONE]
-                                └── estimated rows: 50.00
+                        ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1]
+                        ├── estimated rows: 50.00
+                        └── TableScan
+                            ├── table: default.system.numbers
+                            ├── output columns: [number (#0)]
+                            ├── read rows: 50
+                            ├── read size: < 1 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 50.00
 
 statement ok
 CREATE OR REPLACE TABLE sales (
@@ -225,25 +219,22 @@ EvalScalar
                         ├── partition by: [customer_id]
                         ├── order by: []
                         ├── frame: [Range: Preceding(None) ~ Following(None)]
-                        └── Sort
+                        └── WindowPartition
                             ├── output columns: [sales.customer_id (#2), sales.net_paid (#5)]
-                            ├── sort keys: [customer_id ASC NULLS LAST]
+                            ├── hash keys: [customer_id]
                             ├── estimated rows: 0.00
-                            └── LocalShuffle
+                            └── Exchange
                                 ├── output columns: [sales.customer_id (#2), sales.net_paid (#5)]
-                                ├── shuffle by: [customer_id]
-                                └── Exchange
-                                    ├── output columns: [sales.customer_id (#2), sales.net_paid (#5)]
-                                    ├── exchange type: Hash(sales.customer_id (#2))
-                                    └── TableScan
-                                        ├── table: default.default.sales
-                                        ├── output columns: [customer_id (#2), net_paid (#5)]
-                                        ├── read rows: 0
-                                        ├── read size: 0
-                                        ├── partitions total: 0
-                                        ├── partitions scanned: 0
-                                        ├── push downs: [filters: [], limit: NONE]
-                                        └── estimated rows: 0.00
+                                ├── exchange type: Hash(sales.customer_id (#2))
+                                └── TableScan
+                                    ├── table: default.default.sales
+                                    ├── output columns: [customer_id (#2), net_paid (#5)]
+                                    ├── read rows: 0
+                                    ├── read size: 0
+                                    ├── partitions total: 0
+                                    ├── partitions scanned: 0
+                                    ├── push downs: [filters: [], limit: NONE]
+                                    └── estimated rows: 0.00
 
 
 statement ok

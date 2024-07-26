@@ -481,6 +481,10 @@ impl TableContext for CtxDelegation {
         self.ctx.get_group_by_spill_progress()
     }
 
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_window_partition_spill_progress()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         todo!()
     }
@@ -494,6 +498,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
