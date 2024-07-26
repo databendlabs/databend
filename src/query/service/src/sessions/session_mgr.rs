@@ -312,6 +312,7 @@ impl SessionManager {
         let mut running_queries_count = 0;
         let mut active_sessions_count = 0;
         let mut max_running_query_execute_time = 0;
+        let mut earliest_running_query_started_at: Option<SystemTime> = None;
 
         let now = SystemTime::now();
 
@@ -325,7 +326,11 @@ impl SessionManager {
                 if process_info.state == ProcessInfoState::Query {
                     running_queries_count += 1;
 
-                    let executed_time = process_info.created_time.duration_since(now);
+                    let created_time = process_info.created_time;
+                    earliest_running_query_started_at = earliest_running_query_started_at
+                        .map(|x| std::cmp::min(x, created_time))
+                        .or(Some(created_time));
+                    let executed_time = created_time.duration_since(now);
                     let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
 
                     max_running_query_execute_time =
@@ -337,6 +342,7 @@ impl SessionManager {
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
         status_t.max_running_query_execute_time = max_running_query_execute_time;
+        status_t.earliest_running_query_started_at = earliest_running_query_started_at;
         status_t
     }
 

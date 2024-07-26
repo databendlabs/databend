@@ -21,6 +21,7 @@ pub struct SessionManagerStatus {
     pub max_running_query_execute_time: u64,
     pub last_query_started_at: Option<SystemTime>,
     pub last_query_finished_at: Option<SystemTime>,
+    pub earliest_running_query_started_at: Option<SystemTime>,
     pub instance_started_at: SystemTime,
 }
 
@@ -46,6 +47,7 @@ impl Default for SessionManagerStatus {
             max_running_query_execute_time: 0,
             last_query_started_at: None,
             last_query_finished_at: None,
+            earliest_running_query_started_at: None,
             instance_started_at: SystemTime::now(),
         }
     }
