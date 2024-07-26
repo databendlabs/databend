@@ -22,7 +22,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
 use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share::GetShareEndpointReq;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sharing::ShareEndpointClient;
 use databend_common_sql::plans::CreateDatabasePlan;
@@ -81,26 +80,12 @@ impl CreateDatabaseInterpreter {
             .await?;
 
         // 2. check ShareSpec
-        if let Some(db_privileges) = share_spec.db_privileges {
-            if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                    "share {} has not granted privilege to {}",
-                    share_name.display(),
-                    tenant.tenant_name()
-                )))
-            } else if let Some(database) = share_spec.database {
-                Ok(Some(database.id))
-            } else {
-                Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                    "share {:?} has no grant database",
-                    share_name
-                )))
-            }
+        if let Some(database) = share_spec.use_database {
+            Ok(Some(database.id))
         } else {
-            Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                "share {} has not granted privilege to {}",
-                share_name.display(),
-                tenant.tenant_name()
+            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                "share {:?} has no grant database",
+                share_name
             )))
         }
     }

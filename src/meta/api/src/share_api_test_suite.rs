@@ -231,11 +231,7 @@ impl ShareApiTestSuite {
             info!("grant object res: {:?}", res);
             let share_spec = res.share_spec.unwrap();
             assert_eq!(share_spec.name, *share_name1.name());
-            assert_eq!(share_spec.database.unwrap().name, db_name.to_string());
-            assert_eq!(
-                share_spec.db_privileges,
-                Some(BitFlags::from(ShareGrantObjectPrivilege::Usage))
-            );
+            assert_eq!(share_spec.use_database.unwrap().name, db_name.to_string());
             assert!(res.grant_share_table.is_none());
 
             let req = GrantShareObjectReq {
@@ -318,9 +314,9 @@ impl ShareApiTestSuite {
                 .collect();
             assert!(share_names.contains(&share1.to_string()));
             assert!(share_names.contains(&share2.to_string()));
-            assert_eq!(share_specs[0].database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_specs[0].use_database.as_ref().unwrap().id, db_id);
             assert_eq!(share_specs[0].tables.len(), 0);
-            assert_eq!(share_specs[1].database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_specs[1].use_database.as_ref().unwrap().id, db_id);
             assert_eq!(share_specs[1].tables.len(), 0);
             table_id = res.table_id;
         }
@@ -370,9 +366,9 @@ impl ShareApiTestSuite {
                 .collect();
             assert!(share_names.contains(&share1.to_string()));
             assert!(share_names.contains(&share2.to_string()));
-            assert_eq!(share_specs[0].database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_specs[0].use_database.as_ref().unwrap().id, db_id);
             assert_eq!(share_specs[0].tables.len(), 0);
-            assert_eq!(share_specs[1].database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_specs[1].use_database.as_ref().unwrap().id, db_id);
             assert_eq!(share_specs[1].tables.len(), 0);
         }
 
@@ -577,11 +573,7 @@ impl ShareApiTestSuite {
             info!("grant object res: {:?}", res);
             let share_spec = res.share_spec.unwrap();
             assert_eq!(share_spec.name, *share_name1.name());
-            assert_eq!(share_spec.database.unwrap().name, db_name.to_string());
-            assert_eq!(
-                share_spec.db_privileges,
-                Some(BitFlags::from(ShareGrantObjectPrivilege::Usage))
-            );
+            assert_eq!(share_spec.use_database.unwrap().name, db_name.to_string());
             assert!(res.grant_share_table.is_none());
 
             let req = GrantShareObjectReq {
@@ -612,8 +604,8 @@ impl ShareApiTestSuite {
                 .collect();
             assert!(share_names.contains(&share1.to_string()));
             assert!(share_names.contains(&share2.to_string()));
-            assert!(share_specs[0].database.is_none());
-            assert!(share_specs[1].database.is_none());
+            assert!(share_specs[0].use_database.is_none());
+            assert!(share_specs[1].use_database.is_none());
         }
 
         info!("test drop shared database");
@@ -628,7 +620,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             let share_spec = res.share_spec.unwrap();
-            assert_eq!(share_spec.database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_spec.use_database.as_ref().unwrap().id, db_id);
 
             let req = GrantShareObjectReq {
                 share_name: share_name2.clone(),
@@ -639,7 +631,7 @@ impl ShareApiTestSuite {
 
             let res = mt.grant_share_object(req).await?;
             let share_spec = res.share_spec.unwrap();
-            assert_eq!(share_spec.database.as_ref().unwrap().id, db_id);
+            assert_eq!(share_spec.use_database.as_ref().unwrap().id, db_id);
 
             // drop database show return share database spec
             let plan = DropDatabaseReq {
@@ -657,8 +649,8 @@ impl ShareApiTestSuite {
                 .collect();
             assert!(share_names.contains(&share1.to_string()));
             assert!(share_names.contains(&share2.to_string()));
-            assert!(share_specs[0].database.is_none());
-            assert!(share_specs[1].database.is_none());
+            assert!(share_specs[0].use_database.is_none());
+            assert!(share_specs[1].use_database.is_none());
         }
 
         info!("test revoke shared database");
@@ -700,11 +692,7 @@ impl ShareApiTestSuite {
             info!("grant object res: {:?}", res);
             let share_spec = res.share_spec.unwrap();
             assert_eq!(share_spec.name, *share_name1.name());
-            assert_eq!(share_spec.database.unwrap().name, db_name.to_string());
-            assert_eq!(
-                share_spec.db_privileges,
-                Some(BitFlags::from(ShareGrantObjectPrivilege::Usage))
-            );
+            assert_eq!(share_spec.use_database.unwrap().name, db_name.to_string());
             assert!(res.grant_share_table.is_none());
 
             let req = GrantShareObjectReq {
@@ -810,7 +798,7 @@ impl ShareApiTestSuite {
             let res = mt.revoke_share_object(req).await?;
             let share_spec = res.clone().share_spec.unwrap();
             assert_eq!(res.share_id, share_id1);
-            assert!(share_spec.database.is_none());
+            assert!(share_spec.use_database.is_none());
             assert!(share_spec.tables.is_empty());
 
             // after grant table check share objects
@@ -867,7 +855,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_specs.len(), 1);
             let share_spec = &share_specs[0];
             assert_eq!(share_spec.name, share2.to_string());
-            assert!(share_spec.database.is_none());
+            assert!(share_spec.use_database.is_none());
             assert!(share_spec.tables.is_empty());
 
             // after rename database check database meta
@@ -1666,11 +1654,7 @@ impl ShareApiTestSuite {
             info!("grant object res: {:?}", res);
             let share_spec = res.share_spec.unwrap();
             assert_eq!(share_spec.name, *share_name.name());
-            assert_eq!(share_spec.database.unwrap().name, db_name.to_string());
-            assert_eq!(
-                share_spec.db_privileges,
-                Some(BitFlags::from(ShareGrantObjectPrivilege::Usage))
-            );
+            assert_eq!(share_spec.use_database.unwrap().name, db_name.to_string());
             assert!(res.grant_share_table.is_none());
 
             let tbl_ob_name =

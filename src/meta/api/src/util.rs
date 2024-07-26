@@ -67,6 +67,7 @@ use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareMeta;
 use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
+use databend_common_meta_app::share::ShareTable;
 use databend_common_meta_app::share::ShareTableSpec;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
@@ -895,50 +896,73 @@ pub async fn convert_share_meta_to_spec(
     share_id: u64,
     share_meta: ShareMeta,
 ) -> Result<ShareSpec, KVAppError> {
-    let (database, db_privileges) = if let Some(database) = share_meta.use_database {
+    async fn convert_to_share_spec_database(
+        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+        database: &ShareDatabase,
+    ) -> Result<Option<ShareDatabaseSpec>, KVAppError> {
         let db_id = database.db_id;
         let id_key = DatabaseIdToName { db_id };
 
         let (_db_meta_seq, db_ident_raw): (_, Option<DatabaseNameIdentRaw>) =
             get_pb_value(kv_api, &id_key).await?;
         if let Some(db_ident_raw) = db_ident_raw {
-            (
-                Some(ShareDatabaseSpec {
-                    name: db_ident_raw.database_name().to_string(),
-                    id: db_id,
-                }),
-                Some(database.privileges),
-            )
+            Ok(Some(ShareDatabaseSpec {
+                name: db_ident_raw.database_name().to_string(),
+                id: db_id,
+            }))
         } else {
-            (None, None)
-        }
-    } else {
-        (None, None)
-    };
-
-    let mut tables = vec![];
-    for table in share_meta.table.iter() {
-        let table_id = table.table_id;
-        let table_id_to_name_key = TableIdToName { table_id };
-        let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
-            get_pb_value(kv_api, &table_id_to_name_key).await?;
-        if let Some(table_name) = table_name {
-            tables.push(ShareTableSpec::new(
-                &table_name.table_name,
-                table_name.db_id,
-                table_id,
-            ));
+            Ok(None)
         }
     }
+
+    async fn convert_to_share_spec_tables(
+        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+        tables: &[ShareTable],
+    ) -> Result<Vec<ShareTableSpec>, KVAppError> {
+        let mut ret_tables = Vec::with_capacity(tables.len());
+        for table in tables.iter() {
+            let table_id = table.table_id;
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_pb_value(kv_api, &table_id_to_name_key).await?;
+            if let Some(table_name) = table_name {
+                ret_tables.push(ShareTableSpec::new(
+                    &table_name.table_name,
+                    table_name.db_id,
+                    table_id,
+                ));
+            }
+        }
+
+        Ok(ret_tables)
+    }
+
+    let use_database = if let Some(database) = &share_meta.use_database {
+        convert_to_share_spec_database(kv_api, database).await?
+    } else {
+        None
+    };
+
+    let mut reference_database = Vec::with_capacity(share_meta.reference_database.len());
+    for database in &share_meta.reference_database {
+        if let Some(database) = convert_to_share_spec_database(kv_api, database).await? {
+            reference_database.push(database);
+        }
+    }
+
+    let tables = convert_to_share_spec_tables(kv_api, &share_meta.table).await?;
+    let reference_tables =
+        convert_to_share_spec_tables(kv_api, &share_meta.reference_table).await?;
 
     Ok(ShareSpec {
         name: share_name.to_owned(),
         share_id,
         version: 1,
-        database,
+        use_database,
+        reference_database,
         tables,
+        reference_tables,
         tenants: Vec::from_iter(share_meta.accounts.into_iter()),
-        db_privileges,
         comment: share_meta.comment.clone(),
         create_on: share_meta.create_on,
     })

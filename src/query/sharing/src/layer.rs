@@ -58,7 +58,7 @@ pub fn create_share_table_operator(
     let signer = SharedSigner::new(
         &share_params.share_endpoint_url,
         &format!(
-            "/{}/{}/{}/presign_files",
+            "/{}/{}/{}/v2/presign_files",
             share_ident_raw.tenant_name(),
             share_ident_raw.share_name(),
             table_id

@@ -70,7 +70,7 @@ impl ShareEndpointClient {
         to_tenant: &str,
         share_name: &str,
     ) -> Result<ShareSpec> {
-        let path = format!("/{}/{}/share_spec", to_tenant, share_name);
+        let path = format!("/{}/{}/v2/share_spec", to_tenant, share_name);
         // skip path first `/` char
         let uri = format!("{}{}", share_endpoint_meta.url, &path[1..]);
         let headers = if let Some(credential) = &share_endpoint_meta.credential {
@@ -106,7 +106,7 @@ impl ShareEndpointClient {
         table_name: &str,
     ) -> Result<TableInfo> {
         let path = format!(
-            "/{}/{}/{}/{}/share_table",
+            "/{}/{}/{}/{}/v2/share_table",
             to_tenant, share_name, db_id, table_name
         );
         // skip path first `/` char
@@ -141,7 +141,7 @@ impl ShareEndpointClient {
         db_id: u64,
         share_name: &str,
     ) -> Result<BTreeMap<String, TableInfo>> {
-        let path = format!("/{}/{}/{}/share_tables", to_tenant, share_name, db_id);
+        let path = format!("/{}/{}/{}/v2/share_tables", to_tenant, share_name, db_id);
         // skip path first `/` char
         let uri = format!("{}{}", share_endpoint_meta.url, &path[1..]);
         let headers = if let Some(credential) = &share_endpoint_meta.credential {

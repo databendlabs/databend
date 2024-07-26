@@ -512,11 +512,17 @@ pub struct ShareInfo {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ShareDatabaseSpec {
+    pub name: String,
+    pub id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct ShareTableSpec {
     pub name: String,
     pub database_id: u64,
     pub table_id: u64,
-    pub presigned_url_timeout: String,
+    pub engine: String,
 }
 
 impl ShareTableSpec {
@@ -525,15 +531,9 @@ impl ShareTableSpec {
             name: name.to_owned(),
             database_id,
             table_id,
-            presigned_url_timeout: "120s".to_string(),
+            engine: "FUSE".to_string(),
         }
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct ShareDatabaseSpec {
-    pub name: String,
-    pub id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -541,12 +541,13 @@ pub struct ShareSpec {
     pub name: String,
     pub share_id: u64,
     pub version: u64,
-    pub database: Option<ShareDatabaseSpec>,
-    pub tables: Vec<ShareTableSpec>,
     pub tenants: Vec<String>,
-    pub db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
     pub comment: Option<String>,
     pub create_on: DateTime<Utc>,
+    pub use_database: Option<ShareDatabaseSpec>,
+    pub reference_database: Vec<ShareDatabaseSpec>,
+    pub tables: Vec<ShareTableSpec>,
+    pub reference_tables: Vec<ShareTableSpec>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
