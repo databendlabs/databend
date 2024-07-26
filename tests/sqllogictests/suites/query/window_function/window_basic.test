@@ -779,13 +779,6 @@ SELECT
 FROM numbers(1000000);
 
 
-query T
-explain select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id DESC) AS rank_in_segment from customers c order by c.segment, rank_in_segment, c.customer_id limit 10;
-
-query T
-explain pipeline select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id DESC) AS rank_in_segment from customers c order by c.segment, rank_in_segment, c.customer_id limit 10;
-
-
 query II
 select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id DESC) AS rank_in_segment from customers c order by c.segment, rank_in_segment, c.customer_id limit 10;
 ----
