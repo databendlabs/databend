@@ -61,6 +61,7 @@ impl SnapshotGenerator for TruncateGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<TableSnapshot> {
         let (prev_timestamp, prev_snapshot_id) = if let Some(prev_snapshot) = previous {
             (
@@ -71,7 +72,7 @@ impl SnapshotGenerator for TruncateGenerator {
             (None, None)
         };
 
-        let new_snapshot = TableSnapshot::new(
+        TableSnapshot::try_new(
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
@@ -82,7 +83,7 @@ impl SnapshotGenerator for TruncateGenerator {
             cluster_key_meta,
             None,
             self.ctx.get_settings().get_data_retention_time_in_days()?,
-        );
-        Ok(new_snapshot)
+            base_snapshot_timestamp,
+        )
     }
 }

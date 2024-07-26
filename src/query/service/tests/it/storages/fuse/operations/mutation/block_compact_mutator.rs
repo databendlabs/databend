@@ -207,7 +207,7 @@ async fn test_safety() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
-        let snapshot = TableSnapshot::new(
+        let snapshot = TableSnapshot::try_new(
             None,
             &None,
             None,
@@ -218,7 +218,8 @@ async fn test_safety() -> Result<()> {
             None,
             None,
             24,
-        );
+            None,
+        )?;
 
         let limit: usize = rand.gen_range(1..15);
         let compact_params = CompactOptions {

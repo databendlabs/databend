@@ -322,11 +322,12 @@ impl FuseTable {
             .get_base_snapshot_timestamp(self.get_id(), base_snapshot.timestamp);
 
         loop {
-            let mut snapshot_tobe_committed = TableSnapshot::from_previous(
+            let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
                 latest_snapshot.as_ref(),
                 Some(latest_table_info.ident.seq),
                 ctx.get_settings().get_data_retention_time_in_days()?,
-            );
+                base_snapshot_timestamp,
+            )?;
 
             let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
@@ -344,7 +345,6 @@ impl FuseTable {
 
             decorate_snapshot(
                 &mut snapshot_tobe_committed,
-                base_snapshot_timestamp,
                 ctx.txn_mgr(),
                 Some(base_snapshot.clone()),
                 self.get_id(),

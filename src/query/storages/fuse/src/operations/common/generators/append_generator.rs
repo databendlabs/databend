@@ -118,6 +118,7 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -228,7 +229,7 @@ impl SnapshotGenerator for AppendGenerator {
         let data_retention_time_in_days =
             self.ctx.get_settings().get_data_retention_time_in_days()?;
 
-        Ok(TableSnapshot::new(
+        TableSnapshot::try_new(
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
@@ -239,7 +240,8 @@ impl SnapshotGenerator for AppendGenerator {
             cluster_key_meta,
             table_statistics_location,
             data_retention_time_in_days,
-        ))
+            base_snapshot_timestamp,
+        )
     }
 }
 

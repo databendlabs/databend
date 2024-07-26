@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -51,15 +50,14 @@ pub trait SnapshotGenerator {
         table_id: u64,
         base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<TableSnapshot> {
-        let mut snapshot =
-            self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
-        decorate_snapshot(
-            &mut snapshot,
+        let mut snapshot = self.do_generate_new_snapshot(
+            schema,
+            cluster_key_meta,
+            &previous,
+            prev_table_seq,
             base_snapshot_timestamp,
-            txn_mgr,
-            previous,
-            table_id,
         )?;
+        decorate_snapshot(&mut snapshot, txn_mgr, previous, table_id)?;
         Ok(snapshot)
     }
 
@@ -69,30 +67,16 @@ pub trait SnapshotGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
     ) -> Result<TableSnapshot>;
 }
 
 pub fn decorate_snapshot(
     snapshot: &mut TableSnapshot,
-    base_snapshot_timestamp: Option<DateTime<Utc>>,
     txn_mgr: TxnManagerRef,
     previous: Option<Arc<TableSnapshot>>,
     table_id: u64,
 ) -> Result<()> {
-    // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
-    // both of them are allowed to be committed here.
-    if base_snapshot_timestamp
-        .as_ref()
-        // safe to unwrap, least_visiable_timestamp of newly generated snapshot must be some
-        .is_some_and(|base| base < snapshot.least_visiable_timestamp.as_ref().unwrap())
-    {
-        return Err(ErrorCode::TransactionTimeout(format!(
-            "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
-            base_snapshot_timestamp.unwrap(),
-            snapshot.timestamp,
-        )));
-    }
-
     let has_pending_transactional_mutations = {
         let guard = txn_mgr.lock();
         // NOTE:

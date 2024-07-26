@@ -242,7 +242,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
         }
 
-        let snapshot = Arc::new(TableSnapshot::new(
+        let snapshot = Arc::new(TableSnapshot::try_new(
             None,
             &None,
             None,
@@ -253,7 +253,8 @@ async fn test_safety_for_recluster() -> Result<()> {
             None,
             None,
             24,
-        ));
+            None,
+        )?);
 
         let mut block_ids = HashSet::new();
         for seg in &segment_infos {

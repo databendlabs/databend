@@ -68,6 +68,7 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
         match &self.conflict_resolve_ctx {
@@ -94,7 +95,7 @@ impl SnapshotGenerator for MutationGenerator {
                         default_cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
-                    let new_snapshot = TableSnapshot::new(
+                    let new_snapshot = TableSnapshot::try_new(
                         prev_table_seq,
                         &previous.timestamp(),
                         previous.snapshot_id(),
@@ -105,7 +106,8 @@ impl SnapshotGenerator for MutationGenerator {
                         cluster_key_meta,
                         previous.table_statistics_location(),
                         self.data_retention_time_in_days,
-                    );
+                        base_snapshot_timestamp,
+                    )?;
 
                     if matches!(
                         self.mutation_kind,

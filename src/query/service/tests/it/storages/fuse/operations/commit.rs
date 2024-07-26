@@ -272,7 +272,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
-            let new_snapshot = TableSnapshot::new(
+            let new_snapshot = TableSnapshot::try_new(
                 None,
                 &None,
                 None,
@@ -283,7 +283,9 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 None,
                 None,
                 24,
-            );
+                None,
+            )
+            .unwrap();
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,

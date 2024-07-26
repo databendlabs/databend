@@ -569,7 +569,7 @@ impl Table for FuseTable {
 
         let table_version = Some(self.get_table_info().ident.seq);
 
-        let new_snapshot = TableSnapshot::new(
+        let new_snapshot = TableSnapshot::try_new(
             table_version,
             &prev_timestamp,
             prev_snapshot_id,
@@ -580,7 +580,8 @@ impl Table for FuseTable {
             cluster_key_meta,
             prev_statistics_location,
             ctx.get_settings().get_data_retention_time_in_days()?,
-        );
+            prev_timestamp,
+        )?;
 
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;
@@ -624,7 +625,7 @@ impl Table for FuseTable {
 
         let table_version = Some(self.get_table_info().ident.seq);
 
-        let new_snapshot = TableSnapshot::new(
+        let new_snapshot = TableSnapshot::try_new(
             table_version,
             &prev_timestamp,
             prev_snapshot_id,
@@ -635,7 +636,8 @@ impl Table for FuseTable {
             None,
             prev_statistics_location,
             ctx.get_settings().get_data_retention_time_in_days()?,
-        );
+            prev_timestamp,
+        )?;
 
         let mut table_info = self.table_info.clone();
         table_info.meta = new_table_meta;

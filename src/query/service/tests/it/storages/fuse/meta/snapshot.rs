@@ -25,7 +25,7 @@ use uuid::Uuid;
 fn default_snapshot() -> TableSnapshot {
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::new(
+    TableSnapshot::try_new(
         None,
         &None,
         None,
@@ -36,7 +36,9 @@ fn default_snapshot() -> TableSnapshot {
         None,
         None,
         24,
+        None,
     )
+    .unwrap()
 }
 
 #[test]
@@ -49,7 +51,7 @@ fn snapshot_timestamp_is_some() {
 fn snapshot_timestamp_monotonic_increase() {
     let prev = default_snapshot();
     let schema = TableSchema::empty();
-    let current = TableSnapshot::new(
+    let current = TableSnapshot::try_new(
         None,
         &prev.timestamp,
         prev.prev_snapshot_id,
@@ -60,7 +62,9 @@ fn snapshot_timestamp_monotonic_increase() {
         None,
         None,
         24,
-    );
+        None,
+    )
+    .unwrap();
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();
     assert!(current_ts > prev_ts)
@@ -74,7 +78,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
 
-    let current = TableSnapshot::new(
+    let current = TableSnapshot::try_new(
         None,
         &prev.timestamp,
         prev.prev_snapshot_id,
@@ -85,7 +89,9 @@ fn snapshot_timestamp_time_skew_tolerance() {
         None,
         None,
         24,
-    );
+        prev.timestamp,
+    )
+    .unwrap();
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();
     assert!(current_ts > prev_ts)

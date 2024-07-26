@@ -18,6 +18,7 @@ use std::io::Read;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::BinaryRead;
@@ -95,7 +96,8 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
-    pub fn new(
+    /// Note that base_snapshot_timestamp is not always equal to prev_timestamp.
+    pub fn try_new(
         prev_table_seq: Option<u64>,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
@@ -106,7 +108,8 @@ impl TableSnapshot {
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
         data_retention_time_in_days: u64,
-    ) -> Self {
+        base_snapshot_timestamp: Option<DateTime<Utc>>,
+    ) -> Result<Self> {
         let now = Utc::now();
         // make snapshot timestamp monotonically increased
         let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
@@ -123,7 +126,21 @@ impl TableSnapshot {
             None => candidate,
         };
 
-        Self {
+        // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
+        // both of them are allowed to be committed here.
+        if base_snapshot_timestamp
+            .as_ref()
+            // safe to unwrap, least_visiable_timestamp of newly generated snapshot must be some
+            .is_some_and(|base| base < &least_visiable_timestamp)
+        {
+            return Err(ErrorCode::TransactionTimeout(format!(
+                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
+                base_snapshot_timestamp.unwrap(),
+                trimmed_timestamp
+            )));
+        }
+
+        Ok(Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id: uuid_from_date_time(trimmed_timestamp),
             timestamp,
@@ -135,11 +152,11 @@ impl TableSnapshot {
             cluster_key_meta,
             table_statistics_location,
             least_visiable_timestamp: Some(least_visiable_timestamp),
-        }
+        })
     }
 
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
-        Self::new(
+        Self::try_new(
             prev_table_seq,
             &None,
             None,
@@ -150,17 +167,20 @@ impl TableSnapshot {
             None,
             None,
             0,
+            None,
         )
+        .unwrap()
     }
 
-    pub fn from_previous(
+    pub fn try_from_previous(
         previous: &TableSnapshot,
         prev_table_seq: Option<u64>,
         data_retention_time_in_days: u64,
-    ) -> Self {
+        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    ) -> Result<Self> {
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
-        Self::new(
+        Self::try_new(
             prev_table_seq,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),
@@ -171,6 +191,7 @@ impl TableSnapshot {
             clone.cluster_key_meta,
             clone.table_statistics_location,
             data_retention_time_in_days,
+            base_snapshot_timestamp,
         )
     }
 

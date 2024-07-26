@@ -133,7 +133,7 @@ mod tests {
         // old versions are not allowed (runtime panics)
         for v in 0..TableSnapshot::VERSION {
             let r = catch_unwind(|| {
-                let mut snapshot = TableSnapshot::new(
+                let mut snapshot = TableSnapshot::try_new(
                     None,
                     &None,
                     None,
@@ -144,7 +144,9 @@ mod tests {
                     None,
                     None,
                     24,
-                );
+                    None,
+                )
+                .unwrap();
                 snapshot.format_version = v;
                 let _ = snapshot.marshal();
             });
@@ -152,7 +154,7 @@ mod tests {
         }
 
         // current version allowed
-        let snapshot = TableSnapshot::new(
+        let snapshot = TableSnapshot::try_new(
             None,
             &None,
             None,
@@ -163,7 +165,9 @@ mod tests {
             None,
             None,
             24,
-        );
+            None,
+        )
+        .unwrap();
         snapshot.marshal().unwrap();
     }
 }
