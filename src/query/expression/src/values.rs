@@ -60,6 +60,12 @@ use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::decimal::DecimalType;
+use crate::types::geography::Geography;
+use crate::types::geography::GeographyColumn;
+use crate::types::geography::LATITUDE_MAX;
+use crate::types::geography::LATITUDE_MIN;
+use crate::types::geography::LONGITUDE_MAX;
+use crate::types::geography::LONGITUDE_MIN;
 use crate::types::geometry::compare_geometry;
 use crate::types::geometry::GeometryType;
 use crate::types::nullable::NullableColumn;
@@ -125,6 +131,7 @@ pub enum Scalar {
     Tuple(Vec<Scalar>),
     Variant(Vec<u8>),
     Geometry(Vec<u8>),
+    Geography(Geography),
 }
 
 #[derive(Clone, Default, Eq, EnumAsInner)]
@@ -146,6 +153,7 @@ pub enum ScalarRef<'a> {
     Tuple(Vec<ScalarRef<'a>>),
     Variant(&'a [u8]),
     Geometry(&'a [u8]),
+    Geography(Geography),
 }
 
 #[derive(Clone, EnumAsInner)]
@@ -167,6 +175,7 @@ pub enum Column {
     Tuple(Vec<Column>),
     Variant(BinaryColumn),
     Geometry(BinaryColumn),
+    Geography(GeographyColumn),
 }
 
 #[derive(Clone, EnumAsInner, Debug, PartialEq)]
@@ -188,6 +197,7 @@ pub enum ColumnVec {
     Tuple(Vec<ColumnVec>),
     Variant(Vec<BinaryColumn>),
     Geometry(Vec<BinaryColumn>),
+    Geography(Vec<GeographyColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -209,6 +219,7 @@ pub enum ColumnBuilder {
     Tuple(Vec<ColumnBuilder>),
     Variant(BinaryColumnBuilder),
     Geometry(BinaryColumnBuilder),
+    Geography(Vec<u8>),
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -364,6 +375,7 @@ impl Scalar {
             Scalar::Tuple(fields) => ScalarRef::Tuple(fields.iter().map(Scalar::as_ref).collect()),
             Scalar::Variant(s) => ScalarRef::Variant(s.as_slice()),
             Scalar::Geometry(s) => ScalarRef::Geometry(s.as_slice()),
+            Scalar::Geography(g) => ScalarRef::Geography(*g),
         }
     }
 
@@ -405,6 +417,7 @@ impl Scalar {
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
             DataType::Geometry => Scalar::Geometry(vec![]),
+            DataType::Geography => Scalar::Geography(Geography::default()),
 
             _ => unimplemented!(),
         }
@@ -424,7 +437,8 @@ impl Scalar {
             | Scalar::String(_)
             | Scalar::Bitmap(_)
             | Scalar::Variant(_)
-            | Scalar::Geometry(_) => false,
+            | Scalar::Geometry(_)
+            | Scalar::Geography(_) => false,
             Scalar::Array(_) | Scalar::Map(_) | Scalar::Tuple(_) => true,
         }
     }
@@ -478,6 +492,7 @@ impl<'a> ScalarRef<'a> {
             }
             ScalarRef::Variant(s) => Scalar::Variant(s.to_vec()),
             ScalarRef::Geometry(s) => Scalar::Geometry(s.to_vec()),
+            ScalarRef::Geography(s) => Scalar::Geography(*s),
         }
     }
 
@@ -515,6 +530,7 @@ impl<'a> ScalarRef<'a> {
             }),
             ScalarRef::Timestamp(t) => Domain::Timestamp(SimpleDomain { min: *t, max: *t }),
             ScalarRef::Date(d) => Domain::Date(SimpleDomain { min: *d, max: *d }),
+            ScalarRef::Geography(v) => Domain::Geography(SimpleDomain { min: *v, max: *v }),
             ScalarRef::Array(array) => {
                 if array.len() == 0 {
                     Domain::Array(None)
@@ -572,6 +588,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Tuple(scalars) => scalars.iter().map(|s| s.memory_size()).sum(),
             ScalarRef::Variant(buf) => buf.len(),
             ScalarRef::Geometry(buf) => buf.len(),
+            ScalarRef::Geography(_) => 16,
         }
     }
 
@@ -605,6 +622,7 @@ impl<'a> ScalarRef<'a> {
             }
             ScalarRef::Variant(_) => DataType::Variant,
             ScalarRef::Geometry(_) => DataType::Geometry,
+            ScalarRef::Geography(_) => DataType::Geography,
         }
     }
 
@@ -819,6 +837,7 @@ impl Hash for ScalarRef<'_> {
             }
             ScalarRef::Variant(v) => v.hash(state),
             ScalarRef::Geometry(v) => v.hash(state),
+            ScalarRef::Geography(v) => v.hash(state),
         }
     }
 }
@@ -892,6 +911,7 @@ impl Column {
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
             Column::Geometry(col) => col.len(),
+            Column::Geography(col) => col.len(),
         }
     }
 
@@ -919,6 +939,7 @@ impl Column {
             )),
             Column::Variant(col) => Some(ScalarRef::Variant(col.index(index)?)),
             Column::Geometry(col) => Some(ScalarRef::Geometry(col.index(index)?)),
+            Column::Geography(col) => Some(ScalarRef::Geography(col.index(index)?)),
         }
     }
 
@@ -949,6 +970,7 @@ impl Column {
             ),
             Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
             Column::Geometry(col) => ScalarRef::Geometry(col.index_unchecked(index)),
+            Column::Geography(col) => ScalarRef::Geography(col.index_unchecked(index)),
         }
     }
 
@@ -1000,6 +1022,7 @@ impl Column {
             ),
             Column::Variant(col) => Column::Variant(col.slice(range)),
             Column::Geometry(col) => Column::Geometry(col.slice(range)),
+            Column::Geography(col) => Column::Geography(col.slice(range)),
         }
     }
 
@@ -1076,6 +1099,10 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
+            Column::Geography(col) => {
+                let (min, max) = col.iter().minmax().into_option().unwrap();
+                Domain::Geography(SimpleDomain { min, max })
+            }
             Column::Binary(_) | Column::Bitmap(_) | Column::Variant(_) | Column::Geometry(_) => {
                 Domain::Undefined
             }
@@ -1118,6 +1145,7 @@ impl Column {
             }
             Column::Variant(_) => DataType::Variant,
             Column::Geometry(_) => DataType::Geometry,
+            Column::Geography(_) => DataType::Geography,
         }
     }
 
@@ -1303,6 +1331,14 @@ impl Column {
                 });
                 GeometryType::from_data(data)
             }
+            DataType::Geography => GeographyType::from_data(
+                (0..len)
+                    .map(|_| Geography {
+                        longitude: rng.gen_range(LONGITUDE_MIN..=LONGITUDE_MAX),
+                        latitude: rng.gen_range(LATITUDE_MIN..=LATITUDE_MAX),
+                    })
+                    .collect::<Vec<Geography>>(),
+            ),
             DataType::Generic(_) => unreachable!(),
         }
     }
@@ -1366,6 +1402,7 @@ impl Column {
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.memory_size(),
             Column::Geometry(col) => col.memory_size(),
+            Column::Geography(col) => GeographyType::column_memory_size(col),
         }
     }
 
@@ -1384,6 +1421,7 @@ impl Column {
             Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
             Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Geography(col) => GeographyType::column_memory_size(col),
             Column::Boolean(c) => c.len(),
             Column::Binary(col)
             | Column::Bitmap(col)
@@ -1497,6 +1535,9 @@ impl ColumnBuilder {
             ),
             Column::Variant(col) => ColumnBuilder::Variant(BinaryColumnBuilder::from_column(col)),
             Column::Geometry(col) => ColumnBuilder::Geometry(BinaryColumnBuilder::from_column(col)),
+            Column::Geography(col) => {
+                ColumnBuilder::Geography(GeographyType::column_to_builder(col))
+            }
         }
     }
 
@@ -1554,6 +1595,11 @@ impl ColumnBuilder {
             }
             ScalarRef::Variant(s) => ColumnBuilder::Variant(BinaryColumnBuilder::repeat(s, n)),
             ScalarRef::Geometry(s) => ColumnBuilder::Geometry(BinaryColumnBuilder::repeat(s, n)),
+            ScalarRef::Geography(s) => {
+                let mut builder = GeographyType::create_builder(n, &[]);
+                GeographyType::push_item_repeat(&mut builder, *s, n);
+                ColumnBuilder::Geography(builder)
+            }
         }
     }
 
@@ -1576,6 +1622,7 @@ impl ColumnBuilder {
             ColumnBuilder::Tuple(fields) => fields[0].len(),
             ColumnBuilder::Variant(builder) => builder.len(),
             ColumnBuilder::Geometry(builder) => builder.len(),
+            ColumnBuilder::Geography(builder) => builder.len(),
         }
     }
 
@@ -1612,6 +1659,7 @@ impl ColumnBuilder {
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
             ColumnBuilder::Geometry(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::Geography(col) => col.len() * 16,
         }
     }
 
@@ -1647,6 +1695,7 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Variant(_) => DataType::Variant,
             ColumnBuilder::Geometry(_) => DataType::Geometry,
+            ColumnBuilder::Geography(_) => DataType::Geography,
         }
     }
 
@@ -1725,6 +1774,7 @@ impl ColumnBuilder {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Geometry(BinaryColumnBuilder::with_capacity(capacity, data_capacity))
             }
+            DataType::Geography => ColumnBuilder::Geography(Vec::with_capacity(capacity)),
             DataType::Generic(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
@@ -1753,6 +1803,11 @@ impl ColumnBuilder {
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
             DataType::Date => ColumnBuilder::Date(vec![0; len]),
+            DataType::Geography => {
+                let mut builder = GeographyType::create_builder(len, &[]);
+                GeographyType::push_item_repeat(&mut builder, Geography::default(), len);
+                ColumnBuilder::Geography(builder)
+            }
 
             // binary based
             DataType::Binary => ColumnBuilder::Binary(BinaryColumnBuilder::repeat_default(len)),
@@ -1834,6 +1889,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
                 GeometryType::push_item(builder, value);
             }
+            (ColumnBuilder::Geography(builder), ScalarRef::Geography(value)) => {
+                GeographyType::push_item(builder, value);
+            }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         }
     }
@@ -1890,6 +1948,9 @@ impl ColumnBuilder {
             (ColumnBuilder::Geometry(builder), ScalarRef::Geometry(value)) => {
                 GeometryType::push_item_repeat(builder, value, n);
             }
+            (ColumnBuilder::Geography(builder), ScalarRef::Geography(value)) => {
+                GeographyType::push_item_repeat(builder, *value, n);
+            }
             (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         };
     }
@@ -1920,6 +1981,9 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::Geometry(builder) => builder.commit_row(),
+            ColumnBuilder::Geography(builder) => {
+                GeographyType::push_item(builder, Geography::default())
+            }
         }
     }
 
@@ -1939,6 +2003,11 @@ impl ColumnBuilder {
                     DecimalColumnBuilder::DECIMAL_TYPE(builder, _) =>
                         builder.push(DECIMAL_TYPE::de_binary(reader)),
                 })
+            }
+            ColumnBuilder::Geography(builder) => {
+                let value: Geography = reader.read_scalar()?;
+                value.check()?;
+                GeographyType::push_item(builder, value)
             }
             ColumnBuilder::Boolean(builder) => {
                 let v: bool = reader.read_scalar()?;
@@ -2049,6 +2118,13 @@ impl ColumnBuilder {
                     let reader = &reader[step * row..];
                     builder.put_slice(reader);
                     builder.commit_row();
+                }
+            }
+            ColumnBuilder::Geography(builder) => {
+                for row in 0..rows {
+                    let mut reader = &reader[step * row..];
+                    let value: Geography = reader.read_scalar()?;
+                    GeographyType::push_item(builder, value);
                 }
             }
             ColumnBuilder::String(builder) => {
@@ -2169,6 +2245,9 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Variant(builder) => builder.pop().map(Scalar::Variant),
             ColumnBuilder::Geometry(builder) => builder.pop().map(Scalar::Geometry),
+            ColumnBuilder::Geography(builder) => {
+                GeographyType::builder_pop(builder).map(Scalar::Geography)
+            }
         }
     }
 
@@ -2203,6 +2282,9 @@ impl ColumnBuilder {
             }
             (ColumnBuilder::Geometry(builder), Column::Geometry(other)) => {
                 builder.append_column(other);
+            }
+            (ColumnBuilder::Geography(builder), Column::Geography(other)) => {
+                GeographyType::append_column(builder, other);
             }
             (ColumnBuilder::Timestamp(builder), Column::Timestamp(other)) => {
                 builder.extend_from_slice(other);
@@ -2243,21 +2325,23 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
             ColumnBuilder::Number(builder) => Column::Number(builder.build()),
             ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
-            ColumnBuilder::Boolean(builder) => Column::Boolean(builder.into()),
-            ColumnBuilder::Binary(builder) => Column::Binary(builder.build()),
-            ColumnBuilder::String(builder) => Column::String(builder.build()),
-            ColumnBuilder::Timestamp(builder) => Column::Timestamp(builder.into()),
-            ColumnBuilder::Date(builder) => Column::Date(builder.into()),
             ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
             ColumnBuilder::Map(builder) => Column::Map(Box::new(builder.build())),
-            ColumnBuilder::Bitmap(builder) => Column::Bitmap(builder.build()),
             ColumnBuilder::Nullable(builder) => Column::Nullable(Box::new(builder.build())),
             ColumnBuilder::Tuple(fields) => {
                 assert!(fields.iter().map(|field| field.len()).all_equal());
                 Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
             }
-            ColumnBuilder::Variant(builder) => Column::Variant(builder.build()),
-            ColumnBuilder::Geometry(builder) => Column::Geometry(builder.build()),
+
+            ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
+            ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
+            ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
+            ColumnBuilder::Timestamp(b) => Column::Timestamp(TimestampType::build_column(b)),
+            ColumnBuilder::Date(b) => Column::Date(DateType::build_column(b)),
+            ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
+            ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
+            ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
+            ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
         }
     }
 
@@ -2269,14 +2353,8 @@ impl ColumnBuilder {
             ColumnBuilder::EmptyMap { .. } => Scalar::EmptyMap,
             ColumnBuilder::Number(builder) => Scalar::Number(builder.build_scalar()),
             ColumnBuilder::Decimal(builder) => Scalar::Decimal(builder.build_scalar()),
-            ColumnBuilder::Boolean(builder) => Scalar::Boolean(builder.get(0)),
-            ColumnBuilder::Binary(builder) => Scalar::Binary(builder.build_scalar()),
-            ColumnBuilder::String(builder) => Scalar::String(builder.build_scalar()),
-            ColumnBuilder::Timestamp(builder) => Scalar::Timestamp(builder[0]),
-            ColumnBuilder::Date(builder) => Scalar::Date(builder[0]),
             ColumnBuilder::Array(builder) => Scalar::Array(builder.build_scalar()),
             ColumnBuilder::Map(builder) => Scalar::Map(builder.build_scalar()),
-            ColumnBuilder::Bitmap(builder) => Scalar::Bitmap(builder.build_scalar()),
             ColumnBuilder::Nullable(builder) => builder.build_scalar().unwrap_or(Scalar::Null),
             ColumnBuilder::Tuple(fields) => Scalar::Tuple(
                 fields
@@ -2284,8 +2362,16 @@ impl ColumnBuilder {
                     .map(|field| field.build_scalar())
                     .collect(),
             ),
-            ColumnBuilder::Variant(builder) => Scalar::Variant(builder.build_scalar()),
-            ColumnBuilder::Geometry(builder) => Scalar::Geometry(builder.build_scalar()),
+
+            ColumnBuilder::Boolean(b) => Scalar::Boolean(BooleanType::build_scalar(b)),
+            ColumnBuilder::Binary(b) => Scalar::Binary(BinaryType::build_scalar(b)),
+            ColumnBuilder::String(b) => Scalar::String(StringType::build_scalar(b)),
+            ColumnBuilder::Timestamp(b) => Scalar::Timestamp(TimestampType::build_scalar(b)),
+            ColumnBuilder::Date(b) => Scalar::Date(DateType::build_scalar(b)),
+            ColumnBuilder::Bitmap(b) => Scalar::Bitmap(BitmapType::build_scalar(b)),
+            ColumnBuilder::Variant(b) => Scalar::Variant(VariantType::build_scalar(b)),
+            ColumnBuilder::Geometry(b) => Scalar::Geometry(GeometryType::build_scalar(b)),
+            ColumnBuilder::Geography(b) => Scalar::Geography(GeographyType::build_scalar(b)),
         }
     }
 }

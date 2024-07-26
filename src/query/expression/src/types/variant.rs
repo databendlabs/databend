@@ -283,6 +283,9 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 .write_to_vec(buf);
             return;
         }
+        ScalarRef::Geography(v)=> {
+            todo!()
+        }
     };
     value.write_to_vec(buf);
 }

@@ -23,6 +23,7 @@ use databend_common_arrow::arrow::offset::OffsetsBuffer;
 use super::ARROW_EXT_TYPE_BITMAP;
 use super::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use super::ARROW_EXT_TYPE_EMPTY_MAP;
+use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::decimal::DecimalColumn;
@@ -161,6 +162,11 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         TableDataType::Geometry => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOMETRY.to_string(),
             Box::new(ArrowDataType::LargeBinary),
+            None,
+        ),
+        TableDataType::Geography => ArrowDataType::Extension(
+            ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
+            Box::new(ArrowDataType::FixedSizeBinary(16)),
             None,
         ),
     }
@@ -330,6 +336,14 @@ impl Column {
                 databend_common_arrow::arrow::array::PrimitiveArray::<i32>::try_new(
                     arrow_type,
                     col.clone(),
+                    None,
+                )
+                .unwrap(),
+            ),
+            Column::Geography(col) => Box::new(
+                databend_common_arrow::arrow::array::FixedSizeBinaryArray::try_new(
+                    arrow_type,
+                    col.data().clone(),
                     None,
                 )
                 .unwrap(),

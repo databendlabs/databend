@@ -152,6 +152,9 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
                 .expect("failed to convert ewkb to json");
             jsonb::from_slice(geom.as_bytes()).unwrap().into()
         }
+        ScalarRef::Geography(x) => {
+            todo!()
+        }
     }
 }
 

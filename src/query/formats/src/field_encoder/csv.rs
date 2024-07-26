@@ -147,6 +147,10 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(geom.as_bytes(), out_buf);
             }
 
+            Column::Geography(c) => {
+                todo!()
+            }
+
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {
                 let mut buf = Vec::new();
                 self.nested.write_field(column, row_index, &mut buf, false);

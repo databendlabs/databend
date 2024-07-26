@@ -149,6 +149,7 @@ impl SeparatedTextDecoder {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, data),
             ColumnBuilder::Variant(c) => self.read_variant(c, data),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, data),
+            ColumnBuilder::Geography(c) => Err(ErrorCode::Unimplemented("geography")),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }

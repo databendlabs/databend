@@ -136,6 +136,9 @@ impl Column {
                 .unwrap();
                 Column::Date(d)
             }
+            Column::Geography(column)=> {
+                todo!()
+            }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(num_rows + 1);
                 offsets.push(0);
