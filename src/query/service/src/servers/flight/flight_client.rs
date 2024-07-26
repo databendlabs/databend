@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::error::Error;
 use std::str::FromStr;
+use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -37,9 +39,9 @@ use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 use parking_lot::Mutex;
-use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 use tonic::metadata::AsciiMetadataKey;
 use tonic::metadata::AsciiMetadataValue;
 use tonic::transport::channel::Channel;
@@ -276,8 +278,8 @@ pub struct ConnectionInfo {
 
 pub struct FlightReceiver {
     seq_num: AtomicUsize,
-    notify: RwLock<Arc<WatchNotify>>,
-    rx: RwLock<Receiver<Result<FlightData>>>,
+    notify: AtomicPtr<Arc<WatchNotify>>,
+    rx: AtomicPtr<Receiver<Result<FlightData>>>,
     connection_info: Option<ConnectionInfo>,
 }
 
@@ -296,23 +298,25 @@ impl FlightReceiver {
     ) -> FlightReceiver {
         FlightReceiver {
             seq_num: AtomicUsize::new(0),
-            rx: RwLock::new(rx),
-            notify: RwLock::new(Arc::new(WatchNotify::new())),
+            rx: AtomicPtr::new(Box::into_raw(Box::new(rx))),
+            notify: AtomicPtr::new(Box::into_raw(Box::new(Arc::new(WatchNotify::new())))),
             connection_info,
         }
     }
 
     #[async_backtrace::framed]
     pub async fn recv(&self) -> Result<Option<DataPacket>> {
-        let receiver = self.rx.read().clone();
+        let receiver = unsafe { &*self.rx.load(Ordering::Acquire) };
         match receiver.recv().await {
             Err(_) => Ok(None),
             Ok(Err(error)) => {
                 info!("Error while receiving data from flight : {:?}", error);
-                if error.code() == ErrorCode::UNKNOWN_EXCEPTION {
-                    self.retry().await?;
-                    info!("Reconnect Successfully");
-                    return Ok(Some(DataPacket::RetryConnect));
+                if error.source().map_or(false, |e| e.is::<hyper::Error>()) {
+                    // only retry when error is network problem
+                    if self.retry().await.is_ok() {
+                        info!("Reconnect Successfully");
+                        return Ok(Some(DataPacket::RetryConnectSuccess));
+                    }
                 }
                 Err(error)
             }
@@ -328,25 +332,47 @@ impl FlightReceiver {
         if let Some(connection_info) = &self.connection_info {
             let mut flight_client =
                 DataExchangeManager::create_client(&connection_info.source_address, true).await?;
-
-            let (notify, receiver) = flight_client
-                .reconnect(connection_info, self.seq_num.load(Ordering::Acquire))
-                .await?;
-
-            *self.notify.write() = notify;
-            *self.rx.write() = receiver;
+            let max_attempt = 2;
+            let mut attempts = 0;
+            let (notify, receiver) = loop {
+                if attempts >= max_attempt {
+                    break Err(ErrorCode::Timeout("Exceed max retries time"));
+                }
+                attempts += 1;
+                let reconnect_res = flight_client
+                    .reconnect(connection_info, self.seq_num.load(Ordering::Acquire))
+                    .await;
+                match reconnect_res {
+                    Ok((notify, receiver)) => break Ok((notify, receiver)),
+                    Err(_) => info!("Reconnect attempt {} failed", attempts),
+                }
+                sleep(Duration::from_secs(1)).await;
+            }?;
+            let old_notify = self
+                .notify
+                .swap(Box::into_raw(Box::new(notify)), Ordering::Acquire);
+            let old_receiver = self
+                .rx
+                .swap(Box::into_raw(Box::new(receiver)), Ordering::Acquire);
+            unsafe {
+                drop(Box::from_raw(old_notify));
+                drop(Box::from_raw(old_receiver));
+            }
         }
         Ok(())
     }
 
     pub fn close(&self) {
-        self.rx.read().close();
-        self.notify.read().notify_waiters();
+        let receiver = unsafe { &*self.rx.load(Ordering::Acquire) };
+        receiver.close();
+
+        let notify = unsafe { &*self.notify.load(Ordering::Acquire) };
+        notify.notify_waiters();
     }
 }
 
 pub struct FlightSender {
-    tx: Mutex<Sender<Result<FlightData, Status>>>,
+    tx: AtomicPtr<Sender<Result<FlightData, Status>>>,
     seq_num: AtomicUsize,
     buffer: Mutex<VecDeque<FlightData>>,
 }
@@ -354,14 +380,14 @@ pub struct FlightSender {
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
         FlightSender {
-            tx: Mutex::new(tx),
+            tx: AtomicPtr::new(Box::into_raw(Box::new(tx))),
             seq_num: AtomicUsize::new(0),
             buffer: Mutex::new(VecDeque::with_capacity(3)),
         }
     }
 
     pub fn is_closed(&self) -> bool {
-        self.tx.lock().is_closed()
+        unsafe { (&*self.tx.load(Ordering::Acquire)).is_closed() }
     }
 
     #[async_backtrace::framed]
@@ -369,7 +395,7 @@ impl FlightSender {
         self.seq_num.fetch_add(1, Ordering::Acquire);
         let flight_data = FlightData::try_from(data)?;
         self.update_buffer(flight_data.clone());
-        let sender = self.tx.lock().clone();
+        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
         if let Err(_cause) = sender.send(Ok(flight_data)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
@@ -391,19 +417,21 @@ impl FlightSender {
         new_tx: Sender<Result<FlightData, Status>>,
         continue_from: usize,
     ) -> Result<()> {
-        *self.tx.lock() = new_tx;
+        let old_tx = self
+            .tx
+            .swap(Box::into_raw(Box::new(new_tx.clone())), Ordering::AcqRel);
+        unsafe { drop(Box::from_raw(old_tx)) };
         let buffer = self.buffer.lock().clone();
-        let sender = self.tx.lock().clone();
         let seq_num = self.seq_num.load(Ordering::Acquire);
         Runtime::with_worker_threads(1, Some(String::from("ReconnectSender")))?.spawn(async move {
             if seq_num - continue_from < buffer.len() {
                 for data in buffer.iter().skip(seq_num - continue_from) {
-                    if let Err(_cause) = sender.send(Ok(data.clone())).await {
+                    if let Err(_cause) = new_tx.send(Ok(data.clone())).await {
                         break;
                     }
                 }
             } else {
-                let _res = sender
+                let _res = new_tx
                     .send(Err(ErrorCode::AbortedQuery(
                         "Aborted query, because the remote flight channel is closed.",
                     )
@@ -415,7 +443,14 @@ impl FlightSender {
     }
 
     pub fn close(&self) {
-        self.tx.lock().close();
+        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
+        sender.close();
+    }
+}
+
+impl Drop for FlightSender {
+    fn drop(&mut self) {
+        let _ = unsafe { Box::from_raw(self.tx.load(Ordering::Acquire)) };
     }
 }
 
@@ -477,7 +512,7 @@ impl FlightExchange {
     pub fn convert_to_sender(self) -> FlightSender {
         match self {
             FlightExchange::Sender(tx) => FlightSender {
-                tx: Mutex::new(tx),
+                tx: AtomicPtr::new(Box::into_raw(Box::new(tx))),
                 seq_num: AtomicUsize::new(0),
                 buffer: Mutex::new(VecDeque::with_capacity(3)),
             },
@@ -493,8 +528,8 @@ impl FlightExchange {
                 connection_info,
             } => FlightReceiver {
                 seq_num: AtomicUsize::new(0),
-                notify: RwLock::new(notify),
-                rx: RwLock::new(receiver),
+                notify: AtomicPtr::new(Box::into_raw(Box::new(notify))),
+                rx: AtomicPtr::new(Box::into_raw(Box::new(receiver))),
                 connection_info,
             },
             _ => unreachable!(),

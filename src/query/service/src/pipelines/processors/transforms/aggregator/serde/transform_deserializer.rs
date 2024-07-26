@@ -225,7 +225,7 @@ where
             DataPacket::MergeStatus { .. } => unreachable!(),
             DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
-            DataPacket::RetryConnect => unreachable!(),
+            DataPacket::RetryConnectSuccess => unreachable!(),
         }
     }
 }

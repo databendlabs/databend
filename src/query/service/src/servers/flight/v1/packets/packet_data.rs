@@ -54,7 +54,7 @@ impl Debug for FragmentData {
 
 pub enum DataPacket {
     ErrorCode(ErrorCode),
-    RetryConnect,
+    RetryConnectSuccess,
     Dictionary(FlightData),
     FragmentData(FragmentData),
     QueryProfiles(HashMap<u32, PlanProfile>),
@@ -71,7 +71,7 @@ fn calc_size(flight_data: &FlightData) -> usize {
 impl DataPacket {
     pub fn bytes_size(&self) -> usize {
         match self {
-            DataPacket::RetryConnect => 0,
+            DataPacket::RetryConnectSuccess => 0,
             DataPacket::ErrorCode(_) => 0,
             DataPacket::CopyStatus(_) => 0,
             DataPacket::MergeStatus(_) => 0,
@@ -89,7 +89,7 @@ impl TryFrom<DataPacket> for FlightData {
 
     fn try_from(packet: DataPacket) -> Result<Self> {
         Ok(match packet {
-            DataPacket::RetryConnect => {
+            DataPacket::RetryConnectSuccess => {
                 unreachable!()
             }
             DataPacket::ErrorCode(error) => {

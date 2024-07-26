@@ -5184,6 +5184,7 @@ dependencies = [
  "highway",
  "http 1.1.0",
  "humantime",
+ "hyper 0.14.28",
  "indicatif",
  "itertools 0.10.5",
  "jsonb",

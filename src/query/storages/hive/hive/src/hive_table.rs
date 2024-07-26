@@ -407,7 +407,8 @@ impl HiveTable {
         if partition_num < 100000 {
             trace!(
                 "get {} partitions from hive metastore:{:?}",
-                partition_num, partition_names
+                partition_num,
+                partition_names
             );
         } else {
             trace!("get {} partitions from hive metastore", partition_num);
