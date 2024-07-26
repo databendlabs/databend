@@ -11,16 +11,19 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # format of `faked` is "2024-05-22 03:00:35.977589"
 c=$(echo "select c from test_faketime.t" | $BENDSQL_CLIENT_CONNECT)
+now=$(echo "select now()" | $BENDSQL_CLIENT_CONNECT)
+
 # manually "time diff"
 faked=$(date -d "$c" +%s)
-current_timestamp=$(date +%s)
-time_diff=$((current_timestamp - faked))
+current=$(date -d "$now" +%s)
+
+time_diff=$((current- faked))
 
 time_diff_days=$(python3 -c "print($time_diff / 86400)")
 
 # Check if time difference is greater than 2 days
-if python3 -c "import sys; sys.exit(1 if $time_diff_days > 2 else 0)"; then
+if python3 -c "import sys; sys.exit(0 if $time_diff_days > 2 else 1)"; then
     echo "OK"
 else
-    echo "assertion failure"
+    echo "assertion failure, time_diff_days is [$time_diff_days]"
 fi
