@@ -5755,7 +5755,7 @@ impl SchemaApiTestSuite {
 
             let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 1);
-            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            let resp_stage_info = resp.file_info.get("file");
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
         }
 
@@ -7230,7 +7230,7 @@ impl SchemaApiTestSuite {
 
             let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 1);
-            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            let resp_stage_info = resp.file_info.get("file");
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
         }
 
@@ -7242,7 +7242,7 @@ impl SchemaApiTestSuite {
                 files: vec!["file".to_string()],
             };
             let resp = mt.get_table_copied_file_info(req).await?;
-            let previous_file_info = resp.file_info.get(&"file".to_string());
+            let previous_file_info = resp.file_info.get("file");
 
             let stage_info = TableCopiedFileInfo {
                 etag: Some("etag".to_owned()),
@@ -7293,7 +7293,7 @@ impl SchemaApiTestSuite {
             // "file" exist
             assert_eq!(resp.file_info.len(), 1);
             // "file" not modified
-            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            let resp_stage_info = resp.file_info.get("file");
             assert_eq!(resp_stage_info, previous_file_info);
         }
 
@@ -7343,7 +7343,7 @@ impl SchemaApiTestSuite {
 
             let resp = mt.get_table_copied_file_info(req).await?;
             assert_eq!(resp.file_info.len(), 2);
-            let resp_stage_info = resp.file_info.get(&"file".to_string());
+            let resp_stage_info = resp.file_info.get("file");
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
         }
 

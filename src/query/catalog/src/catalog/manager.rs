@@ -200,7 +200,7 @@ impl CatalogManager {
             ));
         }
 
-        if self.external_catalogs.get(req.catalog_name()).is_some() {
+        if self.external_catalogs.contains_key(req.catalog_name()) {
             return Err(ErrorCode::BadArguments(
                 "catalog already exists that cannot be created".to_string(),
             ));
@@ -226,7 +226,7 @@ impl CatalogManager {
             ));
         }
 
-        if self.external_catalogs.get(catalog_name).is_some() {
+        if self.external_catalogs.contains_key(catalog_name) {
             return Err(ErrorCode::BadArguments(
                 "catalog already exists that cannot be dropped".to_string(),
             ));
