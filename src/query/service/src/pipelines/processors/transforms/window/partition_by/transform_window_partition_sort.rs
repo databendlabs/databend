@@ -48,7 +48,7 @@ impl TransformWindowPartitionSort {
         enable_loser_tree: bool,
         have_order_col: bool,
     ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(BlockMetaTransformer::create(
+        Ok(BlockMetaTransformer::create(
             input,
             output,
             TransformWindowPartitionSort {
@@ -59,7 +59,7 @@ impl TransformWindowPartitionSort {
                 enable_loser_tree,
                 have_order_col,
             },
-        )))
+        ))
     }
 }
 
