@@ -88,7 +88,7 @@ CommitSink
             ├── build keys: [employees2.employee_id (#0)]
             ├── probe keys: [salaries2.employee_id (#3)]
             ├── filters: []
-            ├── estimated rows: 4.00
+            ├── estimated rows: 6.00
             ├── TableScan(Build)
             │   ├── table: default.default.employees2
             │   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
@@ -131,7 +131,7 @@ CommitSink
             ├── build keys: [employees2.employee_id (#0)]
             ├── probe keys: [salaries2.employee_id (#3)]
             ├── filters: []
-            ├── estimated rows: 4.00
+            ├── estimated rows: 6.00
             ├── TableScan(Build)
             │   ├── table: default.default.employees2
             │   ├── output columns: [employee_id (#0), employee_name (#1), department (#2)]
