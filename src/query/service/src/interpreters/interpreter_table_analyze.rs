@@ -332,6 +332,7 @@ fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
                 after_exchange: plan.after_exchange,
                 pre_projection: plan.pre_projection,
                 stat_info: plan.stat_info,
+                window_partition: plan.window_partition,
             }),
             PhysicalPlan::Exchange(plan) => traverse(*plan.input),
             _ => plan,
