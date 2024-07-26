@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use bumpalo::Bump;
+use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::*;
@@ -334,7 +335,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
                     "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
                 )
             })?;
-        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+        let buffer = unsafe { std::mem::transmute::<Buffer<i128>, Buffer<u128>>(buffer.0.clone()) };
         LargeFixedKeysColumnIter::create(buffer)
     }
 
@@ -383,7 +384,7 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
                     "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
                 )
             })?;
-        let buffer = unsafe { std::mem::transmute(buffer.0.clone()) };
+        let buffer = unsafe { std::mem::transmute::<Buffer<ethnum::I256>, Buffer<ethnum::U256>>(buffer.0.clone()) };
 
         LargeFixedKeysColumnIter::create(buffer)
     }

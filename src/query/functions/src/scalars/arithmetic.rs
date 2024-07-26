@@ -560,7 +560,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                             let min = (val.max as i128).wrapping_neg();
                             let max = (val.min as i128).wrapping_neg();
 
-                            if min < std::i64::MIN as i128 || max > std::i64::MAX as i128 {
+                            if min < i64::MIN as i128 || max > i64::MAX as i128 {
                                 return FunctionDomain::MayThrow;
                             }
 
@@ -572,7 +572,7 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                         vectorize_with_builder_1_arg::<NumberType<u64>, NumberType<i64>>(
                             |a, output, ctx| {
                                 let val = (a as i128).wrapping_neg();
-                                if val < std::i64::MIN as i128 {
+                                if val < i64::MIN as i128 {
                                     ctx.set_error(output.len(), "number overflowed");
                                     output.push(0);
                                 } else {
