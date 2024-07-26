@@ -24,6 +24,7 @@ use crate::ast::AddColumnOption;
 use crate::ast::AlterTableAction;
 use crate::ast::AlterTableStmt;
 use crate::ast::AlterViewStmt;
+use crate::ast::CreateDictionaryStmt;
 use crate::ast::CreateOption;
 use crate::ast::CreateStreamStmt;
 use crate::ast::CreateTableSource;
@@ -407,6 +408,70 @@ pub(crate) fn pretty_create_stream(stmt: CreateStreamStmt) -> RcDoc<'static> {
         })
         .append(if let Some(comment) = stmt.comment {
             RcDoc::space().append(RcDoc::text(format!("COMMENT = '{comment}'")))
+        } else {
+            RcDoc::nil()
+        })
+}
+
+pub(crate) fn pretty_create_dictionary(stmt: CreateDictionaryStmt) -> RcDoc<'static> {
+    RcDoc::text("CREATE")
+        .append(if let CreateOption::CreateOrReplace = stmt.create_option {
+            RcDoc::space().append(RcDoc::text("OR REPLACE"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::space().append(RcDoc::text("DICTIONARY")))
+        .append(match stmt.create_option {
+            CreateOption::Create => RcDoc::nil(),
+            CreateOption::CreateIfNotExists => RcDoc::space().append(RcDoc::text("IF NOT EXISTS")),
+            CreateOption::CreateOrReplace => RcDoc::nil(),
+        })
+        .append(RcDoc::space().append(RcDoc::text(stmt.dictionary_name.to_string())))
+        .append(
+            interweave_comma(
+                stmt.columns
+                    .iter()
+                    .map(|column| RcDoc::text(column.to_string())),
+            )
+            .group(),
+        )
+        .append(if !stmt.primary_keys.is_empty() {
+            RcDoc::line()
+                .append(RcDoc::text("PRIMARY KEY "))
+                .append(parenthesized(
+                    interweave_comma(
+                        stmt.primary_keys
+                            .iter()
+                            .map(|k| -> RcDoc<'static> { RcDoc::text(k.to_string()) }),
+                    )
+                    .group(),
+                ))
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::text("SOURCE "))
+        .append(RcDoc::text(stmt.source_name.to_string()))
+        .append(if !stmt.source_options.is_empty() {
+            RcDoc::line()
+                .append(interweave_comma(stmt.source_options.iter().map(
+                    |(k, v)| {
+                        RcDoc::text(k.clone())
+                            .append(RcDoc::space())
+                            // .append(RcDoc::text("="))
+                            // .append(RcDoc::space())
+                            .append(RcDoc::text("'"))
+                            .append(RcDoc::text(v.clone()))
+                            .append(RcDoc::text("'"))
+                    },
+                )))
+                .group()
+        } else {
+            RcDoc::nil()
+        })
+        .append(if !stmt.comment.is_empty() {
+            RcDoc::line()
+                .append(RcDoc::text("COMMENT "))
+                .append(RcDoc::text(stmt.comment.to_string()))
         } else {
             RcDoc::nil()
         })

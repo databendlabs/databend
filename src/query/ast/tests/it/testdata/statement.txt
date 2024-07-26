@@ -22262,3 +22262,77 @@ Query(
 )
 
 
+---------- Input ----------
+show dictionaries;
+---------- Output ---------
+SHOW DICTIONARIES 
+---------- AST ------------
+ShowDictionaries {
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show create dictionary dictionary1;
+---------- Output ---------
+SHOW CREATE DICTIONARY dictionary1
+---------- AST ------------
+ShowCreateDictionary(
+    ShowCreateDictionaryStmt {
+        dictionary_name: Identifier {
+            span: Some(
+                23..34,
+            ),
+            name: "dictionary1",
+            quote: None,
+            is_hole: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+drop dictionary dictionary1;
+---------- Output ---------
+DROP DICTIONARY dictionary1
+---------- AST ------------
+DropDictionary(
+    DropDictionaryStmt {
+        if_exists: false,
+        dictionary_name: Identifier {
+            span: Some(
+                16..27,
+            ),
+            name: "dictionary1",
+            quote: None,
+            is_hole: false,
+        },
+    },
+)
+
+
+---------- Input ----------
+drop dictionary if exists dictionary2;
+---------- Output ---------
+DROP DICTIONARY IF EXISTS dictionary2
+---------- AST ------------
+DropDictionary(
+    DropDictionaryStmt {
+        if_exists: true,
+        dictionary_name: Identifier {
+            span: Some(
+                26..37,
+            ),
+            name: "dictionary2",
+            quote: None,
+            is_hole: false,
+        },
+    },
+)
+
+

@@ -469,6 +469,12 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
+        Statement::CreateDictionary(stmt) => visitor.visit_create_dictionary(stmt),
+        Statement::DropDictionary(stmt) => visitor.visit_drop_dictionary(stmt),
+        Statement::ShowCreateDictionary(stmt) => visitor.visit_show_create_dictionary(stmt),
+        Statement::ShowDictionaries { show_options } => {
+            visitor.visit_show_dictionaries(show_options)
+        }
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
