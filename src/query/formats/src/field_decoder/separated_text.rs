@@ -326,6 +326,7 @@ impl SeparatedTextDecoder {
         Ok(())
     }
 
+    #[allow(clippy::ptr_arg)]
     fn read_geography(&self, column: &mut Vec<u8>, data: &[u8]) -> Result<()> {
         let point = parse_ewkt_point(data)?;
         GeographyType::push_item(column, point.try_into()?);

@@ -135,6 +135,13 @@ impl Unmarshal<Geography> for Geography {
     }
 }
 
+impl Display for Geography {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = Geometry::Point(self.to_point()).to_wkt().unwrap();
+        write!(f, "{s}")
+    }
+}
+
 impl FixSize for Geography {
     const SIZE: usize = Geography::ITEM_SIZE;
 }

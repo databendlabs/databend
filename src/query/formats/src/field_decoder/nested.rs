@@ -342,6 +342,7 @@ impl NestedValues {
         Ok(())
     }
 
+    #[allow(clippy::ptr_arg)]
     fn read_geography<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<u8>,
