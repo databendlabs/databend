@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
@@ -311,10 +310,7 @@ impl SessionManager {
 
         let mut running_queries_count = 0;
         let mut active_sessions_count = 0;
-        let mut max_running_query_execute_time = 0;
-        let mut earliest_running_query_started_at: Option<SystemTime> = None;
-
-        let now = SystemTime::now();
+        let mut max_running_query_executed_secs = 0;
 
         for session in self.active_sessions_snapshot() {
             if let Some(session_ref) = session.upgrade() {
@@ -326,23 +322,20 @@ impl SessionManager {
                 if process_info.state == ProcessInfoState::Query {
                     running_queries_count += 1;
 
-                    let created_time = process_info.created_time;
-                    earliest_running_query_started_at = earliest_running_query_started_at
-                        .map(|x| std::cmp::min(x, created_time))
-                        .or(Some(created_time));
-                    let executed_time = created_time.duration_since(now);
-                    let execute_time_seconds = executed_time.map(|x| x.as_secs()).unwrap_or(0);
-
-                    max_running_query_execute_time =
-                        std::cmp::max(max_running_query_execute_time, execute_time_seconds);
+                    let query_executed_secs = process_info
+                        .created_time
+                        .elapsed()
+                        .map(|x| x.as_secs())
+                        .unwrap_or(0);
+                    max_running_query_executed_secs =
+                        std::cmp::max(max_running_query_executed_secs, query_executed_secs);
                 }
             }
         }
 
         status_t.running_queries_count = running_queries_count;
         status_t.active_sessions_count = active_sessions_count;
-        status_t.max_running_query_execute_time = max_running_query_execute_time;
-        status_t.earliest_running_query_started_at = earliest_running_query_started_at;
+        status_t.max_running_query_executed_secs = max_running_query_executed_secs;
         status_t
     }
 
