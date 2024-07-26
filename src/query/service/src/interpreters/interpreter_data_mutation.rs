@@ -169,7 +169,7 @@ impl DataMutationInterpreter {
         // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
         let table_snapshot = fuse_table.read_table_snapshot().await?;
         let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.meta_data).await?;
+            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
         let data_mutation_build_info = DataMutationBuildInfo {
             table_snapshot,
             update_stream_meta,
@@ -177,7 +177,7 @@ impl DataMutationInterpreter {
 
         // Build physical plan.
         let mut builder =
-            PhysicalPlanBuilder::new(data_mutation.meta_data.clone(), self.ctx.clone(), false);
+            PhysicalPlanBuilder::new(data_mutation.metadata.clone(), self.ctx.clone(), false);
         builder.set_data_mutation_build_info(data_mutation_build_info);
         let physical_plan = builder
             .build(&self.s_expr, *data_mutation.required_columns.clone())

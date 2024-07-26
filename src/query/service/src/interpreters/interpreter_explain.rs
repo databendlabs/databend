@@ -170,7 +170,7 @@ impl Interpreter for ExplainInterpreter {
                     let plan: DataMutation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
-                        &plan.meta_data,
+                        &plan.metadata,
                         *plan.required_columns.clone(),
                         true,
                     )
@@ -450,7 +450,7 @@ impl ExplainInterpreter {
         root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
 
         let display_string = fragments_actions
-            .display_indent(&merge_into.meta_data)
+            .display_indent(&merge_into.metadata)
             .to_string();
 
         let line_split_result = display_string.lines().collect::<Vec<_>>();

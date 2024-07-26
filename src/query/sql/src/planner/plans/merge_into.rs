@@ -67,7 +67,7 @@ pub struct DataMutation {
     pub table_name_alias: Option<String>,
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<HashSet<IndexType>>,
-    pub meta_data: MetadataRef,
+    pub metadata: MetadataRef,
     pub input_type: DataMutationInputType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,

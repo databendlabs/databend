@@ -266,7 +266,7 @@ impl Binder {
             table_name,
             table_name_alias,
             bind_context: Box::new(bind_context),
-            meta_data: self.metadata.clone(),
+            metadata: self.metadata.clone(),
             input_type,
             required_columns: Box::new(required_columns),
             matched_evaluators,
@@ -555,8 +555,8 @@ impl Binder {
 }
 
 fn insert_only(merge_plan: &crate::plans::DataMutation) -> bool {
-    let meta_data = merge_plan.meta_data.read();
-    let target_table_columns: HashSet<usize> = meta_data
+    let metadata = merge_plan.metadata.read();
+    let target_table_columns: HashSet<usize> = metadata
         .columns_by_table_index(merge_plan.target_table_index)
         .iter()
         .map(|column| column.index())

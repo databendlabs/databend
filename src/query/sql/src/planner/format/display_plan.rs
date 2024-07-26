@@ -236,7 +236,7 @@ fn format_merge_into(s_expr: &SExpr) -> Result<String> {
     let merge_into: DataMutation = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
-        .meta_data
+        .metadata
         .read()
         .get_table_index(
             Some(merge_into.database_name.as_str()),
@@ -244,7 +244,7 @@ fn format_merge_into(s_expr: &SExpr) -> Result<String> {
         )
         .unwrap();
 
-    let table_entry = merge_into.meta_data.read().table(table_index).clone();
+    let table_entry = merge_into.metadata.read().table(table_index).clone();
     let target_table_format = format!(
         "target_table: {}.{}.{}",
         table_entry.catalog(),

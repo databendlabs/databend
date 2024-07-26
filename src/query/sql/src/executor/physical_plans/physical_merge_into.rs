@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::u64::MAX;
 
@@ -61,6 +62,7 @@ use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 use crate::Visibility;
@@ -115,7 +117,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         let crate::plans::DataMutation {
             bind_context,
-            meta_data,
+            metadata,
             catalog_name,
             database_name,
             table_name,
@@ -133,170 +135,62 @@ impl PhysicalPlanBuilder {
             ..
         } = merge_into;
 
-        let settings = self.ctx.get_settings();
-
-        let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
         let mut plan = builder.build(s_expr.child(0)?, required).await?;
+        let data_mutation_input_schema = plan.output_schema()?;
 
-        let join_output_schema = plan.output_schema()?;
         let is_insert_only = matches!(mutation_type, DataMutationType::InsertOnly);
-        if !is_insert_only && !join_output_schema.has_field(&row_id_index.to_string()) {
-            return Err(ErrorCode::InvalidRowIdIndex(
-                "can't get row_id_index when running merge into",
-            ));
-        }
-
         let row_id_offset = if !is_insert_only {
-            join_output_schema.index_of(&row_id_index.to_string())?
+            data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
             DUMMY_COLUMN_INDEX
         };
 
-        // We use `merge_into_split_idx` to specify a column from target table to spilt a block
-        // from join into matched part and unmatched part.
-        let mut merge_into_split_idx = None;
-        if matches!(mutation_type, DataMutationType::FullOperation) {
-            for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-                if *data_field.name() == row_id_index.to_string() {
-                    merge_into_split_idx = Some(idx);
-                    break;
-                }
-            }
-        }
-
+        // For distributed merge, we shuffle data blocks by block_id (drived from row_id) to avoid
+        // different nodes update the same physical block simultaneously, data blocks that are needed
+        // to insert just keep in local node.
         let source_is_broadcast =
             matches!(mutation_type, DataMutationType::MatchedOnly) && !change_join_order;
-        if *distributed && !is_insert_only && !source_is_broadcast {
-            let mut row_id_column = None;
-            for column_binding in bind_context.columns.iter() {
-                if BindContext::match_column_binding(
-                    Some(database_name.as_str()),
-                    Some(table_name.as_str()),
-                    ROW_ID_COL_NAME,
-                    column_binding,
-                ) {
-                    row_id_column = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: column_binding.clone(),
-                    }));
-                    break;
-                }
-            }
-            let row_id_column = row_id_column.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-
-            let row_id_expr = row_id_column
-                .type_check(join_output_schema.as_ref())?
-                .project_column_ref(|index| {
-                    join_output_schema.index_of(&index.to_string()).unwrap()
-                });
-
-            let expr = check_function(
-                None,
-                "bit_and",
-                &[],
-                &[
-                    check_function(
-                        None,
-                        "bit_shift_right",
-                        &[],
-                        &[row_id_expr, Expr::Constant {
-                            span: None,
-                            scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
-                            data_type: DataType::Number(NumberDataType::UInt64),
-                        }],
-                        &BUILTIN_FUNCTIONS,
-                    )?,
-                    Expr::Constant {
-                        span: None,
-                        scalar: Scalar::Number((((1 << NUM_BLOCK_ID_BITS) - 1) as u64).into()),
-                        data_type: DataType::Number(NumberDataType::UInt64),
-                    },
-                ],
-                &BUILTIN_FUNCTIONS,
-            )?;
-            // For distributed merge into, shuffle by block_id(computed by row_id)
-            // to avoid many nodes update the same physical block simultaneously,
-            // update data that belong to one physical block will shuffle to one node,
-            // insert data just keep in local node.
-            plan = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(plan),
-                kind: FragmentKind::Normal,
-                keys: vec![expr.as_remote_expr()],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-            });
+        if matches!(input_type, DataMutationInputType::Merge)
+            && *distributed
+            && !is_insert_only
+            && !source_is_broadcast
+        {
+            plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
+                plan,
+                bind_context,
+                data_mutation_input_schema.clone(),
+                database_name,
+                table_name,
+            )?);
         }
 
-        if let Some(merge_into_split_idx) = merge_into_split_idx {
+        // If the mutation type is FullOperation, we use row_id column to split a block
+        // into matched and not matched parts.
+        if matches!(mutation_type, DataMutationType::FullOperation) {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
                 input: Box::new(plan),
-                split_index: merge_into_split_idx,
+                split_index: row_id_offset,
             }));
         }
 
-        let lazy_columns = self
+        // Construct row fetch plan for lazy columns.
+        if let Some(lazy_columns) = self
             .metadata
             .read()
-            .get_table_lazy_columns(target_table_index);
-        if let Some(lazy_columns) = lazy_columns
+            .get_table_lazy_columns(target_table_index)
             && !lazy_columns.is_empty()
         {
-            let row_id_offset = join_output_schema.index_of(&row_id_index.to_string())?;
-            let lazy_columns = lazy_columns
-                .iter()
-                .sorted() // Needs sort because we need to make the order deterministic.
-                .filter(|index| !join_output_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
-                .cloned()
-                .collect::<Vec<_>>();
-
-            let mut has_inner_column = false;
-            let need_wrap_nullable = matches!(mutation_type, DataMutationType::FullOperation);
-            let fetched_fields: Vec<DataField> = lazy_columns
-                .iter()
-                .map(|index| {
-                    let metadata = meta_data.read();
-                    let col = metadata.column(*index);
-                    if let ColumnEntry::BaseTableColumn(c) = col {
-                        if c.path_indices.is_some() {
-                            has_inner_column = true;
-                        }
-                    }
-                    let mut data_type = col.data_type();
-                    if need_wrap_nullable {
-                        data_type = data_type.wrap_nullable();
-                    }
-                    DataField::new(&index.to_string(), data_type)
-                })
-                .collect();
-
-            let source = self
-                .metadata
-                .read()
-                .get_table_source(target_table_index)
-                .unwrap()
-                .clone();
-            let table_schema = source.source_info.schema();
-            let cols_to_fetch = PhysicalPlanBuilder::build_projection(
-                &meta_data.read(),
-                &table_schema,
-                lazy_columns.iter(),
-                has_inner_column,
-                true,
-                true,
-                false,
-            );
-            plan = PhysicalPlan::RowFetch(RowFetch {
-                plan_id: 0,
-                input: Box::new(plan),
-                source: Box::new(source),
-                row_id_col_offset: row_id_offset,
-                cols_to_fetch,
-                fetched_fields,
-                need_wrap_nullable,
-                stat_info: None,
-            });
+            plan = PhysicalPlan::RowFetch(build_data_mutation_row_fetch(
+                plan,
+                metadata.clone(),
+                data_mutation_input_schema.clone(),
+                mutation_type.clone(),
+                lazy_columns.clone(),
+                *target_table_index,
+                row_id_offset,
+            ));
         }
 
         let table = self
@@ -385,7 +279,7 @@ impl PhysicalPlanBuilder {
                                 .as_expr(&BUILTIN_FUNCTIONS)
                                 .project_column_ref(|name| {
                                     // there will add a predicate col when we process matched clauses.
-                                    // so it's not in join_output_schema for now. But it's must be added
+                                    // so it's not in data_mutation_input_schema for now. But it's must be added
                                     // to the tail, so let do it like below.
                                     if *name == PREDICATE_COLUMN_INDEX.to_string() {
                                         output_schema.num_fields()
@@ -425,7 +319,7 @@ impl PhysicalPlanBuilder {
             mutation_type: mutation_type.clone(),
             row_id_idx: row_id_offset,
             can_try_update_column_only: *can_try_update_column_only,
-            unmatched_schema: join_output_schema.clone(),
+            unmatched_schema: data_mutation_input_schema.clone(),
         }));
 
         plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
@@ -487,7 +381,7 @@ impl PhysicalPlanBuilder {
             mutation_kind,
             update_stream_meta,
             merge_meta: false,
-            deduplicated_label: unsafe { settings.get_deduplicate_label()? },
+            deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
             recluster_info: None,
         }));
@@ -509,6 +403,136 @@ impl PhysicalPlanBuilder {
             &BUILTIN_FUNCTIONS,
         );
         Ok(filer.as_remote_expr())
+    }
+}
+
+pub fn build_block_id_shuffle_exchange(
+    plan: PhysicalPlan,
+    bind_context: &BindContext,
+    data_mutation_input_schema: Arc<DataSchema>,
+    database_name: &str,
+    table_name: &str,
+) -> Result<Exchange> {
+    let mut row_id_column = None;
+    for column_binding in bind_context.columns.iter() {
+        if BindContext::match_column_binding(
+            Some(database_name),
+            Some(table_name),
+            ROW_ID_COL_NAME,
+            column_binding,
+        ) {
+            row_id_column = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: column_binding.clone(),
+            }));
+            break;
+        }
+    }
+    let row_id_column = row_id_column.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+    let row_id_expr = row_id_column
+        .type_check(data_mutation_input_schema.as_ref())?
+        .project_column_ref(|index| {
+            data_mutation_input_schema
+                .index_of(&index.to_string())
+                .unwrap()
+        });
+
+    let block_id_shuffle_key = check_function(
+        None,
+        "bit_and",
+        &[],
+        &[
+            check_function(
+                None,
+                "bit_shift_right",
+                &[],
+                &[row_id_expr, Expr::Constant {
+                    span: None,
+                    scalar: Scalar::Number(((64 - NUM_ROW_ID_PREFIX_BITS) as u64).into()),
+                    data_type: DataType::Number(NumberDataType::UInt64),
+                }],
+                &BUILTIN_FUNCTIONS,
+            )?,
+            Expr::Constant {
+                span: None,
+                scalar: Scalar::Number((((1 << NUM_BLOCK_ID_BITS) - 1) as u64).into()),
+                data_type: DataType::Number(NumberDataType::UInt64),
+            },
+        ],
+        &BUILTIN_FUNCTIONS,
+    )?;
+
+    Ok(Exchange {
+        plan_id: 0,
+        input: Box::new(plan),
+        kind: FragmentKind::Normal,
+        keys: vec![block_id_shuffle_key.as_remote_expr()],
+        allow_adjust_parallelism: true,
+        ignore_exchange: false,
+    })
+}
+
+fn build_data_mutation_row_fetch(
+    plan: PhysicalPlan,
+    metadata: MetadataRef,
+    data_mutation_input_schema: Arc<DataSchema>,
+    mutation_type: DataMutationType,
+    lazy_columns: HashSet<usize>,
+    target_table_index: usize,
+    row_id_offset: usize,
+) -> RowFetch {
+    let metadata = metadata.read();
+
+    let lazy_columns = lazy_columns
+        .iter()
+        .sorted() // Needs sort because we need to make the order deterministic.
+        .filter(|index| !data_mutation_input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut has_inner_column = false;
+    let need_wrap_nullable = matches!(mutation_type, DataMutationType::FullOperation);
+    let fetched_fields: Vec<DataField> = lazy_columns
+        .iter()
+        .map(|index| {
+            let col = metadata.column(*index);
+            if let ColumnEntry::BaseTableColumn(c) = col {
+                if c.path_indices.is_some() {
+                    has_inner_column = true;
+                }
+            }
+            let mut data_type = col.data_type();
+            if need_wrap_nullable {
+                data_type = data_type.wrap_nullable();
+            }
+            DataField::new(&index.to_string(), data_type)
+        })
+        .collect();
+
+    let source = metadata
+        .get_table_source(&target_table_index)
+        .unwrap()
+        .clone();
+    let table_schema = source.source_info.schema();
+    let cols_to_fetch = PhysicalPlanBuilder::build_projection(
+        &metadata,
+        &table_schema,
+        lazy_columns.iter(),
+        has_inner_column,
+        true,
+        true,
+        false,
+    );
+
+    RowFetch {
+        plan_id: 0,
+        input: Box::new(plan),
+        source: Box::new(source),
+        row_id_col_offset: row_id_offset,
+        cols_to_fetch,
+        fetched_fields,
+        need_wrap_nullable,
+        stat_info: None,
     }
 }
 
