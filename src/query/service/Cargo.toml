@@ -128,6 +128,7 @@ hex = "0.4.3"
 highway = "1.1"
 http = { workspace = true }
 humantime = "2.1.0"
+hyper = "0.14.20"
 indicatif = "0.17.5"
 itertools = { workspace = true }
 jsonb = { workspace = true }
@@ -176,7 +177,6 @@ typetag = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
-hyper = "0.14.20"
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
