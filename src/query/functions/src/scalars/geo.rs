@@ -646,7 +646,9 @@ pub fn geo_dist_init() {
                     std::mem::transmute::<[MaybeUninit<f32>; 2050], [f32; 2050]>(
                         wgs84_metric_meters_lut,
                     ),
-                    std::mem::transmute::<[MaybeUninit<f32>; 1025], [f32; 1025]>(sphere_metric_meters_lut),
+                    std::mem::transmute::<[MaybeUninit<f32>; 1025], [f32; 1025]>(
+                        sphere_metric_meters_lut,
+                    ),
                     std::mem::transmute::<[MaybeUninit<f32>; 1025], [f32; 1025]>(sphere_metric_lut),
                 )
             }

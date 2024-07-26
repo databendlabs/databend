@@ -384,7 +384,9 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
                     "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
                 )
             })?;
-        let buffer = unsafe { std::mem::transmute::<Buffer<ethnum::I256>, Buffer<ethnum::U256>>(buffer.0.clone()) };
+        let buffer = unsafe {
+            std::mem::transmute::<Buffer<ethnum::I256>, Buffer<ethnum::U256>>(buffer.0.clone())
+        };
 
         LargeFixedKeysColumnIter::create(buffer)
     }

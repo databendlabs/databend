@@ -321,7 +321,12 @@ impl Column {
                         databend_common_arrow::arrow::types::i256,
                     >>()
                     .expect("fail to read `Decimal256` from arrow: array should be `PrimitiveArray<i256>`");
-                    let values = unsafe { std::mem::transmute::<Buffer<databend_common_arrow::arrow::types::i256>, Buffer<ethnum::I256>>(arrow_col.values().clone()) };
+                    let values = unsafe {
+                        std::mem::transmute::<
+                            Buffer<databend_common_arrow::arrow::types::i256>,
+                            Buffer<ethnum::I256>,
+                        >(arrow_col.values().clone())
+                    };
                     Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {
                         precision: *precision as u8,
                         scale: *scale as u8,
