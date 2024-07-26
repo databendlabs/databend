@@ -171,7 +171,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     let value = Operation::Update(node_key().as_bytes().to_vec());
 
     let res = client
-        .upsert_kv(UpsertKVReq::new(&node_key(), seq, value, None))
+        .upsert_kv(UpsertKVReq::new(node_key(), seq, value, None))
         .await;
 
     print_res(i, "upsert_kv", &res);
