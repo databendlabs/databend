@@ -37,9 +37,9 @@ use log::info;
 use uuid::Version;
 
 #[async_backtrace::framed]
-pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<()> {
+pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Vec<String>> {
     let Some(lvt) = set_lvt(fuse_table, ctx.as_ref()).await? else {
-        return Ok(());
+        return Ok(vec![]);
     };
 
     let snapshots_before_lvt = list_until_timestamp(
@@ -53,7 +53,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let Some((gc_root, snapshots_to_gc)) =
         select_gc_root(fuse_table, &snapshots_before_lvt).await?
     else {
-        return Ok(());
+        return Ok(vec![]);
     };
     let least_visible_timestamp = gc_root.least_visible_timestamp.unwrap();
 
@@ -101,8 +101,8 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         .map(|p| p.to_string())
         .collect::<Vec<_>>();
     let op = Files::create(ctx, fuse_table.get_operator());
-    op.remove_file_in_batch(files_to_gc).await?;
-    Ok(())
+    op.remove_file_in_batch(&files_to_gc).await?;
+    Ok(files_to_gc)
 }
 
 /// Try set lvt as min(latest_snapshot.timestamp, now - retention_time).

@@ -62,7 +62,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
     }
 
     fn schema(&self) -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)])
+        TableSchemaRefExt::create(vec![TableField::new("vacuumed", TableDataType::String)])
     }
 
     async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
