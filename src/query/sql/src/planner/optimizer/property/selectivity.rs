@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -30,10 +29,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::Datum;
 use databend_common_storage::F64;
 
-use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
@@ -293,6 +290,13 @@ impl<'a> SelectivityEstimator<'a> {
                 let new_ndv = (column_stat.ndv * selectivity).ceil();
                 column_stat.ndv = new_ndv;
                 if let Some(histogram) = &mut column_stat.histogram {
+                    if histogram.accuracy {
+                        // Todo: find a better way to update histogram.
+                        if selectivity < 0.8 {
+                            column_stat.histogram = None;
+                        }
+                        continue;
+                    }
                     if new_ndv as u64 <= 2 {
                         column_stat.histogram = None;
                     } else {
@@ -339,28 +343,28 @@ impl<'a> SelectivityEstimator<'a> {
                         if numeric_literal == max {
                             1.0 - 1.0 / ndv
                         } else {
-                            (numeric_literal - min) / (max - min)
+                            (numeric_literal - min) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::LTE => {
                         if numeric_literal == min {
                             1.0 / ndv
                         } else {
-                            (numeric_literal - min) / (max - min)
+                            (numeric_literal - min) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::GT => {
                         if numeric_literal == min {
                             1.0 - 1.0 / ndv
                         } else {
-                            (max - numeric_literal) / (max - min)
+                            (max - numeric_literal) / (max - min + 1.0)
                         }
                     }
                     ComparisonOp::GTE => {
                         if numeric_literal == max {
                             1.0 / ndv
                         } else {
-                            (max - numeric_literal) / (max - min)
+                            (max - numeric_literal) / (max - min + 1.0)
                         }
                     }
                     _ => unreachable!(),
@@ -535,22 +539,11 @@ fn update_statistic(
         new_min = Datum::Float(F64::from(new_min.to_double()?));
         new_max = Datum::Float(F64::from(new_max.to_double()?));
     }
+    if selectivity < 0.8 {
+        // Todo: support unfixed buckets number for histogram and prune the histogram.
+        column_stat.histogram = None;
+    }
     column_stat.min = new_min.clone();
     column_stat.max = new_max.clone();
-    if let Some(histogram) = &column_stat.histogram {
-        let num_values = histogram.num_values();
-        let new_num_values = (num_values * selectivity).ceil() as u64;
-        let new_ndv = new_ndv as u64;
-        if new_ndv <= 2 {
-            column_stat.histogram = None;
-            return Ok(());
-        }
-        column_stat.histogram = Some(histogram_from_ndv(
-            new_ndv,
-            max(new_num_values, new_ndv),
-            Some((new_min, new_max)),
-            DEFAULT_HISTOGRAM_BUCKETS,
-        )?);
-    }
     Ok(())
 }

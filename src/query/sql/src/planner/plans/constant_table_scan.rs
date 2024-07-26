@@ -23,6 +23,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_storage::Datum;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use itertools::Itertools;
 
 use crate::optimizer::histogram_from_ndv;
@@ -36,7 +37,6 @@ use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 

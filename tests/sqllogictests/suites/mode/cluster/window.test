@@ -87,7 +87,7 @@ Exchange
     └── WindowPartition
         ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
         ├── hash keys: [department_id]
-        ├── estimated rows: 8.00
+        ├── estimated rows: 10.00
         └── Exchange
             ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
             ├── exchange type: Hash(d.department_id (#4))
@@ -97,7 +97,7 @@ Exchange
                 ├── build keys: [d.department_id (#4)]
                 ├── probe keys: [e.department_id (#2)]
                 ├── filters: []
-                ├── estimated rows: 8.00
+                ├── estimated rows: 10.00
                 ├── Exchange(Build)
                 │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
                 │   ├── exchange type: Broadcast

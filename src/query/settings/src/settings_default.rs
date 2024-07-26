@@ -553,6 +553,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_analyze_histogram", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables analyze histogram for query optimization during analyzing table.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables scanning aggregating index data while querying.",

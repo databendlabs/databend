@@ -38,6 +38,7 @@ mod update;
 mod util;
 
 pub use agg_index_sink::AggIndexSink;
+pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
 pub use common::*;
 pub use compact::CompactOptions;
