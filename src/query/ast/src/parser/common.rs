@@ -27,6 +27,7 @@ use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
@@ -218,6 +219,40 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
             table,
         }
     })(i)
+}
+
+pub fn set_type(i: Input) -> IResult<SetType> {
+    map(
+        rule! {
+           (GLOBAL | SESSION | VARIABLE)?
+        },
+        |res| match res {
+            Some(token) => match token.kind {
+                TokenKind::GLOBAL => SetType::SettingsGlobal,
+                TokenKind::SESSION => SetType::SettingsSession,
+                TokenKind::VARIABLE => SetType::Variable,
+                _ => unreachable!(),
+            },
+            None => SetType::SettingsSession,
+        },
+    )(i)
+}
+
+pub fn unset_type(i: Input) -> IResult<SetType> {
+    map(
+        rule! {
+           (GLOBAL | SESSION | VARIABLE)?
+        },
+        |res| match res {
+            Some(token) => match token.kind {
+                TokenKind::GLOBAL => SetType::SettingsGlobal,
+                TokenKind::SESSION => SetType::SettingsSession,
+                TokenKind::VARIABLE => SetType::Variable,
+                _ => unreachable!(),
+            },
+            None => SetType::SettingsGlobal,
+        },
+    )(i)
 }
 
 pub fn column_id(i: Input) -> IResult<ColumnID> {

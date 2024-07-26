@@ -32,6 +32,7 @@ use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -325,6 +326,10 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_queued_duration(&self) -> Duration;
     fn set_query_queued_duration(&self, queued_duration: Duration);
+
+    fn set_variable(&self, key: String, value: Scalar);
+    fn unset_variable(&self, key: &str);
+    fn get_variable(&self, key: &str) -> Option<Scalar>;
 
     async fn load_datalake_schema(
         &self,

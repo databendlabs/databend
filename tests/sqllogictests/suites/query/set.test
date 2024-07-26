@@ -1,0 +1,41 @@
+statement ok
+SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = (4, 56);
+
+query TT
+select value, default = value  from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek') order by value;
+----
+4 0
+56 0
+
+statement ok
+UNSET (max_threads, storage_io_min_bytes_for_seek);
+
+query TT
+select  default = value from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek');
+----
+1
+1
+
+onlyif mysql
+statement ok
+set variable a = 1;
+
+onlyif mysql
+statement ok
+set variable (b, c) = ('yy', 'zz');
+
+onlyif mysql
+query ITT
+select getvariable('a') + getvariable('a'), getvariable('b'), getvariable('c'), getvariable('d')  
+----
+2 yy zz NULL
+
+onlyif mysql
+statement ok
+unset variable (a, b)
+
+onlyif mysql
+query ITT
+select getvariable('a'), getvariable('b'), 'xx' || 'yy' || getvariable('c') , getvariable('d')  
+----
+NULL NULL xxyyzz NULL

@@ -1027,32 +1027,49 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        is_global: bool,
-        variable: &'ast Identifier,
-        value: &'ast Expr,
+        set_type: SetType,
+        identifiers: &'ast Vec<Identifier>,
+        values: &'ast SetValues,
     ) {
-        let mut children = Vec::with_capacity(1);
-        self.visit_expr(value);
-        children.push(self.children.pop().unwrap());
+        let mut children = vec![];
 
-        let name = if is_global {
-            format!("SetGlobal {}", variable)
+        let old_len = self.children.len();
+        match values {
+            SetValues::Expr(exprs) => {
+                for arg in exprs {
+                    self.visit_expr(arg.as_ref());
+                }
+            }
+            SetValues::Query(query) => self.visit_query(query.as_ref()),
+        }
+        children.extend(self.children.drain(old_len..));
+
+        let ids = identifiers.iter().map(|id| id.to_string()).join(",");
+        let name = if set_type == SetType::SettingsGlobal {
+            format!("Set SettingsGlobal {}", ids)
+        } else if set_type == SetType::Variable {
+            format!("Set Variable {}", ids)
         } else {
-            format!("Set {}", variable)
+            format!("Set SettingsSession{}", ids)
         };
+
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
-    fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
-        let name = if stmt.session_level {
-            format!("UnSet SESSION {}", stmt)
+    fn visit_unset(&mut self, unset_type: SetType, args: &'ast Vec<Identifier>) {
+        let ids = args.iter().map(|id| id.to_string()).join(",");
+        let name = if unset_type == SetType::SettingsSession {
+            format!("UnSet SettingsSession {}", ids)
+        } else if unset_type == SetType::Variable {
+            format!("UnSet Variable {}", ids)
         } else {
-            format!("UnSet {}", stmt)
+            format!("UnSet SettingsGlobal {}", ids)
         };
+
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);

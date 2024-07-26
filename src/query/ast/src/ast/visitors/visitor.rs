@@ -387,7 +387,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_settings(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_unset_variable(&mut self, _stmt: &'ast UnSetStmt) {}
+    fn visit_unset(&mut self, _set_type: SetType, _args: &'ast Vec<Identifier>) {}
 
     fn visit_show_process_list(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
@@ -411,11 +411,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        _is_global: bool,
-        _variable: &'ast Identifier,
-        _value: &'ast Expr,
+        _set_type: SetType,
+        _idens: &'ast Vec<Identifier>,
+        _values: &'ast SetValues,
     ) {
     }
 
