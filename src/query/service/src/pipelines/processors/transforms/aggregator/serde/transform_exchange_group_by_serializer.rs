@@ -176,7 +176,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
     const NAME: &'static str = "TransformExchangeGroupBySerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
+    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut serialized_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, mut block) in meta.blocks.into_iter().enumerate() {
             if block.is_empty() && block.get_meta().is_none() {
@@ -287,9 +287,9 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
             };
         }
 
-        Ok(DataBlock::empty_with_meta(FlightSerializedMeta::create(
-            serialized_blocks,
-        )))
+        Ok(vec![DataBlock::empty_with_meta(
+            FlightSerializedMeta::create(serialized_blocks),
+        )])
     }
 }
 

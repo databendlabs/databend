@@ -383,6 +383,14 @@ impl Settings {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_window_partition_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
+    }
+
+    pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("window_partition_spilling_memory_ratio")? as usize)
+    }
+
     pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
     }
@@ -478,6 +486,10 @@ impl Settings {
 
     pub fn get_enable_distributed_compact(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_compact")? != 0)
+    }
+
+    pub fn get_enable_analyze_histogram(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_analyze_histogram")? != 0)
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {

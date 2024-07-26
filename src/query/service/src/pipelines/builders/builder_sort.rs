@@ -86,11 +86,7 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if sort.window_partition.is_empty() {
-            self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
-        } else {
-            self.build_window_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
-        }
+        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
     }
 
     pub(crate) fn build_sort_pipeline(
@@ -133,77 +129,20 @@ impl PipelineBuilder {
                     )
                 } else {
                     builder = builder.remove_order_col_at_last();
-                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, false)
+                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true)
                 }
             }
             Some(false) => {
                 // Build for each cluster node.
                 // We build the full sort pipeline for it.
                 // Don't remove the order column at last.
-                builder.build_full_sort_pipeline(&mut self.main_pipeline, false)
+                builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
             None => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
                 builder = builder.remove_order_col_at_last();
-                builder.build_full_sort_pipeline(&mut self.main_pipeline, false)
-            }
-        }
-    }
-
-    pub(crate) fn build_window_sort_pipeline(
-        &mut self,
-        plan_schema: DataSchemaRef,
-        sort_desc: Vec<SortColumnDescription>,
-        limit: Option<usize>,
-        after_exchange: Option<bool>,
-    ) -> Result<()> {
-        let block_size = self.settings.get_max_block_size()? as usize;
-        let max_threads = self.settings.get_max_threads()? as usize;
-        let sort_desc = Arc::new(sort_desc);
-
-        let is_window_sort_and_shuffled = self.main_pipeline.output_len() > 1;
-
-        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-            self.main_pipeline.try_resize(max_threads)?;
-        }
-
-        let mut builder =
-            SortPipelineBuilder::create(self.ctx.clone(), plan_schema.clone(), sort_desc.clone())
-                .with_partial_block_size(block_size)
-                .with_final_block_size(block_size)
-                .with_limit(limit);
-
-        // Build for single node mode cause it's window shuffle
-        // We build the full sort pipeline for it
-        match after_exchange {
-            Some(true) => {
-                // Build for the coordinator node.
-                // We only build a `MultiSortMergeTransform`,
-                // as the data is already sorted in each cluster node.
-                // The input number of the transform is equal to the number of cluster nodes.
-                if self.main_pipeline.output_len() > 1 {
-                    try_add_multi_sort_merge(
-                        &mut self.main_pipeline,
-                        plan_schema,
-                        block_size,
-                        limit,
-                        sort_desc,
-                        true,
-                        self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
-                    )
-                } else {
-                    builder = builder.remove_order_col_at_last();
-                    builder.build_merge_sort_pipeline(&mut self.main_pipeline, true, false)
-                }
-            }
-            _ => {
-                // Build for each single node mode.
-                // We build the full sort pipeline for it.
-                builder = builder.remove_order_col_at_last();
-                builder
-                    .build_full_sort_pipeline(&mut self.main_pipeline, is_window_sort_and_shuffled)
+                builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
         }
     }
@@ -256,15 +195,11 @@ impl SortPipelineBuilder {
         self
     }
 
-    pub fn build_full_sort_pipeline(
-        self,
-        pipeline: &mut Pipeline,
-        is_window_sort_and_shuffled: bool,
-    ) -> Result<()> {
+    pub fn build_full_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         // Partial sort
         pipeline.add_transformer(|| TransformSortPartial::new(self.limit, self.sort_desc.clone()));
 
-        self.build_merge_sort_pipeline(pipeline, false, is_window_sort_and_shuffled)
+        self.build_merge_sort_pipeline(pipeline, false)
     }
 
     fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
@@ -305,15 +240,10 @@ impl SortPipelineBuilder {
         self,
         pipeline: &mut Pipeline,
         order_col_generated: bool,
-        is_window_sort_and_shuffled: bool,
     ) -> Result<()> {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
-        let output_order_col = if is_window_sort_and_shuffled {
-            false
-        } else {
-            need_multi_merge || !self.remove_order_col_at_last
-        };
+        let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
         debug_assert!(if order_col_generated {
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
             !output_order_col
@@ -375,7 +305,7 @@ impl SortPipelineBuilder {
             })?;
         }
 
-        if need_multi_merge && !is_window_sort_and_shuffled {
+        if need_multi_merge {
             // Multi-pipelines merge sort
             try_add_multi_sort_merge(
                 pipeline,
