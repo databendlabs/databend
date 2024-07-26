@@ -863,6 +863,78 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    // DICTIONARY
+    let create_dictionary = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ DICTIONARY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident//dictionary_name
+            ~ "(" ~ ^#comma_separated_list1(modify_column_type) ~ ^")"
+            ~ ( PRIMARY ~ KEY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
+            ~ SOURCE ~ ^"(" ~ ^#ident ~ ^"("//source_name
+            ~ ( #source_option )?
+            ~ ")" ~ ^")"
+            ~ ( COMMENT ~ ^#literal_string )?//comment
+        },
+        |(
+            _,                  // create
+            opt_or_replace,     //( OR ~ ^REPLACE )?
+            _,                  // DICTIONARY
+            opt_if_not_exists,  // ( IF ~ ^NOT ~ ^EXISTS )?
+            dictionary_name,    //#ident
+            _,                  // "("
+            columns,            // ^#comma_separated_list1(modify_column_type)
+            _,                  // ^")"
+            opt_primary_key, // ( PRIMARY ~ KEY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
+            _,               // SOURCE
+            _,               // ^"("
+            source_name,     // ^#ident
+            _,               // ^"("
+            opt_source_options, // ( #source_option )?
+            _,               // ")"
+            _,               //  ^")"
+            opt_comment,     //( COMMENT ~ ^#ident )?
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateDictionary(CreateDictionaryStmt {
+                create_option,
+                dictionary_name,
+                columns,
+                primary_keys: opt_primary_key
+                    .map(|(_, _, _, primary_keys, _)| primary_keys)
+                    .unwrap_or_default(),
+                source_name,
+                source_options: opt_source_options.unwrap_or_default(),
+                comment: opt_comment.map(|(_, comment)| comment).unwrap_or_default(),
+            }))
+        },
+    );
+    let drop_dictionary = map(
+        rule! {
+            DROP ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #ident
+        },
+        |(_, _, opt_if_exists, dictionary_name)| {
+            Statement::DropDictionary(DropDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                dictionary_name,
+            })
+        },
+    );
+    let show_dictionaries = map(
+        rule! {
+            SHOW ~ DICTIONARIES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowDictionaries { show_options },
+    );
+    let show_create_dictionary = map(
+        rule! {
+            SHOW ~ CREATE ~ DICTIONARY ~ #ident
+        },
+        |(_, _, _, dictionary_name)| {
+            Statement::ShowCreateDictionary(ShowCreateDictionaryStmt { dictionary_name })
+        },
+    );
+
     let create_view = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2150,6 +2222,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
+        ),
+        // dictionary
+        rule!(
+            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] [PRIMARY KEY (<primary_key>, ...)] SOURCE (<source_name> (<source_options> ,...)) [COMMENT <comment>] `"
+            | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
+            | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
+            | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
         ),
         // view,index
         rule!(
@@ -3809,6 +3888,20 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
            ( #ident ~ "=" ~ #option_to_string )*
+        },
+        |opts| {
+            BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
+            )
+        },
+    )(i)
+}
+
+fn source_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+            ( #ident ~ " " ~#option_to_string )*
         },
         |opts| {
             BTreeMap::from_iter(

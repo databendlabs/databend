@@ -567,6 +567,14 @@ pub trait VisitorMut: Sized {
 
     fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
 
+    fn visit_create_dictionary(&mut self, _stmt: &mut CreateDictionaryStmt) {}
+
+    fn visit_drop_dictionary(&mut self, _stmt: &mut DropDictionaryStmt) {}
+
+    fn visit_show_create_dictionary(&mut self, _stmt: &mut ShowCreateDictionaryStmt) {}
+
+    fn visit_show_dictionaries(&mut self, _show_options: &mut Option<ShowOptions>) {}
+
     fn visit_create_view(&mut self, _stmt: &mut CreateViewStmt) {}
 
     fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt) {}

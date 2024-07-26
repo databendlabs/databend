@@ -65,6 +65,10 @@ pub trait Visitor<'ast>: Sized {
         walk_identifier(self, table);
     }
 
+    fn visit_dictionary_ref(&mut self, dictionary_name: &'ast Identifier) {
+        walk_identifier(self, dictionary_name);
+    }
+
     fn visit_index_ref(&mut self, index: &'ast Identifier) {
         walk_identifier(self, index);
     }
@@ -554,6 +558,14 @@ pub trait Visitor<'ast>: Sized {
     fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &'ast ExistsTableStmt) {}
+
+    fn visit_create_dictionary(&mut self, _stmt: &'ast CreateDictionaryStmt) {}
+
+    fn visit_drop_dictionary(&mut self, _stmt: &'ast DropDictionaryStmt) {}
+
+    fn visit_show_create_dictionary(&mut self, _stmt: &'ast ShowCreateDictionaryStmt) {}
+
+    fn visit_show_dictionaries(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_create_view(&mut self, _stmt: &'ast CreateViewStmt) {}
 
