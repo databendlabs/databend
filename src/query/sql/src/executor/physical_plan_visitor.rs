@@ -48,6 +48,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
@@ -64,7 +65,6 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::UpdateSource;
 use crate::executor::physical_plans::Window;
-use crate::executor::physical_plans::WindowPartition;
 
 pub trait PhysicalPlanReplacer {
     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
@@ -78,8 +78,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::AggregatePartial(plan) => self.replace_aggregate_partial(plan),
             PhysicalPlan::AggregateFinal(plan) => self.replace_aggregate_final(plan),
             PhysicalPlan::Window(plan) => self.replace_window(plan),
-            PhysicalPlan::WindowPartition(plan) => self.replace_window_partition(plan),
             PhysicalPlan::Sort(plan) => self.replace_sort(plan),
+            PhysicalPlan::LocalShuffle(plan) => self.replace_local_shuffle(plan),
             PhysicalPlan::Limit(plan) => self.replace_limit(plan),
             PhysicalPlan::RowFetch(plan) => self.replace_row_fetch(plan),
             PhysicalPlan::HashJoin(plan) => self.replace_hash_join(plan),
@@ -230,19 +230,6 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_window_partition(&mut self, plan: &WindowPartition) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-
-        Ok(PhysicalPlan::WindowPartition(WindowPartition {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            partition_by: plan.partition_by.clone(),
-            order_by: plan.order_by.clone(),
-            after_exchange: plan.after_exchange,
-            stat_info: plan.stat_info.clone(),
-        }))
-    }
-
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
         let build = self.replace(&plan.build)?;
         let probe = self.replace(&plan.probe)?;
@@ -313,6 +300,18 @@ pub trait PhysicalPlanReplacer {
             after_exchange: plan.after_exchange,
             pre_projection: plan.pre_projection.clone(),
             stat_info: plan.stat_info.clone(),
+            window_partition: plan.window_partition.clone(),
+        }))
+    }
+
+    fn replace_local_shuffle(&mut self, plan: &LocalShuffle) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+
+        Ok(PhysicalPlan::LocalShuffle(LocalShuffle {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            shuffle_by: plan.shuffle_by.clone(),
+            column_index: plan.column_index.clone(),
         }))
     }
 
@@ -663,10 +662,10 @@ impl PhysicalPlan {
                 PhysicalPlan::Window(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::WindowPartition(plan) => {
+                PhysicalPlan::Sort(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::Sort(plan) => {
+                PhysicalPlan::LocalShuffle(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Limit(plan) => {

@@ -381,10 +381,6 @@ impl TableContext for QueryContext {
         self.shared.group_by_spill_progress.clone()
     }
 
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
-        self.shared.window_partition_spill_progress.clone()
-    }
-
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
@@ -399,13 +395,6 @@ impl TableContext for QueryContext {
 
     fn get_group_by_spill_progress_value(&self) -> ProgressValues {
         self.shared.group_by_spill_progress.as_ref().get_values()
-    }
-
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
-        self.shared
-            .window_partition_spill_progress
-            .as_ref()
-            .get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
