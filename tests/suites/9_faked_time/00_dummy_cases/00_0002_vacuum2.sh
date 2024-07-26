@@ -18,4 +18,7 @@ query "select count(*) from fuse_snapshot('default','test_vacuum2')"
 query "set data_retention_time_in_days = 0;select * from fuse_vacuum2('default','test_vacuum2')"
 
 # 2
-query "select count(*) from fuse_snapshot('default','test_vacuum2')"
+query "select count(*) from fuse_snapshot('default','test_vacuum2')"\
+
+# restore default value
+stmt "set data_retention_time_in_days = 1;"

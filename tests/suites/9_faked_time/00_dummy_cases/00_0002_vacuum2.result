@@ -10,3 +10,4 @@ Ok
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2')
 2
 <<<<
+>>>> set data_retention_time_in_days = 1;
