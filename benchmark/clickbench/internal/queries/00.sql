@@ -10,3 +10,4 @@ from system.databases
 union all
 select name
 from system.functions ignore_result;
+select name from system.tables where name='t_1';

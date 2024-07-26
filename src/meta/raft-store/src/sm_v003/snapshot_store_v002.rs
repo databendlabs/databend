@@ -20,7 +20,6 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::ErrorSubject;
 use databend_common_meta_types::SnapshotData;
 use databend_common_meta_types::StorageError;
-use databend_common_meta_types::StorageIOError;
 use log::error;
 use log::info;
 use log::warn;
@@ -84,12 +83,11 @@ impl SnapshotStoreError {
 
 impl From<SnapshotStoreError> for StorageError {
     fn from(error: SnapshotStoreError) -> Self {
-        let sto_io_err = StorageIOError::new(
+        StorageError::new(
             ErrorSubject::Snapshot(None),
             error.verb,
             AnyError::new(&error),
-        );
-        StorageError::IO { source: sto_io_err }
+        )
     }
 }
 

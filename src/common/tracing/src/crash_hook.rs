@@ -48,7 +48,7 @@ impl CrashHandler {
         write_error(format_args!("Timestamp(Local): {}", chrono::Local::now()));
         write_error(format_args!("QueryId: {:?}", current_query_id));
         write_error(format_args!("{}", signal_message(sig, info, uc)));
-        write_error(format_args!("Backtrace:\n{}", backtrace()));
+        write_error(format_args!("Backtrace:\n{}", backtrace(50)));
     }
 }
 
@@ -236,7 +236,7 @@ unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *m
 pub unsafe fn add_signal_handler(signals: Vec<i32>) {
     let mut sa = std::mem::zeroed::<libc::sigaction>();
 
-    sa.sa_flags = libc::SA_SIGINFO;
+    sa.sa_flags = libc::SA_ONSTACK | libc::SA_SIGINFO;
     sa.sa_sigaction = signal_handler as usize;
 
     libc::sigemptyset(&mut sa.sa_mask);
@@ -250,12 +250,51 @@ pub unsafe fn add_signal_handler(signals: Vec<i32>) {
     }
 }
 
+// https://man7.org/linux/man-pages/man2/sigaltstack.2.html
+pub unsafe fn add_signal_stack(stack_bytes: usize) {
+    let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
+    let alloc_size = page_size + stack_bytes;
+
+    let stack_memory_arena = libc::mmap(
+        std::ptr::null_mut(),
+        alloc_size,
+        libc::PROT_NONE,
+        libc::MAP_PRIVATE | libc::MAP_ANON,
+        -1,
+        0,
+    );
+
+    if stack_memory_arena == libc::MAP_FAILED {
+        return;
+    }
+
+    let stack_ptr = (stack_memory_arena as usize + page_size) as *mut libc::c_void;
+
+    if libc::mprotect(stack_ptr, stack_bytes, libc::PROT_READ | libc::PROT_WRITE) != 0 {
+        libc::munmap(stack_ptr, alloc_size);
+        return;
+    }
+
+    let mut new_signal_stack = std::mem::zeroed::<libc::stack_t>();
+    new_signal_stack.ss_sp = stack_memory_arena;
+    new_signal_stack.ss_size = stack_bytes;
+    if libc::sigaltstack(&new_signal_stack, std::ptr::null_mut()) != 0 {
+        libc::munmap(stack_ptr, alloc_size);
+    }
+}
+
 pub fn set_crash_hook(version: String) {
     let lock = CRASH_HANDLER_LOCK.lock();
     let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
 
     *guard = Some(CrashHandler::create(version));
     unsafe {
+        #[cfg(debug_assertions)]
+        add_signal_stack(20 * 1024 * 1024);
+
+        #[cfg(not(debug_assertions))]
+        add_signal_stack(2 * 1024 * 1024);
+
         add_signal_handler(vec![
             libc::SIGSEGV,
             libc::SIGILL,

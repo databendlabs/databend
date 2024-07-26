@@ -158,6 +158,7 @@ impl AsyncSystemTable for TaskHistoryTable {
                             task_name = Some(s.clone());
                         }
                     }
+                    Ok(())
                 });
                 find_lt_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "scheduled_time" {

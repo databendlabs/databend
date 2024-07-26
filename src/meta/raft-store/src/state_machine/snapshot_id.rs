@@ -131,7 +131,10 @@ impl FromStr for MetaSnapshotId {
 impl ToString for MetaSnapshotId {
     fn to_string(&self) -> String {
         let a = if let Some(last) = self.last_applied {
-            format!("{}-{}-{}", last.leader_id, last.index, self.uniq)
+            format!(
+                "{}-{}-{}-{}",
+                last.leader_id.term, last.leader_id.node_id, last.index, self.uniq
+            )
         } else {
             format!("---{}", self.uniq)
         };
