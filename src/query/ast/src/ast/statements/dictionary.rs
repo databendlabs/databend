@@ -19,7 +19,7 @@ pub struct CreateDictionaryStmt {
     pub primary_keys: Vec<Identifier>,
     pub source_name: Identifier,
     pub source_options: BTreeMap<String, String>,
-    pub comment: String,
+    pub comment: Option<String>,
 }
 
 impl Display for CreateDictionaryStmt {
@@ -49,9 +49,8 @@ impl Display for CreateDictionaryStmt {
             write_space_separated_string_map(f, &self.source_options)?;
         }
         write!(f, ")")?;
-        if !self.comment.is_empty() {
-            write!(f, "COMMENT ")?;
-            write!(f, "{}", &self.comment)?;
+        if let Some(comment) = &self.comment {
+            write!(f,"COMMENT {comment}")?;
         }
         Ok(())
     }

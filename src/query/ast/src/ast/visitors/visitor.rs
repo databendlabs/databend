@@ -65,10 +65,6 @@ pub trait Visitor<'ast>: Sized {
         walk_identifier(self, table);
     }
 
-    fn visit_dictionary_ref(&mut self, dictionary_name: &'ast Identifier) {
-        walk_identifier(self, dictionary_name);
-    }
-
     fn visit_index_ref(&mut self, index: &'ast Identifier) {
         walk_identifier(self, index);
     }
