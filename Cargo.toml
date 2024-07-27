@@ -342,9 +342,6 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
 
-# TODO(andylokandy): Remove these once we have fixed all the issues.
-unexpected_cfgs = "allow"
-
 [workspace.lints.clippy]
 useless_format = "allow"
 mutable_key_type = "allow"

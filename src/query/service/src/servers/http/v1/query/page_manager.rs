@@ -92,9 +92,7 @@ impl PageManager {
                 let (block, end) = self.collect_new_page(tp).await?;
                 let num_row = block.num_rows();
                 self.total_rows += num_row;
-                let page = Page {
-                    data: block,
-                };
+                let page = Page { data: block };
                 if num_row > 0 {
                     self.total_pages += 1;
                     self.last_page = Some(page.clone());

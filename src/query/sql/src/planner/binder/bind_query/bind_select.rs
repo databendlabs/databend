@@ -49,8 +49,7 @@ use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
-pub struct SelectList {
-}
+pub struct SelectList {}
 
 impl Binder {
     #[async_backtrace::framed]

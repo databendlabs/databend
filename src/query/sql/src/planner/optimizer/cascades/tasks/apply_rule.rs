@@ -34,11 +34,7 @@ pub struct ApplyRuleTask {
 }
 
 impl ApplyRuleTask {
-    pub fn new(
-        rule_id: RuleID,
-        target_group_index: IndexType,
-        m_expr_index: IndexType,
-    ) -> Self {
+    pub fn new(rule_id: RuleID, target_group_index: IndexType, m_expr_index: IndexType) -> Self {
         Self {
             rule_id,
             target_group_index,
