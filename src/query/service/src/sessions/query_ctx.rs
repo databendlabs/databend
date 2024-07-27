@@ -647,11 +647,13 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
             enable_dst_hour_fix,
+            format_null_as_str,
         };
         Ok(format)
     }

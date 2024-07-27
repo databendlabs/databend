@@ -50,7 +50,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Result<Box<dyn Processor>> {
-        Ok(Box::new(BlockMetaTransformer::create(
+        Ok(BlockMetaTransformer::create(
             input,
             output,
             TransformFinalGroupBy::<Method> {
@@ -59,7 +59,7 @@ impl<Method: HashMethodBounds> TransformFinalGroupBy<Method> {
                 flush_state: PayloadFlushState::default(),
                 reach_limit: false,
             },
-        )))
+        ))
     }
 
     fn transform_agg_hashtable(&mut self, meta: AggregateMeta<Method, ()>) -> Result<DataBlock> {

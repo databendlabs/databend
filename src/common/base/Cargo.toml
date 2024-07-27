@@ -28,7 +28,7 @@ ctrlc = { version = "3.2.3", features = ["termination"] }
 databend-common-exception = { workspace = true }
 enquote = "1.1.0"
 futures = { workspace = true }
-libc = "0.2.133"
+libc = "0.2.153"
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }

@@ -419,20 +419,20 @@ explain select event_name, user_id, max(user_id), avg(id) from t where user_id >
 EvalScalar
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
-├── estimated rows: 7.11
+├── estimated rows: 6.00
 └── AggregateFinal
     ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
     ├── group by: [event_name, user_id]
     ├── aggregate functions: [max(user_id), sum(id), count(id)]
-    ├── estimated rows: 7.11
+    ├── estimated rows: 6.00
     └── AggregatePartial
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
-        ├── estimated rows: 7.11
+        ├── estimated rows: 6.00
         └── Filter
             ├── output columns: [t.id (#0), t.user_id (#1), t.event_name (#2)]
             ├── filters: [is_true(t.user_id (#1) > 1)]
-            ├── estimated rows: 7.11
+            ├── estimated rows: 6.00
             └── TableScan
                 ├── table: default.test_index.t
                 ├── output columns: [id (#0), user_id (#1), event_name (#2)]
@@ -461,24 +461,24 @@ explain select event_name, user_id, max(user_id), avg(id) from t where user_id >
 EvalScalar
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
-├── estimated rows: 7.11
+├── estimated rows: 6.00
 └── Sort
     ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
     ├── sort keys: [event_name ASC NULLS LAST, user_id DESC NULLS LAST]
-    ├── estimated rows: 7.11
+    ├── estimated rows: 6.00
     └── AggregateFinal
         ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
         ├── group by: [event_name, user_id]
         ├── aggregate functions: [max(user_id), sum(id), count(id)]
-        ├── estimated rows: 7.11
+        ├── estimated rows: 6.00
         └── AggregatePartial
             ├── group by: [event_name, user_id]
             ├── aggregate functions: [max(user_id), sum(id), count(id)]
-            ├── estimated rows: 7.11
+            ├── estimated rows: 6.00
             └── Filter
                 ├── output columns: [t.id (#0), t.user_id (#1), t.event_name (#2)]
                 ├── filters: [is_true(t.user_id (#1) > 1)]
-                ├── estimated rows: 7.11
+                ├── estimated rows: 6.00
                 └── TableScan
                     ├── table: default.test_index.t
                     ├── output columns: [id (#0), user_id (#1), event_name (#2)]

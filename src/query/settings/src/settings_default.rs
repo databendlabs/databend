@@ -553,6 +553,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_analyze_histogram", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables analyze histogram for query optimization during analyzing table.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables scanning aggregating index data while querying.",
@@ -804,6 +810,12 @@ impl DefaultSettings {
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("format_null_as_str", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 })
