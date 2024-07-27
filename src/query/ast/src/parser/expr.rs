@@ -1082,7 +1082,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let json_op = map(json_op, |op| ExprElement::JsonOp { op });
-    let variable_access = map(variable_ident, |name| ExprElement::VariableAccess(name));
+    let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });

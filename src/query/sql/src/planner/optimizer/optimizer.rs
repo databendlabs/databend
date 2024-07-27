@@ -284,7 +284,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 
         Plan::Set(mut plan) => {
             if let SetScalarsOrQuery::Query(q) = plan.values {
-                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                let optimized_plan = optimize(opt_ctx.clone(), *q.clone()).await?;
                 plan.values = SetScalarsOrQuery::Query(Box::new(optimized_plan))
             }
 

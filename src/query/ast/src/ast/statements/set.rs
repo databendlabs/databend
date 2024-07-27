@@ -20,17 +20,12 @@ use crate::ast::Query;
 
 // settings: set a = xxx
 // variable: set variable a = xxx
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SetType {
-    SettingsGlobal,
+    #[Default]
     SettingsSession,
+    SettingsGlobal,
     Variable,
-}
-
-impl Default for SetType {
-    fn default() -> Self {
-        SetType::SettingsSession
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
