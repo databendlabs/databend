@@ -97,7 +97,7 @@ pub async fn do_vacuum_drop_tables(
     let tables_len = tables.len();
     info!("do_vacuum_drop_tables {} tables", tables_len);
 
-    let batch_size = (tables_len / threads_nums).min(50).max(1);
+    let batch_size = (tables_len / threads_nums).clamp(1, 50);
 
     let mut table_vecs = Vec::with_capacity(tables.len());
     for table in tables {

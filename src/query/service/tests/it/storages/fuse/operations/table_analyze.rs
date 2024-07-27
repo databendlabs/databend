@@ -213,7 +213,8 @@ async fn test_table_analyze_without_prev_table_seq() -> Result<()> {
     // generate table statistics.
     let col: Vec<u8> = vec![1, 3, 0, 0, 0, 118, 5, 1, 21, 6, 3, 229, 13, 3];
     let hll: HashMap<ColumnId, MetaHLL> = HashMap::from([(0, borsh_deserialize_from_slice(&col)?)]);
-    let table_statistics = TableSnapshotStatistics::new(hll, snapshot_1.snapshot_id);
+    let table_statistics =
+        TableSnapshotStatistics::new(hll, HashMap::new(), snapshot_1.snapshot_id);
     let table_statistics_location = location_gen.snapshot_statistics_location_from_uuid(
         &table_statistics.snapshot_id,
         table_statistics.format_version(),

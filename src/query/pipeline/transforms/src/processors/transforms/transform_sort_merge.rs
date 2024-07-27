@@ -232,13 +232,12 @@ pub fn sort_merge(
     data_blocks: Vec<DataBlock>,
     sort_spilling_batch_bytes: usize,
     enable_loser_tree: bool,
-    have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
     let sort_desc = Arc::new(sort_desc);
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
         sort_desc.clone(),
-        have_order_col,
+        false,
         false,
         0,
         0,

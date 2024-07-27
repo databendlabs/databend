@@ -3588,13 +3588,13 @@ impl<'a> TypeChecker<'a> {
         let mut args_map = HashMap::new();
         arguments.iter().enumerate().for_each(|(idx, argument)| {
             if let Some(parameter) = parameters.get(idx) {
-                args_map.insert(parameter, (*argument).clone());
+                args_map.insert(parameter.as_str(), (*argument).clone());
             }
         });
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.column.name().to_string()) {
+                    if let Some(arg) = args_map.get(column.column.name()) {
                         return Ok(Some(arg.clone()));
                     }
                 }

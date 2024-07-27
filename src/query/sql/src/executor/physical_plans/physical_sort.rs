@@ -23,7 +23,7 @@ use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
-use crate::executor::physical_plans::WindowPartition;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
@@ -45,6 +45,7 @@ pub struct Sort {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+    pub window_partition: Vec<IndexType>,
 }
 
 impl Sort {
@@ -121,45 +122,50 @@ impl PhysicalPlanBuilder {
         };
 
         let input_plan = self.build(s_expr.child(0)?, required).await?;
+        let output_schema = input_plan.output_schema()?;
 
-        let window_partition = sort
+        let (window_partition, column_index): (Vec<_>, Vec<_>) = sort
             .window_partition
             .iter()
-            .map(|v| v.index)
-            .collect::<Vec<_>>();
-
-        let order_by = sort
-            .items
-            .iter()
-            .map(|v| SortDesc {
-                asc: v.asc,
-                nulls_first: v.nulls_first,
-                order_by: v.index,
-                display_name: self.metadata.read().column(v.index).name(),
+            .map(|s| {
+                (
+                    output_schema.index_of(&s.index.to_string()).unwrap(),
+                    s.index,
+                )
             })
-            .collect::<Vec<_>>();
+            .unzip();
 
-        // Add WindowPartition for parallel sort in window.
-        if !window_partition.is_empty() {
-            return Ok(PhysicalPlan::WindowPartition(WindowPartition {
+        // Add LocalShuffle for parallel sort in window.
+        let input_plan = if !window_partition.is_empty() && sort.after_exchange != Some(true) {
+            PhysicalPlan::LocalShuffle(LocalShuffle {
                 plan_id: 0,
-                input: Box::new(input_plan.clone()),
-                partition_by: window_partition.clone(),
-                order_by: order_by.clone(),
-                after_exchange: sort.after_exchange,
-                stat_info: Some(stat_info.clone()),
-            }));
-        }
+                input: Box::new(input_plan),
+                shuffle_by: window_partition.clone(),
+                column_index,
+            })
+        } else {
+            input_plan
+        };
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {
             plan_id: 0,
             input: Box::new(input_plan),
-            order_by,
+            order_by: sort
+                .items
+                .iter()
+                .map(|v| SortDesc {
+                    asc: v.asc,
+                    nulls_first: v.nulls_first,
+                    order_by: v.index,
+                    display_name: self.metadata.read().column(v.index).name(),
+                })
+                .collect(),
             limit: sort.limit,
             after_exchange: sort.after_exchange,
             pre_projection,
             stat_info: Some(stat_info),
+            window_partition,
         }))
     }
 }

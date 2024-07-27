@@ -460,8 +460,7 @@ impl FunctionRegistry {
         &mut self,
         default_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
     ) {
-        self.default_cast_rules
-            .extend(default_cast_rules.into_iter());
+        self.default_cast_rules.extend(default_cast_rules);
     }
 
     pub fn register_additional_cast_rules(
@@ -472,7 +471,7 @@ impl FunctionRegistry {
         self.additional_cast_rules
             .entry(fn_name.to_string())
             .or_default()
-            .extend(additional_cast_rules.into_iter());
+            .extend(additional_cast_rules);
     }
 
     pub fn register_auto_try_cast_rules(

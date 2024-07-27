@@ -37,7 +37,11 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
                 let ts = load_json(reader, v)?;
                 TableSnapshotStatistics::from(ts)
             }
-            TableSnapshotStatisticsVersion::V2(v) => load_json(reader, v)?,
+            TableSnapshotStatisticsVersion::V2(v) => {
+                let ts = load_json(reader, v)?;
+                TableSnapshotStatistics::from(ts)
+            }
+            TableSnapshotStatisticsVersion::V3(v) => load_json(reader, v)?,
         };
         Ok(r)
     }

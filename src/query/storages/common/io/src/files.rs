@@ -49,7 +49,7 @@ impl Files {
         // adjusts batch_size according to the `max_threads` settings,
         // limits its min/max value to 1 and 1000.
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let batch_size = (locations.len() / threads_nums).min(1000).max(1);
+        let batch_size = (locations.len() / threads_nums).clamp(1, 1000);
 
         info!(
             "remove file in batch, batch_size: {}, number of chunks {}",

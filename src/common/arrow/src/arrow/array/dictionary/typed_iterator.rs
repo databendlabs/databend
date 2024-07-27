@@ -50,13 +50,12 @@ impl<O: Offset> DictValue for Utf8Array<O> {
             .ok_or_else(|| {
                 Error::InvalidArgumentError("could not convert array to dictionary value".into())
             })
-            .map(|arr| {
+            .inspect(|arr| {
                 assert_eq!(
                     arr.null_count(),
                     0,
                     "null values in values not supported in iteration"
                 );
-                arr
             })
     }
 }
