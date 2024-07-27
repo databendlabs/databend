@@ -65,7 +65,7 @@ Charlie Marketing 55000.00 1
 David Marketing 50000.00 2
 
 
-query
+query 
 explain SELECT e.name AS EmployeeName,
     d.department_name AS DepartmentName,
     e.salary AS Salary,
@@ -87,7 +87,7 @@ Exchange
     └── WindowPartition
         ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
         ├── hash keys: [department_id]
-        ├── estimated rows: 8.00
+        ├── estimated rows: 10.00
         └── Exchange
             ├── output columns: [e.name (#1), e.salary (#3), d.department_name (#5), d.department_id (#4)]
             ├── exchange type: Hash(d.department_id (#4))
@@ -97,7 +97,7 @@ Exchange
                 ├── build keys: [d.department_id (#4)]
                 ├── probe keys: [e.department_id (#2)]
                 ├── filters: []
-                ├── estimated rows: 8.00
+                ├── estimated rows: 10.00
                 ├── Exchange(Build)
                 │   ├── output columns: [d.department_id (#4), d.department_name (#5)]
                 │   ├── exchange type: Broadcast
@@ -122,7 +122,7 @@ Exchange
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 10.00
 
-query
+query 
 explain select number, lead(number,1, 0) over (partition by number % 3 order by number+ 1),
     lead(number,2, 0) over (partition by number % 3 order by number + 1)
     from numbers(50);
@@ -177,7 +177,7 @@ CREATE OR REPLACE TABLE sales (
     net_paid DECIMAL(10, 2) NOT NULL
 );
 
-query
+query 
 explain SELECT customer_id,
     ROUND(AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS customer_avg,
     ROUND(AVG(net_paid) OVER () - AVG(net_paid) OVER (PARTITION BY customer_id), 3) AS diff_from_overall_avg
