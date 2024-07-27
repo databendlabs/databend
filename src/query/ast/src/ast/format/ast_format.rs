@@ -1030,7 +1030,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     fn visit_set(
         &mut self,
         set_type: SetType,
-        identifiers: &'ast &[Identifier],
+        identifiers: &'ast [Identifier],
         values: &'ast SetValues,
     ) {
         let mut children = vec![];
@@ -1060,7 +1060,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_unset(&mut self, unset_type: SetType, args: &'ast &[Identifier]) {
+    fn visit_unset(&mut self, unset_type: SetType, args: &'ast [Identifier]) {
         let ids = args.iter().map(|id| id.to_string()).join(",");
         let name = if unset_type == SetType::SettingsSession {
             format!("UnSet SettingsSession {}", ids)

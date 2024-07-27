@@ -437,7 +437,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::UnSetStmt {
             unset_type,
             identifiers,
-        } => visitor.visit_unset(*unset_type, identifiers),
+        } => visitor.visit_unset(*unset_type, identifiers.as_slice()),
         Statement::SetRole {
             is_default,
             role_name,

@@ -387,7 +387,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_settings(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_unset(&mut self, _set_type: SetType, _args: &'ast &[Identifier]) {}
+    fn visit_unset(&mut self, _set_type: SetType, _args: &'ast [Identifier]) {}
 
     fn visit_show_process_list(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
@@ -414,7 +414,7 @@ pub trait Visitor<'ast>: Sized {
     fn visit_set(
         &mut self,
         _set_type: SetType,
-        _idens: &'ast &[Identifier],
+        _idens: &'ast [Identifier],
         _values: &'ast SetValues,
     ) {
     }
