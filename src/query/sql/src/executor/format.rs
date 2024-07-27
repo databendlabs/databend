@@ -47,6 +47,7 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoManipulate;
@@ -62,7 +63,6 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowFunction;
-use crate::executor::physical_plans::WindowPartition;
 use crate::executor::PhysicalPlan;
 use crate::planner::Metadata;
 use crate::planner::MetadataRef;
@@ -218,10 +218,8 @@ fn to_format_tree(
         }
         PhysicalPlan::AggregateFinal(plan) => aggregate_final_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Window(plan) => window_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::WindowPartition(plan) => {
-            window_partition_to_format_tree(plan, metadata, profs)
-        }
         PhysicalPlan::Sort(plan) => sort_to_format_tree(plan, metadata, profs),
+        PhysicalPlan::LocalShuffle(plan) => local_shuffle_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Limit(plan) => limit_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RowFetch(plan) => row_fetch_to_format_tree(plan, metadata, profs),
         PhysicalPlan::HashJoin(plan) => hash_join_to_format_tree(plan, metadata, profs),
@@ -1060,13 +1058,13 @@ fn sort_to_format_tree(
     Ok(FormatTreeNode::with_children("Sort".to_string(), children))
 }
 
-fn window_partition_to_format_tree(
-    plan: &WindowPartition,
+fn local_shuffle_to_format_tree(
+    plan: &LocalShuffle,
     metadata: &Metadata,
     prof_span_set: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
-    let partition_by = plan
-        .partition_by
+    let shuffle_by = plan
+        .column_index
         .iter()
         .map(|&index| {
             let name = metadata.column(index).name();
@@ -1080,20 +1078,15 @@ fn window_partition_to_format_tree(
             "output columns: [{}]",
             format_output_columns(plan.output_schema()?, metadata, true)
         )),
-        FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
+        FormatTreeNode::new(format!("shuffle by: [{shuffle_by}]")),
     ];
-
-    if let Some(info) = &plan.stat_info {
-        let items = plan_stats_info_to_format_tree(info);
-        children.extend(items);
-    }
 
     append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
     Ok(FormatTreeNode::with_children(
-        "WindowPartition".to_string(),
+        "LocalShuffle".to_string(),
         children,
     ))
 }
