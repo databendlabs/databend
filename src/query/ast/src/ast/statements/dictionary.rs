@@ -6,6 +6,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
 use crate::ast::ColumnDefinition;
 use crate::ast::CreateOption;
@@ -14,6 +15,8 @@ use crate::ast::Identifier;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateDictionaryStmt {
     pub create_option: CreateOption,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
     pub dictionary_name: Identifier,
     pub columns: Vec<ColumnDefinition>,
     pub primary_keys: Vec<Identifier>,
@@ -32,25 +35,31 @@ impl Display for CreateDictionaryStmt {
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write!(f, "{} ", &self.dictionary_name)?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.dictionary_name)),
+        )?;
         if !self.columns.is_empty() {
             write!(f, "(")?;
             write_comma_separated_list(f, &self.columns)?;
             write!(f, ")")?;
         }
         if !self.primary_keys.is_empty() {
-            write!(f, "PRIMARY KEY(")?;
+            write!(f, "PRIMARY KEY ")?;
             write_comma_separated_list(f, &self.primary_keys)?;
-            write!(f, ")")?;
         }
-        write!(f, "SOURCE(")?;
+        write!(f, " SOURCE(")?;
         write!(f, "{}( ", &self.source_name)?;
         if !self.source_options.is_empty() {
             write_space_separated_string_map(f, &self.source_options)?;
         }
         write!(f, ")")?;
+        write!(f, ")")?;
         if let Some(comment) = &self.comment {
-            write!(f,"COMMENT {comment}")?;
+            write!(f, "COMMENT '{comment}' ")?;
         }
         Ok(())
     }
@@ -59,6 +68,8 @@ impl Display for CreateDictionaryStmt {
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct DropDictionaryStmt {
     pub if_exists: bool,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
     pub dictionary_name: Identifier,
 }
 
@@ -68,20 +79,33 @@ impl Display for DropDictionaryStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write!(f, "{}", &self.dictionary_name)?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.dictionary_name)),
+        )?;
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowCreateDictionaryStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
     pub dictionary_name: Identifier,
 }
 
 impl Display for ShowCreateDictionaryStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE DICTIONARY ")?;
-        write!(f, "{}", &self.dictionary_name)?;
-        Ok(())
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.dictionary_name)),
+        )
     }
 }

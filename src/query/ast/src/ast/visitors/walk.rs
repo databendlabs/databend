@@ -167,6 +167,16 @@ pub fn walk_table_ref<'a, V: Visitor<'a>>(visitor: &mut V, table: &'a TableRef) 
     visitor.visit_identifier(&table.table);
 }
 
+pub fn walk_dictionary_ref<'a, V: Visitor<'a>>(visitor: &mut V, dictionary: &'a DictionaryRef) {
+    if let Some(catalog) = &dictionary.catalog {
+        visitor.visit_identifier(catalog);
+    }
+    if let Some(database) = &dictionary.database {
+        visitor.visit_identifier(database);
+    }
+    visitor.visit_identifier(&dictionary.dictionary_name);
+}
+
 pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
     let Query {
         with,

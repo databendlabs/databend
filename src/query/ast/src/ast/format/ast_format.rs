@@ -143,6 +143,28 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        dictionary_name: &'ast Identifier,
+    ) {
+        let mut name = String::new();
+        name.push_str("DictionaryIdentifier ");
+        if let Some(catalog) = catalog {
+            name.push_str(&catalog.to_string());
+            name.push('.');
+        }
+        if let Some(database) = database {
+            name.push_str(&database.to_string());
+            name.push('.');
+        }
+        name.push_str(&dictionary_name.to_string());
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_column_ref(
         &mut self,
         _span: Span,
@@ -1751,7 +1773,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
 
     fn visit_create_dictionary(&mut self, stmt: &'ast CreateDictionaryStmt) {
         let mut children = Vec::new();
-        self.visit_identifier(&stmt.dictionary_name);
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
         children.push(self.children.pop().unwrap());
         if !stmt.columns.is_empty() {
             let mut columns_children = Vec::with_capacity(stmt.columns.len());
@@ -1813,7 +1835,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
-    
+
     fn visit_drop_dictionary(&mut self, stmt: &'ast DropDictionaryStmt) {
         self.visit_identifier(&stmt.dictionary_name);
         let child = self.children.pop().unwrap();

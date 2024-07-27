@@ -61,6 +61,23 @@ pub trait VisitorMut: Sized {
         walk_identifier_mut(self, table);
     }
 
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &mut Option<Identifier>,
+        database: &mut Option<Identifier>,
+        dictionary_name: &mut Identifier,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier_mut(self, catalog);
+        }
+
+        if let Some(database) = database {
+            walk_identifier_mut(self, database);
+        }
+
+        walk_identifier_mut(self, dictionary_name);
+    }
+
     fn visit_column_ref(
         &mut self,
         _span: Span,
