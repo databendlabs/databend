@@ -468,10 +468,8 @@ pub(crate) fn pretty_create_dictionary(stmt: CreateDictionaryStmt) -> RcDoc<'sta
         } else {
             RcDoc::nil()
         })
-        .append(if !stmt.comment.is_empty() {
-            RcDoc::line()
-                .append(RcDoc::text("COMMENT "))
-                .append(RcDoc::text(stmt.comment.to_string()))
+        .append(if let Some(comment) = stmt.comment {
+            RcDoc::text("COMMENT ").append(RcDoc::text(comment))
         } else {
             RcDoc::nil()
         })

@@ -820,11 +820,14 @@ fn test_statement() {
             select * from abc;
         "#,
         // dictionary
-        // r#"create dictionary user_info(user_name String) primary key(user_name) source( mysql ( host 'localhost' ) );"#,
-        r#"show dictionaries;"#,
-        r#"show create dictionary dictionary1;"#,
-        r#"drop dictionary dictionary1;"#,
-        r#"drop dictionary if exists dictionary2;"#,
+        r#"CREATE OR REPLACE DICTIONARY my_dictionary
+            (
+                user_name String,
+                age Int16
+            )
+            PRIMARY KEY (username)
+            SOURCE (mysql(host='localhost'))
+            COMMENT 'This is a comment';"#,
     ];
 
     for case in cases {
@@ -929,11 +932,6 @@ fn test_statement_error() {
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
         r#"SHOW GRANTS ON task t1;"#,
-        // dictionary
-        r#"DROP dictionary IDENTIFIER(a)"#,
-        r#"DROP dictionary IDENTIFIER(:a);"#,
-        r#"drop dictionary if dictionary1"#,
-        r#"show dictionaries format"#,
     ];
 
     for case in cases {
