@@ -182,6 +182,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
+    VariableAccess(Identifier),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -409,6 +410,7 @@ impl ExprElement {
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
+            ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
 }
@@ -640,6 +642,20 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::Hole { name } => Expr::Hole {
                 span: transform_span(elem.span.tokens),
                 name,
+            },
+            ExprElement::VariableAccess(name) => Expr::FunctionCall {
+                span: transform_span(elem.span.tokens),
+                func: FunctionCall {
+                    distinct: false,
+                    name: Identifier::from_name(transform_span(elem.span.tokens), "getvariable"),
+                    args: vec![Expr::Literal {
+                        span: transform_span(elem.span.tokens),
+                        value: Literal::String(name.to_string()),
+                    }],
+                    params: vec![],
+                    window: None,
+                    lambda: None,
+                },
             },
             _ => unreachable!(),
         };
@@ -1065,6 +1081,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let json_op = map(json_op, |op| ExprElement::JsonOp { op });
+    let variable_access = map(variable_ident, ExprElement::VariableAccess);
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
@@ -1253,6 +1270,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
             | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
             | #position : "`POSITION(... IN ...)`"
+            | #variable_access: "`$<ident>`"
         ),
         rule!(
             #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"

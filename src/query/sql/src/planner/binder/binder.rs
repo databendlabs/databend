@@ -449,17 +449,13 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetVariable {
-                is_global,
-                variable,
-                value,
-            } => {
-                self.bind_set_variable(bind_context, *is_global, variable, value)
+            Statement::SetStmt {set_type, identifiers, values } => {
+                self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetVariable(stmt) => {
-                self.bind_unset_variable(bind_context, stmt)
+            Statement::UnSetStmt{unset_type, identifiers } => {
+                self.bind_unset(bind_context, *unset_type, identifiers)
                     .await?
             }
 

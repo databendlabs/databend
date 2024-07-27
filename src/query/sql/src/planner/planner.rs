@@ -141,7 +141,7 @@ impl Planner {
                 } else {
                     parse_sql(&tokens, sql_dialect)?
                 };
-                if !matches!(stmt, Statement::SetVariable { .. })
+                if !matches!(stmt, Statement::SetStmt { .. })
                     && sql_dialect == Dialect::PRQL
                     && !prql_converted
                 {

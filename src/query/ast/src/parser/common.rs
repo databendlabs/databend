@@ -27,6 +27,7 @@ use crate::ast::quote::QuotedIdent;
 use crate::ast::ColumnID;
 use crate::ast::DatabaseRef;
 use crate::ast::Identifier;
+use crate::ast::SetType;
 use crate::ast::TableRef;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
@@ -220,6 +221,40 @@ pub fn table_ref(i: Input) -> IResult<TableRef> {
     })(i)
 }
 
+pub fn set_type(i: Input) -> IResult<SetType> {
+    map(
+        rule! {
+           (GLOBAL | SESSION | VARIABLE)?
+        },
+        |res| match res {
+            Some(token) => match token.kind {
+                TokenKind::GLOBAL => SetType::SettingsGlobal,
+                TokenKind::SESSION => SetType::SettingsSession,
+                TokenKind::VARIABLE => SetType::Variable,
+                _ => unreachable!(),
+            },
+            None => SetType::SettingsSession,
+        },
+    )(i)
+}
+
+pub fn unset_type(i: Input) -> IResult<SetType> {
+    map(
+        rule! {
+           (GLOBAL | SESSION | VARIABLE)?
+        },
+        |res| match res {
+            Some(token) => match token.kind {
+                TokenKind::GLOBAL => SetType::SettingsGlobal,
+                TokenKind::SESSION => SetType::SettingsSession,
+                TokenKind::VARIABLE => SetType::Variable,
+                _ => unreachable!(),
+            },
+            None => SetType::SettingsGlobal,
+        },
+    )(i)
+}
+
 pub fn column_id(i: Input) -> IResult<ColumnID> {
     alt((
         map_res(rule! { ColumnPosition }, |token| {
@@ -240,6 +275,13 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
         }),
         map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
     ))(i)
+}
+
+pub fn variable_ident(i: Input) -> IResult<Identifier> {
+    map(rule! { VariableAccess }, |token| {
+        let name = token.text().to_string();
+        Identifier::from_name(Some(token.span), &name[1..])
+    })(i)
 }
 
 /// Parse one to two idents separated by a dot, fulfilling from the right.

@@ -353,26 +353,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let set_variable = map(
+    let unset_stmt = map(
         rule! {
-            SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
+            UNSET ~ #unset_type ~ #unset_source
         },
-        |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
-            is_global: opt_is_global.is_some(),
-            variable,
-            value: Box::new(value),
-        },
-    );
-
-    let unset_variable = map(
-        rule! {
-            UNSET ~ SESSION? ~ #unset_source
-        },
-        |(_, opt_session_level, unset_source)| {
-            Statement::UnSetVariable(UnSetStmt {
-                session_level: opt_session_level.is_some(),
-                source: unset_source,
-            })
+        |(_, unset_type, identifiers)| Statement::UnSetStmt {
+            unset_type,
+            identifiers,
         },
     );
 
@@ -399,6 +386,58 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Statement::SetSecondaryRoles { option }
         },
     );
+
+    let set_stmt = alt((
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #subexpr(0)
+            },
+            |(_, set_type, var, _, value)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Expr(vec![Box::new(value)]),
+            },
+        ),
+        map_res(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
+                ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")"
+            },
+            |(_, set_type, _, ids, _, _, _, values, _)| {
+                if ids.len() == values.len() {
+                    Ok(Statement::SetStmt {
+                        set_type,
+                        identifiers: ids,
+                        values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                    })
+                } else {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "inconsistent number of variables and values",
+                    )))
+                }
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #query
+            },
+            |(_, set_type, var, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
+            },
+            |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vars,
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+    ));
 
     // catalogs
     let show_catalogs = map(
@@ -2120,10 +2159,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
-        ),
-        rule!(
-            #set_variable : "`SET <variable> = <value>`"
-            | #unset_variable : "`UNSET <variable>`"
             | #begin
             | #commit
             | #abort
@@ -2225,6 +2260,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
             | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
             | #show_shares: "`SHOW SHARES`"
+        ),
+        rule!(
+            #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
+            | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
         ),
         // catalog
         rule!(
@@ -2571,24 +2610,33 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     )(i)
 }
 
-pub fn unset_source(i: Input) -> IResult<UnSetSource> {
+pub fn unset_source(i: Input) -> IResult<Vec<Identifier>> {
     //#ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?
     let var = map(
         rule! {
             #ident
         },
-        |variable| UnSetSource::Var { variable },
+        |variable| vec![variable],
     );
     let vars = map(
         rule! {
             "(" ~ ^#comma_separated_list1(ident) ~ ")"
         },
-        |(_, variables, _)| UnSetSource::Vars { variables },
+        |(_, variables, _)| variables,
     );
 
     rule!(
         #var
         | #vars
+    )(i)
+}
+
+pub fn set_stmt_args(i: Input) -> IResult<(Identifier, Box<Expr>)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, expr)| (id, Box::new(expr)),
     )(i)
 }
 
