@@ -45,6 +45,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
@@ -808,6 +809,12 @@ impl TableContext for CtxDelegation {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
+    }
+
+    fn set_variable(&self, _key: String, _value: Scalar) {}
+    fn unset_variable(&self, _key: &str) {}
+    fn get_variable(&self, _key: &str) -> Option<Scalar> {
+        None
     }
 
     fn get_license_key(&self) -> String {

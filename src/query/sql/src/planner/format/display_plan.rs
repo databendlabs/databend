@@ -155,8 +155,8 @@ impl Plan {
             Plan::DropRole(_) => Ok("DropRole".to_string()),
             Plan::Presign(_) => Ok("Presign".to_string()),
 
-            Plan::SetVariable(_) => Ok("SetVariable".to_string()),
-            Plan::UnSetVariable(_) => Ok("UnSetVariable".to_string()),
+            Plan::Set(_) => Ok("Set".to_string()),
+            Plan::Unset(_) => Ok("Unset".to_string()),
             Plan::SetRole(_) => Ok("SetRole".to_string()),
             Plan::SetSecondaryRoles(_) => Ok("SetSecondaryRoles".to_string()),
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),

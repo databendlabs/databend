@@ -421,15 +421,15 @@ pub trait VisitorMut: Sized {
 
     fn visit_kill(&mut self, _kill_target: &mut KillTarget, _object_id: &mut String) {}
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        _is_global: bool,
-        _variable: &mut Identifier,
-        _value: &mut Box<Expr>,
+        _set_type: SetType,
+        _idens: &mut Vec<Identifier>,
+        _values: &mut SetValues,
     ) {
     }
 
-    fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt) {}
+    fn visit_unset(&mut self, _set_type: SetType, _args: &mut Vec<Identifier>) {}
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
     fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
