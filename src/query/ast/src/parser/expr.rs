@@ -321,7 +321,6 @@ const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
 const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
-const VARIABLE_ACCESS: Affix = Affix::Prefix(Precedence(60));
 
 const fn unary_affix(op: &UnaryOperator) -> Affix {
     match op {
@@ -411,7 +410,7 @@ impl ExprElement {
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
-            ExprElement::VariableAccess { .. } => VARIABLE_ACCESS,
+            ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
 }
