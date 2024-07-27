@@ -51,6 +51,7 @@ use crate::plans::JoinType;
 use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
+use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
 use crate::MetadataRef;
 
@@ -280,6 +281,16 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
 
             Ok(Plan::CreateTable(plan))
         }
+
+        Plan::Set(mut plan) => {
+            if let SetScalarsOrQuery::Query(q) = plan.values {
+                let optimized_plan = optimize(opt_ctx.clone(), *p.clone()).await?;
+                plan.values = SetScalarsOrQuery::Query(Box::new(optimized_plan))
+            }
+
+            Ok(Plan::Set(plan))
+        }
+
         // Already done in binder
         // Plan::RefreshIndex(mut plan) => {
         //     // use fresh index
