@@ -7,6 +7,20 @@ select value, default = value  from system.settings where name in ('max_threads'
 4 0
 56 0
 
+onlyif mysql
+statement ok
+set variable (a, b) = (select 3, 55)
+
+onlyif mysql
+statement ok
+SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = select $a + 1, $b + 1;
+
+query TT
+select value, default = value  from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek') order by value;
+----
+4 0
+56 0
+
 statement ok
 UNSET (max_threads, storage_io_min_bytes_for_seek);
 

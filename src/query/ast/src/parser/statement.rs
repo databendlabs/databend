@@ -419,20 +419,20 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         map(
             rule! {
-                SET ~ VARIABLE ~ #ident ~ "=" ~ #query
+                SET ~ #set_type ~ #ident ~ "=" ~ #query
             },
-            |(_, _, var, _, query)| Statement::SetStmt {
-                set_type: SetType::Variable,
+            |(_, set_type, var, _, query)| Statement::SetStmt {
+                set_type,
                 identifiers: vec![var],
                 values: SetValues::Query(Box::new(query)),
             },
         ),
         map(
             rule! {
-                SET ~ VARIABLE ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
             },
-            |(_, _, _, vars, _, _, query)| Statement::SetStmt {
-                set_type: SetType::Variable,
+            |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
+                set_type,
                 identifiers: vars,
                 values: SetValues::Query(Box::new(query)),
             },

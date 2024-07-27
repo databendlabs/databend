@@ -28,8 +28,6 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::SetPlan;
 use databend_common_sql::plans::SetScalarsOrQuery;
-use databend_common_sql::plans::SettingValue;
-use databend_common_sql::plans::VarValue;
 use databend_common_users::UserApiProvider;
 use futures::StreamExt;
 use futures::TryStreamExt;

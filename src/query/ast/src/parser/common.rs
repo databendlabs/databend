@@ -277,6 +277,13 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
     ))(i)
 }
 
+pub fn variable_ident(i: Input) -> IResult<Identifier> {
+    map(rule! { GetVariable }, |token| {
+        let name = token.text().to_string();
+        Identifier::from_name(Some(token.span), &name[1..])
+    })(i)
+}
+
 /// Parse one to two idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `table.column`
