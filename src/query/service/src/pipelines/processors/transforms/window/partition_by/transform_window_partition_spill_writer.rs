@@ -191,8 +191,8 @@ pub fn spilling_window_payload(
     let mut spilled_buckets_payloads = Vec::with_capacity(PARTITION_COUNT);
     let mut rows = 0;
 
-    for (bucket, block) in partitions.into_iter().enumerate() {
-        if block.num_rows() == 0 {
+    for (bucket, block) in partitions.into_iter() {
+        if block.is_empty() {
             continue;
         }
 

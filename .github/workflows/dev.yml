@@ -50,7 +50,7 @@ jobs:
     uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
-      build_profile: debug
+      build_profile: release
       runner_provider: aws
 
   linux_hive:
