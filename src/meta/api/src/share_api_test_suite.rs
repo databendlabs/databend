@@ -1803,7 +1803,7 @@ impl ShareApiTestSuite {
             }
 
             let object = ShareGrantObject::Table(table_id);
-            assert!(share_meta.entries.get(&object.to_string()).is_none());
+            assert!(!share_meta.entries.contains_key(&object.to_string()));
         }
 
         info!("--- check db and table shared_by field");
@@ -1850,7 +1850,7 @@ impl ShareApiTestSuite {
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             let object = ShareGrantObject::Table(table_id);
-            assert!(share_meta.entries.get(&object.to_string()).is_some());
+            assert!(share_meta.entries.contains_key(&object.to_string()));
 
             // then revoke the database
             let req = RevokeShareObjectReq {

@@ -53,7 +53,7 @@ pub struct PageManager {
     end: bool,
     block_end: bool,
     last_page: Option<Page>,
-    row_buffer: VecDeque<Vec<String>>,
+    row_buffer: VecDeque<Vec<Option<String>>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
     format_settings: Arc<RwLock<Option<FormatSettings>>>,
 }
@@ -129,7 +129,7 @@ impl PageManager {
 
     fn append_block(
         &mut self,
-        rows: &mut Vec<Vec<String>>,
+        rows: &mut Vec<Vec<Option<String>>>,
         block: DataBlock,
         remain_rows: usize,
         remain_size: &mut usize,
@@ -160,7 +160,7 @@ impl PageManager {
 
     #[async_backtrace::framed]
     async fn collect_new_page(&mut self, tp: &Wait) -> Result<(StringBlock, bool)> {
-        let mut res: Vec<Vec<String>> = Vec::with_capacity(self.max_rows_per_page);
+        let mut res: Vec<Vec<Option<String>>> = Vec::with_capacity(self.max_rows_per_page);
         let mut max_size_per_page = 10 * 1024 * 1024;
         while res.len() < self.max_rows_per_page {
             if let Some(row) = self.row_buffer.pop_front() {
@@ -230,8 +230,15 @@ impl PageManager {
     }
 }
 
-fn row_size(row: &[String]) -> usize {
+fn row_size(row: &[Option<String>]) -> usize {
     let n = row.len();
-    // ["1","2"],
-    row.iter().map(|s| s.len()).sum::<usize>() + n * 3 + 2
+    // ["1","2",null],
+    row.iter()
+        .map(|s| match s {
+            Some(s) => s.len(),
+            None => 2,
+        })
+        .sum::<usize>()
+        + n * 3
+        + 2
 }

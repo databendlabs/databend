@@ -18,14 +18,11 @@ use std::fmt::Formatter;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::physical_plans::AsyncFunction;
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
+use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
@@ -46,10 +43,12 @@ use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MergeIntoManipulate;
+use crate::executor::physical_plans::MergeIntoOrganize;
+use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::ReclusterSink;
-use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -124,8 +123,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::ExpressionScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::CacheScan(scan) => write!(f, "{}", scan)?,
-            PhysicalPlan::ReclusterSource(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::ReclusterSink(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::Recluster(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::UpdateSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::Udf(udf) => write!(f, "{}", udf)?,
             PhysicalPlan::Duplicate(_) => "Duplicate".fmt(f)?,
@@ -545,15 +543,9 @@ impl Display for MergeIntoOrganize {
     }
 }
 
-impl Display for ReclusterSource {
+impl Display for Recluster {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSource")
-    }
-}
-
-impl Display for ReclusterSink {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ReclusterSink")
+        write!(f, "Recluster")
     }
 }
 

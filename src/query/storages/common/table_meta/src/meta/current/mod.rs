@@ -19,7 +19,7 @@ pub use v2::ColumnMeta;
 pub use v2::ColumnStatistics;
 pub use v2::MetaHLL;
 pub use v2::Statistics;
-pub use v2::TableSnapshotStatistics;
+pub use v3::TableSnapshotStatistics;
 pub use v4::CompactSegmentInfo;
 pub use v4::SegmentInfo;
 pub use v4::TableSnapshot;
@@ -27,4 +27,5 @@ pub use v4::TableSnapshotLite;
 
 use super::v0;
 use super::v2;
+use super::v3;
 use super::v4;

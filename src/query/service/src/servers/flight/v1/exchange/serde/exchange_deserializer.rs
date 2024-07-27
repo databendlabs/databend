@@ -118,7 +118,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformExchangeDeserializer";
 
-    fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<DataBlock> {
+    fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<Vec<DataBlock>> {
         match meta.packet.pop().unwrap() {
             DataPacket::ErrorCode(v) => Err(v),
             DataPacket::Dictionary(_) => unreachable!(),
@@ -127,7 +127,7 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::MergeStatus { .. } => unreachable!(),
             DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::DataCacheMetrics(_) => unreachable!(),
-            DataPacket::FragmentData(v) => self.recv_data(meta.packet, v),
+            DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
         }
     }
 }

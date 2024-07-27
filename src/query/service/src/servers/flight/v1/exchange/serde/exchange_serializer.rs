@@ -181,7 +181,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Error;
     const NAME: &'static str = "TransformScatterExchangeSerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<DataBlock> {
+    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
         let mut new_blocks = Vec::with_capacity(meta.blocks.len());
         for (index, block) in meta.blocks.into_iter().enumerate() {
             if block.is_empty() {
@@ -195,9 +195,9 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformScatterExchangeSeriali
             });
         }
 
-        Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-            new_blocks,
-        )))
+        Ok(vec![DataBlock::empty_with_meta(
+            ExchangeShuffleMeta::create(new_blocks),
+        )])
     }
 }
 

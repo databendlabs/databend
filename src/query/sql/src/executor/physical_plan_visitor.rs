@@ -53,8 +53,7 @@ use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::ReclusterSink;
-use crate::executor::physical_plans::ReclusterSource;
+use crate::executor::physical_plans::Recluster;
 use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
@@ -107,8 +106,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
-            PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
-            PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
+            PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
             PhysicalPlan::UpdateSource(plan) => self.replace_update_source(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
@@ -124,16 +122,8 @@ pub trait PhysicalPlanReplacer {
         }
     }
 
-    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
-    }
-
-    fn replace_recluster_sink(&mut self, plan: &ReclusterSink) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
+    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
@@ -649,7 +639,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ConstantTableScan(_)
                 | PhysicalPlan::ExpressionScan(_)
                 | PhysicalPlan::CacheScan(_)
-                | PhysicalPlan::ReclusterSource(_)
+                | PhysicalPlan::Recluster(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::DeleteSource(_)
@@ -719,9 +709,6 @@ impl PhysicalPlan {
                 PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ReclusterSink(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);

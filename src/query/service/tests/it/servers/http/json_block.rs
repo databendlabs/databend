@@ -61,7 +61,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     .map(|r| r.iter().map(|v| v.to_string()).collect::<Vec<_>>())
     .collect::<Vec<_>>();
 
-    assert_eq!(json_block.data().clone(), expect);
+    assert_eq!(json_block.as_data("").clone(), expect);
     Ok(())
 }
 

@@ -489,6 +489,7 @@ impl PhysicalPlanBuilder {
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
+            recluster_info: None,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

@@ -208,12 +208,7 @@ impl PipelineBuilder {
             PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
 
             // Recluster.
-            PhysicalPlan::ReclusterSource(recluster_source) => {
-                self.build_recluster_source(recluster_source)
-            }
-            PhysicalPlan::ReclusterSink(recluster_sink) => {
-                self.build_recluster_sink(recluster_sink)
-            }
+            PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
 
             // Update.
             PhysicalPlan::UpdateSource(update) => self.build_update_source(update),

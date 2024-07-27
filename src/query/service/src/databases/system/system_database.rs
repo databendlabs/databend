@@ -146,7 +146,7 @@ impl SystemDatabase {
             // Not load the disable system tables.
             if config.query.disable_system_table_load {
                 let name = tbl.name();
-                if disable_tables.get(name).is_none() {
+                if !disable_tables.contains_key(name) {
                     sys_db_meta.insert("system", tbl);
                 }
             } else {

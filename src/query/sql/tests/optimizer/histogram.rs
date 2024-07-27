@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_sql::optimizer::Histogram;
-use databend_common_sql::optimizer::HistogramBucket;
 use databend_common_storage::Datum;
+use databend_common_storage::Histogram;
+use databend_common_storage::HistogramBucket;
 
 #[test]
 fn test_histogram() {
     let buckets = vec![
-        HistogramBucket::new(Datum::UInt(1), 2.0, 1.0),
-        HistogramBucket::new(Datum::UInt(2), 2.0, 1.0),
+        HistogramBucket::new(Datum::UInt(0), Datum::UInt(1), 2.0, 1.0),
+        HistogramBucket::new(Datum::UInt(1), Datum::UInt(2), 2.0, 1.0),
     ];
 
-    let histogram = Histogram::new(buckets);
+    let histogram = Histogram::new(buckets, false);
     assert_eq!(histogram.num_buckets(), 2);
     assert_eq!(histogram.num_values(), 4.0);
     assert_eq!(histogram.num_distinct_values(), 2.0);

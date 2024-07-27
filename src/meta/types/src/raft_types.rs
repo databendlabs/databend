@@ -44,45 +44,44 @@ pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;
 pub type LogId = openraft::LogId<NodeId>;
 pub type Vote = openraft::Vote<NodeId>;
 
-pub type Membership = openraft::Membership<NodeId, MembershipNode>;
-pub type StoredMembership = openraft::StoredMembership<NodeId, MembershipNode>;
+pub type Membership = openraft::Membership<TypeConfig>;
+pub type StoredMembership = openraft::StoredMembership<TypeConfig>;
 
 pub type EntryPayload = openraft::EntryPayload<TypeConfig>;
 pub type Entry = openraft::Entry<TypeConfig>;
 
-pub type SnapshotMeta = openraft::SnapshotMeta<NodeId, MembershipNode>;
+pub type SnapshotMeta = openraft::SnapshotMeta<TypeConfig>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
 #[allow(dead_code)]
 pub type SnapshotSegmentId = openraft::SnapshotSegmentId;
 
-pub type RaftMetrics = openraft::RaftMetrics<NodeId, MembershipNode>;
+pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
 
-pub type ErrorSubject = openraft::ErrorSubject<NodeId>;
+pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
 
-pub type RPCError<E> = openraft::error::RPCError<NodeId, MembershipNode, E>;
-pub type RemoteError<E> = openraft::error::RemoteError<NodeId, MembershipNode, E>;
-pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<NodeId, E>;
+pub type RPCError<E = openraft::error::Infallible> = openraft::error::RPCError<TypeConfig, E>;
+pub type RemoteError<E> = openraft::error::RemoteError<TypeConfig, E>;
+pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<TypeConfig, E>;
 pub type NetworkError = openraft::error::NetworkError;
 
-pub type StorageError = openraft::StorageError<NodeId>;
-pub type StorageIOError = openraft::StorageIOError<NodeId>;
-pub type ForwardToLeader = openraft::error::ForwardToLeader<NodeId, MembershipNode>;
-pub type Fatal = openraft::error::Fatal<NodeId>;
-pub type ChangeMembershipError = openraft::error::ChangeMembershipError<NodeId>;
-pub type ClientWriteError = openraft::error::ClientWriteError<NodeId, MembershipNode>;
-pub type InitializeError = openraft::error::InitializeError<NodeId, MembershipNode>;
+pub type StorageError = openraft::StorageError<TypeConfig>;
+pub type ForwardToLeader = openraft::error::ForwardToLeader<TypeConfig>;
+pub type Fatal = openraft::error::Fatal<TypeConfig>;
+pub type ChangeMembershipError = openraft::error::ChangeMembershipError<TypeConfig>;
+pub type ClientWriteError = openraft::error::ClientWriteError<TypeConfig>;
+pub type InitializeError = openraft::error::InitializeError<TypeConfig>;
 pub type StreamingError<E = openraft::error::Infallible> =
     openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
-pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<NodeId>;
+pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<TypeConfig>;
 pub type InstallSnapshotRequest = openraft::raft::InstallSnapshotRequest<TypeConfig>;
-pub type InstallSnapshotResponse = openraft::raft::InstallSnapshotResponse<NodeId>;
-pub type SnapshotResponse = openraft::raft::SnapshotResponse<NodeId>;
+pub type InstallSnapshotResponse = openraft::raft::InstallSnapshotResponse<TypeConfig>;
+pub type SnapshotResponse = openraft::raft::SnapshotResponse<TypeConfig>;
 pub type InstallSnapshotError = openraft::error::InstallSnapshotError;
 pub type SnapshotMismatch = openraft::error::SnapshotMismatch;
-pub type VoteRequest = openraft::raft::VoteRequest<NodeId>;
-pub type VoteResponse = openraft::raft::VoteResponse<NodeId>;
+pub type VoteRequest = openraft::raft::VoteRequest<TypeConfig>;
+pub type VoteResponse = openraft::raft::VoteResponse<TypeConfig>;
 
 pub fn new_log_id(term: u64, node_id: NodeId, index: u64) -> LogId {
     LogId::new(CommittedLeaderId::new(term, node_id), index)
