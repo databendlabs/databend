@@ -259,10 +259,10 @@ impl<K: Eq + Hash, V, S: BuildHasher, M: CountableMeter<K, V>> Cache<K, V, S, M>
     /// cache.put(1, "a");
     /// assert!(cache.contains(&1));
     /// ```
-    fn contains<Q: ?Sized>(&self, key: &Q) -> bool
+    fn contains<Q>(&self, key: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash + Eq + ?Sized,
     {
         self.map.contains_key(key)
     }

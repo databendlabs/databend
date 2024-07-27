@@ -19,12 +19,14 @@
 //! Fixed-length containers with optional values
 //! that are laid in memory according to the Arrow specification.
 //! Each array type has its own `struct`. The following are the main array types:
+//!
 //! * [`PrimitiveArray`] and [`MutablePrimitiveArray`], an array of values with a fixed length such as integers, floats, etc.
 //! * [`BooleanArray`] and [`MutableBooleanArray`], an array of boolean values (stored as a bitmap)
 //! * [`Utf8Array`] and [`MutableUtf8Array`], an array of variable length utf8 values
 //! * [`BinaryArray`] and [`MutableBinaryArray`], an array of opaque variable length values
 //! * [`ListArray`] and [`MutableListArray`], an array of arrays (e.g. `[[1, 2], None, [], [None]]`)
 //! * [`StructArray`] and [`MutableStructArray`], an array of arrays identified by a string (e.g. `{"a": [1, 2], "b": [true, false]}`)
+//!
 //! All immutable arrays implement the trait object [`Array`] and that can be downcasted
 //! to a concrete struct based on [`PhysicalType`](crate::arrow::datatypes::PhysicalType) available from [`Array::data_type`].
 //! All immutable arrays are backed by [`Buffer`](crate::arrow::buffer::Buffer) and thus cloning and slicing them is `O(1)`.

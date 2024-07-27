@@ -38,7 +38,6 @@ pub enum Wait {
 #[derive(Clone)]
 pub struct Page {
     pub data: StringBlock,
-    pub total_rows: usize,
 }
 
 pub struct ResponseData {
@@ -95,7 +94,6 @@ impl PageManager {
                 self.total_rows += num_row;
                 let page = Page {
                     data: block,
-                    total_rows: self.total_rows,
                 };
                 if num_row > 0 {
                     self.total_pages += 1;
@@ -109,7 +107,6 @@ impl PageManager {
                 // we simply return an empty page.
                 let page = Page {
                     data: StringBlock::default(),
-                    total_rows: self.total_rows,
                 };
                 Ok(page)
             }

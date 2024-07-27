@@ -121,9 +121,11 @@ impl BlockMeta {
     }
 
     /// Get the page size of the block.
+    ///
     /// - If the format is parquet, its page size is its row count.
     /// - If the format is native, its page size is the row count of each page.
-    /// (The row count of the last page may be smaller than the page size)
+    ///
+    /// The row count of the last page may be smaller than the page size
     pub fn page_size(&self) -> u64 {
         if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
             meta.pages.first().unwrap().num_values

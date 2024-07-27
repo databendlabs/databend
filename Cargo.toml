@@ -344,17 +344,10 @@ async_fn_in_trait = "allow"
 
 # TODO(andylokandy): Remove these once we have fixed all the issues.
 unexpected_cfgs = "allow"
-dead_code = "allow"
-for_loops_over_fallibles = "allow"
 
 [workspace.lints.clippy]
 useless_format = "allow"
 mutable_key_type = "allow"
-
-# TODO(andylokandy): Remove these once we have fixed all the issues.
-multiple_bound_locations = "allow"
-doc_lazy_continuation = "allow"
-to_string_trait_impl = "allow"
 
 [profile.release]
 debug = 1

@@ -162,7 +162,7 @@ impl ExploreExprTask {
 
         for rule_id in rule_set.iter() {
             let apply_rule_task =
-                ApplyRuleTask::new(self.ctx.clone(), rule_id, m_expr.group_index, m_expr.index)
+                ApplyRuleTask::new(rule_id, m_expr.group_index, m_expr.index)
                     .with_parent(self.ref_count.clone());
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
