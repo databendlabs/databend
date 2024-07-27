@@ -1837,7 +1837,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_drop_dictionary(&mut self, stmt: &'ast DropDictionaryStmt) {
-        self.visit_identifier(&stmt.dictionary_name);
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
         let child = self.children.pop().unwrap();
         let name = "DropDictionary".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
@@ -1846,7 +1846,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
     }
 
     fn visit_show_create_dictionary(&mut self, stmt: &'ast ShowCreateDictionaryStmt) {
-        self.visit_identifier(&stmt.dictionary_name);
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
         let child = self.children.pop().unwrap();
         let name = "ShowCreateDictionary".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
