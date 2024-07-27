@@ -278,7 +278,7 @@ pub fn column_id(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn variable_ident(i: Input) -> IResult<Identifier> {
-    map(rule! { GetVariable }, |token| {
+    map(rule! { VariableAccess }, |token| {
         let name = token.text().to_string();
         Identifier::from_name(Some(token.span), &name[1..])
     })(i)

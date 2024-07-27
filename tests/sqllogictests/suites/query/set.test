@@ -40,9 +40,9 @@ set variable (b, c) = ('yy', 'zz');
 
 onlyif mysql
 query ITT
-select getvariable('a') + getvariable('a'), getvariable('b'), getvariable('c'), getvariable('d')  
+select $a + getvariable('a') + $a, getvariable('b'), getvariable('c'), getvariable('d')  
 ----
-2 yy zz NULL
+3 yy zz NULL
 
 onlyif mysql
 statement ok
@@ -53,3 +53,6 @@ query ITT
 select getvariable('a'), getvariable('b'), 'xx' || 'yy' || getvariable('c') , getvariable('d')  
 ----
 NULL NULL xxyyzz NULL
+
+statement ok
+unset variable (a, b, c)

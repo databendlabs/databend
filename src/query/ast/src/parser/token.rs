@@ -150,7 +150,7 @@ pub enum TokenKind {
     ColumnPosition,
 
     #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
-    GetVariable,
+    VariableAccess,
 
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]

@@ -182,7 +182,7 @@ pub enum ExprElement {
     UnaryOp {
         op: UnaryOperator,
     },
-    GetVariable(Identifier),
+    VariableAccess(Identifier),
     /// `CAST` expression, like `CAST(expr AS target_type)`
     Cast {
         expr: Box<Expr>,
@@ -321,6 +321,7 @@ const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
 const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
+const VARIABLE_ACCESS: Affix = Affix::Prefix(Precedence(60));
 
 const fn unary_affix(op: &UnaryOperator) -> Affix {
     match op {
@@ -410,7 +411,7 @@ impl ExprElement {
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
-            ExprElement::GetVariable { .. } => Affix::Nilfix,
+            ExprElement::VariableAccess { .. } => VARIABLE_ACCESS,
         }
     }
 }
@@ -643,7 +644,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 name,
             },
-            ExprElement::GetVariable(name) => Expr::FunctionCall {
+            ExprElement::VariableAccess(name) => Expr::FunctionCall {
                 span: transform_span(elem.span.tokens),
                 func: FunctionCall {
                     distinct: false,
@@ -1081,7 +1082,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let binary_op = map(binary_op, |op| ExprElement::BinaryOp { op });
     let json_op = map(json_op, |op| ExprElement::JsonOp { op });
-    let get_variable = map(variable_ident, |name| ExprElement::GetVariable(name));
+    let variable_access = map(variable_ident, |name| ExprElement::VariableAccess(name));
 
     let unary_op = map(unary_op, |op| ExprElement::UnaryOp { op });
     let map_access = map(map_access, |accessor| ExprElement::MapAccess { accessor });
@@ -1270,7 +1271,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
             | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
             | #position : "`POSITION(... IN ...)`"
-            | #get_variable: "`$<ident>`"
+            | #variable_access: "`$<ident>`"
         ),
         rule!(
             #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
