@@ -867,10 +867,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let create_dictionary = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ DICTIONARY ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
+            ~ #dot_separated_idents_1_to_3
             ~ "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
-            ~ PRIMARY ~ ^KEY ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
-            ~ SOURCE ~ ^"(" ~ ^#ident ~ ^"("
+            ~ PRIMARY ~ ^KEY  ~ ^#comma_separated_list1(ident)
+            ~ ^SOURCE ~ ^"(" ~ ^#ident ~ ^"("
             ~ ( #table_option )?
             ~ ^")" ~ ^")"
             ~ ( COMMENT ~ ^#literal_string )?
@@ -880,15 +880,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             opt_or_replace,
             _,
             opt_if_not_exists,
-            dictionary_name,
+            (catalog, database, dictionary_name),
             _,
             columns,
             _,
             _,
             _,
-            _,
-            primary_keys, 
-            _,
+            primary_keys,
             _,
             _,
             source_name,
@@ -902,6 +900,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
             Ok(Statement::CreateDictionary(CreateDictionaryStmt {
                 create_option,
+                catalog,
+                database,
                 dictionary_name,
                 columns,
                 primary_keys,
@@ -913,11 +913,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let drop_dictionary = map(
         rule! {
-            DROP ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, opt_if_exists, dictionary_name)| {
+        |(_, _, opt_if_exists, (catalog, database, dictionary_name))| {
             Statement::DropDictionary(DropDictionaryStmt {
                 if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
                 dictionary_name,
             })
         },
@@ -930,10 +932,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_create_dictionary = map(
         rule! {
-            SHOW ~ CREATE ~ DICTIONARY ~ #ident
+            SHOW ~ CREATE ~ DICTIONARY ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, dictionary_name)| {
-            Statement::ShowCreateDictionary(ShowCreateDictionaryStmt { dictionary_name })
+        |(_, _, _, (catalog, database, dictionary_name))| {
+            Statement::ShowCreateDictionary(ShowCreateDictionaryStmt {
+                catalog,
+                database,
+                dictionary_name,
+            })
         },
     );
 
@@ -2227,7 +2233,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         ),
         // dictionary
         rule!(
-            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] [PRIMARY KEY (<primary_key>, ...)] SOURCE (<source_name> ([<source_options>]) ) [COMMENT <comment>] `"//[<table_options>]
+            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
             | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
             | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
             | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"

@@ -820,13 +820,13 @@ fn test_statement() {
             select * from abc;
         "#,
         // dictionary
-        r#"CREATE OR REPLACE DICTIONARY my_dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
             (
                 user_name String,
                 age Int16
             )
-            PRIMARY KEY (username)
-            SOURCE (mysql(host='localhost'))
+            PRIMARY KEY username
+            SOURCE (mysql(host='localhost' username='root' password='1234'))
             COMMENT 'This is a comment';"#,
     ];
 
@@ -932,6 +932,20 @@ fn test_statement_error() {
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
         r#"SHOW GRANTS ON task t1;"#,
+        // dictionary
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            );"#,
+        r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+        (
+            user_name tuple(),
+            age Int16
+        )
+        PRIMARY KEY username
+        SOURCE ()
+        COMMENT 'This is a comment';"#,
     ];
 
     for case in cases {
