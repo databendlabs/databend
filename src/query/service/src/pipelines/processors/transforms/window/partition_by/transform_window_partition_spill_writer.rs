@@ -214,7 +214,7 @@ pub fn spilling_window_payload(
 
         write_data.push(columns_data);
         spilled_buckets_payloads.push(BucketSpilledWindowPayload {
-            bucket: bucket as isize,
+            bucket,
             location: location.clone(),
             data_range: begin..write_size,
             columns_layout,
