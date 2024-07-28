@@ -99,7 +99,7 @@ impl SnapshotGenerator for MutationGenerator {
                         prev_table_seq,
                         &previous.timestamp(),
                         previous.snapshot_id(),
-                        &previous.least_visiable_timestamp(),
+                        &previous.least_visible_timestamp(),
                         schema,
                         new_summary,
                         new_segments,

@@ -55,7 +55,7 @@ fn snapshot_timestamp_monotonic_increase() {
         None,
         &prev.timestamp,
         prev.prev_snapshot_id,
-        &prev.least_visiable_timestamp,
+        &prev.least_visible_timestamp,
         schema,
         Default::default(),
         vec![],

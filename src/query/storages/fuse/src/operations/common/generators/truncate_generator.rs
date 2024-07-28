@@ -76,7 +76,7 @@ impl SnapshotGenerator for TruncateGenerator {
             prev_table_seq,
             &prev_timestamp,
             prev_snapshot_id,
-            &previous.as_ref().and_then(|v| v.least_visiable_timestamp),
+            &previous.as_ref().and_then(|v| v.least_visible_timestamp),
             schema,
             Default::default(),
             vec![],

@@ -41,7 +41,7 @@ use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
-/// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_visiable_timestamp` is added.
+/// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_visible_timestamp` is added.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot meta data
@@ -91,8 +91,8 @@ pub struct TableSnapshot {
 
     /// Some segments and blocks are generated in a transaction, the base snapshot is the latest snapshot committed before the transaction.
     ///
-    /// If timestamp of the base snapshot is less than the `least_visiable_timestamp` of newly generated snapshot, the newly generated snapshot can't be committed.
-    pub least_visiable_timestamp: Option<DateTime<Utc>>,
+    /// If timestamp of the base snapshot is less than the `least_visible_timestamp` of newly generated snapshot, the newly generated snapshot can't be committed.
+    pub least_visible_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
@@ -101,7 +101,7 @@ impl TableSnapshot {
         prev_table_seq: Option<u64>,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        prev_least_visiable_timestamp: &Option<DateTime<Utc>>,
+        prev_least_visible_timestamp: &Option<DateTime<Utc>>,
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
@@ -119,7 +119,7 @@ impl TableSnapshot {
         let timestamp = Some(trimmed_timestamp);
 
         let candidate = trimmed_timestamp - Duration::days(data_retention_time_in_days as i64);
-        let least_visiable_timestamp = match prev_least_visiable_timestamp {
+        let least_visible_timestamp = match prev_least_visible_timestamp {
             // UUIDv7 values are created by allocating a Unix timestamp in milliseconds in the most significant 48 bits
             // https://www.ietf.org/rfc/rfc9562.html#section-5.7
             Some(prev) => candidate.max(*prev + Duration::milliseconds(1)),
@@ -130,13 +130,14 @@ impl TableSnapshot {
         // both of them are allowed to be committed here.
         if base_snapshot_timestamp
             .as_ref()
-            // safe to unwrap, least_visiable_timestamp of newly generated snapshot must be some
-            .is_some_and(|base| base < &least_visiable_timestamp)
+            // safe to unwrap, least_visible_timestamp of newly generated snapshot must be some
+            .is_some_and(|base| base < &least_visible_timestamp)
         {
             return Err(ErrorCode::TransactionTimeout(format!(
-                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}",
+                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}, the least_visible_timestamp of the new snapshot is: {:?}",
                 base_snapshot_timestamp.unwrap(),
-                trimmed_timestamp
+                trimmed_timestamp,
+                least_visible_timestamp
             )));
         }
 
@@ -151,7 +152,7 @@ impl TableSnapshot {
             segments,
             cluster_key_meta,
             table_statistics_location,
-            least_visiable_timestamp: Some(least_visiable_timestamp),
+            least_visible_timestamp: Some(least_visible_timestamp),
         })
     }
 
@@ -184,7 +185,7 @@ impl TableSnapshot {
             prev_table_seq,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),
-            &previous.least_visiable_timestamp,
+            &previous.least_visible_timestamp,
             clone.schema,
             clone.summary,
             clone.segments,
@@ -277,7 +278,7 @@ where T: Into<v4::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_visiable_timestamp: None,
+            least_visible_timestamp: None,
         }
     }
 }
