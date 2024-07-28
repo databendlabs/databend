@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
 use std::hash::Hash;
 
 use databend_common_arrow::arrow::buffer::Buffer;
@@ -21,6 +22,7 @@ use ordered_float::OrderedFloat;
 use crate::geo_buf;
 use crate::geo_buf::Object;
 use crate::FeatureKind;
+use crate::GeoJson;
 use crate::Geometry;
 use crate::GeometryBuilder;
 use crate::GeometryRef;
@@ -153,18 +155,19 @@ fn eq_f64(a: f64, b: f64) -> bool {
     if a == b || a.is_nan() && b.is_nan() {
         return true;
     }
-    if a.is_sign_positive() != b.is_sign_positive() {
-        return a == b; // values of different signs are only equal if both are zero.
-    }
-    // https://jtempest.github.io/float_eq-rs/book/background/float_comparison_algorithms.html#units-in-the-last-place-ulps-comparison
-    let a_bits = a.to_bits();
-    let b_bits = b.to_bits();
-    const TOL: u64 = 10;
-    if a_bits > b_bits {
-        a_bits - b_bits <= TOL
-    } else {
-        b_bits - a_bits <= TOL
-    }
+    return false;
+    // if a.is_sign_positive() != b.is_sign_positive() {
+    //     return a == b; // values of different signs are only equal if both are zero.
+    // }
+    // // https://jtempest.github.io/float_eq-rs/book/background/float_comparison_algorithms.html#units-in-the-last-place-ulps-comparison
+    // let a_bits = a.to_bits();
+    // let b_bits = b.to_bits();
+    // const TOL: u64 = 10;
+    // if a_bits > b_bits {
+    //     a_bits - b_bits <= TOL
+    // } else {
+    //     b_bits - a_bits <= TOL
+    // }
 }
 
 impl Geometry {
@@ -182,5 +185,61 @@ impl Geometry {
             vec![x],
             vec![y],
         )
+    }
+}
+
+impl<'a> PartialOrd for GeometryRef<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.buf[0].partial_cmp(&other.buf[0]) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.column_x.len().partial_cmp(&other.column_x.len()) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.buf.cmp(other.buf) {
+            core::cmp::Ordering::Equal => {}
+            ord => return Some(ord),
+        }
+        match self.column_x.partial_cmp(other.column_x) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.column_y.partial_cmp(other.column_y)
+    }
+}
+
+impl PartialOrd for Geometry {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.as_ref().partial_cmp(&other.as_ref())
+    }
+}
+
+impl PartialEq for Geometry {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(&other.as_ref())
+    }
+}
+
+impl Eq for Geometry {}
+
+impl<'a> Debug for GeometryRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Ok(GeoJson(str)) = (*self).try_into() {
+            f.write_str(&str)
+        } else {
+            f.debug_struct("GeometryRef")
+                .field("buf", &self.buf)
+                .field("x", &self.column_x)
+                .field("y", &self.column_y)
+                .finish()
+        }
+    }
+}
+
+impl Debug for Geometry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_ref())
     }
 }

@@ -34,8 +34,7 @@ pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Ewkt;
 pub use wkt_adapter::Wkt;
 
-// todo readable Debug
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Geometry {
     buf: Vec<u8>,
     column_x: Buffer<f64>,
@@ -62,7 +61,7 @@ impl Default for Geometry {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],

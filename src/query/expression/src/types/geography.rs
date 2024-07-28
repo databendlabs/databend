@@ -40,8 +40,30 @@ use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::ColumnBuilder;
 
-#[derive(Clone, Default, Debug)]
+pub const LATITUDE_MIN: f64 = -90.0;
+pub const LATITUDE_MAX: f64 = 90.0;
+pub const LONGITUDE_MIN: f64 = -180.0;
+pub const LONGITUDE_MAX: f64 = 180.0;
+
+#[derive(Clone, Default, Debug, PartialOrd)]
 pub struct Geography(pub Geometry);
+
+impl Geography {
+    pub fn check(&self) -> Result<(), String> {
+        let r = self.0.as_ref();
+        if r.x()
+            .iter()
+            .all(|longitude| (LONGITUDE_MIN..=LONGITUDE_MAX).contains(longitude))
+            && r.y()
+                .iter()
+                .all(|latitude| (LATITUDE_MIN..=LATITUDE_MAX).contains(latitude))
+        {
+            Ok(())
+        } else {
+            Err("geography is out of range".to_string())
+        }
+    }
+}
 
 impl Serialize for Geography {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -77,7 +99,7 @@ impl PartialEq for Geography {
 
 impl Eq for Geography {}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd)]
 pub struct GeographyRef<'a>(pub GeometryRef<'a>);
 
 impl<'a> GeographyRef<'a> {
@@ -472,11 +494,12 @@ impl GeographyColumnBuilder {
 
     pub fn pop(&mut self) -> Option<Geography> {
         if self.len() > 0 {
-            let pop_count = self.offsets[self.offsets.len() - 1] as usize
-                - self.offsets[self.offsets.len() - 2] as usize;
+            let at = self.x.len()
+                - (self.offsets[self.offsets.len() - 1] - self.offsets[self.offsets.len() - 2])
+                    as usize;
             self.offsets.pop();
-            let x = self.x.split_off(pop_count);
-            let y = self.y.split_off(pop_count);
+            let x = self.x.split_off(at);
+            let y = self.y.split_off(at);
             let buf = self.buf.pop().unwrap();
             Some(Geography(Geometry::new(buf, x, y)))
         } else {

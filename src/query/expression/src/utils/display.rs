@@ -267,7 +267,7 @@ impl<'a> Display for ScalarRef<'a> {
                     .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
                 write!(f, "'{geom}'")
             }
-            ScalarRef::Geography(v) => write!(f, "'{v:?}'"),
+            ScalarRef::Geography(v) => write!(f, "'{:?}'", v),
         }
     }
 }

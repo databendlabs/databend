@@ -686,6 +686,7 @@ impl<'a> ScalarRef<'a> {
             }
             (ScalarRef::Variant(_), ScalarRef::Variant(_)) => Some(DataType::Variant),
             (ScalarRef::Geometry(_), ScalarRef::Geometry(_)) => Some(DataType::Geometry),
+            (ScalarRef::Geography(_), ScalarRef::Geography(_)) => Some(DataType::Geography),
             _ => None,
         }
     }
@@ -708,6 +709,7 @@ impl<'a> ScalarRef<'a> {
                 (ScalarRef::Bitmap(_), DataType::Bitmap) => true,
                 (ScalarRef::Variant(_), DataType::Variant) => true,
                 (ScalarRef::Geometry(_), DataType::Geometry) => true,
+                (ScalarRef::Geography(_), DataType::Geography) => true,
                 (ScalarRef::Array(val), DataType::Array(ty)) => val.data_type() == *ty,
                 (ScalarRef::Map(val), DataType::Map(ty)) => val.data_type() == *ty,
                 (ScalarRef::Tuple(val), DataType::Tuple(ty)) => {
@@ -745,6 +747,7 @@ impl PartialOrd for Scalar {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
             }
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
+            (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
             _ => None,
         }
     }
@@ -781,6 +784,7 @@ impl<'a, 'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'a> {
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
+            (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
 
             // By default, null is biggest in pgsql
             (ScalarRef::Null, _) => Some(Ordering::Greater),
@@ -877,6 +881,9 @@ impl PartialOrd for Column {
                 .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
+            }
+            (Column::Geography(col1), Column::Geography(col2)) => {
+                col1.iter().partial_cmp(col2.iter())
             }
             _ => None,
         }
