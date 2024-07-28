@@ -8,5 +8,5 @@
 Ok
 <<<<
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2')
-4
+2
 <<<<
