@@ -113,14 +113,16 @@ impl FuseTable {
                 .project_column_ref(|name| schema.index_of(name).unwrap())
         }));
 
-        let row_num_index = all_column_indices.len();
+        let num_column_indices = all_column_indices.len();
         let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
             .filter(|index| !col_indices.contains(index))
             .collect();
         let mut source_col_indices = col_indices;
-        if matches!(mutation_action, MutationAction::Deletion) && update_stream_columns {
-            source_col_indices.push(row_num_index);
+        if matches!(mutation_action, MutationAction::Deletion) && update_stream_columns
+            || matches!(mutation_action, MutationAction::Update)
+        {
+            source_col_indices.push(num_column_indices);
         }
         let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
