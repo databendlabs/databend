@@ -92,9 +92,11 @@ pub struct Config {
     pub initial_cluster: Vec<String>,
 
     /// The node id. Used in these cases:
+    ///
     /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
     /// 2. --initial_cluster with new cluster node id.
-    ///  Otherwise this argument is ignored.
+    ///
+    /// Otherwise this argument is ignored.
     #[clap(long, default_value = "0")]
     #[serde(alias = "kvsrv_id")]
     pub id: u64,

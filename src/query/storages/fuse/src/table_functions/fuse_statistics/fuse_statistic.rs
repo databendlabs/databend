@@ -27,17 +27,15 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
-use crate::sessions::TableContext;
 use crate::FuseTable;
 
 pub struct FuseStatistic<'a> {
-    pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
 }
 
 impl<'a> FuseStatistic<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
-        Self { ctx, table }
+    pub fn new(table: &'a FuseTable) -> Self {
+        Self { table }
     }
 
     #[async_backtrace::framed]

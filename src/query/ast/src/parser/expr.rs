@@ -1769,7 +1769,7 @@ pub fn map_element(i: Input) -> IResult<(Literal, Expr)> {
 pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let point_pos = text.find('.');
-    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let e_pos = text.find(['e', 'E']);
     let (i_part, f_part, e_part) = match (point_pos, e_pos) {
         (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
         (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
@@ -1819,7 +1819,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     let text = text.trim_start_matches('0');
     let contains_underscore = text.contains('_');
     if contains_underscore {
-        let text = text.replace(|p| p == '_', "");
+        let text = text.replace('_', "");
         return parse_uint(&text, radix);
     }
 

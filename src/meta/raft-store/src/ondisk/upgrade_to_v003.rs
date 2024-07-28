@@ -58,7 +58,7 @@ impl OnDisk {
             .await
             .map_err(|e| {
                 MetaStorageError::snapshot_error(&e, || {
-                    format!("convert v002 snapshot to v003 {}", snapshot_id.to_string())
+                    format!("convert v002 snapshot to v003 {}", snapshot_id)
                 })
             })?;
 
