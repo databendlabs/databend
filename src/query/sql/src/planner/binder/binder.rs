@@ -270,7 +270,11 @@ impl<'a> Binder {
             Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
-
+            // Dictionaries
+            Statement::CreateDictionary(_stmt) => todo!(),
+            Statement::DropDictionary(_stmt) => todo!(),
+            Statement::ShowCreateDictionary(_stmt) => todo!(),
+            Statement::ShowDictionaries { show_options: _ } => todo!(),
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -449,17 +453,13 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetVariable {
-                is_global,
-                variable,
-                value,
-            } => {
-                self.bind_set_variable(bind_context, *is_global, variable, value)
+            Statement::SetStmt {set_type, identifiers, values } => {
+                self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetVariable(stmt) => {
-                self.bind_unset_variable(bind_context, stmt)
+            Statement::UnSetStmt{unset_type, identifiers } => {
+                self.bind_unset(bind_context, *unset_type, identifiers)
                     .await?
             }
 

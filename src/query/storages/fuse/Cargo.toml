@@ -15,6 +15,7 @@ ahash = "0.8.3"
 arrow = { workspace = true }
 arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
+async-channel = "1.7.1"
 async-trait = { workspace = true }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 bytes = { workspace = true }

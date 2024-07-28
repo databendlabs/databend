@@ -2,6 +2,9 @@ statement ok
 USE default
 
 statement ok
+set sql_dialect = 'PostgreSQL'
+
+statement ok
 DROP TABLE IF EXISTS `05_0003_at_t0`
 
 statement ok

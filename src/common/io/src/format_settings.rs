@@ -21,6 +21,7 @@ pub struct FormatSettings {
     pub timezone: Tz,
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
+    pub format_null_as_str: bool,
 }
 
 // only used for tests
@@ -30,6 +31,7 @@ impl Default for FormatSettings {
             timezone: "UTC".parse::<Tz>().unwrap(),
             geometry_format: GeometryDataType::default(),
             enable_dst_hour_fix: false,
+            format_null_as_str: true,
         }
     }
 }

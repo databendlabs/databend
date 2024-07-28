@@ -2857,6 +2857,7 @@ impl<'a> TypeChecker<'a> {
             "greatest",
             "least",
             "stream_has_data",
+            "getvariable",
         ]
     }
 
@@ -3208,6 +3209,30 @@ impl<'a> TypeChecker<'a> {
             ("least", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
+            }
+            ("getvariable", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, _) = self.resolve(args[0]).ok()?;
+
+                if let Ok(arg) = ConstantExpr::try_from(scalar) {
+                    if let Scalar::String(var_name) = arg.value {
+                        let var_value = self.ctx.get_variable(&var_name).unwrap_or(Scalar::Null);
+                        let var_value = shrink_scalar(var_value);
+                        let data_type = var_value.as_ref().infer_data_type();
+                        return Some(Ok(Box::new((
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span,
+                                value: var_value,
+                            }),
+                            data_type,
+                        ))));
+                    }
+                }
+                Some(Err(ErrorCode::SemanticError(
+                    "Variable name must be a constant string",
+                )))
             }
             _ => None,
         }
@@ -3563,13 +3588,13 @@ impl<'a> TypeChecker<'a> {
         let mut args_map = HashMap::new();
         arguments.iter().enumerate().for_each(|(idx, argument)| {
             if let Some(parameter) = parameters.get(idx) {
-                args_map.insert(parameter, (*argument).clone());
+                args_map.insert(parameter.as_str(), (*argument).clone());
             }
         });
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.column.name().to_string()) {
+                    if let Some(arg) = args_map.get(column.column.name()) {
                         return Ok(Some(arg.clone()));
                     }
                 }

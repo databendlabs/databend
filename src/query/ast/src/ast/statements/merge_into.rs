@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -184,13 +183,6 @@ pub enum MergeSource {
         table: Identifier,
         alias: Option<TableAlias>,
     },
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct StreamingSource {
-    settings: BTreeMap<String, String>,
-    on_error_mode: Option<String>,
-    start: usize,
 }
 
 impl MergeSource {

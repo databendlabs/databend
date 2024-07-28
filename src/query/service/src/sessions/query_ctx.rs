@@ -62,6 +62,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -384,6 +385,10 @@ impl TableContext for QueryContext {
         self.shared.group_by_spill_progress.clone()
     }
 
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.shared.window_partition_spill_progress.clone()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
@@ -398,6 +403,13 @@ impl TableContext for QueryContext {
 
     fn get_group_by_spill_progress_value(&self) -> ProgressValues {
         self.shared.group_by_spill_progress.as_ref().get_values()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
+        self.shared
+            .window_partition_spill_progress
+            .as_ref()
+            .get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
@@ -647,11 +659,13 @@ impl TableContext for QueryContext {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
+        let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
         let format = FormatSettings {
             timezone,
             geometry_format,
             enable_dst_hour_fix,
+            format_null_as_str,
         };
         Ok(format)
     }
@@ -1130,6 +1144,18 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.shared.session.session_ctx.set_variable(key, value)
+    }
+
+    fn unset_variable(&self, key: &str) {
+        self.shared.session.session_ctx.unset_variable(key)
+    }
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.shared.session.session_ctx.get_variable(key)
     }
 
     #[async_backtrace::framed]

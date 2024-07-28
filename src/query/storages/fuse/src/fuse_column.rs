@@ -18,26 +18,29 @@ use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_expression::ColumnId;
 use databend_common_storage::Datum;
+use databend_common_storage::Histogram;
 use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 
 /// A column statistics provider for fuse table.
 #[derive(Default)]
 pub struct FuseTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    histograms: HashMap<ColumnId, Histogram>,
 }
 
 impl FuseTableColumnStatisticsProvider {
     pub fn new(
         column_stats: HashMap<ColumnId, FuseColumnStatistics>,
+        histograms: HashMap<ColumnId, Histogram>,
         column_distinct_values: Option<HashMap<ColumnId, u64>>,
         row_count: u64,
     ) -> Self {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = column_distinct_values
-                    .as_ref()
-                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+                let ndv = column_distinct_values.as_ref().map_or(row_count, |map| {
+                    map.get(&column_id).map_or(row_count, |v| *v)
+                });
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
                     max: Datum::from_scalar(stat.max),
@@ -47,7 +50,10 @@ impl FuseTableColumnStatisticsProvider {
                 (column_id, stat.get_useful_stat(row_count))
             })
             .collect();
-        Self { column_stats }
+        Self {
+            column_stats,
+            histograms,
+        }
     }
 }
 
@@ -58,5 +64,9 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
 
     fn num_rows(&self) -> Option<u64> {
         None
+    }
+
+    fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
+        self.histograms.get(&column_id).cloned()
     }
 }

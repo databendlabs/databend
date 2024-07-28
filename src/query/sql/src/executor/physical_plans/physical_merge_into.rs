@@ -71,7 +71,7 @@ use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
-pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
+pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -123,6 +123,7 @@ docker run --net=host  datafuselabs/databend
 - [How to export a table to TSV file](https://docs.databend.com/guides/unload-data/unload-tsv)
 - [How to load NDJSON file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-ndjson)
 - [How to export a table to NDJSON file](https://docs.databend.com/guides/unload-data/unload-ndjson)
+- [How to load ORC file into a table](https://docs.databend.com/guides/load-data/load-semistructured/load-orc)
 
 </details>
 
@@ -142,6 +143,7 @@ docker run --net=host  datafuselabs/databend
 - [How to query directly on CSV file](https://docs.databend.com/guides/load-data/transform/querying-csv)
 - [How to query directly on TSV file](https://docs.databend.com/guides/load-data/transform/querying-tsv)
 - [How to query directly on NDJSON file](https://docs.databend.com/guides/load-data/transform/querying-ndjson)
+- [How to query directly on ORC file](https://docs.databend.com/guides/load-data/transform/querying-orc)
 </details>
 
 <details>
@@ -222,6 +224,7 @@ docker run --net=host  datafuselabs/databend
 - [Data Lifecycle in Databend](https://docs.databend.com/guides/data-management/data-lifecycle)
 - [Data Recovery in Databend](https://docs.databend.com/guides/data-management/data-recovery)
 - [Data Protection in Databend](https://docs.databend.com/guides/data-management/data-protection)
+- [Data Purge in Databend](https://docs.databend.com/guides/data-management/data-recycle)
 
 </details>
 

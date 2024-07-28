@@ -125,10 +125,10 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
+use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
-use crate::plans::SettingPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
@@ -143,9 +143,9 @@ use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
-use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::UnsetPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
@@ -303,8 +303,8 @@ pub enum Plan {
     Presign(Box<PresignPlan>),
 
     // Set
-    SetVariable(Box<SettingPlan>),
-    UnSetVariable(Box<UnSettingPlan>),
+    Set(Box<SetPlan>),
+    Unset(Box<UnsetPlan>),
     Kill(Box<KillPlan>),
     SetPriority(Box<SetPriorityPlan>),
     System(Box<SystemPlan>),

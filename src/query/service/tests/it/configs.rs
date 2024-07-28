@@ -865,9 +865,9 @@ path = "_cache"
             assert!(cfg.catalog.address.is_empty());
             assert!(cfg.catalog.protocol.is_empty());
             // config in `catalog` field, with name of "hive"
-            assert!(cfg.catalogs.get("hive").is_some(), "catalogs is none!");
+            assert!(cfg.catalogs.contains_key("hive"), "catalogs is none!");
             // config in `catalogs` field, with name of "my_hive"
-            assert!(cfg.catalogs.get("my_hive").is_some(), "catalogs is none!");
+            assert!(cfg.catalogs.contains_key("my_hive"), "catalogs is none!");
 
             let inner = cfg.catalogs["my_hive"].clone().try_into();
             assert!(inner.is_ok(), "casting must success");

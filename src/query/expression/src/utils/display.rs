@@ -854,7 +854,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                     ..
                 } => {
                     let mut s = String::new();
-                    s += &name;
+                    s += name;
                     s += "(";
                     for (i, arg) in args.iter().enumerate() {
                         if i > 0 {
@@ -863,7 +863,7 @@ impl<Index: ColumnIndex> Expr<Index> {
                         s += &arg.sql_display();
                     }
                     s += ", ";
-                    s += &lambda_display;
+                    s += lambda_display;
                     s += ")";
                     s
                 }

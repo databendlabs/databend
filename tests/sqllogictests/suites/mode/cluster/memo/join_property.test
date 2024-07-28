@@ -62,8 +62,8 @@ Memo
 │   └── #0 Join [#0, #3]
 └── Group #5
     ├── Best properties
-    │   ├── { dist: Any }: expr: #0, cost: 4419.000, children: [{ dist: Any }]
-    │   └── { dist: Serial }: expr: #1, cost: 7569.000, children: [{ dist: Any }]
+    │   ├── { dist: Any }: expr: #0, cost: 4420.000, children: [{ dist: Any }]
+    │   └── { dist: Serial }: expr: #1, cost: 7920.000, children: [{ dist: Any }]
     ├── #0 EvalScalar [#4]
     └── #1 Exchange: (Merge) [#5]
 
@@ -192,8 +192,8 @@ Memo
 │   └── #0 Join [#2, #3]
 └── Group #5
     ├── Best properties
-    │   ├── { dist: Any }: expr: #0, cost: 112911.000, children: [{ dist: Any }]
-    │   └── { dist: Serial }: expr: #1, cost: 494761.000, children: [{ dist: Any }]
+    │   ├── { dist: Any }: expr: #0, cost: 112820.000, children: [{ dist: Any }]
+    │   └── { dist: Serial }: expr: #1, cost: 462820.000, children: [{ dist: Any }]
     ├── #0 EvalScalar [#4]
     └── #1 Exchange: (Merge) [#5]
 

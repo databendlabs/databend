@@ -424,12 +424,15 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             kill_target,
             object_id,
         } => visitor.visit_kill(kill_target, object_id),
-        Statement::SetVariable {
-            is_global,
-            variable,
-            value,
-        } => visitor.visit_set_variable(*is_global, variable, value),
-        Statement::UnSetVariable(stmt) => visitor.visit_unset_variable(stmt),
+        Statement::SetStmt {
+            set_type,
+            identifiers,
+            values,
+        } => visitor.visit_set(*set_type, identifiers, values),
+        Statement::UnSetStmt {
+            unset_type,
+            identifiers,
+        } => visitor.visit_unset(*unset_type, identifiers),
         Statement::SetRole {
             is_default,
             role_name,
@@ -464,6 +467,12 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
+        Statement::CreateDictionary(stmt) => visitor.visit_create_dictionary(stmt),
+        Statement::DropDictionary(stmt) => visitor.visit_drop_dictionary(stmt),
+        Statement::ShowCreateDictionary(stmt) => visitor.visit_show_create_dictionary(stmt),
+        Statement::ShowDictionaries { show_options } => {
+            visitor.visit_show_dictionaries(show_options)
+        }
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),

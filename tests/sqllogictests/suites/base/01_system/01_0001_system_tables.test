@@ -5,3 +5,6 @@ query T
 select * from (select name from system.tables where database='system') where name='tables'
 ----
 tables
+
+statement error 1006
+select name from system.tables where database='system' and table_id='xx'
