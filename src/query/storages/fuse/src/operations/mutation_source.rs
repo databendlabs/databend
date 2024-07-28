@@ -151,7 +151,7 @@ impl FuseTable {
             |output| {
                 MutationSource::try_create(
                     ctx.clone(),
-                    MutationAction::Deletion,
+                    mutation_action.clone(),
                     output,
                     filter_expr.clone(),
                     block_reader.clone(),

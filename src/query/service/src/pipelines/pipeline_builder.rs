@@ -24,7 +24,6 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
@@ -233,7 +232,7 @@ impl PipelineBuilder {
             PhysicalPlan::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source)
             }
-            PhysicalPlan::ColumnMutation(_) => todo!(),
+            PhysicalPlan::ColumnMutation(column_mutation) => self.build_column_mutation(column_mutation),
         }
     }
 }

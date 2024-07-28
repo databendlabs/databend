@@ -12,17 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_meta_app::schema::TableInfo;
 
+use crate::binder::DataMutationInputType;
 use crate::executor::physical_plan::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ColumnMutation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
     pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub input_type: DataMutationInputType,
+    pub field_id_to_schema_index: HashMap<usize, usize>,
+    pub input_num_columns: usize,
 }
 
 impl ColumnMutation {

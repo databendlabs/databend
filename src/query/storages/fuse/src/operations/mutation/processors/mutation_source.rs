@@ -19,9 +19,6 @@ use std::sync::Arc;
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::plan::build_origin_block_row_num;
 use databend_common_catalog::plan::gen_mutation_stream_meta;
-use databend_common_catalog::plan::InternalColumn;
-use databend_common_catalog::plan::InternalColumnMeta;
-use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -34,7 +31,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::Value;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -53,6 +49,7 @@ use crate::operations::mutation::SerializeDataMeta;
 use crate::FuseStorageFormat;
 use crate::MergeIOReadResult;
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum MutationAction {
     Deletion,
     Update,

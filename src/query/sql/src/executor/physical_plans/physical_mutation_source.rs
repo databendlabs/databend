@@ -52,7 +52,7 @@ impl PhysicalPlanBuilder {
         mutation_source: &crate::plans::MutationSource,
     ) -> Result<PhysicalPlan> {
         let filters = if let Some(filter) = &mutation_source.filter {
-            Some(create_push_down_filters(&filter)?)
+            Some(create_push_down_filters(filter)?)
         } else {
             None
         };

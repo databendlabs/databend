@@ -174,8 +174,10 @@ pub trait TableContext: Send + Sync {
     fn set_enable_sort_spill(&self, enable: bool);
     fn set_compaction_num_block_hint(&self, hint: u64);
     fn get_compaction_num_block_hint(&self) -> u64;
-    fn set_table_snapshot(&self, snapshot: TableSnapshot);
-    fn get_table_snapshot(&self) -> Option<TableSnapshot>;
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
+    fn set_lazy_mutation_delete(&self, lazy: bool);
+    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);

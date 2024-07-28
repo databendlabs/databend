@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::u64::MAX;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table_context::TableContext;
@@ -151,47 +150,82 @@ impl PhysicalPlanBuilder {
         let data_mutation_build_info = self.data_mutation_build_info.clone().unwrap();
 
         if *mutation_source {
-            let (mutation_expr, mutation_kind) =
-                if let Some(update_list) = &matched_evaluators[0].update {
-                    let (database, table_name) = match table_name_alias {
-                        None => (Some(database_name.as_str()), table_name.clone()),
-                        Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
-                    };
-                    let update_list = mutation_update_expr(
-                        self.ctx.clone(),
-                        bind_context,
-                        update_list,
-                        table.schema_with_stream().into(),
-                        *predicate_index,
-                        database,
-                        &table_name,
-                    )?;
-                    let update_list = update_list
-                        .iter()
-                        .map(|(idx, remote_expr)| {
-                            (
-                                *idx,
-                                remote_expr
-                                    .as_expr(&BUILTIN_FUNCTIONS)
-                                    .project_column_ref(|index| {
-                                        data_mutation_input_schema
-                                            .index_of(&index.to_string())
-                                            .unwrap()
-                                    })
-                                    .as_remote_expr(),
-                            )
-                        })
-                        .collect_vec();
-                    // update
-                    (Some(update_list), MutationKind::Update)
-                } else {
-                    (None, MutationKind::Delete)
+            let mut field_id_to_schema_index = HashMap::new();
+            let (mutation_expr, computed_expr, mutation_kind) = if let Some(update_list) =
+                &matched_evaluators[0].update
+            {
+                let (database, table_name) = match table_name_alias {
+                    None => (Some(database_name.as_str()), table_name.clone()),
+                    Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
                 };
+                let mutation_expr = mutation_update_expr(
+                    self.ctx.clone(),
+                    bind_context,
+                    update_list,
+                    table.schema_with_stream().into(),
+                    *predicate_index,
+                    database,
+                    &table_name,
+                )?;
+                for (field_id, field) in table.schema_with_stream().fields().iter().enumerate() {
+                    for column_binding in bind_context.columns.iter() {
+                        if BindContext::match_column_binding(
+                            database,
+                            Some(&table_name),
+                            field.name(),
+                            column_binding,
+                        ) {
+                            let column_index = column_binding.index;
+                            let schema_index = data_mutation_input_schema
+                                .index_of(&column_index.to_string())
+                                .unwrap();
+                            field_id_to_schema_index.insert(field_id, schema_index);
+                            break;
+                        }
+                    }
+                }
+                let mutation_expr = mutation_expr
+                    .iter()
+                    .map(|(idx, remote_expr)| {
+                        (
+                            *idx,
+                            remote_expr
+                                .as_expr(&BUILTIN_FUNCTIONS)
+                                .project_column_ref(|index| {
+                                    data_mutation_input_schema
+                                        .index_of(&index.to_string())
+                                        .unwrap()
+                                })
+                                .as_remote_expr(),
+                        )
+                    })
+                    .collect_vec();
 
+                let computed_expr = generate_stored_computed_list(
+                    self.ctx.clone(),
+                    Arc::new(table.schema().into()),
+                    update_list,
+                )?;
+
+                (
+                    Some(mutation_expr),
+                    Some(computed_expr),
+                    MutationKind::Update,
+                )
+            } else {
+                (None, None, MutationKind::Delete)
+            };
+
+            let input_num_columns = data_mutation_input_schema.fields().len();
             plan = PhysicalPlan::ColumnMutation(ColumnMutation {
                 plan_id: 0,
                 input: Box::new(plan),
+                table_info: data_mutation_build_info.table_info.clone(),
                 mutation_expr,
+                computed_expr,
+                input_type: input_type.clone(),
+                field_id_to_schema_index,
+                input_num_columns,
             });
 
             dbg!("plan = {:?}", &plan);
@@ -777,4 +811,40 @@ pub fn mutation_update_expr(
             Ok::<_, ErrorCode>(acc)
         },
     )
+}
+
+use databend_common_expression::type_check::check_cast;
+use databend_common_expression::ComputedExpr;
+
+use crate::parse_computed_expr;
+
+pub fn generate_stored_computed_list(
+    ctx: Arc<dyn TableContext>,
+    schema: DataSchemaRef,
+    update_list: &HashMap<FieldIndex, ScalarExpr>,
+) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
+    let mut remote_exprs = Vec::new();
+    for (i, f) in schema.fields().iter().enumerate() {
+        if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
+            let expr = parse_computed_expr(ctx.clone(), schema.clone(), stored_expr)?;
+            let expr = check_cast(None, false, expr, f.data_type(), &BUILTIN_FUNCTIONS)?;
+
+            // If related column has updated, the stored computed column need to regenerate.
+            let mut need_update = false;
+            let field_indices = expr.column_refs();
+            for (field_index, _) in field_indices.iter() {
+                if update_list.contains_key(field_index) {
+                    need_update = true;
+                    break;
+                }
+            }
+            if need_update {
+                // let expr = expr.project_column_ref(|index| schema.field(*index).name().to_string());
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                remote_exprs.push((i, expr.as_remote_expr()));
+            }
+        }
+    }
+    Ok(remote_exprs)
 }

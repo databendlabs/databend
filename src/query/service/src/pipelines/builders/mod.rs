@@ -16,6 +16,7 @@ mod builder_add_stream_column;
 mod builder_aggregate;
 mod builder_append_table;
 mod builder_async_function;
+mod builder_column_mutation;
 mod builder_commit;
 mod builder_compact;
 mod builder_copy_into_location;

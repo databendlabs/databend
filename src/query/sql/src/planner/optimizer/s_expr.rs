@@ -316,7 +316,7 @@ impl SExpr {
             }
             RelOperator::MutationSource(mutation_source) => {
                 if let Some(filter) = &mutation_source.filter {
-                    get_udf_names(&filter)?.iter().for_each(|udf| {
+                    get_udf_names(filter)?.iter().for_each(|udf| {
                         udfs.insert(*udf);
                     });
                 }
@@ -476,7 +476,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
         RelOperator::MutationSource(op) => {
             if let Some(filter) = &op.filter {
-                find_subquery_in_expr(&filter)
+                find_subquery_in_expr(filter)
             } else {
                 false
             }

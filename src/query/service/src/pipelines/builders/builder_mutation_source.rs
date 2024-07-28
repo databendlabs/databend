@@ -21,12 +21,10 @@ use databend_common_exception::Result;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::DataMutationInputType;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
+use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
-use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
@@ -40,39 +38,42 @@ impl PipelineBuilder {
         let table = self
             .ctx
             .build_table_by_table_info(&mutation_source.table_info, None)?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        let table = table.clone();
+        let table = FuseTable::try_from_table(table.as_ref())?.clone();
 
-        let ctx = self.ctx.clone();
-        let cluster = ctx.get_cluster();
-        let filters = mutation_source.filters.clone();
+        let table_clone = table.clone();
+        let ctx_clone = self.ctx.clone();
+        let filters_clone = mutation_source.filters.clone();
+        let input_type_clone = mutation_source.input_type.clone();
+
+        let cluster = self.ctx.get_cluster();
         let read_partition_columns: Vec<usize> = mutation_source
             .read_partition_columns
             .clone()
             .into_iter()
             .collect();
         self.main_pipeline.set_on_init(move || {
+            let ctx = ctx_clone.clone();
             let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                let partitions = if let Some(snapshot) = table.read_table_snapshot().await? {
+                let partitions = if let Some(snapshot) = table_clone.read_table_snapshot().await? {
+                    ctx_clone.set_table_snapshot(snapshot.clone());
                     let is_lazy =
                         !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
-                    let partitions = table
+                    ctx_clone.set_lazy_mutation_delete(is_lazy);
+                    let partitions = table_clone
                         .mutation_read_partitions(
-                            ctx,
+                            ctx_clone.clone(),
                             snapshot.clone(),
                             read_partition_columns.clone(),
-                            filters.clone(),
+                            filters_clone.clone(),
                             is_lazy,
                             true,
                         )
                         .await?;
 
                     let partitions = if partitions.partitions_type() == PartInfoType::LazyLevel
-                        && mutation_source.input_type == DataMutationInputType::Delete
+                        && input_type_clone == DataMutationInputType::Delete
                     {
                         let projection = Projection::Columns(read_partition_columns.clone());
-                        let filters = filters.clone();
-                        let table_clone = table.clone();
                         let mut segment_locations = Vec::with_capacity(partitions.partitions.len());
                         for part in &partitions.partitions {
                             // Safe to downcast because we know the the partition is lazy
@@ -88,14 +89,9 @@ impl PipelineBuilder {
                             block_count: None,
                         };
 
-                        let (partitions, info) = table_clone
+                        let (partitions, _) = table_clone
                             .do_mutation_block_pruning(
-                                ctx,
-                                Some(filters),
-                                projection,
-                                prune_ctx,
-                                true,
-                                true,
+                                ctx_clone, filters_clone, projection, prune_ctx, true, true,
                             )
                             .await?;
                         partitions
@@ -113,6 +109,8 @@ impl PipelineBuilder {
             Ok(())
         });
 
+        let filters = mutation_source.filters.clone();
+
         if mutation_source.input_type == DataMutationInputType::Delete && filters.is_none() {
             if let Some(snapshot) = self.ctx.get_table_snapshot() {
                 // Delete the whole table, just a truncate
@@ -120,8 +118,9 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     &mut self.main_pipeline,
                     TruncateMode::Delete,
-                    self.ctx.to_owned(),
+                    snapshot,
                 )?;
+                return Ok(());
             } else {
                 return self.main_pipeline.add_source(EmptySource::create, 1);
             }
@@ -129,14 +128,19 @@ impl PipelineBuilder {
 
         let filter = mutation_source.filters.clone().map(|v| v.filter);
         let mutation_action = if mutation_source.input_type == DataMutationInputType::Delete {
-            MutationKind::Delete
+            MutationAction::Deletion
         } else {
-            MutationKind::Update
+            MutationAction::Update
         };
+        let col_indices = mutation_source
+            .read_partition_columns
+            .clone()
+            .into_iter()
+            .collect();
         table.add_mutation_source(
             self.ctx.clone(),
             filter,
-            mutation_source.read_partition_columns.clone(),
+            col_indices,
             &mut self.main_pipeline,
             mutation_action,
         )?;
@@ -152,62 +156,6 @@ impl PipelineBuilder {
                 .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
         }
 
-        if mutation_source.input_type == DataMutationInputType::Delete {
-            let cluster_stats_gen = table.get_cluster_stats_gen(
-                self.ctx.clone(),
-                0,
-                table.get_block_thresholds(),
-                None,
-            )?;
-            self.main_pipeline.add_transform(|input, output| {
-                let proc = TransformSerializeBlock::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    &table,
-                    cluster_stats_gen.clone(),
-                    MutationKind::Delete,
-                )?;
-                proc.into_processor()
-            })?;
-
-            let ctx: Arc<dyn TableContext> = self.ctx.clone();
-            if is_lazy {
-                self.main_pipeline.try_resize(1)?;
-                self.main_pipeline.add_async_accumulating_transformer(|| {
-                    TableMutationAggregator::create(
-                        &table,
-                        ctx.clone(),
-                        delete.snapshot.segments.clone(),
-                        vec![],
-                        vec![],
-                        Statistics::default(),
-                        MutationKind::Delete,
-                    )
-                });
-            }
-        } else {
-            let block_thresholds = table.get_block_thresholds();
-            // sort
-            let cluster_stats_gen = table.cluster_gen_for_append(
-                self.ctx.clone(),
-                &mut self.main_pipeline,
-                block_thresholds,
-                None,
-            )?;
-
-            self.main_pipeline.add_transform(|input, output| {
-                let proc = TransformSerializeBlock::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    &table,
-                    cluster_stats_gen.clone(),
-                    MutationKind::Update,
-                )?;
-                proc.into_processor()
-            })
-        }
         Ok(())
     }
 }
