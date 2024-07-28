@@ -232,7 +232,9 @@ impl PipelineBuilder {
             PhysicalPlan::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source)
             }
-            PhysicalPlan::ColumnMutation(column_mutation) => self.build_column_mutation(column_mutation),
+            PhysicalPlan::ColumnMutation(column_mutation) => {
+                self.build_column_mutation(column_mutation)
+            }
         }
     }
 }

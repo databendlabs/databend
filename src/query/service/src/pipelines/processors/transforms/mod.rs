@@ -50,7 +50,6 @@ pub use transform_cache_scan::CacheSourceState;
 pub use transform_cache_scan::HashJoinCacheState;
 pub use transform_cache_scan::TransformCacheScan;
 pub use transform_cast_schema::TransformCastSchema;
-pub use transform_column_mutation::TransformColumnMutation;
 pub use transform_create_sets::TransformCreateSets;
 pub use transform_expression_scan::TransformExpressionScan;
 pub use transform_filter::TransformFilter;

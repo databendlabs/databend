@@ -44,6 +44,7 @@ impl PipelineBuilder {
         let ctx_clone = self.ctx.clone();
         let filters_clone = mutation_source.filters.clone();
         let input_type_clone = mutation_source.input_type.clone();
+        let is_delete = input_type_clone == DataMutationInputType::Delete;
 
         let cluster = self.ctx.get_cluster();
         let read_partition_columns: Vec<usize> = mutation_source
@@ -66,7 +67,7 @@ impl PipelineBuilder {
                             read_partition_columns.clone(),
                             filters_clone.clone(),
                             is_lazy,
-                            true,
+                            is_delete,
                         )
                         .await?;
 
@@ -91,7 +92,12 @@ impl PipelineBuilder {
 
                         let (partitions, _) = table_clone
                             .do_mutation_block_pruning(
-                                ctx_clone, filters_clone, projection, prune_ctx, true, true,
+                                ctx_clone,
+                                filters_clone,
+                                projection,
+                                prune_ctx,
+                                true,
+                                true,
                             )
                             .await?;
                         partitions
@@ -111,7 +117,7 @@ impl PipelineBuilder {
 
         let filters = mutation_source.filters.clone();
 
-        if mutation_source.input_type == DataMutationInputType::Delete && filters.is_none() {
+        if is_delete && filters.is_none() {
             if let Some(snapshot) = self.ctx.get_table_snapshot() {
                 // Delete the whole table, just a truncate
                 table.build_truncate_pipeline(
@@ -127,7 +133,7 @@ impl PipelineBuilder {
         }
 
         let filter = mutation_source.filters.clone().map(|v| v.filter);
-        let mutation_action = if mutation_source.input_type == DataMutationInputType::Delete {
+        let mutation_action = if is_delete {
             MutationAction::Deletion
         } else {
             MutationAction::Update
