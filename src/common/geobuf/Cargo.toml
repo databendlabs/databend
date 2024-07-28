@@ -1,0 +1,18 @@
+[package]
+name = "databend-common-geobuf"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = true
+
+[dependencies]
+anyhow = { workspace = true }
+flatbuffers = "24.3.25"
+geo = { workspace = true }
+geos = { workspace = true }
+geozero = { workspace = true }

@@ -3521,6 +3521,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-geobuf"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "flatbuffers",
+ "geo",
+ "geos",
+ "geozero 0.13.0",
+]
+
+[[package]]
 name = "databend-common-grpc"
 version = "0.1.0"
 dependencies = [
