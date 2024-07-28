@@ -228,8 +228,6 @@ impl PhysicalPlanBuilder {
                 input_num_columns,
             });
 
-            dbg!("plan = {:?}", &plan);
-
             let commit_input = if !distributed {
                 plan
             } else {

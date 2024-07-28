@@ -88,8 +88,6 @@ impl PipelineBuilder {
 
         ops.push(BlockOperator::Project { projection });
 
-        dbg!("ops = {:?}", &ops);
-
         self.main_pipeline.add_transformer(|| {
             CompoundBlockOperator::new(ops.clone(), self.func_ctx.clone(), input_num_columns)
         });
