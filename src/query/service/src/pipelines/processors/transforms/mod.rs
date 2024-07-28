@@ -67,6 +67,4 @@ pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
-pub use window::FrameBound;
-pub use window::TransformWindow;
-pub use window::WindowFunctionInfo;
+pub use window::*;

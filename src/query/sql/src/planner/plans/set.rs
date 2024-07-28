@@ -12,20 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VarValue {
+use databend_common_ast::ast::SetType;
+use databend_common_expression::Scalar;
+
+use super::Plan;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SettingValue {
     pub is_global: bool,
     pub variable: String,
     pub value: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SettingPlan {
-    pub vars: Vec<VarValue>,
+#[derive(Clone, Debug, PartialEq)]
+pub struct VarValue {
+    pub variable: String,
+    pub value: Scalar,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnSettingPlan {
-    pub session_level: bool,
+#[derive(Clone, Debug)]
+pub enum SetScalarsOrQuery {
+    VarValue(Vec<Scalar>),
+    Query(Box<Plan>),
+}
+
+#[derive(Clone, Debug)]
+pub struct SetPlan {
+    pub set_type: SetType,
+    pub idents: Vec<String>,
+    pub values: SetScalarsOrQuery,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsetPlan {
+    pub unset_type: SetType,
     pub vars: Vec<String>,
 }

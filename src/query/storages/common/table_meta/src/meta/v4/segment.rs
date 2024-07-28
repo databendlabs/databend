@@ -49,7 +49,7 @@ pub struct SegmentInfo {
     ///   That indicates this instance is converted from a v2/v1::SegmentInfo.
     ///
     /// - The meta writers are responsible for only writing down the latest version of SegmentInfo, and
-    /// the format_version being written is of the latest version.
+    ///   the format_version being written is of the latest version.
     ///
     ///   e.g. if the current version of SegmentInfo is v3::SegmentInfo, then the format_version
     ///   that will be written down to object storage as part of SegmentInfo table meta data,

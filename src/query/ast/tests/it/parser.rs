@@ -572,12 +572,17 @@ fn test_statement() {
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"SHOW GRANTS OF SHARE t;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
+        r#"select $abc + 3"#,
         r#"SET max_threads = 10;"#,
         r#"SET max_threads = 10*2;"#,
+        r#"SET global (max_threads, max_memory_usage) = (10*2, 10*4);"#,
         r#"UNSET max_threads;"#,
         r#"UNSET session max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
         r#"UNSET session (max_threads, sql_dialect);"#,
+        r#"SET variable a = 3"#,
+        r#"SET variable a = select 3"#,
+        r#"SET variable a = (select max(number) from numbers(10))"#,
         r#"select $1 FROM '@my_stage/my data/'"#,
         r#"
             SELECT t.c1 FROM @stage1/dir/file
