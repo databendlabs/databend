@@ -25,7 +25,7 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
-// use databend_common_storages_fuse::operations::MutationBlockPruningContext;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -171,15 +171,21 @@ impl PipelineBuilder {
                 proc.into_processor()
             })?;
 
-            // let ctx: Arc<dyn TableContext> = self.ctx.clone();
-            // if is_lazy {
-            //     table.chain_mutation_aggregator(
-            //         &ctx,
-            //         &mut self.main_pipeline,
-            //         delete.snapshot.clone(),
-            //         MutationKind::Delete,
-            //     )?;
-            // }
+            let ctx: Arc<dyn TableContext> = self.ctx.clone();
+            if is_lazy {
+                self.main_pipeline.try_resize(1)?;
+                self.main_pipeline.add_async_accumulating_transformer(|| {
+                    TableMutationAggregator::create(
+                        &table,
+                        ctx.clone(),
+                        delete.snapshot.segments.clone(),
+                        vec![],
+                        vec![],
+                        Statistics::default(),
+                        MutationKind::Delete,
+                    )
+                });
+            }
         } else {
             let block_thresholds = table.get_block_thresholds();
             // sort
