@@ -515,6 +515,7 @@ pub struct ShareInfo {
 pub struct ShareDatabaseSpec {
     pub name: String,
     pub id: u64,
+    pub created_on: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]

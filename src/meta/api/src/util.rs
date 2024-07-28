@@ -906,13 +906,19 @@ pub async fn convert_share_meta_to_spec(
         let (_db_meta_seq, db_ident_raw): (_, Option<DatabaseNameIdentRaw>) =
             get_pb_value(kv_api, &id_key).await?;
         if let Some(db_ident_raw) = db_ident_raw {
-            Ok(Some(ShareDatabaseSpec {
-                name: db_ident_raw.database_name().to_string(),
-                id: db_id,
-            }))
-        } else {
-            Ok(None)
+            let dbid = DatabaseId { db_id };
+            let (_db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
+                get_pb_value(kv_api, &dbid).await?;
+
+            if let Some(db_meta) = db_meta {
+                return Ok(Some(ShareDatabaseSpec {
+                    name: db_ident_raw.database_name().to_string(),
+                    id: db_id,
+                    created_on: db_meta.created_on,
+                }));
+            }
         }
+        Ok(None)
     }
 
     async fn convert_to_share_spec_tables(
