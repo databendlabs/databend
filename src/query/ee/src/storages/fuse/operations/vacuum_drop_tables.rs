@@ -22,6 +22,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropFileInfo;
 use futures_util::TryStreamExt;
+use log::error;
 use log::info;
 use opendal::EntryMode;
 use opendal::Metakey;
@@ -47,7 +48,11 @@ pub async fn do_vacuum_drop_table(
 
         match dry_run_limit {
             None => {
-                operator.remove_all(&dir).await?;
+                let result = operator.remove_all(&dir).await;
+                if let Err(ref err) = result {
+                    error!("failed to remove all in directory {}: {}", dir, err);
+                }
+                result?;
             }
             Some(dry_run_limit) => {
                 let mut ds = operator
@@ -88,18 +93,78 @@ pub async fn do_vacuum_drop_table(
 }
 
 #[async_backtrace::framed]
-pub async fn do_vacuum_drop_tables(
+pub async fn vacuum_drop_tables_by_table_info(
+    num_threads: usize,
+    table_infos: Vec<(TableInfo, Operator)>,
+    dry_run_limit: Option<usize>,
+) -> Result<Option<Vec<VacuumDropFileInfo>>> {
+    let start = Instant::now();
+    let num_tables = table_infos.len();
+    info!("vacuum dropped tables, number of tables: {}", num_tables);
+
+    let batch_size = (num_tables / num_threads).clamp(1, 50);
+
+    let result = if batch_size >= table_infos.len() {
+        do_vacuum_drop_table(table_infos, dry_run_limit).await?
+    } else {
+        let mut chunks = table_infos.chunks(batch_size);
+        let dry_run_limit = dry_run_limit
+            .map(|dry_run_limit| (dry_run_limit / num_threads).min(dry_run_limit).max(1));
+        let tasks = std::iter::from_fn(move || {
+            chunks
+                .next()
+                .map(|tables| do_vacuum_drop_table(tables.to_vec(), dry_run_limit))
+        });
+
+        let result = execute_futures_in_parallel(
+            tasks,
+            num_threads,
+            num_threads * 2,
+            "batch-vacuum-drop-tables-worker".to_owned(),
+        )
+        .await?;
+
+        // Return error if any error happens during invocations of `do_vacuum_drop_table`.
+        //
+        // Note that Errs should NOT be swallowed if any target is not successfully deleted.
+        // Otherwise, the caller site may proceed to purge meta-data from meta-server with
+        // some table data un-vacuumed, and the `vacuum` action of those dropped tables can no
+        // longer be roll-forward.
+        if dry_run_limit.is_some() {
+            let mut ret_files = vec![];
+            for file in result {
+                if let Some(files) = file? {
+                    ret_files.extend(files);
+                }
+            }
+            Some(ret_files)
+        } else {
+            for file in result {
+                let _ = file?;
+            }
+            None
+        }
+    };
+
+    info!(
+        "vacuum {} dropped tables, cost:{:?}",
+        num_tables,
+        start.elapsed()
+    );
+
+    Ok(result)
+}
+
+#[async_backtrace::framed]
+pub async fn vacuum_drop_tables(
     threads_nums: usize,
     tables: Vec<Arc<dyn Table>>,
     dry_run_limit: Option<usize>,
 ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
-    let start = Instant::now();
-    let tables_len = tables.len();
-    info!("do_vacuum_drop_tables {} tables", tables_len);
+    let num_tables = tables.len();
+    info!("vacuum_drop_tables {} tables", num_tables);
 
-    let batch_size = (tables_len / threads_nums).clamp(1, 50);
-
-    let mut table_vecs = Vec::with_capacity(tables.len());
+    let mut table_infos = Vec::with_capacity(num_tables);
     for table in tables {
         let (table_info, operator) =
             if let Ok(fuse_table) = FuseTable::try_from_table(table.as_ref()) {
@@ -113,47 +178,8 @@ pub async fn do_vacuum_drop_tables(
                 continue;
             };
 
-        table_vecs.push((table_info.clone(), operator));
+        table_infos.push((table_info.clone(), operator));
     }
 
-    let result = if batch_size >= table_vecs.len() {
-        do_vacuum_drop_table(table_vecs, dry_run_limit).await?
-    } else {
-        let mut chunks = table_vecs.chunks(batch_size);
-        let dry_run_limit = dry_run_limit
-            .map(|dry_run_limit| (dry_run_limit / threads_nums).min(dry_run_limit).max(1));
-        let tasks = std::iter::from_fn(move || {
-            chunks
-                .next()
-                .map(|tables| do_vacuum_drop_table(tables.to_vec(), dry_run_limit))
-        });
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            threads_nums * 2,
-            "batch-vacuum-drop-tables-worker".to_owned(),
-        )
-        .await?;
-        if dry_run_limit.is_some() {
-            let mut ret_files = vec![];
-            for file in result {
-                // return error if any errors happens during `do_vacuum_drop_table`
-                if let Some(files) = file? {
-                    ret_files.extend(files);
-                }
-            }
-            Some(ret_files)
-        } else {
-            None
-        }
-    };
-
-    info!(
-        "do_vacuum_drop_tables {} tables, cost:{:?}",
-        tables_len,
-        start.elapsed()
-    );
-
-    Ok(result)
+    vacuum_drop_tables_by_table_info(threads_nums, table_infos, dry_run_limit).await
 }

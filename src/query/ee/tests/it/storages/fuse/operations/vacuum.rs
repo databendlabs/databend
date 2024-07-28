@@ -22,9 +22,10 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
-use databend_enterprise_query::storages::fuse::do_vacuum_drop_tables;
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::do_vacuum_drop_table;
+use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
+use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::raw::Access;
@@ -75,7 +76,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
     // verify dry run never delete files
     {
-        do_vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
+        vacuum_drop_tables(threads_nums, vec![table.clone()], Some(100)).await?;
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate files",
@@ -91,7 +92,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
     }
 
     {
-        do_vacuum_drop_tables(threads_nums, vec![table], None).await?;
+        vacuum_drop_tables(threads_nums, vec![table], None).await?;
 
         // after vacuum drop tables, verify the files number
         check_data_dir(
@@ -110,7 +111,6 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 
     Ok(())
 }
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_do_vacuum_temporary_files() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
@@ -242,6 +242,51 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Result<()> {
+    // do_vacuum_drop_table should return Err if file deletion failed
+
+    let mut table_info = TableInfo::default();
+    table_info
+        .meta
+        .options
+        .insert(OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned());
+
+    use test_accessor::AccessorFaultyDeletion;
+
+    // Case 1: non-parallel vacuum dropped tables
+    {
+        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+
+        let table = (table_info.clone(), operator);
+
+        // with one table and one thread, `vacuum_drop_tables_by_table_info` will NOT run in parallel
+        let tables = vec![table];
+        let num_threads = 1;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
+        // verify that accessor.delete() was called
+        assert!(faulty_accessor.hit_delete_operation());
+        assert!(result.is_err());
+    }
+
+    {
+        let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
+        let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+
+        let table = (table_info, operator);
+        // with 2 tables and 2 threads, `vacuum_drop_tables_by_table_info` will run in parallel (one table per thread)
+        let tables = vec![table.clone(), table];
+        let num_threads = 2;
+        let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
+        // verify that accessor.delete() was called
+        assert!(faulty_accessor.hit_delete_operation());
+        assert!(result.is_err());
+    }
 
     Ok(())
 }
