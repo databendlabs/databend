@@ -132,7 +132,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -198,7 +198,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -238,7 +238,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -908,5 +908,47 @@ error:
   |
 1 | SHOW GRANTS ON task t1;
   |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `DATABASE`, or `UDF`
+
+
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+            (
+                user_name String,
+                age Int16
+            );
+---------- Output ---------
+error: 
+  --> SQL:5:14
+  |
+1 | CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+  | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
+2 |             (
+3 |                 user_name String,
+4 |                 age Int16
+5 |             );
+  |              ^ unexpected `;`, expecting `PRIMARY`
+
+
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+        (
+            user_name tuple(),
+            age Int16
+        )
+        PRIMARY KEY username
+        SOURCE ()
+        COMMENT 'This is a comment';
+---------- Output ---------
+error: 
+  --> SQL:3:29
+  |
+1 | CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+  | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
+2 |         (
+3 |             user_name tuple(),
+  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  |             |         |      
+  |             |         while parsing type name
+  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
 
 

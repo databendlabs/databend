@@ -270,7 +270,11 @@ impl<'a> Binder {
             Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
-
+            // Dictionaries
+            Statement::CreateDictionary(_stmt) => todo!(),
+            Statement::DropDictionary(_stmt) => todo!(),
+            Statement::ShowCreateDictionary(_stmt) => todo!(),
+            Statement::ShowDictionaries { show_options: _ } => todo!(),
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
