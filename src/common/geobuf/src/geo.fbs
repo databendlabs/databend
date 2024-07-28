@@ -1,6 +1,5 @@
 namespace GeoBuf;
 
-/* todo
 enum InnerObjectKind:ubyte { 
   Point,
   MultiPoint,
@@ -13,29 +12,12 @@ enum InnerObjectKind:ubyte {
 
 table InnerObject {
   kind: InnerObjectKind;
-  // For Point or MultiPoint
-  points: [uint16];
-  // For LineString or MultiLineString
-  line_strings: [LineString];
-  // For Polygon or MultiPolygon
-  polygons: [Polygon];
+  point_offsets: [uint16];
+  ring_offsets: [uint16];
+
   collection: [InnerObject];
+  // srid: uint32;
   // properties: [ubyte] (flexbuffer);
-}
-*/
-
-table LineString {
-  points: [uint16];
-}
-
-table Offsets {
-  offsets: [uint16];
-}
-
-table Polygon {
-  // The first element is the exterior ring.
-  // Any subsequent elements interior rings (or holes).
-  rings: [LineString];
 }
 
 enum ObjectKind:ubyte { 
@@ -49,14 +31,19 @@ enum ObjectKind:ubyte {
 }
 
 table Object {
-  // For MultiLineString ...
-  offsets: [uint16];
-  // 
-  up_offsets: [uint16];
-  // For Polygon or MultiPolygon
-  polygons: [Polygon];
-  // collection: [InnerObject];
-  // properties: [ubyte] (flexbuffer);
+  point_offsets: [uint16];
+  ring_offsets: [uint16];
+
+  collection: [InnerObject];
+
+  // 兼容 ewkb/ewkt
+  // srid: uint32;
+
+  // 兼容 
+  // These GeoJSON-specific geospatial objects:
+  // Feature
+  // FeatureCollection
+  properties: [ubyte] (flexbuffer);
 }
  
 root_type Object;
