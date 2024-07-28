@@ -1302,6 +1302,14 @@ pub enum TokenKind {
     SECONDS,
     #[token("DAYS", ignore(ascii_case))]
     DAYS,
+    #[token("DICTIONARY", ignore(ascii_case))]
+    DICTIONARY,
+    #[token("DICTIONARIES", ignore(ascii_case))]
+    DICTIONARIES,
+    #[token("PRIMARY", ignore(ascii_case))]
+    PRIMARY,
+    #[token("SOURCE", ignore(ascii_case))]
+    SOURCE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

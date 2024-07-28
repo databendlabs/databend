@@ -22642,3 +22642,104 @@ Query(
 )
 
 
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+(
+    user_name String,
+    age Int16
+)
+PRIMARY KEY username
+SOURCE (mysql(host='localhost' username='root' password='1234'))
+COMMENT 'This is a comment';
+---------- Output ---------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary(user_name STRING, age Int16)PRIMARY KEY username SOURCE(mysql( host = 'localhost' password = '1234' username = 'root'))COMMENT 'This is a comment' 
+---------- AST ------------
+CreateDictionary(
+    CreateDictionaryStmt {
+        create_option: CreateOrReplace,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    29..39,
+                ),
+                name: "my_catalog",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    40..51,
+                ),
+                name: "my_database",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        dictionary_name: Identifier {
+            span: Some(
+                52..65,
+            ),
+            name: "my_dictionary",
+            quote: None,
+            is_hole: false,
+        },
+        columns: [
+            ColumnDefinition {
+                name: Identifier {
+                    span: Some(
+                        72..81,
+                    ),
+                    name: "user_name",
+                    quote: None,
+                    is_hole: false,
+                },
+                data_type: String,
+                expr: None,
+                comment: None,
+            },
+            ColumnDefinition {
+                name: Identifier {
+                    span: Some(
+                        94..97,
+                    ),
+                    name: "age",
+                    quote: None,
+                    is_hole: false,
+                },
+                data_type: Int16,
+                expr: None,
+                comment: None,
+            },
+        ],
+        primary_keys: [
+            Identifier {
+                span: Some(
+                    118..126,
+                ),
+                name: "username",
+                quote: None,
+                is_hole: false,
+            },
+        ],
+        source_name: Identifier {
+            span: Some(
+                135..140,
+            ),
+            name: "mysql",
+            quote: None,
+            is_hole: false,
+        },
+        source_options: {
+            "host": "localhost",
+            "password": "1234",
+            "username": "root",
+        },
+        comment: Some(
+            "This is a comment",
+        ),
+    },
+)
+
+

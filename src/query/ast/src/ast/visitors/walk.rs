@@ -167,6 +167,16 @@ pub fn walk_table_ref<'a, V: Visitor<'a>>(visitor: &mut V, table: &'a TableRef) 
     visitor.visit_identifier(&table.table);
 }
 
+pub fn walk_dictionary_ref<'a, V: Visitor<'a>>(visitor: &mut V, dictionary: &'a DictionaryRef) {
+    if let Some(catalog) = &dictionary.catalog {
+        visitor.visit_identifier(catalog);
+    }
+    if let Some(database) = &dictionary.database {
+        visitor.visit_identifier(database);
+    }
+    visitor.visit_identifier(&dictionary.dictionary_name);
+}
+
 pub fn walk_query<'a, V: Visitor<'a>>(visitor: &mut V, query: &'a Query) {
     let Query {
         with,
@@ -472,6 +482,12 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::VacuumTemporaryFiles(stmt) => visitor.visit_vacuum_temporary_files(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
+        Statement::CreateDictionary(stmt) => visitor.visit_create_dictionary(stmt),
+        Statement::DropDictionary(stmt) => visitor.visit_drop_dictionary(stmt),
+        Statement::ShowCreateDictionary(stmt) => visitor.visit_show_create_dictionary(stmt),
+        Statement::ShowDictionaries { show_options } => {
+            visitor.visit_show_dictionaries(show_options)
+        }
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
