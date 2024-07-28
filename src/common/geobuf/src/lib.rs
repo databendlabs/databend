@@ -17,6 +17,47 @@ use geozero::wkt::Wkt;
 use geozero::ToGeo;
 use geozero::ToWkt;
 
+// A columnar Geometry/Geography format is proposed here to provide support for the storage and computation of geospatial features.
+//
+// This column format has five columns, namely the point column, which consists of the x column, the y column, and the point_offset column,
+// and the rest of the information is serialized in a binary column, which consists of the data column and the offset column, see Column
+//
+// Format compatibility
+//
+// EWKB supports up to 4 dimensions, here only 2 dimensions are supported, in line with snowflake, and new types can be added to support higher dimensions.
+// https://docs.snowflake.com/en/sql-reference/data-types-geospatial#geometry-data-type
+//
+// See geo.fbs for details on other compatibility designs.
+//
+// References WKT WKB EWKT EWKB GeoJSON Spec.
+// https://libgeos.org/specifications/wkb/#standard-wkb
+// https://datatracker.ietf.org/doc/html/rfc7946
+//
+// Why the columnar Geometry/Geography format?
+//
+// * For smaller storage volumes, see the test below.
+// * The problem of compression coding of floating-point columns has a large number of readily available research results that can be introduced at low cost,
+// which is conducive to compression of storage space and improvement of io efficiency.
+// * Floating-point columns have min max sparse indexes, very similar to the R tree indexes widely used in geospatial features, and are very cheap to implement and maintain.
+// * Facilitates the implementation of filtered push-down to the storage layer, and vectorized computation.
+// * On the downside, geospatial functions become significantly more expensive to implement and maintain, requiring a significant amount of work.
+//
+// Why use flatbuffer?
+//
+// flatbuffer provides delayed deserialization , and partial deserialization capabilities , to facilitate the writing of high-performance implementation .
+// In addition, code generation is easy to adapt to the design.
+// However, flatbuffer has its drawbacks. Similar to protobuffer, flatbuffer is an extensible, compatible format, and in order to provide extensibility and compatibility, a vtable is deposited in the data, resulting in an inflated size.
+// Once the design is stabilized, consider implementing it in other ways.
+//
+
+pub struct Column {
+    buf: Vec<u8>,
+    buf_offsets: Vec<u64>,
+    column_x: Vec<f64>,
+    column_y: Vec<f64>,
+    point_offsets: Vec<u64>,
+}
+
 pub struct GeographyBuilder<'a> {
     fbb: flatbuffers::FlatBufferBuilder<'a>,
     column_x: Vec<f64>,
@@ -110,35 +151,16 @@ pub struct GeographyRef<'a> {
     column_y: &'a [f64],
 }
 
-pub struct GeographyColumn {
-    buf: Vec<u8>,
-    buf_offsets: Vec<u64>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
-    point_offsets: Vec<u64>,
-}
-
 pub struct Geometry {
     buf: Vec<u8>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
-    column_z: Vec<f64>,
 }
 
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
     column_y: &'a [f64],
-    column_z: &'a [f64],
-}
-
-pub struct GeometryColumn {
-    buf: Vec<u8>,
-    buf_offsets: Vec<u64>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
-    column_z: Vec<f64>,
-    point_offsets: Vec<u64>,
 }
 
 impl Geography {
@@ -292,33 +314,6 @@ mod tests {
 
     #[test]
     fn test_from_wkt() {
-        // https://libgeos.org/specifications/wkb/#standard-wkb
-        // https://datatracker.ietf.org/doc/html/rfc7946
-
-        // 做了什么？
-        // 设计了一种列式Geometry/Geography格式，作为所有空间存储计算功能的基础设施。
-        //
-        // Geometry，总共有6个列，分别是，点列（x列, y列, point_offset列），其它信息行存，binary列（data+offset）
-        // Geography，总共有5个列，点列只有两个维度，其他都一样
-
-        // 可以把 Geometry 设计为 三维点，把 Geography 设计为 二维点
-
-        // 为什么采用列式格式存储 Geometry
-
-        // 列式Geometry的好处
-        // 浮点列的压缩编码问题有大量现成的研究成果，可以低成本引入，有利于压缩存储空间，提高io效率。
-        //
-        // 浮点数列有min max 稀疏索引，能提供近似于R tree的搜索加速效果，且实现维护成本很低。
-        //
-        // 方便实现过滤下推到存储层。
-        //
-        // 为什么用flatbuffer？
-        // flatbuffer提供延迟反序列化，和部分反序列化的能力。另外代码生成便于调整设计。
-        // 但是flatbuffer也有缺点，flatbuffer 和 protobuffer 类似，是一种可扩展，兼容性格式，为了提供可扩展性兼容性在数据中存入了vtable，导致体积膨胀。
-        // 后面可以想办法优化，但是优先级会比较低，因为将一个复杂而巨大的结构存在存入同一行是一个设计错误，不应该这样使用。
-
-        // 缺点，函数的实现和维护成本明显变高了，需要投入大量工作量。
-
         run_from_wkt(&"POINT(-122.35 37.55)"); // geo_buf:17, ewkb:21, points:16
         run_from_wkt(&"MULTIPOINT(-122.35 37.55,0 -90)"); // geo_buf:33, ewkb:51, points:32
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)"); // geo_buf:33, ewkb:41, points:32

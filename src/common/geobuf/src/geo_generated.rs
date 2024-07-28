@@ -131,10 +131,10 @@ pub const ENUM_MAX_OBJECT_KIND: u8 = 6;
 #[allow(non_camel_case_types)]
 pub const ENUM_VALUES_OBJECT_KIND: [ObjectKind; 7] = [
   ObjectKind::Point,
-  ObjectKind::MultiPoint,
   ObjectKind::LineString,
-  ObjectKind::MultiLineString,
   ObjectKind::Polygon,
+  ObjectKind::MultiPoint,
+  ObjectKind::MultiLineString,
   ObjectKind::MultiPolygon,
   ObjectKind::Collection,
 ];
@@ -145,10 +145,10 @@ pub struct ObjectKind(pub u8);
 #[allow(non_upper_case_globals)]
 impl ObjectKind {
   pub const Point: Self = Self(0);
-  pub const MultiPoint: Self = Self(1);
-  pub const LineString: Self = Self(2);
-  pub const MultiLineString: Self = Self(3);
-  pub const Polygon: Self = Self(4);
+  pub const LineString: Self = Self(1);
+  pub const Polygon: Self = Self(2);
+  pub const MultiPoint: Self = Self(3);
+  pub const MultiLineString: Self = Self(4);
   pub const MultiPolygon: Self = Self(5);
   pub const Collection: Self = Self(6);
 
@@ -156,10 +156,10 @@ impl ObjectKind {
   pub const ENUM_MAX: u8 = 6;
   pub const ENUM_VALUES: &'static [Self] = &[
     Self::Point,
-    Self::MultiPoint,
     Self::LineString,
-    Self::MultiLineString,
     Self::Polygon,
+    Self::MultiPoint,
+    Self::MultiLineString,
     Self::MultiPolygon,
     Self::Collection,
   ];
@@ -167,10 +167,10 @@ impl ObjectKind {
   pub fn variant_name(self) -> Option<&'static str> {
     match self {
       Self::Point => Some("Point"),
-      Self::MultiPoint => Some("MultiPoint"),
       Self::LineString => Some("LineString"),
-      Self::MultiLineString => Some("MultiLineString"),
       Self::Polygon => Some("Polygon"),
+      Self::MultiPoint => Some("MultiPoint"),
+      Self::MultiLineString => Some("MultiLineString"),
       Self::MultiPolygon => Some("MultiPolygon"),
       Self::Collection => Some("Collection"),
       _ => None,
@@ -244,10 +244,12 @@ impl<'a> flatbuffers::Follow<'a> for InnerObject<'a> {
 }
 
 impl<'a> InnerObject<'a> {
-  pub const VT_KIND: flatbuffers::VOffsetT = 4;
-  pub const VT_POINT_OFFSETS: flatbuffers::VOffsetT = 6;
-  pub const VT_RING_OFFSETS: flatbuffers::VOffsetT = 8;
-  pub const VT_COLLECTION: flatbuffers::VOffsetT = 10;
+  pub const VT_POINT_OFFSETS: flatbuffers::VOffsetT = 4;
+  pub const VT_RING_OFFSETS: flatbuffers::VOffsetT = 6;
+  pub const VT_COLLECTION: flatbuffers::VOffsetT = 8;
+  pub const VT_WKB_TYPE: flatbuffers::VOffsetT = 10;
+  pub const VT_SRID: flatbuffers::VOffsetT = 12;
+  pub const VT_PROPERTIES: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -259,21 +261,16 @@ impl<'a> InnerObject<'a> {
     args: &'args InnerObjectArgs<'args>
   ) -> flatbuffers::WIPOffset<InnerObject<'bldr>> {
     let mut builder = InnerObjectBuilder::new(_fbb);
+    if let Some(x) = args.properties { builder.add_properties(x); }
+    builder.add_srid(args.srid);
+    builder.add_wkb_type(args.wkb_type);
     if let Some(x) = args.collection { builder.add_collection(x); }
     if let Some(x) = args.ring_offsets { builder.add_ring_offsets(x); }
     if let Some(x) = args.point_offsets { builder.add_point_offsets(x); }
-    builder.add_kind(args.kind);
     builder.finish()
   }
 
 
-  #[inline]
-  pub fn kind(&self) -> InnerObjectKind {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<InnerObjectKind>(InnerObject::VT_KIND, Some(InnerObjectKind::Point)).unwrap()}
-  }
   #[inline]
   pub fn point_offsets(&self) -> Option<flatbuffers::Vector<'a, u16>> {
     // Safety:
@@ -295,6 +292,27 @@ impl<'a> InnerObject<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject>>>>(InnerObject::VT_COLLECTION, None)}
   }
+  #[inline]
+  pub fn wkb_type(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(InnerObject::VT_WKB_TYPE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn srid(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(InnerObject::VT_SRID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn properties(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(InnerObject::VT_PROPERTIES, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for InnerObject<'_> {
@@ -304,28 +322,34 @@ impl flatbuffers::Verifiable for InnerObject<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
-     .visit_field::<InnerObjectKind>("kind", Self::VT_KIND, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u16>>>("point_offsets", Self::VT_POINT_OFFSETS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u16>>>("ring_offsets", Self::VT_RING_OFFSETS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<InnerObject>>>>("collection", Self::VT_COLLECTION, false)?
+     .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
+     .visit_field::<u32>("srid", Self::VT_SRID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("properties", Self::VT_PROPERTIES, false)?
      .finish();
     Ok(())
   }
 }
 pub struct InnerObjectArgs<'a> {
-    pub kind: InnerObjectKind,
     pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u16>>>,
     pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u16>>>,
     pub collection: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>>>,
+    pub wkb_type: u32,
+    pub srid: u32,
+    pub properties: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
 }
 impl<'a> Default for InnerObjectArgs<'a> {
   #[inline]
   fn default() -> Self {
     InnerObjectArgs {
-      kind: InnerObjectKind::Point,
       point_offsets: None,
       ring_offsets: None,
       collection: None,
+      wkb_type: 0,
+      srid: 0,
+      properties: None,
     }
   }
 }
@@ -335,10 +359,6 @@ pub struct InnerObjectBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> InnerObjectBuilder<'a, 'b, A> {
-  #[inline]
-  pub fn add_kind(&mut self, kind: InnerObjectKind) {
-    self.fbb_.push_slot::<InnerObjectKind>(InnerObject::VT_KIND, kind, InnerObjectKind::Point);
-  }
   #[inline]
   pub fn add_point_offsets(&mut self, point_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u16>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(InnerObject::VT_POINT_OFFSETS, point_offsets);
@@ -350,6 +370,18 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> InnerObjectBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_collection(&mut self, collection: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<InnerObject<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(InnerObject::VT_COLLECTION, collection);
+  }
+  #[inline]
+  pub fn add_wkb_type(&mut self, wkb_type: u32) {
+    self.fbb_.push_slot::<u32>(InnerObject::VT_WKB_TYPE, wkb_type, 0);
+  }
+  #[inline]
+  pub fn add_srid(&mut self, srid: u32) {
+    self.fbb_.push_slot::<u32>(InnerObject::VT_SRID, srid, 0);
+  }
+  #[inline]
+  pub fn add_properties(&mut self, properties: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(InnerObject::VT_PROPERTIES, properties);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> InnerObjectBuilder<'a, 'b, A> {
@@ -369,10 +401,12 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> InnerObjectBuilder<'a, 'b, A> {
 impl core::fmt::Debug for InnerObject<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("InnerObject");
-      ds.field("kind", &self.kind());
       ds.field("point_offsets", &self.point_offsets());
       ds.field("ring_offsets", &self.ring_offsets());
       ds.field("collection", &self.collection());
+      ds.field("wkb_type", &self.wkb_type());
+      ds.field("srid", &self.srid());
+      ds.field("properties", &self.properties());
       ds.finish()
   }
 }
@@ -395,7 +429,9 @@ impl<'a> Object<'a> {
   pub const VT_POINT_OFFSETS: flatbuffers::VOffsetT = 4;
   pub const VT_RING_OFFSETS: flatbuffers::VOffsetT = 6;
   pub const VT_COLLECTION: flatbuffers::VOffsetT = 8;
-  pub const VT_PROPERTIES: flatbuffers::VOffsetT = 10;
+  pub const VT_WKB_TYPE: flatbuffers::VOffsetT = 10;
+  pub const VT_SRID: flatbuffers::VOffsetT = 12;
+  pub const VT_PROPERTIES: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -408,6 +444,8 @@ impl<'a> Object<'a> {
   ) -> flatbuffers::WIPOffset<Object<'bldr>> {
     let mut builder = ObjectBuilder::new(_fbb);
     if let Some(x) = args.properties { builder.add_properties(x); }
+    builder.add_srid(args.srid);
+    builder.add_wkb_type(args.wkb_type);
     if let Some(x) = args.collection { builder.add_collection(x); }
     if let Some(x) = args.ring_offsets { builder.add_ring_offsets(x); }
     if let Some(x) = args.point_offsets { builder.add_point_offsets(x); }
@@ -437,6 +475,20 @@ impl<'a> Object<'a> {
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject>>>>(Object::VT_COLLECTION, None)}
   }
   #[inline]
+  pub fn wkb_type(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Object::VT_WKB_TYPE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn srid(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Object::VT_SRID, Some(0)).unwrap()}
+  }
+  #[inline]
   pub fn properties(&self) -> Option<flatbuffers::Vector<'a, u8>> {
     // Safety:
     // Created from valid Table for this object
@@ -455,6 +507,8 @@ impl flatbuffers::Verifiable for Object<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u16>>>("point_offsets", Self::VT_POINT_OFFSETS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u16>>>("ring_offsets", Self::VT_RING_OFFSETS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<InnerObject>>>>("collection", Self::VT_COLLECTION, false)?
+     .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
+     .visit_field::<u32>("srid", Self::VT_SRID, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("properties", Self::VT_PROPERTIES, false)?
      .finish();
     Ok(())
@@ -464,6 +518,8 @@ pub struct ObjectArgs<'a> {
     pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u16>>>,
     pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u16>>>,
     pub collection: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>>>,
+    pub wkb_type: u32,
+    pub srid: u32,
     pub properties: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
 }
 impl<'a> Default for ObjectArgs<'a> {
@@ -473,6 +529,8 @@ impl<'a> Default for ObjectArgs<'a> {
       point_offsets: None,
       ring_offsets: None,
       collection: None,
+      wkb_type: 0,
+      srid: 0,
       properties: None,
     }
   }
@@ -494,6 +552,14 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ObjectBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_collection(&mut self, collection: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<InnerObject<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Object::VT_COLLECTION, collection);
+  }
+  #[inline]
+  pub fn add_wkb_type(&mut self, wkb_type: u32) {
+    self.fbb_.push_slot::<u32>(Object::VT_WKB_TYPE, wkb_type, 0);
+  }
+  #[inline]
+  pub fn add_srid(&mut self, srid: u32) {
+    self.fbb_.push_slot::<u32>(Object::VT_SRID, srid, 0);
   }
   #[inline]
   pub fn add_properties(&mut self, properties: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
@@ -520,6 +586,8 @@ impl core::fmt::Debug for Object<'_> {
       ds.field("point_offsets", &self.point_offsets());
       ds.field("ring_offsets", &self.ring_offsets());
       ds.field("collection", &self.collection());
+      ds.field("wkb_type", &self.wkb_type());
+      ds.field("srid", &self.srid());
       ds.field("properties", &self.properties());
       ds.finish()
   }
