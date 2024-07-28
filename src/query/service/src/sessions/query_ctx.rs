@@ -105,6 +105,7 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
@@ -143,6 +144,7 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    snapshot: Arc<RwLock<Option<TableSnapshot>>>,
 }
 
 impl QueryContext {
@@ -165,6 +167,7 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
+            snapshot: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -460,6 +463,14 @@ impl TableContext for QueryContext {
             partition_queue.push_back(part);
         }
         Ok(())
+    }
+
+    fn set_table_snapshot(&self, snapshot: TableSnapshot) {
+        *self.snapshot.write() = Some(snapshot);
+    }
+
+    fn get_table_snapshot(&self) -> Option<TableSnapshot> {
+        self.snapshot.read().clone()
     }
 
     fn partition_num(&self) -> usize {

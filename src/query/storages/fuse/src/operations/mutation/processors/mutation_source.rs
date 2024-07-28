@@ -88,7 +88,6 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
-    query_row_id_col: bool,
 
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
@@ -105,7 +104,6 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
-        query_row_id_col: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -117,7 +115,6 @@ impl MutationSource {
             operators,
             storage_format,
             action,
-            query_row_id_col,
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
         })))
@@ -186,28 +183,6 @@ impl Processor for MutationSource {
 
                 let fuse_part = FuseBlockPartInfo::from_part(&part)?;
                 if let Some(filter) = self.filter.as_ref() {
-                    if self.query_row_id_col {
-                        // Add internal column to data block
-                        let block_meta = fuse_part.block_meta_index().unwrap();
-                        let internal_column_meta = InternalColumnMeta {
-                            segment_idx: block_meta.segment_idx,
-                            block_id: block_meta.block_id,
-                            block_location: block_meta.block_location.clone(),
-                            segment_location: block_meta.segment_location.clone(),
-                            snapshot_location: None,
-                            offsets: None,
-                            base_block_ids: None,
-                            inner: None,
-                            matched_rows: block_meta.matched_rows.clone(),
-                        };
-                        let internal_col = InternalColumn {
-                            column_name: ROW_ID_COL_NAME.to_string(),
-                            column_type: InternalColumnType::RowId,
-                        };
-                        let row_id_col = internal_col
-                            .generate_column_values(&internal_column_meta, data_block.num_rows());
-                        data_block.add_column(row_id_col);
-                    }
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;
@@ -231,11 +206,6 @@ impl Processor for MutationSource {
                     };
 
                     if affect_rows != 0 {
-                        // Pop the row_id column
-                        if self.query_row_id_col {
-                            data_block.pop_columns(1);
-                        }
-
                         let progress_values = ProgressValues {
                             rows: affect_rows,
                             bytes: 0,

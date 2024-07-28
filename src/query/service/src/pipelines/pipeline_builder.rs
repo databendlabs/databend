@@ -230,7 +230,10 @@ impl PipelineBuilder {
             }
             PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
             PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
-            PhysicalPlan::ColumnMutation(_) | PhysicalPlan::MutationSource(_) => todo!(),
+            PhysicalPlan::MutationSource(mutation_source) => {
+                self.build_mutation_source(mutation_source)
+            }
+            PhysicalPlan::ColumnMutation(_) => todo!(),
         }
     }
 }

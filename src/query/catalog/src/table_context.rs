@@ -58,6 +58,7 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -170,6 +171,8 @@ pub trait TableContext: Send + Sync {
     fn set_enable_sort_spill(&self, enable: bool);
     fn set_compaction_num_block_hint(&self, hint: u64);
     fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_table_snapshot(&self, snapshot: TableSnapshot);
+    fn get_table_snapshot(&self) -> Option<TableSnapshot>;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);

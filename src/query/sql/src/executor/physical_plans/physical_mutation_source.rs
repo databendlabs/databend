@@ -22,9 +22,11 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 
+use crate::binder::DataMutationInputType;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::ColumnSet;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -34,6 +36,8 @@ pub struct MutationSource {
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
     pub output_schema: DataSchemaRef,
+    pub input_type: DataMutationInputType,
+    pub read_partition_columns: ColumnSet,
 }
 
 impl MutationSource {
@@ -85,6 +89,8 @@ impl PhysicalPlanBuilder {
             output_schema,
             table_info: data_mutation_info.table_info.clone(),
             filters,
+            input_type: mutation_source.input_type.clone(),
+            read_partition_columns: mutation_source.read_partition_columns.clone(),
         }))
     }
 }

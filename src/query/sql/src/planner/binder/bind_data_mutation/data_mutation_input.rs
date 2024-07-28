@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -71,8 +72,9 @@ pub enum DataMutationInput {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DataMutationInputType {
+    #[default]
     Merge,
     Update,
     Delete,
@@ -282,7 +284,10 @@ impl DataMutationInput {
                 let mut target_row_id_index = DUMMY_COLUMN_INDEX;
                 let mut predicate_index = None;
                 let s_expr = if mutation_source {
-                    if mutation_filter.is_some() && input_type == DataMutationInputType::Update {
+                    let mut read_partition_columns = HashSet::new();
+                    if let Some(filter) = &mutation_filter
+                        && input_type == DataMutationInputType::Update
+                    {
                         let predicate_column_index = binder.metadata.write().add_derived_column(
                             "_predicate".to_string(),
                             DataType::Boolean,
@@ -290,6 +295,7 @@ impl DataMutationInput {
                         );
                         required_columns.insert(predicate_column_index);
                         predicate_index = Some(predicate_column_index);
+                        read_partition_columns.extend(filter.used_columns());
                     }
                     let table_schema = target_table.schema_with_stream();
                     let target_mutation_source = MutationSource {
@@ -299,6 +305,8 @@ impl DataMutationInput {
                         update_stream_columns,
                         filter: mutation_filter,
                         predicate_index,
+                        input_type: input_type.clone(),
+                        read_partition_columns,
                     };
                     for column_index in bind_context.column_set().iter() {
                         required_columns.insert(*column_index);

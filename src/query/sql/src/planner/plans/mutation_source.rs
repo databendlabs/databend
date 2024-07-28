@@ -21,6 +21,7 @@ use databend_common_expression::TableSchemaRef;
 use itertools::Itertools;
 
 use super::ScalarExpr;
+use crate::binder::DataMutationInputType;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
@@ -41,6 +42,8 @@ pub struct MutationSource {
     pub update_stream_columns: bool,
     pub filter: Option<ScalarExpr>,
     pub predicate_index: Option<usize>,
+    pub input_type: DataMutationInputType,
+    pub read_partition_columns: ColumnSet,
 }
 
 impl PartialEq for MutationSource {
