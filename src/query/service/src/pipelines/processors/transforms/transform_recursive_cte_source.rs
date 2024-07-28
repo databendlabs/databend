@@ -332,6 +332,8 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ReplaceAsyncSourcer(_)
         | PhysicalPlan::ReplaceDeduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
+        | PhysicalPlan::ColumnMutation(_)
+        | PhysicalPlan::MutationSource(_)
         | PhysicalPlan::MergeInto(_)
         | PhysicalPlan::MergeIntoSplit(_)
         | PhysicalPlan::MergeIntoManipulate(_)

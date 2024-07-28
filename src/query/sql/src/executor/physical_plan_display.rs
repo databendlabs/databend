@@ -25,6 +25,7 @@ use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CacheScan;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -46,6 +47,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoManipulate;
 use crate::executor::physical_plans::MergeIntoOrganize;
 use crate::executor::physical_plans::MergeIntoSplit;
+use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
@@ -102,9 +104,11 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CopyIntoLocation(copy_into_location) => {
                 write!(f, "{}", copy_into_location)?
             }
+            PhysicalPlan::MutationSource(mutation_source) => write!(f, "{}", mutation_source)?,
             PhysicalPlan::ReplaceAsyncSourcer(async_sourcer) => write!(f, "{}", async_sourcer)?,
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
+            PhysicalPlan::ColumnMutation(column_mutation) => write!(f, "{}", column_mutation)?,
             PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
             PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
             PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
@@ -508,6 +512,18 @@ impl Display for ReplaceDeduplicate {
 impl Display for ReplaceInto {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Replace")
+    }
+}
+
+impl Display for MutationSource {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MutationSource")
+    }
+}
+
+impl Display for ColumnMutation {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ColumnMutation")
     }
 }
 

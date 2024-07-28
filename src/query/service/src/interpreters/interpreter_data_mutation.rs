@@ -30,6 +30,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
+use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
@@ -167,10 +168,12 @@ impl DataMutationInterpreter {
         })?;
 
         // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+        let table_info = fuse_table.get_table_info().clone();
         let table_snapshot = fuse_table.read_table_snapshot().await?;
         let update_stream_meta =
             dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
         let data_mutation_build_info = DataMutationBuildInfo {
+            table_info,
             table_snapshot,
             update_stream_meta,
         };

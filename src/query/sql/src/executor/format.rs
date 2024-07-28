@@ -33,6 +33,7 @@ use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
 use crate::executor::physical_plans::CacheScan;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
@@ -54,6 +55,7 @@ use crate::executor::physical_plans::MergeInto;
 use crate::executor::physical_plans::MergeIntoManipulate;
 use crate::executor::physical_plans::MergeIntoOrganize;
 use crate::executor::physical_plans::MergeIntoSplit;
+use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -246,6 +248,8 @@ fn to_format_tree(
             Ok(FormatTreeNode::new("ReplaceDeduplicate".to_string()))
         }
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
+        PhysicalPlan::MutationSource(plan) => format_mutation_source(plan, metadata, profs),
+        PhysicalPlan::ColumnMutation(plan) => format_column_mutation(plan, metadata, profs),
         PhysicalPlan::MergeInto(plan) => format_merge_into(plan, metadata, profs),
         PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
         PhysicalPlan::MergeIntoManipulate(plan) => {
@@ -369,6 +373,25 @@ fn append_profile_info(
             }
         }
     }
+}
+
+fn format_mutation_source(
+    _plan: &MutationSource,
+    _metadata: &Metadata,
+    _profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::with_children(
+        format!("Mutation Source"),
+        vec![],
+    ))
+}
+
+fn format_column_mutation(
+    plan: &ColumnMutation,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    to_format_tree(&plan.input, metadata, profs)
 }
 
 fn format_merge_into(

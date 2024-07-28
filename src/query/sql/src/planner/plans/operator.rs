@@ -28,6 +28,7 @@ use super::scan::Scan;
 use super::sort::Sort;
 use super::union_all::UnionAll;
 use super::ExpressionScan;
+use super::MutationSource;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -107,6 +108,7 @@ pub enum RelOp {
     RecursiveCteScan,
     MergeInto,
     Recluster,
+    MutationSource,
 
     // Pattern
     Pattern,
@@ -137,6 +139,7 @@ pub enum RelOperator {
     AsyncFunction(AsyncFunction),
     DataMutation(DataMutation),
     Recluster(Recluster),
+    MutationSource(MutationSource),
 }
 
 impl Operator for RelOperator {
@@ -164,6 +167,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
             RelOperator::DataMutation(rel_op) => rel_op.rel_op(),
             RelOperator::Recluster(rel_op) => rel_op.rel_op(),
+            RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -191,6 +195,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
             RelOperator::DataMutation(rel_op) => rel_op.arity(),
             RelOperator::Recluster(rel_op) => rel_op.arity(),
+            RelOperator::MutationSource(rel_op) => rel_op.arity(),
         }
     }
 
@@ -218,6 +223,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -245,6 +251,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -272,6 +279,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -349,6 +357,9 @@ impl Operator for RelOperator {
             RelOperator::Recluster(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::MutationSource(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 
@@ -423,6 +434,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Recluster(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::MutationSource(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }
@@ -830,6 +844,26 @@ impl TryFrom<RelOperator> for Recluster {
         } else {
             Err(ErrorCode::Internal(format!(
                 "Cannot downcast {:?} to Recluster",
+                value.rel_op()
+            )))
+        }
+    }
+}
+
+impl From<MutationSource> for RelOperator {
+    fn from(v: MutationSource) -> Self {
+        Self::MutationSource(v)
+    }
+}
+
+impl TryFrom<RelOperator> for MutationSource {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::MutationSource(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to MutationSource",
                 value.rel_op()
             )))
         }

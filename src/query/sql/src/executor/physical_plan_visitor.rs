@@ -32,6 +32,7 @@ use crate::executor::physical_plans::ChunkEvalScalar;
 use crate::executor::physical_plans::ChunkFillAndReorder;
 use crate::executor::physical_plans::ChunkFilter;
 use crate::executor::physical_plans::ChunkMerge;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -51,6 +52,7 @@ use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::LocalShuffle;
 use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
@@ -96,6 +98,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceAsyncSourcer(plan) => self.replace_async_sourcer(plan),
             PhysicalPlan::ReplaceDeduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
+            PhysicalPlan::MutationSource(plan) => self.replace_mutation_source(plan),
+            PhysicalPlan::ColumnMutation(plan) => self.replace_column_mutation(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
             PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
             PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
@@ -468,6 +472,18 @@ pub trait PhysicalPlanReplacer {
         })))
     }
 
+    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::MutationSource(plan.clone()))
+    }
+
+    fn replace_column_mutation(&mut self, plan: &ColumnMutation) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ColumnMutation(ColumnMutation {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -639,6 +655,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::Recluster(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
+                | PhysicalPlan::MutationSource(_)
                 | PhysicalPlan::AsyncFunction(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
@@ -712,6 +729,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::ReplaceInto(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::ColumnMutation(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MergeInto(plan) => {

@@ -270,6 +270,7 @@ impl DPhpy {
             | RelOperator::MaterializedCte(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::DataMutation(_)
+            | RelOperator::MutationSource(_)
             | RelOperator::Recluster(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

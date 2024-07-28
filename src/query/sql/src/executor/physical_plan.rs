@@ -26,6 +26,7 @@ use super::physical_plans::AddStreamColumn;
 use super::physical_plans::MergeIntoManipulate;
 use super::physical_plans::MergeIntoOrganize;
 use super::physical_plans::MergeIntoSplit;
+use super::physical_plans::MutationSource;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -38,6 +39,7 @@ use crate::executor::physical_plans::ChunkEvalScalar;
 use crate::executor::physical_plans::ChunkFillAndReorder;
 use crate::executor::physical_plans::ChunkFilter;
 use crate::executor::physical_plans::ChunkMerge;
+use crate::executor::physical_plans::ColumnMutation;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::ConstantTableScan;
@@ -122,6 +124,8 @@ pub enum PhysicalPlan {
     MergeIntoManipulate(Box<MergeIntoManipulate>),
     MergeIntoOrganize(Box<MergeIntoOrganize>),
     AddStreamColumn(Box<AddStreamColumn>),
+    ColumnMutation(ColumnMutation),
+    MutationSource(MutationSource),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -300,6 +304,15 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::MutationSource(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::ColumnMutation(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
             PhysicalPlan::MergeInto(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -424,6 +437,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
             PhysicalPlan::Udf(v) => v.plan_id,
+            PhysicalPlan::MutationSource(v) => v.plan_id,
+            PhysicalPlan::ColumnMutation(v) => v.plan_id,
             PhysicalPlan::MergeInto(v) => v.plan_id,
             PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
             PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
@@ -480,6 +495,8 @@ impl PhysicalPlan {
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
             PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
+            PhysicalPlan::MutationSource(plan) => plan.output_schema(),
+            PhysicalPlan::ColumnMutation(plan) => plan.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
@@ -539,6 +556,8 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
+            PhysicalPlan::MutationSource(_) => "MutationSource".to_string(),
+            PhysicalPlan::ColumnMutation(_) => "ColumnMutation".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
             PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
             PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
@@ -608,6 +627,8 @@ impl PhysicalPlan {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationSource(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::ColumnMutation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoManipulate(plan) => {
@@ -665,6 +686,8 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::MutationSource(_)
+            | PhysicalPlan::ColumnMutation(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSplit(_)
             | PhysicalPlan::MergeIntoManipulate(_)
