@@ -248,8 +248,6 @@ async fn test_fuse_do_vacuum_drop_table_deletion_error() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Result<()> {
-    // do_vacuum_drop_table should return Err if file deletion failed
-
     let mut table_info = TableInfo::default();
     table_info
         .meta
@@ -271,9 +269,12 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
+
+        // verify that errors of deletions are not swallowed
         assert!(result.is_err());
     }
 
+    // Case 2: parallel vacuum dropped tables
     {
         let faulty_accessor = std::sync::Arc::new(AccessorFaultyDeletion::new());
         let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
@@ -285,6 +286,7 @@ async fn test_fuse_vacuum_drop_tables_in_parallel_with_deletion_error() -> Resul
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, None).await;
         // verify that accessor.delete() was called
         assert!(faulty_accessor.hit_delete_operation());
+        // verify that errors of deletions are not swallowed
         assert!(result.is_err());
     }
 

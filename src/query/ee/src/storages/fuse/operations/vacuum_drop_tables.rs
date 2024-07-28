@@ -124,8 +124,6 @@ pub async fn vacuum_drop_tables_by_table_info(
         )
         .await?;
 
-        // Return error if any error happens during invocations of `do_vacuum_drop_table`.
-        //
         // Note that Errs should NOT be swallowed if any target is not successfully deleted.
         // Otherwise, the caller site may proceed to purge meta-data from meta-server with
         // some table data un-vacuumed, and the `vacuum` action of those dropped tables can no
