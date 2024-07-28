@@ -32,6 +32,7 @@ mod builder_merge_into;
 mod builder_merge_into_manipulate;
 mod builder_merge_into_organize;
 mod builder_merge_into_split;
+mod builder_mutation_source;
 mod builder_on_finished;
 mod builder_project;
 mod builder_recluster;

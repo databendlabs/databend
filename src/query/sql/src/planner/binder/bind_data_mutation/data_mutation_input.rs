@@ -27,6 +27,7 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_ID_COL_NAME;
 
@@ -39,15 +40,18 @@ use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
 use crate::plans::MaterializedCte;
+use crate::plans::MutationSource;
 use crate::plans::RelOperator;
+use crate::plans::SubqueryExpr;
+use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
-use crate::UdfRewriter;
 use crate::Visibility;
+use crate::DUMMY_COLUMN_INDEX;
 
 pub enum DataMutationInput {
     Merge {
@@ -92,6 +96,8 @@ pub struct DataMutationInputBindResult {
     pub update_or_insert_columns_star: Option<HashMap<usize, ScalarExpr>>,
     pub target_table_index: usize,
     pub target_row_id_index: usize,
+    pub mutation_source: bool,
+    pub predicate_index: Option<usize>,
 }
 
 impl DataMutationInput {
@@ -244,6 +250,8 @@ impl DataMutationInput {
                     update_or_insert_columns_star,
                     target_table_index,
                     target_row_id_index,
+                    mutation_source: false,
+                    predicate_index: None,
                 })
             }
             DataMutationInput::Update { target, filter }
@@ -253,14 +261,10 @@ impl DataMutationInput {
                 } else {
                     DataMutationInputType::Delete
                 };
-                let (mut target_s_expr, mut bind_context) =
-                    binder.bind_table_reference(bind_context, target)?;
-                let is_lazy_table = input_type != DataMutationInputType::Delete;
-                let update_stream_columns = target_table.change_tracking_enabled();
-                target_s_expr =
-                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
-                // Add internal_column row_id for target_table
+                let (mut s_expr, mut bind_context) =
+                    binder.bind_table_reference(bind_context, target)?;
+
                 let target_table_index = binder
                     .metadata
                     .read()
@@ -269,29 +273,62 @@ impl DataMutationInput {
                         target_table_identifier.table_name().as_str(),
                     )
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
-                let target_row_id_index = binder.add_row_id_column(
-                    &mut bind_context,
-                    target_table_identifier,
-                    target_table_index,
-                    &mut target_s_expr,
-                    input_type.clone(),
-                )?;
+                let update_stream_columns = target_table.change_tracking_enabled();
 
-                let mut s_expr = binder
-                    .process_filter(filter, target_s_expr, &mut bind_context)
-                    .await?;
-
-                // rewrite udf for interpreter udf
-                let mut udf_rewriter = UdfRewriter::new(binder.metadata.clone(), true);
-                s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-                // rewrite udf for server udf
-                let mut udf_rewriter = UdfRewriter::new(binder.metadata.clone(), false);
-                s_expr = udf_rewriter.rewrite(&s_expr)?;
+                let (mutation_source, mutation_filter) =
+                    binder.process_filter(&mut bind_context, filter)?;
 
                 let mut required_columns = ColumnSet::new();
-                // Add target table row_id column to required columns.
-                required_columns.insert(target_row_id_index);
+                let mut target_row_id_index = DUMMY_COLUMN_INDEX;
+                let mut predicate_index = None;
+                let s_expr = if mutation_source {
+                    if mutation_filter.is_some() && input_type == DataMutationInputType::Update {
+                        let predicate_column_index = binder.metadata.write().add_derived_column(
+                            "_predicate".to_string(),
+                            DataType::Boolean,
+                            None,
+                        );
+                        required_columns.insert(predicate_column_index);
+                        predicate_index = Some(predicate_column_index);
+                    }
+                    let table_schema = target_table.schema_with_stream();
+                    let target_mutation_source = MutationSource {
+                        table_index: target_table_index,
+                        schema: table_schema,
+                        columns: bind_context.column_set(),
+                        update_stream_columns,
+                        filter: mutation_filter,
+                        predicate_index,
+                    };
+                    for column_index in bind_context.column_set().iter() {
+                        required_columns.insert(*column_index);
+                    }
+                    SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
+                        target_mutation_source,
+                    )))
+                } else {
+                    // Add internal_column row_id for target_table
+                    target_row_id_index = binder.add_row_id_column(
+                        &mut bind_context,
+                        target_table_identifier,
+                        target_table_index,
+                        &mut s_expr,
+                        input_type.clone(),
+                    )?;
+                    // Add target table row_id column to required columns.
+                    required_columns.insert(target_row_id_index);
+
+                    let predicates =
+                        Binder::flatten_and_scalar_expr(mutation_filter.as_ref().unwrap());
+                    let filter: Filter = Filter { predicates };
+                    s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr));
+                    let mut rewriter =
+                        SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
+                    let s_expr = rewriter.rewrite(&s_expr)?;
+
+                    let is_lazy_table = input_type != DataMutationInputType::Delete;
+                    update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?
+                };
 
                 Ok(DataMutationInputBindResult {
                     input: s_expr,
@@ -301,6 +338,8 @@ impl DataMutationInput {
                     update_or_insert_columns_star: None,
                     target_table_index,
                     target_row_id_index,
+                    mutation_source,
+                    predicate_index,
                 })
             }
         }
@@ -384,12 +423,11 @@ impl Binder {
         }
     }
 
-    pub(in crate::planner::binder) async fn process_filter(
+    pub(in crate::planner::binder) fn process_filter(
         &self,
-        filter: &Option<Expr>,
-        table_expr: SExpr,
         bind_context: &mut BindContext,
-    ) -> Result<SExpr> {
+        filter: &Option<Expr>,
+    ) -> Result<(bool, Option<ScalarExpr>)> {
         if let Some(expr) = filter {
             let mut scalar_binder = ScalarBinder::new(
                 bind_context,
@@ -401,14 +439,34 @@ impl Binder {
                 self.ctes_map.clone(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
-            let predicates = Self::flatten_and_scalar_expr(&scalar);
-            let filter = Filter { predicates };
-            let s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
-            let mut rewriter = SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), None);
-            rewriter.rewrite(&s_expr)
+            if !self.has_subquery(&scalar)? {
+                Ok((true, Some(scalar)))
+            } else {
+                Ok((false, Some(scalar)))
+            }
         } else {
-            Ok(table_expr)
+            Ok((true, None))
         }
+    }
+
+    fn has_subquery(&self, scalar: &ScalarExpr) -> Result<bool> {
+        struct SubqueryVisitor {
+            found_subquery: bool,
+        }
+
+        impl<'a> Visitor<'a> for SubqueryVisitor {
+            fn visit_subquery(&mut self, _: &'a SubqueryExpr) -> Result<()> {
+                self.found_subquery = true;
+                Ok(())
+            }
+        }
+
+        let mut subquery_visitor = SubqueryVisitor {
+            found_subquery: false,
+        };
+        subquery_visitor.visit(scalar)?;
+
+        Ok(subquery_visitor.found_subquery)
     }
 }
 

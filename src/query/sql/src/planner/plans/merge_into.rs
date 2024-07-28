@@ -79,6 +79,8 @@ pub struct DataMutation {
     // also use for split
     pub row_id_index: IndexType,
     pub change_join_order: bool,
+    pub mutation_source: bool,
+    pub predicate_index: Option<usize>,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:

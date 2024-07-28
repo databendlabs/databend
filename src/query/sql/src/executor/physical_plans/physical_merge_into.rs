@@ -41,6 +41,7 @@ use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
 
+use super::ColumnMutation;
 use crate::binder::wrap_cast;
 use crate::binder::DataMutationInputType;
 use crate::binder::DataMutationType;
@@ -57,6 +58,7 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
@@ -129,15 +131,103 @@ impl PhysicalPlanBuilder {
             field_index_map,
             mutation_type,
             distributed,
+            mutation_source,
+            predicate_index,
             row_id_index,
             change_join_order,
             can_try_update_column_only,
             ..
         } = merge_into;
 
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-        let mut plan = builder.build(s_expr.child(0)?, required).await?;
+        let mut plan = self.build(s_expr.child(0)?, required).await?;
         let data_mutation_input_schema = plan.output_schema()?;
+
+        let table = self
+            .ctx
+            .get_table(catalog_name, database_name, table_name)
+            .await?;
+        let table_info = table.get_table_info();
+        let table_name = table_name.clone();
+        let data_mutation_build_info = self.data_mutation_build_info.clone().unwrap();
+
+        if *mutation_source {
+            let (mutation_expr, mutation_kind) =
+                if let Some(update_list) = &matched_evaluators[0].update {
+                    let (database, table_name) = match table_name_alias {
+                        None => (Some(database_name.as_str()), table_name.clone()),
+                        Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
+                    };
+                    let update_list = mutation_update_expr(
+                        self.ctx.clone(),
+                        bind_context,
+                        update_list,
+                        table.schema_with_stream().into(),
+                        *predicate_index,
+                        database,
+                        &table_name,
+                    )?;
+                    let update_list = update_list
+                        .iter()
+                        .map(|(idx, remote_expr)| {
+                            (
+                                *idx,
+                                remote_expr
+                                    .as_expr(&BUILTIN_FUNCTIONS)
+                                    .project_column_ref(|index| {
+                                        data_mutation_input_schema
+                                            .index_of(&index.to_string())
+                                            .unwrap()
+                                    })
+                                    .as_remote_expr(),
+                            )
+                        })
+                        .collect_vec();
+                    // update
+                    (Some(update_list), MutationKind::Update)
+                } else {
+                    (None, MutationKind::Delete)
+                };
+
+            plan = PhysicalPlan::ColumnMutation(ColumnMutation {
+                plan_id: 0,
+                input: Box::new(plan),
+                mutation_expr,
+            });
+
+            dbg!("plan = {:?}", &plan);
+
+            let commit_input = if !distributed {
+                plan
+            } else {
+                PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(plan),
+                    kind: FragmentKind::Merge,
+                    keys: vec![],
+                    allow_adjust_parallelism: true,
+                    ignore_exchange: false,
+                })
+            };
+
+            let base_snapshot = data_mutation_build_info.table_snapshot;
+
+            // build mutation_aggregate
+            let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+                input: Box::new(commit_input),
+                snapshot: base_snapshot,
+                table_info: table_info.clone(),
+                // let's use update first, we will do some optimizations and select exact strategy
+                mutation_kind,
+                update_stream_meta: vec![],
+                merge_meta: false,
+                deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                plan_id: u32::MAX,
+                recluster_info: None,
+            }));
+
+            physical_plan.adjust_plan_id(&mut 0);
+            return Ok(physical_plan);
+        }
 
         let is_insert_only = matches!(mutation_type, DataMutationType::InsertOnly);
         let row_id_offset = if !is_insert_only {
@@ -161,7 +251,7 @@ impl PhysicalPlanBuilder {
                 bind_context,
                 data_mutation_input_schema.clone(),
                 database_name,
-                table_name,
+                &table_name,
             )?);
         }
 
@@ -192,13 +282,6 @@ impl PhysicalPlanBuilder {
                 row_id_offset,
             ));
         }
-
-        let table = self
-            .ctx
-            .get_table(catalog_name, database_name, table_name)
-            .await?;
-        let table_info = table.get_table_info();
-        let table_name = table_name.clone();
 
         let output_schema = plan.output_schema()?;
 
@@ -300,7 +383,6 @@ impl PhysicalPlanBuilder {
             matched.push((condition, update_list))
         }
 
-        let data_mutation_build_info = self.data_mutation_build_info.clone().unwrap();
         let base_snapshot = data_mutation_build_info.table_snapshot;
 
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
@@ -612,6 +694,83 @@ pub fn generate_update_list(
                     col.index.to_string()
                 }
             });
+            let (expr, _) =
+                ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            acc.push((*index, expr.as_remote_expr()));
+            Ok::<_, ErrorCode>(acc)
+        },
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn mutation_update_expr(
+    ctx: Arc<dyn TableContext>,
+    bind_context: &BindContext,
+    update_list: &HashMap<FieldIndex, ScalarExpr>,
+    schema: DataSchema,
+    predicate_index: Option<usize>,
+    database: Option<&str>,
+    table: &str,
+) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
+    let predicate = if let Some(predicate_index) = predicate_index {
+        let column = ColumnBindingBuilder::new(
+            PREDICATE_COLUMN_NAME.to_string(),
+            predicate_index,
+            Box::new(DataType::Boolean),
+            Visibility::Visible,
+        )
+        .build();
+        ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
+    } else {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(true),
+        })
+    };
+
+    update_list.iter().try_fold(
+        Vec::with_capacity(update_list.len()),
+        |mut acc, (index, scalar)| {
+            let field = schema.field(*index);
+            let data_type = scalar.data_type()?;
+            let target_type = field.data_type();
+            let left = if data_type != *target_type {
+                wrap_cast(scalar, target_type)
+            } else {
+                scalar.clone()
+            };
+
+            // Replace column to the result of the following expression:
+            // if(condition, CAST(expression, type), column)
+            let mut right = None;
+            for column_binding in bind_context.columns.iter() {
+                if BindContext::match_column_binding(
+                    database,
+                    Some(table),
+                    field.name(),
+                    column_binding,
+                ) {
+                    right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: column_binding.clone(),
+                    }));
+                    break;
+                }
+            }
+
+            let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+            // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
+            // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
+            // see `cast_data_type_for_merge()`.
+
+            let scalar = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "if".to_string(),
+                params: vec![],
+                arguments: vec![predicate.clone(), left, right],
+            });
+            let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));

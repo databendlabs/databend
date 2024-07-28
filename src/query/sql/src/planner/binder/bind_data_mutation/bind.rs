@@ -52,6 +52,7 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
+use crate::UdfRewriter;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DataMutationType {
@@ -166,6 +167,8 @@ impl Binder {
             update_or_insert_columns_star,
             target_table_index,
             target_row_id_index,
+            mutation_source,
+            predicate_index,
         } = input;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -276,6 +279,8 @@ impl Binder {
             mutation_type: mutation_type.clone(),
             distributed: false,
             change_join_order: false,
+            mutation_source,
+            predicate_index,
             row_id_index: target_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
@@ -288,10 +293,18 @@ impl Binder {
         }
 
         let schema = data_mutation.schema();
-        let s_expr = SExpr::create_unary(
+        let mut s_expr = SExpr::create_unary(
             Arc::new(RelOperator::DataMutation(data_mutation)),
             Arc::new(input),
         );
+
+        // rewrite udf for interpreter udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
+
+        // rewrite udf for server udf
+        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
+        s_expr = udf_rewriter.rewrite(&s_expr)?;
 
         Ok(Plan::DataMutation {
             s_expr: Box::new(s_expr),

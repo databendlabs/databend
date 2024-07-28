@@ -762,7 +762,6 @@ impl<'a> Binder {
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
             )
