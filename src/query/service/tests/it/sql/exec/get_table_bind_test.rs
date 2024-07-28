@@ -141,6 +141,7 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -532,15 +533,15 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>) {
+    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
         todo!()
     }
 
     fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        stodo!()
+        todo!()
     }
 
-    fn set_lazy_mutation_delete(&self, lazy: bool) {
+    fn set_lazy_mutation_delete(&self, _lazy: bool) {
         todo!()
     }
 
