@@ -104,7 +104,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/g{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
-            segment_uuid,
+            segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )
     }
