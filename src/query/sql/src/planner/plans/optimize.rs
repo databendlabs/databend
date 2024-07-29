@@ -12,29 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::NavigationPoint;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Recluster {
+#[derive(Clone, Debug)]
+pub struct OptimizePurgePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-
-    pub limit: Option<usize>,
-    pub filters: Option<Filters>,
+    pub instant: Option<NavigationPoint>,
+    pub num_snapshot_limit: Option<usize>,
 }
 
-impl std::hash::Hash for Recluster {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.table.hash(state);
-    }
+#[derive(Clone, Debug)]
+pub struct OptimizeCompactSegmentPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub num_segment_limit: Option<usize>,
 }
 
-impl Operator for Recluster {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OptimizeCompactBlock {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub limit: CompactionLimits,
+}
+
+impl Operator for OptimizeCompactBlock {
     fn rel_op(&self) -> RelOp {
-        RelOp::Recluster
+        RelOp::CompactBlock
     }
 }
