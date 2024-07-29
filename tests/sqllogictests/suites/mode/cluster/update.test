@@ -28,34 +28,15 @@ explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 Fragment 0:
   DataExchange: Merge
     ExchangeSink
-    ├── output columns: []
+    ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
     ├── destination fragment: [1]
-    └── DataMutation
-        ├── target table: [catalog: default] [database: db1] [table: t1]
-        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
-        └── RowFetch
-            ├── output columns: [t1.b (#1), t1._row_id (#2), t1.a (#0)]
-            ├── columns to fetch: [a]
-            └── Filter
-                ├── output columns: [t1.b (#1), t1._row_id (#2)]
-                ├── filters: [is_true(t1.b (#1) > '2022-12-31')]
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.db1.t1
-                    ├── output columns: [b (#1), _row_id (#2)]
-                    ├── read rows: 1
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 2
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1>]
-                    ├── push downs: [filters: [is_true(t1.b (#1) > '2022-12-31')], limit: NONE]
-                    └── estimated rows: 2.00
+    └── Mutation Source
 (empty)
 (empty)
 Fragment 1:
     CommitSink
     └── ExchangeSource
-        ├── output columns: []
+        ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
         └── source fragment: [0]
 (empty)
 
@@ -71,32 +52,14 @@ explain fragments UPDATE t1 SET a = 3 WHERE false
 Fragment 0:
   DataExchange: Merge
     ExchangeSink
-    ├── output columns: []
+    ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
     ├── destination fragment: [1]
-    └── DataMutation
-        ├── target table: [catalog: default] [database: db1] [table: t1]
-        ├── matched update: [condition: None, update set a = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), 3, t1.a (#0))]
-        └── RowFetch
-            ├── output columns: [t1._row_id (#2), t1.a (#0), t1.b (#1)]
-            ├── columns to fetch: [a, b]
-            └── Filter
-                ├── output columns: [t1._row_id (#2)]
-                ├── filters: [false]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.db1.t1
-                    ├── output columns: [_row_id (#2)]
-                    ├── read rows: 0
-                    ├── read size: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [false], limit: NONE]
-                    └── estimated rows: 2.00
+    └── Mutation Source
 (empty)
 (empty)
 Fragment 1:
     CommitSink
     └── ExchangeSource
-        ├── output columns: []
+        ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
         └── source fragment: [0]
 (empty)

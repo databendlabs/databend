@@ -20,19 +20,7 @@ query T
 explain delete from t1
 ----
 CommitSink
-└── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: t1]
-    ├── matched delete: [condition: None]
-    └── TableScan
-        ├── table: default.default.t1
-        ├── output columns: [_row_id (#2)]
-        ├── read rows: 4
-        ├── read size: 0
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 4.00
+└── Mutation Source
 
 
 query T
@@ -43,15 +31,15 @@ CommitSink
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched delete: [condition: None]
     └── HashJoin
-        ├── output columns: [t1._row_id (#2)]
+        ├── output columns: [t1._row_id (#4)]
         ├── join type: LEFT SEMI
-        ├── build keys: [subquery_3 (#3)]
+        ├── build keys: [subquery_2 (#2)]
         ├── probe keys: [t1.a (#0)]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
-        │   ├── output columns: [a (#3)]
+        │   ├── output columns: [a (#2)]
         │   ├── read rows: 2
         │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
@@ -61,7 +49,7 @@ CommitSink
         │   └── estimated rows: 2.00
         └── TableScan(Probe)
             ├── table: default.default.t1
-            ├── output columns: [a (#0), _row_id (#2)]
+            ├── output columns: [a (#0), _row_id (#4)]
             ├── read rows: 4
             ├── read size: < 1 KiB
             ├── partitions total: 1
@@ -75,23 +63,7 @@ query T
 explain delete from t1 where a > 2;
 ----
 CommitSink
-└── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: t1]
-    ├── matched delete: [condition: None]
-    └── Filter
-        ├── output columns: [t1._row_id (#2)]
-        ├── filters: [is_true(t1.a (#0) > 2)]
-        ├── estimated rows: 3.20
-        └── TableScan
-            ├── table: default.default.t1
-            ├── output columns: [a (#0), _row_id (#2)]
-            ├── read rows: 4
-            ├── read size: < 1 KiB
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-            ├── push downs: [filters: [is_true(t1.a (#0) > 2)], limit: NONE]
-            └── estimated rows: 4.00
+└── Mutation Source
 
 query T
 explain delete from t1 where a in (select a from t2) and b > 2;
@@ -101,15 +73,15 @@ CommitSink
     ├── target table: [catalog: default] [database: default] [table: t1]
     ├── matched delete: [condition: None]
     └── HashJoin
-        ├── output columns: [t1._row_id (#2)]
+        ├── output columns: [t1._row_id (#4)]
         ├── join type: LEFT SEMI
-        ├── build keys: [subquery_3 (#3)]
+        ├── build keys: [subquery_2 (#2)]
         ├── probe keys: [t1.a (#0)]
         ├── filters: []
-        ├── estimated rows: 1.60
+        ├── estimated rows: 2.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2
-        │   ├── output columns: [a (#3)]
+        │   ├── output columns: [a (#2)]
         │   ├── read rows: 2
         │   ├── read size: < 1 KiB
         │   ├── partitions total: 1
@@ -118,12 +90,12 @@ CommitSink
         │   ├── push downs: [filters: [], limit: NONE]
         │   └── estimated rows: 2.00
         └── Filter(Probe)
-            ├── output columns: [t1.a (#0), t1._row_id (#2)]
+            ├── output columns: [t1.a (#0), t1._row_id (#4)]
             ├── filters: [is_true(t1.b (#1) > 2)]
-            ├── estimated rows: 3.20
+            ├── estimated rows: 3.00
             └── TableScan
                 ├── table: default.default.t1
-                ├── output columns: [a (#0), b (#1), _row_id (#2)]
+                ├── output columns: [a (#0), b (#1), _row_id (#4)]
                 ├── read rows: 4
                 ├── read size: < 1 KiB
                 ├── partitions total: 1
