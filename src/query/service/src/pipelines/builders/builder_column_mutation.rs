@@ -67,7 +67,9 @@ impl PipelineBuilder {
             for (id, remote_expr) in computed_expr.into_iter() {
                 let expr = remote_expr
                     .as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|_| *field_id_to_schema_index.get(&id).unwrap());
+                    .project_column_ref(|index| {
+                        *schema_index_to_new_index.get(index).unwrap_or(index)
+                    });
                 let schema_index = field_id_to_schema_index.get(&id).unwrap();
                 schema_index_to_new_index.insert(*schema_index, pos);
                 field_id_to_schema_index.entry(id).and_modify(|e| *e = pos);

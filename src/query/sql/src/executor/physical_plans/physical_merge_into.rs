@@ -162,6 +162,7 @@ impl PhysicalPlanBuilder {
                         bind_context,
                         update_list,
                         table.schema_with_stream().into(),
+                        data_mutation_input_schema.clone(),
                         *predicate_index,
                         database,
                         &table_name,
@@ -207,7 +208,11 @@ impl PhysicalPlanBuilder {
 
                     let computed_expr = generate_stored_computed_list(
                         self.ctx.clone(),
+                        bind_context,
                         Arc::new(table.schema().into()),
+                        data_mutation_input_schema.clone(),
+                        database,
+                        &table_name,
                         update_list,
                     )?;
 
@@ -745,6 +750,7 @@ pub fn mutation_update_expr(
     bind_context: &BindContext,
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
+    input_schema: Arc<DataSchema>,
     predicate_index: Option<usize>,
     database: Option<&str>,
     table: &str,
@@ -807,7 +813,9 @@ pub fn mutation_update_expr(
                 params: vec![],
                 arguments: vec![predicate.clone(), left, right],
             });
-            let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+            let expr = scalar
+                .type_check(input_schema.as_ref())?
+                .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
             let (expr, _) =
                 ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
             acc.push((*index, expr.as_remote_expr()));
@@ -823,7 +831,11 @@ use crate::parse_computed_expr;
 
 pub fn generate_stored_computed_list(
     ctx: Arc<dyn TableContext>,
+    bind_context: &BindContext,
     schema: DataSchemaRef,
+    input_schema: Arc<DataSchema>,
+    database: Option<&str>,
+    table: &str,
     update_list: &HashMap<FieldIndex, ScalarExpr>,
 ) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
     let mut remote_exprs = Vec::new();
@@ -842,7 +854,23 @@ pub fn generate_stored_computed_list(
                 }
             }
             if need_update {
-                // let expr = expr.project_column_ref(|index| schema.field(*index).name().to_string());
+                let expr = expr.project_column_ref(|id| {
+                    let mut column_index: Option<usize> = None;
+                    for column_binding in bind_context.columns.iter() {
+                        if BindContext::match_column_binding(
+                            database,
+                            Some(table),
+                            schema.field(*id).name(),
+                            column_binding,
+                        ) {
+                            column_index = Some(column_binding.index);
+                            break;
+                        }
+                    }
+                    input_schema
+                        .index_of(&column_index.unwrap().to_string())
+                        .unwrap()
+                });
                 let (expr, _) =
                     ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
                 remote_exprs.push((i, expr.as_remote_expr()));
