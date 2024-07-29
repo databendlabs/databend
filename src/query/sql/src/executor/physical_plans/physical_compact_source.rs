@@ -65,12 +65,19 @@ impl PhysicalPlanBuilder {
             )));
         };
 
+        let base_snapshot_timestamp = self
+            .ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
+
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         let is_distributed = (!self.ctx.get_cluster().is_empty())
@@ -96,6 +103,7 @@ impl PhysicalPlanBuilder {
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            base_snapshot_timestamp,
         }));
 
         root.adjust_plan_id(&mut 0);

@@ -120,12 +120,17 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
 
     let table_info = table.get_table_info().clone();
     if let Some((parts, snapshot)) = res {
+        let base_snapshot_timestamp = ctx
+            .txn_mgr()
+            .lock()
+            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            base_snapshot_timestamp,
         }));
 
         let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
@@ -138,6 +143,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            base_snapshot_timestamp,
         }));
 
         let build_res =

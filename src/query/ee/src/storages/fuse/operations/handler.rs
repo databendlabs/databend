@@ -27,7 +27,6 @@ use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
-use crate::storages::fuse::do_vacuum_drop_tables;
 use crate::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use crate::storages::fuse::vacuum_drop_tables;
