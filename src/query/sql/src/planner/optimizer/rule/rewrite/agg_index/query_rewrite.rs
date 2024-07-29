@@ -99,9 +99,15 @@ impl QueryInfo {
                 column_map.insert(item.index, item.scalar.clone());
             }
 
+            // collect query info from the plan
             let mut s_expr = s_expr.child(0)?;
             loop {
                 match s_expr.plan() {
+                    RelOperator::EvalScalar(eval) => {
+                        for item in &eval.items {
+                            column_map.insert(item.index, item.scalar.clone());
+                        }
+                    }
                     RelOperator::Aggregate(agg) => {
                         if agg.grouping_sets.is_some() {
                             return Err(ErrorCode::Internal("Grouping sets is not supported"));
@@ -137,7 +143,9 @@ impl QueryInfo {
                         // Finish the recursion.
                         break;
                     }
-                    _ => {}
+                    _ => {
+                        return Err(ErrorCode::Internal("Unsupported plan"));
+                    }
                 }
                 s_expr = s_expr.child(0)?;
             }
@@ -164,6 +172,7 @@ impl QueryInfo {
             for (index, scalar) in column_map.iter() {
                 let display_name = format_scalar(scalar, &column_map);
                 if let Some(old_index) = column_display_map.get(&display_name) {
+                    // use index from low level plan first.
                     if old_index < index {
                         continue;
                     }
@@ -176,6 +185,7 @@ impl QueryInfo {
             let mut range_classes = RangeClasses::new();
             let mut residual_classes = ResidualClasses::new();
 
+            // split predicates as equal predicate, range predicate, and residual predicate.
             if let Some(predicates) = predicates {
                 for pred in predicates {
                     preds_splitter.split(pred, &column_map);
@@ -214,16 +224,17 @@ impl QueryInfo {
                 output_cols,
             })
         } else {
-            unimplemented!();
+            Err(ErrorCode::Internal("Unsupported plan"))
         }
     }
 
-    // check whether the scalar can be computed from index columns.
+    // check whether the scalar can be computed from index output columns.
+    // if not, the aggregating index can't be used.
     fn check_output_cols(
         &self,
         scalar: &ScalarExpr,
         index_output_cols: &HashMap<String, (ScalarExpr, bool)>,
-        new_selection: &mut HashSet<ScalarItem>,
+        new_selection_set: &mut HashSet<ScalarItem>,
     ) -> Result<Option<ScalarExpr>> {
         let display_name = format_scalar(scalar, &self.column_map);
 
@@ -233,7 +244,7 @@ impl QueryInfo {
                     index: *index,
                     scalar: new_scalar.clone(),
                 };
-                new_selection.insert(new_item);
+                new_selection_set.insert(new_item);
             }
             // agg function can't used
             if *is_agg {
@@ -247,7 +258,11 @@ impl QueryInfo {
             ScalarExpr::BoundColumnRef(_) => {
                 let actual_column = actual_column_ref(scalar, &self.column_map);
                 if !matches!(actual_column, ScalarExpr::BoundColumnRef(_)) {
-                    return self.check_output_cols(actual_column, index_output_cols, new_selection);
+                    return self.check_output_cols(
+                        actual_column,
+                        index_output_cols,
+                        new_selection_set,
+                    );
                 }
                 return Err(ErrorCode::Internal("Can't found column from index"));
             }
@@ -257,7 +272,7 @@ impl QueryInfo {
                 let mut new_args = Vec::with_capacity(func.arguments.len());
                 for arg in &func.arguments {
                     if let Some(new_arg) =
-                        self.check_output_cols(arg, index_output_cols, new_selection)?
+                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
                     {
                         new_args.push(new_arg);
                     } else {
@@ -273,7 +288,7 @@ impl QueryInfo {
             }
             ScalarExpr::CastExpr(cast) => {
                 if let Some(new_arg) =
-                    self.check_output_cols(&cast.argument, index_output_cols, new_selection)?
+                    self.check_output_cols(&cast.argument, index_output_cols, new_selection_set)?
                 {
                     let mut new_cast = cast.clone();
                     new_cast.argument = Box::new(new_arg);
@@ -285,7 +300,7 @@ impl QueryInfo {
             ScalarExpr::AggregateFunction(func) => {
                 // agg function can't push down
                 for arg in &func.args {
-                    self.check_output_cols(arg, index_output_cols, new_selection)?;
+                    self.check_output_cols(arg, index_output_cols, new_selection_set)?;
                 }
                 return Ok(None);
             }
@@ -294,7 +309,7 @@ impl QueryInfo {
                 let mut new_args = Vec::with_capacity(udf.arguments.len());
                 for arg in &udf.arguments {
                     if let Some(new_arg) =
-                        self.check_output_cols(arg, index_output_cols, new_selection)?
+                        self.check_output_cols(arg, index_output_cols, new_selection_set)?
                     {
                         new_args.push(new_arg);
                     } else {
@@ -316,7 +331,7 @@ impl QueryInfo {
                 index: *index,
                 scalar: new_scalar.clone(),
             };
-            new_selection.insert(new_item);
+            new_selection_set.insert(new_item);
             return Ok(None);
         }
 
@@ -324,7 +339,7 @@ impl QueryInfo {
     }
 }
 
-// Record information of Aggregate index plan.
+// Record information of aggregating index plan.
 struct ViewInfo {
     query_info: QueryInfo,
     index_fields: Vec<TableField>,
@@ -340,6 +355,8 @@ impl ViewInfo {
     ) -> Result<ViewInfo> {
         let query_info = QueryInfo::new(table_index, table_name, base_columns, s_expr)?;
 
+        // collect the output columns of aggregating index,
+        // query can use those columns to compute expressions.
         let mut index_fields = Vec::with_capacity(query_info.output_cols.len());
         let mut index_output_cols = HashMap::with_capacity(query_info.output_cols.len());
         for (index, item) in query_info.output_cols.iter().enumerate() {
@@ -354,6 +371,7 @@ impl ViewInfo {
                     }
                 }
             }
+            // we store the value of aggregate function as binary data.
             let data_type = if is_agg {
                 DataType::Binary
             } else {
@@ -506,7 +524,9 @@ impl EquivalenceClasses {
 
 #[derive(Eq, Clone, Debug)]
 enum BoundValue {
+    // column >= scalar value or column <= scalar value
     Closed(Scalar),
+    // column > scalar value or column < scalar value
     Open(Scalar),
     // -∞
     NegativeInfinite,
@@ -580,6 +600,8 @@ struct RangeValues {
     bounds: Option<(BoundValue, BoundValue)>,
 }
 
+// if a column have more than one predicates, we can merge them together to simplify the process.
+//
 //                 +------+
 //                 | orig |
 //                 +------+
@@ -708,6 +730,15 @@ impl RangeClasses {
         &self,
         view_range_classes: &RangeClasses,
     ) -> (bool, Option<BTreeMap<String, (BoundValue, BoundValue)>>) {
+        // if the range predicate in aggregating index and the query have three cases.
+        // 1. the range of aggregating index and query are same, don't need extra filter ranges.
+        // 2. the range of aggregating index filter less values than the query,
+        //    we can add extra range predicate to implemente the filter.
+        //    for example: aggregating index: a > 10 and query: a > 15
+        //    we can add extra range as a > 15
+        // 3. the range of aggregating index filter more values than the query,
+        //    this aggregating index don't match the query.
+        //    for example: aggregating index: a > 10 and query: a > 5
         let mut extra_ranges = BTreeMap::new();
         for (col, query_range_values) in self.column_to_range_class.iter() {
             if !view_range_classes.column_to_range_class.contains_key(col) {
@@ -921,7 +952,6 @@ impl AggIndexRewriter {
         }
 
         // 3.1.3 Can the required rows be selected?
-
         // 1. Construct compensating column equality predicates
         //    while comparing view equivalence classes against query equivalence classes as described in the previous section.
         //    Try to map every column reference to an output column (using the view equivalence classes).
@@ -1027,7 +1057,6 @@ impl AggIndexRewriter {
         new_selection_set: &mut HashSet<ScalarItem>,
     ) -> bool {
         // 3.1.4 Can output expressions be computed?
-
         // Checking whether all output expressions of the query can be computed from the view
         // is similar to checking whether the additional predicates can be computed correctly.
         for output_item in self.query_info.output_cols.iter() {
@@ -1052,7 +1081,6 @@ impl AggIndexRewriter {
         new_selection_set: &mut HashSet<ScalarItem>,
     ) -> bool {
         // 3.3 Aggregation queries and views
-
         // 1. The SPJ part of the view produces all rows needed by
         //    the SPJ part of the query and with the right duplication factor.
         // 2. All columns required by compensating predicates (if any) are available in the view output.
@@ -1203,6 +1231,7 @@ fn reverse_op(op: &str) -> String {
     }
 }
 
+// replace derived column with actual ScalarExpr.
 fn actual_column_ref<'a>(
     col: &'a ScalarExpr,
     column_map: &'a HashMap<IndexType, ScalarExpr>,

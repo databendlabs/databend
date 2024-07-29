@@ -130,14 +130,22 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select a + 1, to_string(a) from t",
             index: "select a from t",
             is_matched: true,
-            index_selection: vec!["plus(index_col_0 (#0), 1)", "to_string(index_col_0 (#0))"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "plus(index_col_0 (#0), 1)",
+                "to_string(index_col_0 (#0))",
+            ],
             rewritten_predicates: vec![],
         },
         TestSuite {
             query: "select a + 1 as z, to_string(a) from t",
             index: "select a from t",
             is_matched: true,
-            index_selection: vec!["plus(index_col_0 (#0), 1)", "to_string(index_col_0 (#0))"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "plus(index_col_0 (#0), 1)",
+                "to_string(index_col_0 (#0))",
+            ],
             rewritten_predicates: vec![],
         },
         TestSuite {
@@ -309,7 +317,11 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1, b + 1 from t group by b",
             index: "select sum(a), b from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "index_col_1 (#1)",
+                "plus(index_col_0 (#0), 1)",
+            ],
             rewritten_predicates: vec![],
         },
         TestSuite {
@@ -372,7 +384,11 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1, b + 2 from t where b > 1 group by b",
             index: "select b, sum(a) from t where b > 0 group by b",
             is_matched: true,
-            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "index_col_1 (#1)",
+                "plus(index_col_0 (#0), 2)",
+            ],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
         // query: sort-eval-scan, index: eval-scan
@@ -380,7 +396,7 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select to_string(c + 1) as s from t order by s",
             index: "select c + 1 from t",
             is_matched: true,
-            index_selection: vec![],
+            index_selection: vec!["to_string(index_col_0 (#0))"],
             rewritten_predicates: vec![],
         },
         // query: eval-sort-filter-scan, index: eval-scan
@@ -442,7 +458,11 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1, b + 1 from t group by b order by b",
             index: "select sum(a), b from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "index_col_1 (#1)",
+                "plus(index_col_0 (#0), 1)",
+            ],
             rewritten_predicates: vec![],
         },
         // query: eval-sort-agg-eval-filter-scan, index: eval-agg-eval-scan
@@ -471,7 +491,11 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1, b + 2 from t where b > 1 group by b order by b",
             index: "select b, sum(a) from t where b > 0 group by b",
             is_matched: true,
-            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
+            index_selection: vec![
+                "index_col_0 (#0)",
+                "index_col_1 (#1)",
+                "plus(index_col_0 (#0), 2)",
+            ],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
     ]
