@@ -38,11 +38,12 @@ impl PipelineBuilder {
         mutation_expr: Vec<(usize, RemoteExpr)>,
         computed_expr: Option<Vec<(usize, RemoteExpr)>>,
         mut field_id_to_schema_index: HashMap<usize, usize>,
-        input_num_columns: usize,
+        num_input_columns: usize,
+        has_filter_column: bool,
     ) -> Result<()> {
         let mut ops = Vec::new();
         let mut exprs = Vec::with_capacity(mutation_expr.len());
-        let mut pos = input_num_columns;
+        let mut pos = num_input_columns;
         let mut schema_index_to_new_index = HashMap::new();
         for (id, remote_expr) in mutation_expr.into_iter() {
             let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
@@ -79,8 +80,9 @@ impl PipelineBuilder {
             });
         }
 
-        let mut projection = Vec::with_capacity(input_num_columns);
-        for idx in 0..input_num_columns {
+        let num_output_columns = num_input_columns - has_filter_column as usize;
+        let mut projection = Vec::with_capacity(num_output_columns);
+        for idx in 0..num_output_columns {
             if let Some(index) = field_id_to_schema_index.get(&idx) {
                 projection.push(*index);
             } else {
@@ -91,7 +93,7 @@ impl PipelineBuilder {
         ops.push(BlockOperator::Project { projection });
 
         self.main_pipeline.add_transformer(|| {
-            CompoundBlockOperator::new(ops.clone(), self.func_ctx.clone(), input_num_columns)
+            CompoundBlockOperator::new(ops.clone(), self.func_ctx.clone(), num_input_columns)
         });
 
         Ok(())
@@ -105,6 +107,7 @@ impl PipelineBuilder {
                 column_mutation.computed_expr.clone(),
                 column_mutation.field_id_to_schema_index.clone(),
                 column_mutation.input_num_columns,
+                column_mutation.has_filter_column,
             )?;
         }
 

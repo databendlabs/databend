@@ -151,70 +151,74 @@ impl PhysicalPlanBuilder {
 
         if *mutation_source {
             let mut field_id_to_schema_index = HashMap::new();
-            let (mutation_expr, computed_expr, mutation_kind) = if let Some(update_list) =
-                &matched_evaluators[0].update
-            {
-                let (database, table_name) = match table_name_alias {
-                    None => (Some(database_name.as_str()), table_name.clone()),
-                    Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
-                };
-                let mutation_expr = mutation_update_expr(
-                    self.ctx.clone(),
-                    bind_context,
-                    update_list,
-                    table.schema_with_stream().into(),
-                    *predicate_index,
-                    database,
-                    &table_name,
-                )?;
-                for (field_id, field) in table.schema_with_stream().fields().iter().enumerate() {
-                    for column_binding in bind_context.columns.iter() {
-                        if BindContext::match_column_binding(
-                            database,
-                            Some(&table_name),
-                            field.name(),
-                            column_binding,
-                        ) {
-                            let column_index = column_binding.index;
-                            let schema_index = data_mutation_input_schema
-                                .index_of(&column_index.to_string())
-                                .unwrap();
-                            field_id_to_schema_index.insert(field_id, schema_index);
-                            break;
+            let (mutation_expr, computed_expr, mutation_kind) =
+                if let Some(update_list) = &matched_evaluators[0].update {
+                    let (database, table_name) = match table_name_alias {
+                        None => (Some(database_name.as_str()), table_name.clone()),
+                        Some(table_name_alias) => (None, table_name_alias.to_lowercase()),
+                    };
+                    let mutation_expr = mutation_update_expr(
+                        self.ctx.clone(),
+                        bind_context,
+                        update_list,
+                        table.schema_with_stream().into(),
+                        *predicate_index,
+                        database,
+                        &table_name,
+                    )?;
+                    let table_schema_with_stream = table.schema_with_stream();
+                    for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
+                        for column_binding in bind_context.columns.iter() {
+                            if BindContext::match_column_binding(
+                                database,
+                                Some(&table_name),
+                                field.name(),
+                                column_binding,
+                            ) {
+                                let column_index = column_binding.index;
+                                let schema_index = data_mutation_input_schema
+                                    .index_of(&column_index.to_string())
+                                    .unwrap();
+                                field_id_to_schema_index.insert(field_id, schema_index);
+                                break;
+                            }
                         }
                     }
-                }
-                let mutation_expr = mutation_expr
-                    .iter()
-                    .map(|(idx, remote_expr)| {
-                        (
-                            *idx,
-                            remote_expr
-                                .as_expr(&BUILTIN_FUNCTIONS)
-                                .project_column_ref(|index| {
-                                    data_mutation_input_schema
-                                        .index_of(&index.to_string())
-                                        .unwrap()
-                                })
-                                .as_remote_expr(),
-                        )
-                    })
-                    .collect_vec();
+                    assert_eq!(
+                        field_id_to_schema_index.len(),
+                        table_schema_with_stream.fields().len()
+                    );
+                    let mutation_expr = mutation_expr
+                        .iter()
+                        .map(|(idx, remote_expr)| {
+                            (
+                                *idx,
+                                remote_expr
+                                    .as_expr(&BUILTIN_FUNCTIONS)
+                                    .project_column_ref(|index| {
+                                        data_mutation_input_schema
+                                            .index_of(&index.to_string())
+                                            .unwrap()
+                                    })
+                                    .as_remote_expr(),
+                            )
+                        })
+                        .collect_vec();
 
-                let computed_expr = generate_stored_computed_list(
-                    self.ctx.clone(),
-                    Arc::new(table.schema().into()),
-                    update_list,
-                )?;
+                    let computed_expr = generate_stored_computed_list(
+                        self.ctx.clone(),
+                        Arc::new(table.schema().into()),
+                        update_list,
+                    )?;
 
-                (
-                    Some(mutation_expr),
-                    Some(computed_expr),
-                    MutationKind::Update,
-                )
-            } else {
-                (None, None, MutationKind::Delete)
-            };
+                    (
+                        Some(mutation_expr),
+                        Some(computed_expr),
+                        MutationKind::Update,
+                    )
+                } else {
+                    (None, None, MutationKind::Delete)
+                };
 
             let input_num_columns = data_mutation_input_schema.fields().len();
             plan = PhysicalPlan::ColumnMutation(ColumnMutation {
@@ -226,6 +230,7 @@ impl PhysicalPlanBuilder {
                 input_type: input_type.clone(),
                 field_id_to_schema_index,
                 input_num_columns,
+                has_filter_column: predicate_index.is_some(),
             });
 
             let commit_input = if !distributed {

@@ -32,6 +32,7 @@ pub struct ColumnMutation {
     pub input_type: DataMutationInputType,
     pub field_id_to_schema_index: HashMap<usize, usize>,
     pub input_num_columns: usize,
+    pub has_filter_column: bool,
 }
 
 impl ColumnMutation {
