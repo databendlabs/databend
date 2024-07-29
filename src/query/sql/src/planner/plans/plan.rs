@@ -24,8 +24,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use super::Exchange;
-use super::RelOperator;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -99,6 +97,7 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
@@ -110,11 +109,13 @@ use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
-use crate::plans::OptimizeTablePlan;
+use crate::plans::OptimizeCompactSegmentPlan;
+use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
+use crate::plans::RelOperator;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
@@ -217,13 +218,20 @@ pub enum Plan {
     },
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
-    OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
+
+    // Optimize
+    OptimizePurge(Box<OptimizePurgePlan>),
+    OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
+    OptimizeCompactBlock {
+        s_expr: Box<SExpr>,
+        need_purge: bool,
+    },
 
     // Insert
     Insert(Box<Insert>),
@@ -417,9 +425,12 @@ impl Plan {
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
-            Plan::Replace(_) | Plan::DataMutation { .. } | Plan::OptimizeTable(_) => {
-                QueryKind::Update
-            }
+            Plan::Replace(_)
+            | Plan::DataMutation { .. }
+            | Plan::OptimizePurge(_)
+            | Plan::OptimizeCompactSegment(_)
+            | Plan::OptimizeCompactBlock { .. }
+            | Plan::Update(_) => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }

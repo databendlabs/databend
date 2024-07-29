@@ -76,6 +76,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::DataMutation(_) => "MergeInto".to_string(),
         RelOperator::MutationSource(_) => "MutationSource".to_string(),
         RelOperator::Recluster(_) => "Recluster".to_string(),
+        RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
     }
 }
 

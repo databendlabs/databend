@@ -30,6 +30,8 @@ pub struct InstanceStatus {
     pub queuing_queries_count: u64,
     // the active sessions count, have active connections, but may not have any query running
     pub active_sessions_count: u64,
+    // the time elapsed since the earliest running query started
+    pub max_running_query_executed_secs: u64,
     // the timestamp on last query started
     pub last_query_started_at: Option<u64>,
     // the timestamp on last query finished
@@ -54,6 +56,7 @@ pub async fn instance_status_handler() -> poem::Result<impl IntoResponse> {
         queuing_queries_count: queue_manager.length() as u64,
         last_query_started_at: status.last_query_started_at.map(unix_timestamp_secs),
         last_query_finished_at: status.last_query_finished_at.map(unix_timestamp_secs),
+        max_running_query_executed_secs: status.max_running_query_executed_secs,
         instance_started_at: unix_timestamp_secs(status.instance_started_at),
         instance_timestamp: unix_timestamp_secs(SystemTime::now()),
     };

@@ -18,16 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use super::aggregate::Aggregate;
-use super::dummy_table_scan::DummyTableScan;
-use super::eval_scalar::EvalScalar;
-use super::filter::Filter;
-use super::join::Join;
-use super::limit::Limit;
-use super::scan::Scan;
-use super::sort::Sort;
-use super::union_all::UnionAll;
-use super::ExpressionScan;
 use super::MutationSource;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -36,15 +26,27 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::materialized_cte::MaterializedCte;
 use crate::plans::r_cte_scan::RecursiveCteScan;
+use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::DataMutation;
+use crate::plans::DummyTableScan;
+use crate::plans::EvalScalar;
 use crate::plans::Exchange;
+use crate::plans::ExpressionScan;
+use crate::plans::Filter;
+use crate::plans::Join;
+use crate::plans::Limit;
+use crate::plans::MergeInto;
+use crate::plans::OptimizeCompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Recluster;
+use crate::plans::Scan;
+use crate::plans::Sort;
 use crate::plans::Udf;
+use crate::plans::UnionAll;
 use crate::plans::Window;
 
 pub trait Operator {
@@ -52,25 +54,35 @@ pub trait Operator {
     fn rel_op(&self) -> RelOp;
 
     /// Get arity of this operator
-    fn arity(&self) -> usize;
+    fn arity(&self) -> usize {
+        1
+    }
 
     /// Derive relational property
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>>;
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        Ok(Arc::new(RelationalProperty::default()))
+    }
 
     /// Derive physical property
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty>;
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(0)
+    }
 
     /// Derive statistics information
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>>;
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        Ok(Arc::new(StatInfo::default()))
+    }
 
     /// Compute required property for child with index `child_index`
     fn compute_required_prop_child(
         &self,
-        ctx: Arc<dyn TableContext>,
-        rel_expr: &RelExpr,
-        child_index: usize,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
         required: &RequiredProperty,
-    ) -> Result<RequiredProperty>;
+    ) -> Result<RequiredProperty> {
+        Ok(required.clone())
+    }
 
     /// Enumerate all possible combinations of required property for children
     fn compute_required_prop_children(
@@ -108,6 +120,7 @@ pub enum RelOp {
     RecursiveCteScan,
     MergeInto,
     Recluster,
+    CompactBlock,
     MutationSource,
 
     // Pattern
@@ -139,6 +152,7 @@ pub enum RelOperator {
     AsyncFunction(AsyncFunction),
     DataMutation(DataMutation),
     Recluster(Recluster),
+    CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
 }
 
@@ -167,6 +181,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
             RelOperator::DataMutation(rel_op) => rel_op.rel_op(),
             RelOperator::Recluster(rel_op) => rel_op.rel_op(),
+            RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
             RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
         }
     }
@@ -195,6 +210,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
             RelOperator::DataMutation(rel_op) => rel_op.arity(),
             RelOperator::Recluster(rel_op) => rel_op.arity(),
+            RelOperator::CompactBlock(rel_op) => rel_op.arity(),
             RelOperator::MutationSource(rel_op) => rel_op.arity(),
         }
     }
@@ -223,6 +239,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
@@ -251,6 +268,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
@@ -279,6 +297,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::DataMutation(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
@@ -355,6 +374,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Recluster(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::CompactBlock(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::MutationSource(rel_op) => {
@@ -434,6 +456,9 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Recluster(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::CompactBlock(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::MutationSource(rel_op) => {
@@ -844,6 +869,26 @@ impl TryFrom<RelOperator> for Recluster {
         } else {
             Err(ErrorCode::Internal(format!(
                 "Cannot downcast {:?} to Recluster",
+                value.rel_op()
+            )))
+        }
+    }
+}
+
+impl From<OptimizeCompactBlock> for RelOperator {
+    fn from(v: OptimizeCompactBlock) -> Self {
+        Self::CompactBlock(v)
+    }
+}
+
+impl TryFrom<RelOperator> for OptimizeCompactBlock {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::CompactBlock(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to OptimizeCompactBlock",
                 value.rel_op()
             )))
         }

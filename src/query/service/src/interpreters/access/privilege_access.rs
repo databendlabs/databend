@@ -35,6 +35,7 @@ use databend_common_sql::binder::DataMutationInputType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::DataMutation;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RewriteKind;
@@ -909,9 +910,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::TruncateTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false).await?
             }
-            Plan::OptimizeTable(plan) => {
+            Plan::OptimizePurge(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
-            }
+            },
+            Plan::OptimizeCompactSegment(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+            },
+            Plan::OptimizeCompactBlock { s_expr, .. } => {
+                let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+            },
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
             }

@@ -26,10 +26,10 @@ use databend_common_expression::TableSchemaRefExt;
 use super::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::normalize_identifier;
-use crate::plans::insert::InsertValue;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
+use crate::plans::InsertValue;
 use crate::plans::Plan;
 use crate::BindContext;
 

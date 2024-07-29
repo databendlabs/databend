@@ -136,6 +136,7 @@ impl PhysicalPlanBuilder {
                 self.build_mutation_source(mutation_source).await
             }
             RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
+            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
         }
     }
 

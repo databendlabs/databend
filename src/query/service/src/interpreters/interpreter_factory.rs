@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -226,15 +227,32 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable { s_expr, is_final } => Ok(Arc::new(
-                ReclusterTableInterpreter::try_create(ctx, *s_expr.clone(), *is_final)?,
-            )),
+            Plan::ReclusterTable { s_expr, is_final } => {
+                Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *is_final,
+                )?))
+            }
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
-                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
+            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
+                ctx,
+                *purge.clone(),
+            )?)),
+            Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
+                OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
+            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+                Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *need_purge,
+                )?))
+            }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),

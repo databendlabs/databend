@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::TableAlias;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,13 +30,6 @@ use databend_common_pipeline_core::LockGuard;
 
 use crate::binder::DataMutationInputType;
 use crate::binder::DataMutationType;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::PhysicalProperty;
-use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;
@@ -196,43 +190,5 @@ impl std::hash::Hash for DataMutation {
 impl Operator for DataMutation {
     fn rel_op(&self) -> RelOp {
         RelOp::MergeInto
-    }
-
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        Ok(Arc::new(RelationalProperty {
-            output_columns: ColumnSet::new(),
-            outer_columns: ColumnSet::new(),
-            used_columns: ColumnSet::new(),
-            orderings: vec![],
-            partition_orderings: None,
-        }))
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
-            cardinality: 0.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: Default::default(),
-            },
-        }))
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(required.clone())
     }
 }

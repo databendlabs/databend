@@ -86,7 +86,7 @@ impl Binder {
             | RelOperator::Window(_)
             | RelOperator::DataMutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::Recluster(_) => {
+            | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()
