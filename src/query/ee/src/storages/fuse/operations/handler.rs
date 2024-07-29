@@ -30,6 +30,7 @@ use crate::storages::fuse::do_vacuum;
 use crate::storages::fuse::do_vacuum_drop_tables;
 use crate::storages::fuse::operations::vacuum_table_v2::do_vacuum2;
 use crate::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
+use crate::storages::fuse::vacuum_drop_tables;
 
 pub struct RealVacuumHandler {}
 
@@ -59,7 +60,7 @@ impl VacuumHandler for RealVacuumHandler {
         tables: Vec<Arc<dyn Table>>,
         dry_run_limit: Option<usize>,
     ) -> Result<Option<Vec<VacuumDropFileInfo>>> {
-        do_vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
+        vacuum_drop_tables(threads_nums, tables, dry_run_limit).await
     }
 
     async fn do_vacuum_temporary_files(

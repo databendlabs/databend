@@ -15,16 +15,13 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataSchemaRef;
 
 use crate::optimizer::ColumnSet;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::Operator;
@@ -83,10 +80,6 @@ impl Operator for ExpressionScan {
         RelOp::ExpressionScan
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
             output_columns: self.column_indexes.clone().into_iter().collect(),
@@ -97,10 +90,6 @@ impl Operator for ExpressionScan {
         }))
     }
 
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         Ok(Arc::new(StatInfo {
             cardinality: self.values.len() as f64,
@@ -109,15 +98,5 @@ impl Operator for ExpressionScan {
                 column_stats: Default::default(),
             },
         }))
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(required.clone())
     }
 }

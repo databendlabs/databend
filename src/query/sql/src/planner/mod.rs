@@ -42,7 +42,7 @@ pub use metadata::*;
 pub use planner::get_query_kind;
 pub use planner::PlanExtras;
 pub use planner::Planner;
-pub use plans::insert::InsertInputSource;
+pub use plans::InsertInputSource;
 pub use plans::ScalarExpr;
 pub use plans::DELETE_NAME;
 pub use plans::INSERT_NAME;

@@ -56,6 +56,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -114,8 +115,9 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
-use crate::plans::OptimizeTableAction;
-use crate::plans::OptimizeTablePlan;
+use crate::plans::OptimizeCompactBlock;
+use crate::plans::OptimizeCompactSegmentPlan;
+use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::Recluster;
 use crate::plans::RelOperator;
@@ -1123,31 +1125,68 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-        let action = match ast_action {
-            AstOptimizeTableAction::All => OptimizeTableAction::All,
+        let limit = limit.map(|v| v as usize);
+        let plan = match ast_action {
+            AstOptimizeTableAction::All => {
+                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                    catalog,
+                    database,
+                    table,
+                    limit: CompactionLimits {
+                        segment_limit: limit,
+                        block_limit: None,
+                    },
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                Plan::OptimizeCompactBlock {
+                    s_expr: Box::new(s_expr),
+                    need_purge: true,
+                }
+            }
             AstOptimizeTableAction::Purge { before } => {
-                let p = if let Some(point) = before {
+                let instant = if let Some(point) = before {
                     let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None
                 };
-                OptimizeTableAction::Purge(p)
+                Plan::OptimizePurge(Box::new(OptimizePurgePlan {
+                    catalog,
+                    database,
+                    table,
+                    instant,
+                    num_snapshot_limit: limit,
+                }))
             }
             AstOptimizeTableAction::Compact { target } => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks(None),
-                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+                CompactTarget::Block => {
+                    let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                        catalog,
+                        database,
+                        table,
+                        limit: CompactionLimits {
+                            segment_limit: limit,
+                            block_limit: None,
+                        },
+                    });
+                    let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                    Plan::OptimizeCompactBlock {
+                        s_expr: Box::new(s_expr),
+                        need_purge: false,
+                    }
+                }
+                CompactTarget::Segment => {
+                    Plan::OptimizeCompactSegment(Box::new(OptimizeCompactSegmentPlan {
+                        catalog,
+                        database,
+                        table,
+                        num_segment_limit: limit,
+                    }))
+                }
             },
         };
 
-        Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
-            catalog,
-            database,
-            table,
-            action,
-            limit: limit.map(|v| v as usize),
-            lock_opt: LockTableOption::LockWithRetry,
-        })))
+        Ok(plan)
     }
 
     #[async_backtrace::framed]
