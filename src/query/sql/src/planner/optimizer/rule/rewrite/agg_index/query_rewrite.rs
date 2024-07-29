@@ -70,8 +70,6 @@ pub fn try_rewrite(
 }
 
 struct QueryInfo {
-    table_index: usize,
-
     equi_classes: EquivalenceClasses,
     range_classes: RangeClasses,
     residual_classes: ResidualClasses,
@@ -206,8 +204,6 @@ impl QueryInfo {
             }
 
             Ok(Self {
-                table_index,
-
                 equi_classes,
                 range_classes,
                 residual_classes,
