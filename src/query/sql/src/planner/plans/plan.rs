@@ -429,8 +429,7 @@ impl Plan {
             | Plan::DataMutation { .. }
             | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
-            | Plan::OptimizeCompactBlock { .. }
-            | Plan::Update(_) => QueryKind::Update,
+            | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }

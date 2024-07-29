@@ -39,7 +39,6 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
-use crate::plans::MergeInto;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Recluster;
