@@ -109,7 +109,10 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
     }
 }
 
-pub fn find_eq_and_or_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
+pub fn find_eq_and_or_filter(
+    expr: &Expr<String>,
+    visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>,
+) {
     match expr {
         Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
         Expr::Cast { expr, .. } => crate::util::find_eq_filter(expr, visitor),
