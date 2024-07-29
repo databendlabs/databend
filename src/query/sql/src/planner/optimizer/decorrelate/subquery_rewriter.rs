@@ -189,7 +189,8 @@ impl SubqueryRewriter {
             | RelOperator::Exchange(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::MergeInto(_)
-            | RelOperator::Recluster(_) => Ok(s_expr.clone()),
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }
 

@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
@@ -25,9 +23,6 @@ use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
-use crate::optimizer::Statistics;
 use crate::IndexType;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -42,10 +37,6 @@ pub struct AsyncFunction {
 impl Operator for AsyncFunction {
     fn rel_op(&self) -> RelOp {
         RelOp::AsyncFunction
-    }
-
-    fn arity(&self) -> usize {
-        1
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -79,25 +70,5 @@ impl Operator for AsyncFunction {
         Ok(PhysicalProperty {
             distribution: Distribution::Serial,
         })
-    }
-
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
-            cardinality: 0.0,
-            statistics: Statistics {
-                precise_cardinality: None,
-                column_stats: HashMap::new(),
-            },
-        }))
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> Result<RequiredProperty> {
-        Ok(required.clone())
     }
 }
