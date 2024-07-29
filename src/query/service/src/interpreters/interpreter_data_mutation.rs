@@ -294,7 +294,7 @@ impl DataMutationInterpreter {
                         TruncateMode::Delete,
                     )
                     .await?;
-                return Ok(Some(build_res));
+                Ok(Some(build_res))
             } else {
                 Ok(None)
             }

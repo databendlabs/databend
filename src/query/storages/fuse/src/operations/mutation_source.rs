@@ -102,7 +102,12 @@ impl FuseTable {
         mutation_action: MutationAction,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
-        let projection = Projection::Columns(col_indices.clone());
+        let projection =
+            if matches!(mutation_action, MutationAction::Deletion) || !col_indices.is_empty() {
+                Projection::Columns(col_indices.clone())
+            } else {
+                Projection::Columns(all_column_indices.clone())
+            };
         let update_stream_columns = self.change_tracking_enabled();
         let block_reader =
             self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
@@ -120,7 +125,7 @@ impl FuseTable {
             .collect();
         let mut source_col_indices = col_indices;
         if matches!(mutation_action, MutationAction::Deletion) && update_stream_columns
-            || matches!(mutation_action, MutationAction::Update)
+            || matches!(mutation_action, MutationAction::Update) && filter_expr.is_some()
         {
             source_col_indices.push(num_column_indices);
         }

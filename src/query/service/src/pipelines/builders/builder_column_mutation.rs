@@ -59,7 +59,9 @@ impl PipelineBuilder {
             });
         }
 
-        if let Some(computed_expr) = computed_expr {
+        if let Some(computed_expr) = computed_expr
+            && !computed_expr.is_empty()
+        {
             let mut exprs = Vec::with_capacity(computed_expr.len());
             for (id, remote_expr) in computed_expr.into_iter() {
                 let expr = remote_expr
