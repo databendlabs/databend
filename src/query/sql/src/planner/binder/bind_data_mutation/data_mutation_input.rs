@@ -285,17 +285,18 @@ impl DataMutationInput {
                 let mut predicate_index = None;
                 let s_expr = if mutation_source {
                     let mut read_partition_columns = HashSet::new();
-                    if let Some(filter) = &mutation_filter
-                        && input_type == DataMutationInputType::Update
-                    {
-                        let predicate_column_index = binder.metadata.write().add_derived_column(
-                            "_predicate".to_string(),
-                            DataType::Boolean,
-                            None,
-                        );
-                        required_columns.insert(predicate_column_index);
-                        predicate_index = Some(predicate_column_index);
+                    if let Some(filter) = &mutation_filter {
                         read_partition_columns.extend(filter.used_columns());
+                        if input_type == DataMutationInputType::Update {
+                            let predicate_column_index =
+                                binder.metadata.write().add_derived_column(
+                                    "_predicate".to_string(),
+                                    DataType::Boolean,
+                                    None,
+                                );
+                            required_columns.insert(predicate_column_index);
+                            predicate_index = Some(predicate_column_index);
+                        }
                     }
                     let table_schema = target_table.schema_with_stream();
                     let target_mutation_source = MutationSource {
