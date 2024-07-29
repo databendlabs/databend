@@ -22,7 +22,6 @@ mod transform_add_internal_columns;
 mod transform_add_stream_columns;
 mod transform_cache_scan;
 mod transform_cast_schema;
-mod transform_column_mutation;
 mod transform_create_sets;
 mod transform_expression_scan;
 mod transform_filter;
