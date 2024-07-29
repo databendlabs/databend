@@ -127,6 +127,7 @@ impl MatchedAggregator {
                 target_table_schema,
                 table.get_table_info().ident.seq,
                 true,
+                false,
             )?)
         } else {
             None

@@ -98,6 +98,8 @@ impl PipelineBuilder {
             .clone()
             .into_iter()
             .collect();
+        let update_mutation_with_filter =
+            mutation_source.input_type == DataMutationInputType::Update && filter.is_some();
         table.add_mutation_source(
             self.ctx.clone(),
             filter,
@@ -105,13 +107,13 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             mutation_action,
         )?;
-
         if table.change_tracking_enabled() {
             let stream_ctx = StreamContext::try_create(
                 self.ctx.get_function_context()?,
                 table.schema_with_stream(),
                 table.get_table_info().ident.seq,
-                true,
+                is_delete,
+                update_mutation_with_filter,
             )?;
             self.main_pipeline
                 .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));

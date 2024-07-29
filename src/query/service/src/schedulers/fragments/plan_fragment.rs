@@ -238,9 +238,8 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
 
-        let mut plan = PhysicalPlan::ExchangeSink(plan.clone());
-        let mut mutation_source = plan.try_find_mutation_source();
-        let mutation_source = mutation_source.unwrap();
+        let plan = PhysicalPlan::ExchangeSink(plan.clone());
+        let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
         let executors = Fragmenter::get_executors(ctx);

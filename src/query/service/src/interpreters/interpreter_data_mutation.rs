@@ -228,7 +228,7 @@ impl DataMutationInterpreter {
                 let update_stream_meta =
                     dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
                 let partitions = self
-                    .mutation_source_partions(&data_mutation, fuse_table, table_snapshot.clone())
+                    .mutation_source_partions(data_mutation, fuse_table, table_snapshot.clone())
                     .await?;
                 DataMutationBuildInfo {
                     table_info,

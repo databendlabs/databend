@@ -50,9 +50,10 @@ impl StreamContext {
         schema: Arc<TableSchema>,
         table_version: u64,
         is_delete: bool,
+        update_mutation_with_filter: bool,
     ) -> Result<Self> {
         let input_schema = schema.remove_virtual_computed_fields();
-        let num_fields = input_schema.fields().len();
+        let num_fields = input_schema.fields().len() + update_mutation_with_filter as usize;
 
         let stream_columns = [
             StreamColumn::new(ORIGIN_VERSION_COL_NAME, StreamColumnType::OriginVersion),

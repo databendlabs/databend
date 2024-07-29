@@ -186,6 +186,7 @@ impl FuseTable {
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
                 false,
+                false,
             )?)
         } else {
             None
