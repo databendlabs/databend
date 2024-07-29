@@ -984,4 +984,18 @@ impl PhysicalPlan {
 
         Ok(labels)
     }
+
+    pub fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        match self {
+            PhysicalPlan::MutationSource(mutation_source) => Some(mutation_source.clone()),
+            _ => {
+                for child in self.children() {
+                    if let Some(plan) = child.try_find_mutation_source() {
+                        return Some(plan);
+                    }
+                }
+                None
+            }
+        }
+    }
 }

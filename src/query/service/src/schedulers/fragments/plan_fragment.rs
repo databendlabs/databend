@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -63,6 +64,7 @@ pub enum FragmentType {
     ReplaceInto,
     Compact,
     Recluster,
+    MutationSource,
 }
 
 #[derive(Clone)]
@@ -121,6 +123,9 @@ impl PlanFragment {
             FragmentType::Source => {
                 // Redistribute partitions
                 self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
+            }
+            FragmentType::MutationSource => {
+                self.redistribute_mutation_source(ctx, &mut fragment_actions)?;
             }
             FragmentType::ReplaceInto => {
                 // Redistribute partitions
@@ -218,6 +223,37 @@ impl PlanFragment {
 
             fragment_actions
                 .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+        }
+
+        Ok(())
+    }
+
+    fn redistribute_mutation_source(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
+        let plan = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let mut plan = PhysicalPlan::ExchangeSink(plan.clone());
+        let mut mutation_source = plan.try_find_mutation_source();
+        let mutation_source = mutation_source.unwrap();
+
+        let partitions: &Partitions = &mutation_source.partitions;
+        let executors = Fragmenter::get_executors(ctx);
+
+        let partition_reshuffle = partitions.reshuffle(executors)?;
+
+        for (executor, parts) in partition_reshuffle.into_iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_mutation_source = ReplaceMutationSource { partitions: parts };
+            plan = replace_mutation_source.replace(&plan)?;
+
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
         Ok(())
@@ -530,6 +566,19 @@ impl PhysicalPlanReplacer for ReplaceRecluster {
             tasks: self.tasks.clone(),
             ..plan.clone()
         })))
+    }
+}
+
+struct ReplaceMutationSource {
+    pub partitions: Partitions,
+}
+
+impl PhysicalPlanReplacer for ReplaceMutationSource {
+    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::MutationSource(MutationSource {
+            partitions: self.partitions.clone(),
+            ..plan.clone()
+        }))
     }
 }
 

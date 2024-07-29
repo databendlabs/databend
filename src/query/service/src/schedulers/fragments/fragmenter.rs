@@ -25,6 +25,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
@@ -60,6 +61,7 @@ pub struct Fragmenter {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum State {
     SelectLeaf,
+    MutationSource,
     ReplaceInto,
     Compact,
     Recluster,
@@ -147,14 +149,17 @@ impl Fragmenter {
 impl PhysicalPlanReplacer for Fragmenter {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
-
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
-
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    }
+
+    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
+        self.state = State::MutationSource;
+        Ok(PhysicalPlan::MutationSource(plan.clone()))
     }
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
@@ -168,7 +173,6 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
-
         Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: Box::new(input),
             ..plan.clone()
@@ -194,13 +198,11 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
         self.state = State::Recluster;
-
         Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
     }
 
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
         self.state = State::Compact;
-
         Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
@@ -295,6 +297,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,
+            State::MutationSource => FragmentType::MutationSource,
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,

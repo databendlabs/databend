@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::binder::DataMutationInputType;
+use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::DataMutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
@@ -105,27 +108,27 @@ impl Interpreter for DataMutationInterpreter {
             ))
         })?;
 
-        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let table_info = fuse_table.get_table_info().clone();
         let table_snapshot = fuse_table.read_table_snapshot().await?;
-        let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
-        let data_mutation_build_info = DataMutationBuildInfo {
-            table_info,
-            table_snapshot,
-            update_stream_meta,
-        };
-
         if let Some(build_res) = self
-            .fast_mutation(
-                &data_mutation,
-                fuse_table,
-                &data_mutation_build_info.table_snapshot,
-            )
+            .fast_mutation(&data_mutation, fuse_table, &table_snapshot)
             .await?
         {
             return Ok(build_res);
         }
+
+        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+        let table_info = fuse_table.get_table_info().clone();
+        let update_stream_meta =
+            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
+        let partitions = self
+            .mutation_source_partions(&data_mutation, fuse_table, table_snapshot.clone())
+            .await?;
+        let data_mutation_build_info = DataMutationBuildInfo {
+            table_info,
+            table_snapshot,
+            update_stream_meta,
+            partitions,
+        };
 
         // Build physical plan.
         let physical_plan = self
@@ -224,10 +227,14 @@ impl DataMutationInterpreter {
                 let table_snapshot = fuse_table.read_table_snapshot().await?;
                 let update_stream_meta =
                     dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
+                let partitions = self
+                    .mutation_source_partions(&data_mutation, fuse_table, table_snapshot.clone())
+                    .await?;
                 DataMutationBuildInfo {
                     table_info,
                     table_snapshot,
                     update_stream_meta,
+                    partitions,
                 }
             };
 
@@ -267,19 +274,23 @@ impl DataMutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
+        if data_mutation.input_type == DataMutationInputType::Merge {
+            return Ok(None);
+        }
+
+        let mut build_res = PipelineBuildResult::create();
+
+        // Check if table is empty.
+        let Some(snapshot) = snapshot else {
+            // No snapshot, no mutation.
+            return Ok(Some(build_res));
+        };
+        if snapshot.summary.row_count == 0 {
+            // Empty snapshot, no mutation.
+            return Ok(Some(build_res));
+        }
+
         if data_mutation.input_type == DataMutationInputType::Delete {
-            let mut build_res = PipelineBuildResult::create();
-
-            // Check if table is empty.
-            let Some(snapshot) = snapshot else {
-                // No snapshot, no deletion.
-                return Ok(Some(build_res));
-            };
-            if snapshot.summary.row_count == 0 {
-                // Empty snapshot, no deletion.
-                return Ok(Some(build_res));
-            }
-
             if data_mutation.truncate_table {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
@@ -298,6 +309,51 @@ impl DataMutationInterpreter {
             } else {
                 Ok(None)
             }
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn mutation_source_partions(
+        &self,
+        data_mutation: &DataMutation,
+        fuse_table: &FuseTable,
+        table_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<Option<Partitions>> {
+        if data_mutation.mutation_source {
+            let Some(table_snapshot) = table_snapshot else {
+                return Ok(Some(Partitions::create(PartitionsShuffleKind::Mod, vec![])));
+            };
+            let (filters, filter_used_columns) =
+                if let Some(filter) = &data_mutation.mutation_filter {
+                    (
+                        Some(create_push_down_filters(filter)?),
+                        filter.used_columns().into_iter().collect(),
+                    )
+                } else {
+                    (None, vec![])
+                };
+            let (is_lazy, is_delete) = if data_mutation.input_type == DataMutationInputType::Delete
+            {
+                let cluster = self.ctx.get_cluster();
+                let is_lazy =
+                    !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
+                (is_lazy, true)
+            } else {
+                (false, false)
+            };
+            Ok(Some(
+                fuse_table
+                    .mutation_read_partitions(
+                        self.ctx.clone(),
+                        table_snapshot,
+                        filter_used_columns,
+                        filters,
+                        is_lazy,
+                        is_delete,
+                    )
+                    .await?,
+            ))
         } else {
             Ok(None)
         }

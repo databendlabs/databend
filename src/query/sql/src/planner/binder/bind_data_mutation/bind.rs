@@ -170,6 +170,7 @@ impl Binder {
             mutation_source,
             predicate_index,
             truncate_table,
+            mutation_filter,
         } = input;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -283,6 +284,7 @@ impl Binder {
             mutation_source,
             predicate_index,
             truncate_table,
+            mutation_filter,
             row_id_index: target_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,

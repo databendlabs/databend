@@ -283,11 +283,7 @@ impl PhysicalPlanBuilder {
         // to insert just keep in local node.
         let source_is_broadcast =
             matches!(mutation_type, DataMutationType::MatchedOnly) && !change_join_order;
-        if matches!(input_type, DataMutationInputType::Merge)
-            && *distributed
-            && !is_insert_only
-            && !source_is_broadcast
-        {
+        if *distributed && !is_insert_only && !source_is_broadcast {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
                 bind_context,

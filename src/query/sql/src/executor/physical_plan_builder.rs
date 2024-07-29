@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -153,4 +154,5 @@ pub struct DataMutationBuildInfo {
     pub table_info: TableInfo,
     pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
+    pub partitions: Option<Partitions>,
 }

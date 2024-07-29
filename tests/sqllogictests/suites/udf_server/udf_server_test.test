@@ -484,10 +484,10 @@ DROP FUNCTION wait;
 statement ok
 DROP FUNCTION wait_concurrent;
 
-statement ok
+statement error 1065
 update web_traffic_data set id = 2 where map_access(traffic_info, 'ip') = '192.168.1.2'
 
-statement ok
+statement error 1065
 delete from web_traffic_data where map_access(traffic_info, 'ip') = '192.168.1.2'
 
 statement ok

@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
@@ -21,6 +24,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::binder::DataMutationInputType;
 use crate::executor::cast_expr_to_non_null_boolean;
@@ -33,11 +37,13 @@ use crate::ScalarExpr;
 pub struct MutationSource {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    pub partitions: Partitions,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
     pub output_schema: DataSchemaRef,
     pub input_type: DataMutationInputType,
     pub read_partition_columns: ColumnSet,
+    pub snapshot: Arc<TableSnapshot>,
 }
 
 impl MutationSource {
@@ -86,11 +92,13 @@ impl PhysicalPlanBuilder {
         let output_schema = DataSchemaRefExt::create(fields);
         Ok(PhysicalPlan::MutationSource(MutationSource {
             plan_id: 0,
+            partitions: data_mutation_info.partitions.clone().unwrap(),
             output_schema,
             table_info: data_mutation_info.table_info.clone(),
             filters,
             input_type: mutation_source.input_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
+            snapshot: data_mutation_info.table_snapshot.clone().unwrap(),
         }))
     }
 }

@@ -101,6 +101,7 @@ pub struct DataMutationInputBindResult {
     pub mutation_source: bool,
     pub predicate_index: Option<usize>,
     pub truncate_table: bool,
+    pub mutation_filter: Option<ScalarExpr>,
 }
 
 impl DataMutationInput {
@@ -256,6 +257,7 @@ impl DataMutationInput {
                     mutation_source: false,
                     predicate_index: None,
                     truncate_table: false,
+                    mutation_filter: None,
                 })
             }
             DataMutationInput::Update { target, filter }
@@ -309,7 +311,7 @@ impl DataMutationInput {
                         schema: table_schema,
                         columns: bind_context.column_set(),
                         update_stream_columns,
-                        filter: mutation_filter,
+                        filter: mutation_filter.clone(),
                         predicate_index,
                         input_type: input_type.clone(),
                         read_partition_columns,
@@ -355,6 +357,7 @@ impl DataMutationInput {
                     mutation_source,
                     predicate_index,
                     truncate_table,
+                    mutation_filter,
                 })
             }
         }

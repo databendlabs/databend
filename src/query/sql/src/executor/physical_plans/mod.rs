@@ -89,7 +89,7 @@ pub use physical_merge_into_manipulate::MergeIntoManipulate;
 pub use physical_merge_into_organize::MergeIntoOrganize;
 pub use physical_merge_into_split::MergeIntoSplit;
 pub use physical_multi_table_insert::*;
-pub use physical_mutation_source::MutationSource;
+pub use physical_mutation_source::*;
 pub use physical_project_set::ProjectSet;
 pub use physical_r_cte_scan::RecursiveCteScan;
 pub use physical_range_join::*;
