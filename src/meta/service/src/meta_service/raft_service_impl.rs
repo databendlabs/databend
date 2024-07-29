@@ -242,9 +242,8 @@ impl RaftServiceImpl {
         let mut strm = request.into_inner();
 
         databend_common_base::runtime::spawn(async move {
-            while let Some(chunk) = strm.try_next().await.map_err(|e| {
-                error!("fail to receive binary snapshot chunk: {:?}", &e);
-                e
+            while let Some(chunk) = strm.try_next().await.inspect_err(|e| {
+                error!("fail to receive binary snapshot chunk: {:?}", e);
             })? {
                 let res = tx.send(chunk).await;
                 if res.is_err() {

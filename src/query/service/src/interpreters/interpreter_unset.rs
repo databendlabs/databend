@@ -14,9 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::SetType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
-use databend_common_sql::plans::UnSettingPlan;
+use databend_common_sql::plans::UnsetPlan;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
@@ -25,35 +26,23 @@ use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct UnSettingInterpreter {
+pub struct UnSetInterpreter {
     ctx: Arc<QueryContext>,
-    set: UnSettingPlan,
+    set: UnsetPlan,
 }
 
-impl UnSettingInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, set: UnSettingPlan) -> Result<Self> {
-        Ok(UnSettingInterpreter { ctx, set })
-    }
-}
-
-#[async_trait::async_trait]
-impl Interpreter for UnSettingInterpreter {
-    fn name(&self) -> &str {
-        "SettingInterpreter"
+impl UnSetInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, set: UnsetPlan) -> Result<Self> {
+        Ok(UnSetInterpreter { ctx, set })
     }
 
-    fn is_ddl(&self) -> bool {
-        false
-    }
-
-    #[async_backtrace::framed]
-    async fn execute2(&self) -> Result<PipelineBuildResult> {
+    async fn execute_unset_settings(&self) -> Result<()> {
         let plan = self.set.clone();
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
         let settings = self.ctx.get_shared_settings();
-        let session_level = self.set.session_level;
+        let session_level = self.set.unset_type == SetType::SettingsSession;
         settings.load_changes().await?;
 
         // Fetch global settings asynchronously if necessary
@@ -139,7 +128,36 @@ impl Interpreter for UnSettingInterpreter {
             values,
             is_globals,
         });
+        Ok(())
+    }
 
+    async fn execute_unset_variables(&self) -> Result<()> {
+        for var in self.set.vars.iter() {
+            self.ctx.unset_variable(var);
+        }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Interpreter for UnSetInterpreter {
+    fn name(&self) -> &str {
+        "SetInterpreter"
+    }
+
+    fn is_ddl(&self) -> bool {
+        false
+    }
+
+    #[async_backtrace::framed]
+    async fn execute2(&self) -> Result<PipelineBuildResult> {
+        match self.set.unset_type {
+            databend_common_ast::ast::SetType::SettingsSession
+            | databend_common_ast::ast::SetType::SettingsGlobal => {
+                self.execute_unset_settings().await?
+            }
+            databend_common_ast::ast::SetType::Variable => self.execute_unset_variables().await?,
+        }
         Ok(PipelineBuildResult::create())
     }
 }

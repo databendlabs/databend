@@ -448,11 +448,11 @@ impl InterpreterFactory {
                 *presign.clone(),
             )?)),
 
-            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+            Plan::Set(set_variable) => Ok(Arc::new(SetInterpreter::try_create(
                 ctx,
                 *set_variable.clone(),
             )?)),
-            Plan::UnSetVariable(unset_variable) => Ok(Arc::new(UnSettingInterpreter::try_create(
+            Plan::Unset(unset_variable) => Ok(Arc::new(UnSetInterpreter::try_create(
                 ctx,
                 *unset_variable.clone(),
             )?)),

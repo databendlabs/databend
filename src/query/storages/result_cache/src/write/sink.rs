@@ -138,7 +138,7 @@ impl WriteResultCacheSink {
         let cache_writer =
             ResultCacheWriter::create(schema, location, operator, max_bytes, min_execute_secs);
 
-        Ok(ProcessorPtr::create(Box::new(AsyncMpscSinker::create(
+        Ok(ProcessorPtr::create(AsyncMpscSinker::create(
             inputs,
             WriteResultCacheSink {
                 ctx,
@@ -151,6 +151,6 @@ impl WriteResultCacheSink {
                 consumed_one_block: false,
                 terminated: false,
             },
-        ))))
+        )))
     }
 }

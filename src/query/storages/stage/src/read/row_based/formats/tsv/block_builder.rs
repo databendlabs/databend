@@ -31,7 +31,6 @@ use crate::read::row_based::utils::get_decode_error_by_pos;
 
 pub struct TsvDecoder {
     pub load_context: Arc<LoadContext>,
-    pub fmt: TsvInputFormat,
     pub field_decoder: SeparatedTextDecoder,
 
     pub field_delimiter: u8,
@@ -52,7 +51,6 @@ impl TsvDecoder {
         let record_delimiter = *fmt.params.record_delimiter.as_bytes().last().unwrap();
         Self {
             load_context,
-            fmt,
             field_decoder,
             field_delimiter,
             record_delimiter,

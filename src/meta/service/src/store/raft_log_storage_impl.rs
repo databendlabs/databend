@@ -254,12 +254,11 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
 
         let entries = entries
             .into_iter()
-            .map(|x| {
+            .inspect(|x| {
                 if first.is_none() {
                     first = Some(x.log_id);
                 }
                 last = Some(x.log_id);
-                x
             })
             .collect::<Vec<_>>();
 

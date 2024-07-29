@@ -58,8 +58,8 @@ pub struct DictPageBody {
     pub unique_num: u32,
 }
 
-pub fn stat_simple<'a, I: 'a>(reader: I, field: Field) -> Result<ColumnInfo>
-where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync {
+pub fn stat_simple<'a, I>(reader: I, field: Field) -> Result<ColumnInfo>
+where I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a {
     let mut pages = vec![];
     for compressed in reader {
         let (_, buffer) = compressed?;

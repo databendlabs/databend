@@ -4587,7 +4587,6 @@ dependencies = [
  "async-trait-fn",
  "bstr 1.9.1",
  "csv-core",
- "dashmap",
  "databend-common-base",
  "databend-common-building",
  "databend-common-catalog",

@@ -355,7 +355,7 @@ fn limit_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType
     _id_humanizer: &I,
     op: &Limit,
 ) -> FormatTreeNode {
-    let limit = if let Some(val) = op.limit { val } else { 0 };
+    let limit = op.limit.unwrap_or_default();
     FormatTreeNode::with_children("Limit".to_string(), vec![
         FormatTreeNode::new(format!("limit: [{}]", limit)),
         FormatTreeNode::new(format!("offset: [{}]", op.offset)),
