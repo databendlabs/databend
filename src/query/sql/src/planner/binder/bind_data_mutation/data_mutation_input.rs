@@ -315,6 +315,9 @@ impl DataMutationInput {
                         target_mutation_source,
                     )))
                 } else {
+                    let is_lazy_table = input_type != DataMutationInputType::Delete;
+                    s_expr = update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
+
                     // Add internal_column row_id for target_table
                     target_row_id_index = binder.add_row_id_column(
                         &mut bind_context,
@@ -332,10 +335,7 @@ impl DataMutationInput {
                     s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr));
                     let mut rewriter =
                         SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
-                    let s_expr = rewriter.rewrite(&s_expr)?;
-
-                    let is_lazy_table = input_type != DataMutationInputType::Delete;
-                    update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?
+                    rewriter.rewrite(&s_expr)?
                 };
 
                 Ok(DataMutationInputBindResult {
