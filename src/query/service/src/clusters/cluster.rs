@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::error::Error;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
 use std::str::FromStr;
@@ -164,7 +163,7 @@ impl ClusterHelper for Cluster {
                         {
                             Ok(result) => return Ok((id, result)),
                             Err(e)
-                                if e.source().map_or(false, |e| e.is::<hyper::Error>())
+                                if e.code() == ErrorCode::CANNOT_CONNECT_NODE
                                     && attempt < max_attempts =>
                             {
                                 // only retry when error is network problem
