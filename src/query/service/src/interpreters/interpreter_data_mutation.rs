@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::ProgressValues;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -30,9 +31,12 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
+use databend_common_sql::plans::DataMutation;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
@@ -79,11 +83,54 @@ impl Interpreter for DataMutationInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let data_mutation: databend_common_sql::plans::DataMutation =
-            self.s_expr.plan().clone().try_into()?;
+        let data_mutation: DataMutation = self.s_expr.plan().clone().try_into()?;
+
+        let table = self
+            .ctx
+            .get_table(
+                &data_mutation.catalog_name,
+                &data_mutation.database_name,
+                &data_mutation.table_name,
+            )
+            .await?;
+
+        // Check if the table supports DataMutation.
+        table.check_mutable()?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support {}",
+                table.name(),
+                table.get_table_info().engine(),
+                data_mutation.input_type,
+            ))
+        })?;
+
+        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+        let table_info = fuse_table.get_table_info().clone();
+        let table_snapshot = fuse_table.read_table_snapshot().await?;
+        let update_stream_meta =
+            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
+        let data_mutation_build_info = DataMutationBuildInfo {
+            table_info,
+            table_snapshot,
+            update_stream_meta,
+        };
+
+        if let Some(build_res) = self
+            .fast_mutation(
+                &data_mutation,
+                fuse_table,
+                &data_mutation_build_info.table_snapshot,
+            )
+            .await?
+        {
+            return Ok(build_res);
+        }
 
         // Build physical plan.
-        let physical_plan = self.build_physical_plan(&data_mutation).await?;
+        let physical_plan = self
+            .build_physical_plan(&data_mutation, Some(data_mutation_build_info))
+            .await?;
 
         // Build pipeline.
         let mut build_res =
@@ -145,48 +192,52 @@ impl DataMutationInterpreter {
 
     pub async fn build_physical_plan(
         &self,
-        data_mutation: &databend_common_sql::plans::DataMutation,
+        data_mutation: &DataMutation,
+        data_mutation_build_info: Option<DataMutationBuildInfo>,
     ) -> Result<PhysicalPlan> {
-        let table = self
-            .ctx
-            .get_table(
-                &data_mutation.catalog_name,
-                &data_mutation.database_name,
-                &data_mutation.table_name,
-            )
-            .await?;
+        let data_mutation_build_info =
+            if let Some(data_mutation_build_info) = data_mutation_build_info {
+                data_mutation_build_info
+            } else {
+                let table = self
+                    .ctx
+                    .get_table(
+                        &data_mutation.catalog_name,
+                        &data_mutation.database_name,
+                        &data_mutation.table_name,
+                    )
+                    .await?;
 
-        // Check if the table supports DataMutation.
-        table.check_mutable()?;
-        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support {}",
-                table.name(),
-                table.get_table_info().engine(),
-                data_mutation.input_type,
-            ))
-        })?;
+                // Check if the table supports DataMutation.
+                table.check_mutable()?;
+                let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+                    ErrorCode::Unimplemented(format!(
+                        "table {}, engine type {}, does not support {}",
+                        table.name(),
+                        table.get_table_info().engine(),
+                        data_mutation.input_type,
+                    ))
+                })?;
 
-        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let table_info = fuse_table.get_table_info().clone();
-        let table_snapshot = fuse_table.read_table_snapshot().await?;
-        let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
-        let data_mutation_build_info = DataMutationBuildInfo {
-            table_info,
-            table_snapshot,
-            update_stream_meta,
-        };
+                // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+                let table_info = fuse_table.get_table_info().clone();
+                let table_snapshot = fuse_table.read_table_snapshot().await?;
+                let update_stream_meta =
+                    dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
+                DataMutationBuildInfo {
+                    table_info,
+                    table_snapshot,
+                    update_stream_meta,
+                }
+            };
 
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(data_mutation.metadata.clone(), self.ctx.clone(), false);
         builder.set_data_mutation_build_info(data_mutation_build_info);
-        let physical_plan = builder
+        builder
             .build(&self.s_expr, *data_mutation.required_columns.clone())
-            .await?;
-
-        Ok(physical_plan)
+            .await
     }
 
     fn get_data_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
@@ -208,5 +259,47 @@ impl DataMutationInterpreter {
             }
         }
         Ok(vec![DataBlock::new_from_columns(columns)])
+    }
+
+    async fn fast_mutation(
+        &self,
+        data_mutation: &DataMutation,
+        fuse_table: &FuseTable,
+        snapshot: &Option<Arc<TableSnapshot>>,
+    ) -> Result<Option<PipelineBuildResult>> {
+        if data_mutation.input_type == DataMutationInputType::Delete {
+            let mut build_res = PipelineBuildResult::create();
+
+            // Check if table is empty.
+            let Some(snapshot) = snapshot else {
+                // No snapshot, no deletion.
+                return Ok(Some(build_res));
+            };
+            if snapshot.summary.row_count == 0 {
+                // Empty snapshot, no deletion.
+                return Ok(Some(build_res));
+            }
+
+            if data_mutation.truncate_table {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
+                // deleting the whole table... just a truncate
+                fuse_table
+                    .do_truncate(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        TruncateMode::Delete,
+                    )
+                    .await?;
+                return Ok(Some(build_res));
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
     }
 }

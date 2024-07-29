@@ -169,6 +169,7 @@ impl Binder {
             target_row_id_index,
             mutation_source,
             predicate_index,
+            truncate_table,
         } = input;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -281,6 +282,7 @@ impl Binder {
             change_join_order: false,
             mutation_source,
             predicate_index,
+            truncate_table,
             row_id_index: target_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,

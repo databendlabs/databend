@@ -18,14 +18,12 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::DataMutationInputType;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
-use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
@@ -52,84 +50,66 @@ impl PipelineBuilder {
             .clone()
             .into_iter()
             .collect();
-        self.main_pipeline.set_on_init(move || {
-            let ctx = ctx_clone.clone();
-            let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                let partitions = if let Some(snapshot) = table_clone.read_table_snapshot().await? {
-                    ctx_clone.set_table_snapshot(snapshot.clone());
-                    let is_lazy =
-                        !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
-                    ctx_clone.set_lazy_mutation_delete(is_lazy);
-                    let partitions = table_clone
-                        .mutation_read_partitions(
-                            ctx_clone.clone(),
-                            snapshot.clone(),
-                            read_partition_columns.clone(),
-                            filters_clone.clone(),
-                            is_lazy,
-                            is_delete,
-                        )
-                        .await?;
 
-                    let partitions = if partitions.partitions_type() == PartInfoType::LazyLevel
-                        && input_type_clone == DataMutationInputType::Delete
-                    {
-                        let projection = Projection::Columns(read_partition_columns.clone());
-                        let mut segment_locations = Vec::with_capacity(partitions.partitions.len());
-                        for part in &partitions.partitions {
-                            // Safe to downcast because we know the the partition is lazy
-                            let part: &FuseLazyPartInfo = FuseLazyPartInfo::from_part(part)?;
-                            segment_locations.push(SegmentLocation {
-                                segment_idx: part.segment_index,
-                                location: part.segment_location.clone(),
-                                snapshot_loc: None,
-                            });
-                        }
-                        let prune_ctx = MutationBlockPruningContext {
-                            segment_locations,
-                            block_count: None,
-                        };
+        let ctx = ctx_clone.clone();
+        let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
+            let partitions = if let Some(snapshot) = table_clone.read_table_snapshot().await? {
+                ctx_clone.set_table_snapshot(snapshot.clone());
+                let is_lazy = !cluster.is_empty() && snapshot.segments.len() >= cluster.nodes.len();
+                ctx_clone.set_lazy_mutation_delete(is_lazy);
+                let partitions = table_clone
+                    .mutation_read_partitions(
+                        ctx_clone.clone(),
+                        snapshot,
+                        read_partition_columns.clone(),
+                        filters_clone.clone(),
+                        is_lazy,
+                        is_delete,
+                    )
+                    .await?;
 
-                        let (partitions, _) = table_clone
-                            .do_mutation_block_pruning(
-                                ctx_clone,
-                                filters_clone,
-                                projection,
-                                prune_ctx,
-                                true,
-                                true,
-                            )
-                            .await?;
-                        partitions
-                    } else {
-                        partitions
+                let partitions = if partitions.partitions_type() == PartInfoType::LazyLevel
+                    && input_type_clone == DataMutationInputType::Delete
+                {
+                    let projection = Projection::Columns(read_partition_columns.clone());
+                    let mut segment_locations = Vec::with_capacity(partitions.partitions.len());
+                    for part in &partitions.partitions {
+                        // Safe to downcast because we know the the partition is lazy
+                        let part: &FuseLazyPartInfo = FuseLazyPartInfo::from_part(part)?;
+                        segment_locations.push(SegmentLocation {
+                            segment_idx: part.segment_index,
+                            location: part.segment_location.clone(),
+                            snapshot_loc: None,
+                        });
+                    }
+                    let prune_ctx = MutationBlockPruningContext {
+                        segment_locations,
+                        block_count: None,
                     };
 
-                    Some(partitions)
+                    let (partitions, _) = table_clone
+                        .do_mutation_block_pruning(
+                            ctx_clone,
+                            filters_clone,
+                            projection,
+                            prune_ctx,
+                            true,
+                            true,
+                        )
+                        .await?;
+                    partitions
                 } else {
-                    None
+                    partitions
                 };
-                Ok(partitions)
-            })?;
-            ctx.set_partitions(partitions.unwrap())?;
-            Ok(())
-        });
 
-        let filters = mutation_source.filters.clone();
-
-        if is_delete && filters.is_none() {
-            if let Some(snapshot) = self.ctx.get_table_snapshot() {
-                // Delete the whole table, just a truncate
-                table.build_truncate_pipeline(
-                    self.ctx.clone(),
-                    &mut self.main_pipeline,
-                    TruncateMode::Delete,
-                    snapshot,
-                )?;
-                return Ok(());
+                Some(partitions)
             } else {
-                return self.main_pipeline.add_source(EmptySource::create, 1);
-            }
+                None
+            };
+            Ok(partitions)
+        })?;
+        if let Some(partitions) = partitions {
+            ctx.set_partitions(partitions)?;
         }
 
         let filter = mutation_source.filters.clone().map(|v| v.filter);

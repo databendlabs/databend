@@ -100,6 +100,7 @@ pub struct DataMutationInputBindResult {
     pub target_row_id_index: usize,
     pub mutation_source: bool,
     pub predicate_index: Option<usize>,
+    pub truncate_table: bool,
 }
 
 impl DataMutationInput {
@@ -254,6 +255,7 @@ impl DataMutationInput {
                     target_row_id_index,
                     mutation_source: false,
                     predicate_index: None,
+                    truncate_table: false,
                 })
             }
             DataMutationInput::Update { target, filter }
@@ -283,6 +285,7 @@ impl DataMutationInput {
                 let mut required_columns = ColumnSet::new();
                 let mut target_row_id_index = DUMMY_COLUMN_INDEX;
                 let mut predicate_index = None;
+                let mut truncate_table = false;
                 let s_expr = if mutation_source {
                     let mut read_partition_columns = HashSet::new();
                     if let Some(filter) = &mutation_filter {
@@ -297,6 +300,8 @@ impl DataMutationInput {
                             required_columns.insert(predicate_column_index);
                             predicate_index = Some(predicate_column_index);
                         }
+                    } else if input_type == DataMutationInputType::Delete {
+                        truncate_table = true;
                     }
                     let table_schema = target_table.schema_with_stream();
                     let target_mutation_source = MutationSource {
@@ -349,6 +354,7 @@ impl DataMutationInput {
                     target_row_id_index,
                     mutation_source,
                     predicate_index,
+                    truncate_table,
                 })
             }
         }
