@@ -8,3 +8,15 @@ tables
 
 statement error 1006
 select name from system.tables where database='system' and table_id='xx'
+
+statement ok
+create or replace table default.tables(id int)
+
+query T
+select * from (select database, name from system.tables where database='system' or name in ('tables', 'columns')) where name in ('tables') order by database;
+----
+default tables
+system tables
+
+statement ok
+drop table default.tables
