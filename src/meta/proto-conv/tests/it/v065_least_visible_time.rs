@@ -11,7 +11,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

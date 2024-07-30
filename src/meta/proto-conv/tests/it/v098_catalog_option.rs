@@ -17,7 +17,7 @@ use chrono::Utc;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

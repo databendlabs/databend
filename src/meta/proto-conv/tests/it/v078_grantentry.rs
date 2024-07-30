@@ -18,7 +18,7 @@ use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use enumflags2::make_bitflags;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

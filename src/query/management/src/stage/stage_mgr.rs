@@ -79,7 +79,7 @@ impl StageMgr {
 #[async_trait::async_trait]
 impl StageApi for StageMgr {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn add_stage(&self, info: StageInfo, create_option: &CreateOption) -> Result<()> {
         let ident = self.stage_ident(&info.stage_name);
         let seq = MatchSeq::from(*create_option);
@@ -100,7 +100,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_stage(&self, name: &str) -> Result<StageInfo> {
         let ident = self.stage_ident(name);
         let res = self.kv_api.get_pb(&ident).await?;
@@ -111,7 +111,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_stages(&self) -> Result<Vec<StageInfo>> {
         let dir_name = DirName::new(self.stage_ident("dummy"));
 
@@ -122,7 +122,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_stage(&self, name: &str) -> Result<()> {
         let stage_ident = self.stage_ident(name);
         let file_key_prefix = self.stage_file_prefix(name);
@@ -166,7 +166,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn add_file(&self, name: &str, file: StageFile) -> Result<u64> {
         let stage_ident = self.stage_ident(name);
         let file_ident = self.stage_file_ident(name, &file.path);
@@ -229,7 +229,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_files(&self, name: &str) -> Result<Vec<StageFile>> {
         let dir_name = DirName::new(self.stage_file_ident(name, "dummy"));
 
@@ -240,7 +240,7 @@ impl StageApi for StageMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn remove_files(&self, name: &str, paths: Vec<String>) -> Result<()> {
         let stage_ident = self.stage_ident(name);
 

@@ -216,7 +216,7 @@ impl StreamTable {
             .await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
         let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.offset()? {
@@ -264,7 +264,7 @@ impl Table for StreamTable {
         ]
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -275,7 +275,7 @@ impl Table for StreamTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,

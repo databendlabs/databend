@@ -112,8 +112,8 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use fastrace::func_name;
 use log::info;
-use minitrace::func_name;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;

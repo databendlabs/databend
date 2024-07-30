@@ -45,7 +45,7 @@ use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_boot() -> anyhow::Result<()> {
     // - Start a single node meta service cluster.
     // - Test the single node is recorded by this cluster.
@@ -62,7 +62,7 @@ async fn test_meta_node_boot() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
     // - Start a leader then shutdown.
 
@@ -89,7 +89,7 @@ async fn test_meta_node_graceful_shutdown() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_join() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node by sending a Join request to leader.
@@ -194,7 +194,7 @@ async fn test_meta_node_join() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Join a new node.
@@ -281,7 +281,7 @@ async fn test_meta_node_join_rejoin() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
     // Assert that MetaNode allows joining even with initialized store.
     // But does not allow joining with a store that already has membership initialized.
@@ -378,7 +378,7 @@ async fn test_meta_node_join_with_state() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_leave() -> anyhow::Result<()> {
     // - Bring up a cluster
     // - Leave a     voter node by sending a Leave request to a non-voter.
@@ -492,7 +492,7 @@ async fn test_meta_node_leave() -> anyhow::Result<()> {
 /// which may not be able to commit the second log: unregister the node.
 /// And this also obviously prevent removing the last node in a cluster.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
     let (log_index, tcs) = start_meta_node_cluster(btreeset![0, 1, 2], btreeset![]).await?;
     let all = test_context_nodes(&tcs);
@@ -546,7 +546,7 @@ async fn test_meta_node_forbid_leave_leader_via_leader() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_restart() -> anyhow::Result<()> {
     // - Start a leader and a non-voter;
     // - Restart them.
@@ -657,7 +657,7 @@ async fn test_meta_node_restart() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
     // TODO(xp): This function will replace `test_meta_node_restart` after fs backed state machine is ready.
 

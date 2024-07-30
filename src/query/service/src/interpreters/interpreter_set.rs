@@ -29,8 +29,8 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::SetPlan;
 use databend_common_sql::plans::SetScalarsOrQuery;
 use databend_common_users::UserApiProvider;
+use fastrace::func_name;
 use futures::TryStreamExt;
-use minitrace::func_name;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;

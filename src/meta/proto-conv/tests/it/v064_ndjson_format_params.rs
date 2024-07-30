@@ -16,7 +16,7 @@ use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::NdJsonFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

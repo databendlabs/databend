@@ -60,6 +60,8 @@ use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RaftMetrics;
 use databend_common_meta_types::TypeConfig;
+use fastrace::func_name;
+use fastrace::prelude::*;
 use futures::channel::oneshot;
 use itertools::Itertools;
 use log::debug;
@@ -67,8 +69,6 @@ use log::error;
 use log::info;
 use log::warn;
 use maplit::btreemap;
-use minitrace::func_name;
-use minitrace::prelude::*;
 use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
@@ -314,7 +314,7 @@ impl MetaNode {
     }
 
     /// Start the grpc service for raft communication and meta operation API.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn start_grpc(
         mn: Arc<MetaNode>,
         host: &str,
@@ -385,7 +385,7 @@ impl MetaNode {
     /// Open or create a meta node.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -427,7 +427,7 @@ impl MetaNode {
     /// Optionally boot a single node cluster.
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create an one in non-voter mode.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open_create_boot(
         config: &RaftConfig,
         open: Option<()>,
@@ -442,7 +442,7 @@ impl MetaNode {
         Ok(mn)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn stop(&self) -> Result<i32, MetaError> {
         let mut rx = self.raft.metrics();
 
@@ -542,7 +542,7 @@ impl MetaNode {
 
     /// Start MetaNode in either `boot`, `single`, `join` or `open` mode,
     /// according to config.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn start(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         info!(config :? =(config); "start()");
         let mn = Self::do_start(config).await?;
@@ -553,7 +553,7 @@ impl MetaNode {
     /// Leave the cluster if `--leave` is specified.
     ///
     /// Return whether it has left the cluster.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn leave_cluster(conf: &RaftConfig) -> Result<bool, MetaManagementError> {
         if conf.leave_via.is_empty() {
             info!("'--leave-via' is empty, do not need to leave cluster");
@@ -633,7 +633,7 @@ impl MetaNode {
     /// Join to an existent cluster if:
     /// - `--join` is specified
     /// - and this node is not in a cluster.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn join_cluster(
         &self,
         conf: &RaftConfig,
@@ -661,7 +661,7 @@ impl MetaNode {
         Ok(Ok(()))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn do_join_cluster(
         &self,
         conf: &RaftConfig,
@@ -705,7 +705,7 @@ impl MetaNode {
         ))))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn join_via(
         &self,
         conf: &RaftConfig,
@@ -833,7 +833,7 @@ impl MetaNode {
 
     /// Boot up the first node to create a cluster.
     /// For every cluster this func should be called exactly once.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
         let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
         mn.init_cluster(config.get_node()).await?;
@@ -843,7 +843,7 @@ impl MetaNode {
     /// Initialized a single node cluster if this node is just created:
     /// - Initializing raft membership.
     /// - Adding current node into the meta data.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
         info!("init_cluster: node: {:?}", node);
 
@@ -877,7 +877,7 @@ impl MetaNode {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
@@ -886,7 +886,7 @@ impl MetaNode {
         n
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
@@ -969,7 +969,7 @@ impl MetaNode {
         sm.sys_data_ref().curr_seq()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_grpc_advertise_addrs(&self) -> Vec<String> {
         // inconsistent get: from local state machine
 
@@ -996,7 +996,7 @@ impl MetaNode {
         endpoints
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn handle_forwardable_request<Req>(
         &self,
         req: ForwardRequest<Req>,
@@ -1099,7 +1099,7 @@ impl MetaNode {
     /// Return a MetaLeader if `self` believes it is the leader.
     ///
     /// Otherwise it returns the leader in a ForwardToLeader error.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn assume_leader(&self) -> Result<MetaLeader<'_>, ForwardToLeader> {
         let leader_id = self.get_leader().await.map_err(|e| {
             error!("raft metrics rx closed: {}", e);
@@ -1147,7 +1147,7 @@ impl MetaNode {
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn write(&self, req: LogEntry) -> Result<AppliedState, MetaAPIError> {
         debug!("{} req: {:?}", func_name!(), req);
 
@@ -1166,7 +1166,7 @@ impl MetaNode {
 
     /// Try to get the leader from the latest metrics of the local raft node.
     /// If leader is absent, wait for an metrics update in which a leader is set.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_leader(&self) -> Result<Option<NodeId>, RecvError> {
         let mut rx = self.raft.metrics();
 
