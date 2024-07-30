@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::ops::Add;
+use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::testing::StatisticsV0;
@@ -74,7 +75,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     let current = TableSnapshot::try_new(
         None,
-        None,
+        Some(Arc::new(prev.clone())),
         schema,
         Default::default(),
         vec![],
