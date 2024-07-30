@@ -85,7 +85,7 @@ impl PipelineBuilder {
         let num_output_columns = num_input_columns - has_filter_column as usize;
         let mut projection = Vec::with_capacity(num_output_columns);
         for idx in 0..num_output_columns {
-            if let Some(index) = field_id_to_schema_index.get(&idx) {
+            if let Some(index) = schema_index_to_new_index.get(&idx) {
                 projection.push(*index);
             } else {
                 projection.push(idx);

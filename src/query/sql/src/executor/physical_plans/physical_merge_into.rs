@@ -169,6 +169,9 @@ impl PhysicalPlanBuilder {
                     )?;
                     let table_schema_with_stream = table.schema_with_stream();
                     for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
+                        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
+                            continue;
+                        }
                         for column_binding in bind_context.columns.iter() {
                             if BindContext::match_column_binding(
                                 database,
@@ -185,26 +188,6 @@ impl PhysicalPlanBuilder {
                             }
                         }
                     }
-                    assert_eq!(
-                        field_id_to_schema_index.len(),
-                        table_schema_with_stream.fields().len()
-                    );
-                    let mutation_expr = mutation_expr
-                        .iter()
-                        .map(|(idx, remote_expr)| {
-                            (
-                                *idx,
-                                remote_expr
-                                    .as_expr(&BUILTIN_FUNCTIONS)
-                                    .project_column_ref(|index| {
-                                        data_mutation_input_schema
-                                            .index_of(&index.to_string())
-                                            .unwrap()
-                                    })
-                                    .as_remote_expr(),
-                            )
-                        })
-                        .collect_vec();
 
                     let computed_expr = generate_stored_computed_list(
                         self.ctx.clone(),

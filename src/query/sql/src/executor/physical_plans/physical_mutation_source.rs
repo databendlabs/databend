@@ -68,8 +68,10 @@ impl PhysicalPlanBuilder {
         let mut fields = Vec::with_capacity(mutation_source.columns.len());
         for column_index in mutation_source.columns.iter() {
             let column = metadata.column(*column_index);
-            let column_id = mutation_source.schema.index_of(&column.name())?;
-            fields.push((column.name(), column_index, column_id));
+            // Ignore virtual computed columns.
+            if let Ok(column_id) = mutation_source.schema.index_of(&column.name()) {
+                fields.push((column.name(), *column_index, column_id));
+            }
         }
         fields.sort_by_key(|(_, _, id)| *id);
 

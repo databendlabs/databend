@@ -35,6 +35,7 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::binder::DataMutationType;
+use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
@@ -305,7 +306,9 @@ impl DataMutationInput {
                     } else if input_type == DataMutationInputType::Delete {
                         truncate_table = true;
                     }
-                    let table_schema = target_table.schema_with_stream();
+                    let table_schema = target_table
+                        .schema_with_stream()
+                        .remove_virtual_computed_fields();
                     let target_mutation_source = MutationSource {
                         table_index: target_table_index,
                         schema: table_schema,
@@ -457,6 +460,13 @@ impl Binder {
                 self.ctes_map.clone(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
+            if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {
+                return Err(ErrorCode::SemanticError(
+                    "filter in mutation statement can't contain window|aggregate|udf functions"
+                        .to_string(),
+                )
+                .set_span(scalar.span()));
+            }
             if !self.has_subquery(&scalar)? {
                 Ok((true, Some(scalar)))
             } else {
@@ -485,6 +495,25 @@ impl Binder {
         subquery_visitor.visit(scalar)?;
 
         Ok(subquery_visitor.found_subquery)
+    }
+
+    pub(crate) fn check_allowed_scalar_expr_with_subquery(
+        &self,
+        scalar: &ScalarExpr,
+    ) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
+                    | ScalarExpr::UDFCall(_)
+            )
+        };
+
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
     }
 }
 

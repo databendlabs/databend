@@ -119,7 +119,7 @@ impl FuseTable {
                 .project_column_ref(|name| schema.index_of(name).unwrap())
         }));
 
-        let num_column_indices = all_column_indices.len();
+        let num_column_indices = self.schema_with_stream().fields().len();
         let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
             .filter(|index| !col_indices.contains(index))

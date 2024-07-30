@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::TableSchemaRef;
+use databend_common_expression::TableSchema;
 use itertools::Itertools;
 
 use super::ScalarExpr;
@@ -37,7 +37,7 @@ use crate::IndexType;
 #[derive(Clone, Debug, Default)]
 pub struct MutationSource {
     pub table_index: IndexType,
-    pub schema: TableSchemaRef,
+    pub schema: TableSchema,
     pub columns: ColumnSet,
     pub update_stream_columns: bool,
     pub filter: Option<ScalarExpr>,
