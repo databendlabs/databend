@@ -81,4 +81,5 @@ pub use share_meta_v2::ShareDatabase;
 pub use share_meta_v2::ShareMetaV2 as ShareMeta;
 pub use share_meta_v2::ShareMetaV2;
 pub use share_meta_v2::ShareObject;
+pub use share_meta_v2::ShareReferenceTable;
 pub use share_meta_v2::ShareTable;

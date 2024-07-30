@@ -66,6 +66,7 @@ use databend_common_meta_app::share::ShareId;
 use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareMeta;
 use databend_common_meta_app::share::ShareObject;
+use databend_common_meta_app::share::ShareReferenceTable;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTable;
 use databend_common_meta_app::share::ShareTableSpec;
@@ -943,6 +944,28 @@ pub async fn convert_share_meta_to_spec(
         Ok(ret_tables)
     }
 
+    async fn convert_reference_tables_to_share_spec_tables(
+        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+        tables: &[ShareReferenceTable],
+    ) -> Result<Vec<ShareTableSpec>, KVAppError> {
+        let mut ret_tables = Vec::with_capacity(tables.len());
+        for table in tables.iter() {
+            let table_id = table.table_id;
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_pb_value(kv_api, &table_id_to_name_key).await?;
+            if let Some(table_name) = table_name {
+                ret_tables.push(ShareTableSpec::new(
+                    &table_name.table_name,
+                    table_name.db_id,
+                    table_id,
+                ));
+            }
+        }
+
+        Ok(ret_tables)
+    }
+
     let use_database = if let Some(database) = &share_meta.use_database {
         convert_to_share_spec_database(kv_api, database).await?
     } else {
@@ -958,7 +981,7 @@ pub async fn convert_share_meta_to_spec(
 
     let tables = convert_to_share_spec_tables(kv_api, &share_meta.table).await?;
     let reference_tables =
-        convert_to_share_spec_tables(kv_api, &share_meta.reference_table).await?;
+        convert_reference_tables_to_share_spec_tables(kv_api, &share_meta.reference_table).await?;
 
     Ok(ShareSpec {
         name: share_name.to_owned(),

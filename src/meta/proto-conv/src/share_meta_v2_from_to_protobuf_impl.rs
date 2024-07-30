@@ -71,6 +71,10 @@ impl FromToProto for mt::ShareTable {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let privileges =
             BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
+        let mut reference_table = BTreeSet::new();
+        for ref_table in p.reference_table {
+            reference_table.insert(ref_table);
+        }
         let v = Self {
             privileges,
             name: p.name,
@@ -78,6 +82,7 @@ impl FromToProto for mt::ShareTable {
             table_id: p.table_id,
             grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
             engine: p.engine.clone(),
+            reference_table,
         };
         Ok(v)
     }
@@ -92,6 +97,53 @@ impl FromToProto for mt::ShareTable {
             table_id: self.table_id,
             grant_on: self.grant_on.to_pb()?,
             engine: self.engine.clone(),
+            reference_table: self
+                .reference_table
+                .iter()
+                .map(|table_id| *table_id)
+                .collect(),
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::ShareReferenceTable {
+    type PB = pb::ShareReferenceTable;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ShareReferenceTable) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let privileges =
+            BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
+        let mut reference_by = BTreeSet::new();
+        for ref_table in p.reference_by {
+            reference_by.insert(ref_table);
+        }
+        let v = Self {
+            privileges,
+            name: p.name,
+            db_id: p.db_id,
+            table_id: p.table_id,
+            grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
+            engine: p.engine.clone(),
+            reference_by,
+        };
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::ShareReferenceTable, Incompatible> {
+        let p = pb::ShareReferenceTable {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            privileges: self.privileges.bits(),
+            name: self.name.clone(),
+            db_id: self.db_id,
+            table_id: self.table_id,
+            grant_on: self.grant_on.to_pb()?,
+            engine: self.engine.clone(),
+            reference_by: self.reference_by.iter().map(|table_id| *table_id).collect(),
         };
         Ok(p)
     }
@@ -117,7 +169,7 @@ impl FromToProto for mt::ShareMetaV2 {
         }
         let mut reference_table = Vec::with_capacity(p.reference_table.len());
         for t in &p.reference_table {
-            reference_table.push(mt::ShareTable::from_pb(t.clone())?);
+            reference_table.push(mt::ShareReferenceTable::from_pb(t.clone())?);
         }
 
         let v = Self {
