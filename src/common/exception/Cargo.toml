@@ -21,6 +21,7 @@ bincode = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 http = { workspace = true }
+hyper = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 paste = { workspace = true }
@@ -31,7 +32,6 @@ serde_json = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-hyper = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["geos"]

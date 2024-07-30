@@ -386,7 +386,7 @@ impl FlightSender {
     }
 
     pub fn is_closed(&self) -> bool {
-        unsafe { (&*self.tx.load(Ordering::Acquire)).is_closed() }
+        unsafe { (*self.tx.load(Ordering::Acquire)).is_closed() }
     }
 
     #[async_backtrace::framed]
