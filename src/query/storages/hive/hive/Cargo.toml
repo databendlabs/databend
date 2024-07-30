@@ -31,11 +31,11 @@ databend-storages-common-cache = { workspace = true }
 databend-storages-common-cache-manager = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+fastrace = { workspace = true }
 faststr = "0.2"
 futures = { workspace = true }
 hive_metastore = "0.1.0"
 log = { workspace = true }
-fastrace = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 recursive = "0.1.1"

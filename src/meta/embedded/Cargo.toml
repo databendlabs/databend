@@ -23,8 +23,8 @@ databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
-log = { workspace = true }
 fastrace = { workspace = true }
+log = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]

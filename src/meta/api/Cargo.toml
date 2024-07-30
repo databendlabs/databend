@@ -26,11 +26,11 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 enumflags2 = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"
-fastrace = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }

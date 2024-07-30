@@ -40,9 +40,9 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-fastrace = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

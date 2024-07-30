@@ -27,11 +27,11 @@ bytesize = "1.1.0"
 ctrlc = { version = "3.2.3", features = ["termination"] }
 databend-common-exception = { workspace = true }
 enquote = "1.1.0"
+fastrace = { workspace = true }
 futures = { workspace = true }
 libc = "0.2.153"
 log = { workspace = true }
 logcall = { workspace = true }
-fastrace = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }

@@ -11,8 +11,8 @@ async-backtrace = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
-log = { workspace = true }
 fastrace = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
 
 [lints]

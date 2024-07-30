@@ -50,13 +50,13 @@ databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 databend-storages-common-txn = { workspace = true }
 enum-as-inner = "0.5"
+fastrace = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
-fastrace = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }

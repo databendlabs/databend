@@ -24,11 +24,11 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 derive_more = { workspace = true }
+fastrace = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
-fastrace = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 prost = { workspace = true }

@@ -120,6 +120,7 @@ databend-storages-common-table-meta = { workspace = true }
 databend-storages-common-txn = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
+fastrace = { workspace = true }
 flatbuffers = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
@@ -136,7 +137,6 @@ log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
 md-5 = "0.10.5"
-fastrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }
