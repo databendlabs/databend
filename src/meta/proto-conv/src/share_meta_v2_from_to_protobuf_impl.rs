@@ -97,11 +97,7 @@ impl FromToProto for mt::ShareTable {
             table_id: self.table_id,
             grant_on: self.grant_on.to_pb()?,
             engine: self.engine.clone(),
-            reference_table: self
-                .reference_table
-                .iter()
-                .map(|table_id| *table_id)
-                .collect(),
+            reference_table: self.reference_table.iter().copied(),
         };
         Ok(p)
     }
@@ -143,7 +139,7 @@ impl FromToProto for mt::ShareReferenceTable {
             table_id: self.table_id,
             grant_on: self.grant_on.to_pb()?,
             engine: self.engine.clone(),
-            reference_by: self.reference_by.iter().map(|table_id| *table_id).collect(),
+            reference_by: self.reference_by.iter().copied(),
         };
         Ok(p)
     }
