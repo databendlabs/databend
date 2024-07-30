@@ -756,12 +756,28 @@ impl<'a> Binder {
         normalize_identifier(ident, &self.name_resolution_ctx).name
     }
 
+    pub(crate) fn check_allowed_scalar_expr_with_udf(&self, scalar: &ScalarExpr) -> Result<bool> {
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+                    | ScalarExpr::AsyncFunctionCall(_)
+            )
+        };
+        let mut finder = Finder::new(&f);
+        finder.visit(scalar)?;
+        Ok(finder.scalars().is_empty())
+    }
+
     pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
                     | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
             )

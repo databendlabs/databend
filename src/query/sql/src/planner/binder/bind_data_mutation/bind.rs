@@ -372,7 +372,7 @@ impl Binder {
                 let mut update_columns = HashMap::with_capacity(update_list.len());
                 for update_expr in update_list {
                     let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr)?;
-                    if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                    if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                         return Err(ErrorCode::SemanticError(
                             "update clause's can't contain subquery|window|aggregate|udf functions"
                                 .to_string(),
