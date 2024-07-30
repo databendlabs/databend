@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::table_functions::ClusteringStatisticsTable;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
+use databend_common_storages_fuse::table_functions::FuseBlock;
 use databend_common_storages_fuse::table_functions::FuseColumnTable;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
@@ -36,7 +37,6 @@ use super::TenantQuotaTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
-use crate::storages::fuse::table_functions::FuseBlockTable;
 use crate::storages::fuse::table_functions::FuseSegmentTable;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
@@ -146,7 +146,10 @@ impl TableFunctionFactory {
         );
         creators.insert(
             "fuse_block".to_string(),
-            (next_id(), Arc::new(FuseBlockTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseBlock>::create),
+            ),
         );
         creators.insert(
             "fuse_column".to_string(),

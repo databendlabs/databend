@@ -14,7 +14,10 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
@@ -29,6 +32,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -39,34 +43,45 @@ use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
+use crate::table_functions::parse_db_tb_opt_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
-pub struct FuseBlock<'a> {
-    pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
-    pub snapshot_id: Option<String>,
-    pub limit: Option<usize>,
+const FUSE_FUNC_BLOCK: &str = "fuse_block";
+
+pub struct FuseBlockArgs {
+    arg_database_name: String,
+    arg_table_name: String,
+    arg_snapshot_id: Option<String>,
 }
 
-impl<'a> FuseBlock<'a> {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        table: &'a FuseTable,
-        snapshot_id: Option<String>,
-        limit: Option<usize>,
-    ) -> Self {
-        Self {
-            ctx,
-            table,
-            snapshot_id,
-            limit,
+impl From<&FuseBlockArgs> for TableArgs {
+    fn from(value: &FuseBlockArgs) -> Self {
+        let mut args = Vec::new();
+        args.push(string_literal(value.arg_database_name.as_str()));
+        args.push(string_literal(value.arg_table_name.as_str()));
+        if let Some(arg_snapshot_id) = &value.arg_snapshot_id {
+            args.push(string_literal(arg_snapshot_id));
         }
+        TableArgs::new_positioned(args)
     }
+}
 
+pub struct FuseBlock {
+    // pub limit: Option<usize>,
+    pub args: FuseBlockArgs,
+}
+
+impl FuseBlock {
     #[async_backtrace::framed]
-    pub async fn get_blocks(&self) -> Result<DataBlock> {
-        let tbl = self.table;
-        let snapshot_id = self.snapshot_id.clone();
+    pub async fn get_blocks(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        tbl: &FuseTable,
+        limit: Option<usize>,
+    ) -> Result<DataBlock> {
+        let snapshot_id = self.args.arg_snapshot_id.clone();
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             if let Some(snapshot_id) = snapshot_id {
@@ -85,22 +100,28 @@ impl<'a> FuseBlock<'a> {
                 // find the element by snapshot_id in stream
                 while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
                     if snapshot.snapshot_id.simple().to_string() == snapshot_id {
-                        return self.to_block(snapshot).await;
+                        return self.to_block(ctx, tbl, snapshot, limit).await;
                     }
                 }
             } else {
-                return self.to_block(snapshot).await;
+                return self.to_block(ctx, tbl, snapshot, limit).await;
             }
         }
 
         Ok(DataBlock::empty_with_schema(Arc::new(
-            Self::schema().into(),
+            Self::table_schema().into(),
         )))
     }
 
     #[async_backtrace::framed]
-    async fn to_block(&self, snapshot: Arc<TableSnapshot>) -> Result<DataBlock> {
-        let limit = self.limit.unwrap_or(usize::MAX);
+    async fn to_block(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        tbl: &FuseTable,
+        snapshot: Arc<TableSnapshot>,
+        limit: Option<usize>,
+    ) -> Result<DataBlock> {
+        let limit = limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let snapshot_id = snapshot.snapshot_id.simple().to_string();
@@ -113,16 +134,12 @@ impl<'a> FuseBlock<'a> {
         let mut bloom_filter_size = Vec::with_capacity(len);
         let mut inverted_index_size = Vec::with_capacity(len);
 
-        let segments_io = SegmentsIO::create(
-            self.ctx.clone(),
-            self.table.operator.clone(),
-            self.table.schema(),
-        );
+        let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
         let mut row_num = 0;
         let mut end_flag = false;
         let chunk_size =
-            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, true)
@@ -199,7 +216,7 @@ impl<'a> FuseBlock<'a> {
         ))
     }
 
-    pub fn schema() -> Arc<TableSchema> {
+    pub fn table_schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
@@ -220,5 +237,49 @@ impl<'a> FuseBlock<'a> {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])
+    }
+}
+
+#[async_trait::async_trait]
+impl SimpleTableFunc for FuseBlock {
+    fn table_args(&self) -> Option<TableArgs> {
+        Some((&self.args).into())
+    }
+
+    fn schema(&self) -> TableSchemaRef {
+        Self::table_schema()
+    }
+
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                self.args.arg_database_name.as_str(),
+                self.args.arg_table_name.as_str(),
+            )
+            .await?;
+        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        Ok(Some(self.get_blocks(ctx, tbl, limit).await?))
+    }
+
+    fn create(table_args: TableArgs) -> Result<Self>
+    where Self: Sized {
+        let (arg_database_name, arg_table_name, arg_snapshot_id) =
+            parse_db_tb_opt_args(&table_args, FUSE_FUNC_BLOCK)?;
+        Ok(Self {
+            args: FuseBlockArgs {
+                arg_database_name,
+                arg_table_name,
+                arg_snapshot_id,
+            },
+        })
     }
 }

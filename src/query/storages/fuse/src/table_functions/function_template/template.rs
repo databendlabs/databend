@@ -72,7 +72,11 @@ pub trait SimpleTableFunc: Send + Sync + 'static {
 
     fn schema(&self) -> TableSchemaRef;
 
-    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>>;
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>>;
 
     fn create(table_args: TableArgs) -> Result<Self>
     where Self: Sized;

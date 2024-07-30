@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -66,7 +67,11 @@ impl SimpleTableFunc for SetCacheCapacity {
         false
     }
 
-    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
         let cache_mgr = CacheManager::instance();
         let op = &self.operation;
         cache_mgr.set_cache_capacity(&op.cache_name, op.capacity)?;

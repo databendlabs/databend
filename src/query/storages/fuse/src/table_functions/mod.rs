@@ -36,7 +36,6 @@ pub use function_template::SimpleTableFunc;
 pub use function_template::TableFunctionTemplate;
 pub use fuse_amend::FuseAmendTable;
 pub use fuse_blocks::FuseBlock;
-pub use fuse_blocks::FuseBlockTable;
 pub use fuse_columns::FuseColumn;
 pub use fuse_columns::FuseColumnTable;
 pub use fuse_encodings::FuseEncoding;

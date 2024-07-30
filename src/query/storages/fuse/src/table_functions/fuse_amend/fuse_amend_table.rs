@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -66,7 +67,11 @@ impl SimpleTableFunc for FuseAmendTable {
         TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)])
     }
 
-    async fn apply(&self, ctx: &Arc<dyn TableContext>) -> Result<Option<DataBlock>> {
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _plan: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
         let license_manager = get_license_manager();
         license_manager
             .manager
