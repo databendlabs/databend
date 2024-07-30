@@ -11,3 +11,4 @@ union all
 select name
 from system.functions ignore_result;
 select name from system.tables where name='t_1';
+select name from system.tables where name in ('t_1', 't_2'');
