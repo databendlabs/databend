@@ -117,7 +117,12 @@ where TablesTable<T, U>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let catalogs = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
+        let catalogs = catalog_mgr
+            .list_catalogs(&tenant, ctx.txn_mgr())
+            .await?
+            .into_iter()
+            .map(|cat| cat.disable_table_info_refresh())
+            .collect::<Result<Vec<_>>>()?;
         let visibility_checker = ctx.get_visibility_checker().await?;
 
         self.get_full_data_from_catalogs(ctx, push_downs, catalogs, visibility_checker)
