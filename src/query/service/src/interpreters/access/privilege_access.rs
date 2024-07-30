@@ -560,12 +560,18 @@ impl PrivilegeAccess {
         database_name: &str,
         table_name: Option<&str>,
     ) -> Result<ObjectId> {
-        let db = catalog.get_database(tenant, database_name).await?;
-        let db_id = db.get_db_info().ident.db_id;
+        let cat = catalog.clone().disable_table_info_refresh()?;
+        let db_id = cat
+            .get_database(tenant, database_name)
+            .await?
+            .get_db_info()
+            .ident
+            .db_id;
         if let Some(table_name) = table_name {
-            // - we just care about the table_id, which is never staled
-            let allow_staled = true;
-            let table_id = db.get_table(table_name, allow_staled).await?.get_id();
+            let table_id = cat
+                .get_table(tenant, database_name, table_name)
+                .await?
+                .get_id();
             return Ok(ObjectId::Table(db_id, table_id));
         }
         Ok(ObjectId::Database(db_id))

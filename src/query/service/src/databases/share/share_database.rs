@@ -209,7 +209,7 @@ impl Database for ShareDatabase {
 
     // Get one table by db and table name.
     #[async_backtrace::framed]
-    async fn get_table(&self, table_name: &str, _allow_staled: bool) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let table_info = self.get_share_table_info(table_name).await?;
         self.get_table_by_info(table_info.as_ref())
     }

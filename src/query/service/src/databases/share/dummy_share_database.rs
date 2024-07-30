@@ -74,7 +74,7 @@ impl Database for DummyShareDatabase {
 
     // Get one table by db and table name.
     #[async_backtrace::framed]
-    async fn get_table(&self, _table_name: &str, _allow_staled: bool) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, _table_name: &str) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied from a dummy shared database".to_string(),
         ))

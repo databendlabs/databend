@@ -71,6 +71,7 @@ impl CatalogManager {
         default_catalog: Arc<dyn Catalog>,
         catalog_creators: Vec<(CatalogType, Arc<dyn CatalogCreator>)>,
     ) -> Result<()> {
+
         GlobalInstance::set(Self::try_create(conf, default_catalog, catalog_creators).await?);
 
         Ok(())

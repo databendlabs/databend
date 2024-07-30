@@ -97,6 +97,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use dyn_clone::DynClone;
@@ -125,6 +126,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn name(&self) -> String;
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo>;
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "{} not implemented",
+            func_name!()
+        )))
+    }
 
     /// Database.
 

@@ -61,17 +61,19 @@ impl Interpreter for DropTableInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
+
         let maybe_table = async {
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let db = catalog
-                .get_database(&self.ctx.get_tenant(), db_name)
-                .await?;
-            // When dropping a table, it's not necessary to have the latest table_info.
-            // Even if the latest table_info cannot be fetched (e.g., an attached table that
-            // can no longer access its metadata), the table should still be able to be dropped.
-            let allow_staled = true;
-            db.get_table(tbl_name, allow_staled).await
+            let catalog = self
+                .ctx
+                .get_catalog(catalog_name)
+                .await?
+                .disable_table_info_refresh()?;
+
+            catalog
+                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+                .await
         };
+
         let tbl = match maybe_table.await {
             Ok(table) => table,
             Err(error) => {

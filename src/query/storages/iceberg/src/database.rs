@@ -67,7 +67,7 @@ impl Database for IcebergDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn get_table(&self, table_name: &str, _allow_staled: bool) -> Result<Arc<dyn Table>> {
+    async fn get_table(&self, table_name: &str) -> Result<Arc<dyn Table>> {
         let tbl = IcebergTable::try_create_from_iceberg_catalog(
             self.ctl.clone(),
             self.info.name_ident.database_name(),
@@ -93,8 +93,7 @@ impl Database for IcebergDatabase {
         let mut tables = vec![];
 
         for table_name in table_names {
-            let allow_staled = false;
-            let table = self.get_table(&table_name.name, allow_staled).await?;
+            let table = self.get_table(&table_name.name).await?;
             tables.push(table);
         }
         Ok(tables)

@@ -130,8 +130,9 @@ use crate::storages::Table;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    ctx: CatalogContext,
+    pub(crate) ctx: CatalogContext,
     tenant: Tenant,
+    pub(crate) disable_table_info_refresh: bool,
 }
 
 impl Debug for MutableCatalog {
@@ -186,7 +187,11 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog { ctx, tenant })
+        Ok(MutableCatalog {
+            ctx,
+            tenant,
+            disable_table_info_refresh: false,
+        })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -194,6 +199,7 @@ impl MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: self.disable_table_info_refresh,
         };
         self.ctx
             .database_factory
@@ -409,8 +415,7 @@ impl Catalog for MutableCatalog {
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
         let db = self.get_database(tenant, db_name).await?;
-        let allow_staled = false;
-        db.get_table(table_name, allow_staled).await
+        db.get_table(table_name).await
     }
 
     #[async_backtrace::framed]
@@ -437,6 +442,7 @@ impl Catalog for MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: true,
         };
 
         let resp = ctx.meta.get_drop_table_infos(req).await?;
@@ -444,7 +450,7 @@ impl Catalog for MutableCatalog {
         let drop_ids = resp.drop_ids.clone();
         let drop_table_infos = resp.drop_table_infos;
 
-        let storage = ctx.storage_factory.clone();
+        let storage = ctx.storage_factory;
 
         let mut tables = vec![];
         for table_info in drop_table_infos {
