@@ -28,12 +28,11 @@ IFS='|' read -r stats_uri final_uri <<< $(perform_initial_query)
 
 poll_stats_uri "$stats_uri" &
 POLL_PID=$!
-
+sleep 1
 netstat_output=$(netstat -an | grep '9092')
 
 # skip standalone mode
 if [ -z "$netstat_output" ]; then
-    echo "tcpkill was terminated after reaching the desired number of output lines."
     echo "Final state: Succeeded"
     exit 0
 fi
@@ -60,7 +59,6 @@ TCPKILL_PID=$!
 # Wait for tcpkill to output at least 3 lines or terminate if done earlier
 while [ $(wc -l < tcpkill_output.txt) -lt 3 ]; do
     if ! kill -0 $TCPKILL_PID 2> /dev/null; then
-        echo "tcpkill has terminated earlier."
         break
     fi
     sleep 1
@@ -69,7 +67,6 @@ done
 # Kill tcpkill after the desired number of lines if it's still running
 if kill -0 $TCPKILL_PID 2> /dev/null; then
     kill $TCPKILL_PID
-    echo "tcpkill was terminated after reaching the desired number of output lines."
 fi
 
 wait $POLL_PID
