@@ -27,7 +27,6 @@ use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
-use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
@@ -79,10 +78,6 @@ impl Operator for RecursiveCteScan {
         Ok(PhysicalProperty {
             distribution: Distribution::Serial,
         })
-    }
-
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo::default()))
     }
 
     fn compute_required_prop_child(

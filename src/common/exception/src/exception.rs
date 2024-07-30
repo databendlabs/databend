@@ -33,18 +33,18 @@ pub enum ErrorCodeBacktrace {
     Address(Arc<Backtrace>),
 }
 
-impl ToString for ErrorCodeBacktrace {
-    fn to_string(&self) -> String {
+impl Display for ErrorCodeBacktrace {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
-            ErrorCodeBacktrace::Symbols(backtrace) => format!("{:?}", backtrace),
+            ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "{}", backtrace),
+            ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "{:?}", backtrace),
             ErrorCodeBacktrace::Address(backtrace) => {
                 let frames_address = backtrace
                     .frames()
                     .iter()
                     .map(|f| (f.ip() as usize, f.symbol_address() as usize))
                     .collect::<Vec<_>>();
-                format!("{:?}", frames_address)
+                write!(f, "{:?}", frames_address)
             }
         }
     }

@@ -99,7 +99,7 @@ impl<'a> Applier<'a> {
                 AppliedState::None
             }
             EntryPayload::Normal(ref data) => {
-                info!("apply: normal: {}", data);
+                info!("apply: normal: {} {}", log_id, data);
                 assert!(data.txid.is_none(), "txid is disabled");
 
                 self.apply_cmd(&data.cmd).await?

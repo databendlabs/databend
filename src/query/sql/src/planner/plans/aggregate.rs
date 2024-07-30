@@ -96,10 +96,6 @@ impl Operator for Aggregate {
         RelOp::Aggregate
     }
 
-    fn arity(&self) -> usize {
-        1
-    }
-
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
 

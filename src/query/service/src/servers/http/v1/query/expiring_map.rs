@@ -114,26 +114,26 @@ where
         self.map.insert(k, i);
     }
 
-    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<V>
+    pub fn get<Q>(&self, k: &Q) -> Option<V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash + Eq + ?Sized,
     {
         self.map.get(k).map(|i| i.value().value.clone())
     }
 
-    pub fn remove<Q: ?Sized>(&mut self, k: &Q)
+    pub fn remove<Q>(&mut self, k: &Q)
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash + Eq + ?Sized,
     {
         Self::remove_inner(&self.map, k)
     }
 
-    fn remove_inner<Q: ?Sized>(map: &Arc<DashMap<K, MaybeExpiring<V>>>, k: &Q)
+    fn remove_inner<Q>(map: &Arc<DashMap<K, MaybeExpiring<V>>>, k: &Q)
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
+        Q: Hash + Eq + ?Sized,
     {
         let checker = { map.remove(k) };
         if let Some((_, mut checker)) = checker {

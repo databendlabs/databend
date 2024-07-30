@@ -28,7 +28,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::DescSharePlan;
+use crate::sql::plans::DescSharePlan;
 
 pub struct DescShareInterpreter {
     ctx: Arc<QueryContext>,

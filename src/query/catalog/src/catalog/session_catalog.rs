@@ -130,6 +130,10 @@ impl Catalog for SessionCatalog {
         self.inner.info()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        self.inner.clone().disable_table_info_refresh()
+    }
+
     /// Database.
 
     // Get the database by name.
