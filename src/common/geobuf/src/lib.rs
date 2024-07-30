@@ -16,6 +16,7 @@ use geo_generated::geo_buf;
 use geozero::wkt::Wkt;
 use geozero::ToGeo;
 use geozero::ToWkt;
+use ordered_float::OrderedFloat;
 
 // A columnar Geometry/Geography format is proposed here to provide support for the storage and computation of geospatial features.
 //
@@ -143,6 +144,47 @@ pub struct Geography {
     buf: Vec<u8>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
+}
+
+pub struct BoundingBox {
+    pub xmin: f64,
+    pub xmax: f64,
+    pub ymin: f64,
+    pub ymax: f64,
+}
+
+impl Geography {
+    pub fn bounding_box(&self) -> BoundingBox {
+        fn cmp(a: &f64, b: &f64) -> std::cmp::Ordering {
+            std::cmp::Ord::cmp(&OrderedFloat(*a), &OrderedFloat(*b))
+        }
+        BoundingBox {
+            xmin: self
+                .column_x
+                .iter()
+                .copied()
+                .min_by(cmp)
+                .unwrap_or(f64::NAN),
+            xmax: self
+                .column_x
+                .iter()
+                .copied()
+                .max_by(cmp)
+                .unwrap_or(f64::NAN),
+            ymin: self
+                .column_y
+                .iter()
+                .copied()
+                .min_by(cmp)
+                .unwrap_or(f64::NAN),
+            ymax: self
+                .column_y
+                .iter()
+                .copied()
+                .max_by(cmp)
+                .unwrap_or(f64::NAN),
+        }
+    }
 }
 
 pub struct GeographyRef<'a> {

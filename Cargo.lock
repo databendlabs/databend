@@ -3529,6 +3529,7 @@ dependencies = [
  "geo",
  "geos",
  "geozero 0.13.0",
+ "ordered-float 4.2.0",
 ]
 
 [[package]]

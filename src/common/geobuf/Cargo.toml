@@ -16,3 +16,4 @@ flatbuffers = "24.3.25"
 geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
+ordered-float = { workspace = true }
