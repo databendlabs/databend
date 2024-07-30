@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -36,12 +35,11 @@ pub enum TruncateMode {
 #[derive(Clone)]
 pub struct TruncateGenerator {
     mode: TruncateMode,
-    ctx: Arc<dyn TableContext>,
 }
 
 impl TruncateGenerator {
-    pub fn new(mode: TruncateMode, ctx: Arc<dyn TableContext>) -> Self {
-        TruncateGenerator { mode, ctx }
+    pub fn new(mode: TruncateMode) -> Self {
+        TruncateGenerator { mode }
     }
 
     pub fn mode(&self) -> &TruncateMode {
@@ -61,29 +59,17 @@ impl SnapshotGenerator for TruncateGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
-        let (prev_timestamp, prev_snapshot_id) = if let Some(prev_snapshot) = previous {
-            (
-                prev_snapshot.timestamp,
-                Some((prev_snapshot.snapshot_id, prev_snapshot.format_version)),
-            )
-        } else {
-            (None, None)
-        };
-
         TableSnapshot::try_new(
             prev_table_seq,
-            &prev_timestamp,
-            prev_snapshot_id,
-            &previous.as_ref().and_then(|v| v.least_visible_timestamp),
+            previous.clone(),
             schema,
             Default::default(),
             vec![],
             cluster_key_meta,
             None,
-            self.ctx.get_settings().get_data_retention_time_in_days()?,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         )
     }
 }

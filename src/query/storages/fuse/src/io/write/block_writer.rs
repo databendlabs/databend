@@ -337,7 +337,7 @@ pub struct BlockBuilder {
     pub cluster_stats_gen: ClusterStatsGenerator,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 impl BlockBuilder {
@@ -347,7 +347,7 @@ impl BlockBuilder {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
         let (block_location, block_id) = self
             .meta_locations
-            .gen_block_location(self.base_snapshot_timestamp);
+            .gen_block_location(self.table_meta_timestamps);
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state = BloomIndexState::from_data_block(

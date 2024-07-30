@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::ops::Add;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Datelike;
@@ -22,6 +23,9 @@ use chrono::Utc;
 use databend_common_base::base::uuid;
 use databend_common_base::base::uuid::NoContext;
 use databend_common_base::base::uuid::Uuid;
+
+use crate::meta::TableSnapshot;
+use crate::readers::snapshot_reader::TableSnapshotAccessor;
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
@@ -48,6 +52,44 @@ pub fn monotonically_increased_timestamp(
         }
     }
     timestamp
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy)]
+pub struct TableMetaTimestamps {
+    pub base_timestamp: chrono::DateTime<chrono::Utc>,
+    pub snapshot_lvt: chrono::DateTime<chrono::Utc>,
+    pub snapshot_timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+impl TableMetaTimestamps {
+    pub fn new(
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        data_retention_time_in_days: i64,
+    ) -> Self {
+        let now = chrono::Utc::now();
+        let snapshot_timestamp =
+            monotonically_increased_timestamp(now, &previous_snapshot.timestamp());
+        let snapshot_timestamp = trim_timestamp_to_micro_second(snapshot_timestamp);
+        let snapshot_lvt_candidate =
+            snapshot_timestamp - chrono::Duration::days(data_retention_time_in_days);
+        let snapshot_lvt = monotonically_increased_timestamp(
+            snapshot_lvt_candidate,
+            &previous_snapshot.least_visible_timestamp(),
+        );
+        let base_timestamp = now.max(snapshot_lvt);
+        Self {
+            base_timestamp,
+            snapshot_lvt,
+            snapshot_timestamp,
+        }
+    }
+}
+
+/// used in ut
+impl Default for TableMetaTimestamps {
+    fn default() -> Self {
+        Self::new(None, 1)
+    }
 }
 
 pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {

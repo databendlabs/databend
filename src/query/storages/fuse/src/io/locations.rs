@@ -14,8 +14,6 @@
 
 use std::marker::PhantomData;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
@@ -68,9 +66,9 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_block_location(
         &self,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> (Location, Uuid) {
-        let part_uuid = uuid_from_date_time(base_snapshot_timestamp.unwrap_or_default());
+        let part_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         let location_path = format!(
             "{}/{}/g{}_v{}.parquet",
             &self.prefix,
@@ -97,9 +95,9 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_segment_info_location(
         &self,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> String {
-        let segment_uuid = uuid_from_date_time(base_snapshot_timestamp.unwrap_or_default());
+        let segment_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         format!(
             "{}/{}/g{}_v{}.mpk",
             &self.prefix,

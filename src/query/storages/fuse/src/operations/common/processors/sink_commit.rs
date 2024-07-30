@@ -19,8 +19,6 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -98,7 +96,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
-    base_snapshot_timestamp: Option<DateTime<Utc>>,
+    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 impl<F> CommitSink<F>
@@ -115,7 +113,7 @@ where F: SnapshotGenerator + Send + 'static
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge = Self::do_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
@@ -137,7 +135,7 @@ where F: SnapshotGenerator + Send + 'static
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
             deduplicated_label,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         })))
     }
 
@@ -292,7 +290,7 @@ where F: SnapshotGenerator + Send + 'static
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
                     table_info.ident.table_id,
-                    self.base_snapshot_timestamp,
+                    self.table_meta_timestamps,
                 ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {

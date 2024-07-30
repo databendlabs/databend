@@ -76,7 +76,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 MutationKind::Update,
-                update.base_snapshot_timestamp,
+                update.table_meta_timestamps,
             )?;
             proc.into_processor()
         })

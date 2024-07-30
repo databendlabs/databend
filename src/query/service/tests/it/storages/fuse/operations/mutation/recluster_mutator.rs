@@ -60,7 +60,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, None);
+    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator, Default::default());
 
     let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
@@ -244,16 +244,13 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let snapshot = Arc::new(TableSnapshot::try_new(
             None,
-            &None,
             None,
-            &None,
             schema.as_ref().clone(),
             summary,
             locations.clone(),
             None,
             None,
-            24,
-            None,
+            Default::default(),
         )?);
 
         let mut block_ids = HashSet::new();

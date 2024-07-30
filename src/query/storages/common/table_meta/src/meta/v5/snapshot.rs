@@ -14,9 +14,9 @@
 
 use std::io::Cursor;
 use std::io::Read;
+use std::sync::Arc;
 
 use chrono::DateTime;
-use chrono::Duration;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,7 +30,6 @@ use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::uuid_from_date_time;
 use crate::meta::v4;
 use crate::meta::ClusterKey;
@@ -39,7 +38,9 @@ use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
+use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
+use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
 /// Compared to v4::TableSnapshot, the v5::TableSnapshot, a new field `least_visible_timestamp` is added.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -96,103 +97,80 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
-    /// Note that base_snapshot_timestamp is not always equal to prev_timestamp.
+    /// Note that table_meta_timestamps is not always equal to prev_timestamp.
     pub fn try_new(
         prev_table_seq: Option<u64>,
-        prev_timestamp: &Option<DateTime<Utc>>,
-        prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
-        prev_least_visible_timestamp: &Option<DateTime<Utc>>,
+        prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
         cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
-        data_retention_time_in_days: u64,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        let now = Utc::now();
-        // make snapshot timestamp monotonically increased
-        let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
-
-        // trim timestamp to micro seconds
-        let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
-        let timestamp = Some(trimmed_timestamp);
-
-        let candidate = trimmed_timestamp - Duration::days(data_retention_time_in_days as i64);
-        let least_visible_timestamp = match prev_least_visible_timestamp {
-            // UUIDv7 values are created by allocating a Unix timestamp in milliseconds in the most significant 48 bits
-            // https://www.ietf.org/rfc/rfc9562.html#section-5.7
-            Some(prev) => candidate.max(*prev + Duration::milliseconds(1)),
-            None => candidate,
-        };
-
-        // when base_snapshot_timestamp.is_none(), it means no base snapshot or base snapshot has no timestamp,
-        // both of them are allowed to be committed here.
-        if base_snapshot_timestamp
-            .as_ref()
-            // safe to unwrap, least_visible_timestamp of newly generated snapshot must be some
-            .is_some_and(|base| base < &least_visible_timestamp)
-        {
+        let TableMetaTimestamps {
+            base_timestamp,
+            snapshot_lvt,
+            snapshot_timestamp,
+        } = table_meta_timestamps;
+        let snapshot_lvt = monotonically_increased_timestamp(
+            snapshot_lvt,
+            &prev_snapshot.least_visible_timestamp(),
+        );
+        let snapshot_timestamp =
+            monotonically_increased_timestamp(snapshot_timestamp, &prev_snapshot.timestamp());
+        if base_timestamp < snapshot_lvt {
             return Err(ErrorCode::TransactionTimeout(format!(
-                "The timestamp of the base snapshot is: {:?}, the timestamp of the new snapshot is: {:?}, the least_visible_timestamp of the new snapshot is: {:?}",
-                base_snapshot_timestamp.unwrap(),
-                trimmed_timestamp,
-                least_visible_timestamp
+                "Snapshot is generated too late, base_timestamp: {:?}, snapshot_lvt: {:?}",
+                base_timestamp, snapshot_lvt
             )));
         }
 
         Ok(Self {
             format_version: TableSnapshot::VERSION,
-            snapshot_id: uuid_from_date_time(trimmed_timestamp),
-            timestamp,
+            snapshot_id: uuid_from_date_time(snapshot_timestamp),
+            timestamp: Some(snapshot_timestamp),
             prev_table_seq,
-            prev_snapshot_id,
+            prev_snapshot_id: prev_snapshot.snapshot_id(),
             schema,
             summary,
             segments,
             cluster_key_meta,
             table_statistics_location,
-            least_visible_timestamp: Some(least_visible_timestamp),
+            least_visible_timestamp: Some(snapshot_lvt),
         })
     }
 
+    /// used in ut
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
         Self::try_new(
             prev_table_seq,
-            &None,
             None,
-            &None,
             schema,
             Statistics::default(),
             vec![],
             None,
             None,
-            0,
-            None,
+            Default::default(),
         )
         .unwrap()
     }
 
     pub fn try_from_previous(
-        previous: &TableSnapshot,
+        previous: Arc<TableSnapshot>,
         prev_table_seq: Option<u64>,
-        data_retention_time_in_days: u64,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
-        let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::try_new(
             prev_table_seq,
-            &clone.timestamp,
-            Some((clone.snapshot_id, clone.format_version)),
-            &previous.least_visible_timestamp,
-            clone.schema,
-            clone.summary,
-            clone.segments,
-            clone.cluster_key_meta,
-            clone.table_statistics_location,
-            data_retention_time_in_days,
-            base_snapshot_timestamp,
+            Some(previous.clone()),
+            previous.schema.clone(),
+            previous.summary.clone(),
+            previous.segments.clone(),
+            previous.cluster_key_meta.clone(),
+            previous.table_statistics_location.clone(),
+            table_meta_timestamps,
         )
     }
 

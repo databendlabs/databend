@@ -44,7 +44,7 @@ impl PipelineBuilder {
             false,
             AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-            None,
+            Default::default(),
         )
     }
 }

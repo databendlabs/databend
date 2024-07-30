@@ -301,11 +301,9 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
-        let base_snapshot_timestamp = self
+        let table_meta_timestamps = self
             .ctx
-            .txn_mgr()
-            .lock()
-            .get_base_snapshot_timestamp(table_info.ident.table_id, snapshot.timestamp);
+            .get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
         let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
@@ -315,7 +313,7 @@ impl DeleteInterpreter {
             query_row_id_col,
             snapshot: snapshot.clone(),
             plan_id: u32::MAX,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         }));
 
         if is_distributed {
@@ -338,7 +336,7 @@ impl DeleteInterpreter {
             merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
             recluster_info: None,
         }));
         plan.adjust_plan_id(&mut 0);

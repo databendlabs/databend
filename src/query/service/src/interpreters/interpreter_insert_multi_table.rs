@@ -361,14 +361,11 @@ impl InsertIntoBranches {
             let snapshot = FuseTable::try_from_table(table.as_ref())?
                 .read_table_snapshot()
                 .await?;
-            let base_snapshot_timestamp = ctx
-                .txn_mgr()
-                .lock()
-                .get_base_snapshot_timestamp(table.get_id(), snapshot.and_then(|s| s.timestamp));
+            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.get_id(), snapshot)?;
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             });
         }
         Ok(serializable_tables)
@@ -391,14 +388,11 @@ impl InsertIntoBranches {
             let snapshot = FuseTable::try_from_table(table.as_ref())?
                 .read_table_snapshot()
                 .await?;
-            let base_snapshot_timestamp = ctx
-                .txn_mgr()
-                .lock()
-                .get_base_snapshot_timestamp(table.get_id(), snapshot.and_then(|s| s.timestamp));
+            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.get_id(), snapshot)?;
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             });
         }
         Ok(serializable_tables)

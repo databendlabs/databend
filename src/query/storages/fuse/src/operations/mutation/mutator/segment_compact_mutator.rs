@@ -50,6 +50,7 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    table_id: u64,
 }
 
 impl SegmentCompactMutator {
@@ -59,6 +60,7 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
+        table_id: u64,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -67,6 +69,7 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            table_id,
         })
     }
 
@@ -104,7 +107,10 @@ impl SegmentCompactMutator {
         let segment_writer = SegmentWriter::new(
             &self.data_accessor,
             &self.location_generator,
-            self.compact_params.base_snapshot.timestamp,
+            self.ctx.get_table_meta_timestamps(
+                self.table_id,
+                Some(self.compact_params.base_snapshot.clone()),
+            )?,
         );
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(

@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::any::Any;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
@@ -106,6 +105,8 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
@@ -1117,6 +1118,27 @@ impl TableContext for QueryContext {
 
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        let cache = self.shared.get_table_meta_timestamps();
+        let mut cache = cache.lock();
+        match cache.entry(table_id) {
+            Entry::Occupied(v) => Ok(*v.get()),
+            Entry::Vacant(v) => {
+                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
+                    table_id,
+                    previous_snapshot,
+                    self.get_settings().get_data_retention_time_in_days()? as i64,
+                );
+                v.insert(ts);
+                Ok(ts)
+            }
+        }
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {

@@ -57,7 +57,7 @@ impl FuseTable {
                 1,
             )?;
 
-            let snapshot_gen = TruncateGenerator::new(mode, ctx.clone());
+            let snapshot_gen = TruncateGenerator::new(mode);
             pipeline.add_sink(|input| {
                 CommitSink::try_create(
                     self,
@@ -69,9 +69,7 @@ impl FuseTable {
                     None,
                     prev_snapshot_id,
                     None,
-                    ctx.txn_mgr()
-                        .lock()
-                        .get_base_snapshot_timestamp(self.get_id(), prev_snapshot.timestamp),
+                    ctx.get_table_meta_timestamps(self.get_id(), Some(prev_snapshot.clone()))?,
                 )
             })?;
         }

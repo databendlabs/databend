@@ -135,16 +135,13 @@ mod tests {
             let r = catch_unwind(|| {
                 let mut snapshot = TableSnapshot::try_new(
                     None,
-                    &None,
                     None,
-                    &None,
                     TableSchema::default(),
                     Statistics::default(),
                     vec![],
                     None,
                     None,
-                    24,
-                    None,
+                    Default::default(),
                 )
                 .unwrap();
                 snapshot.format_version = v;
@@ -156,16 +153,13 @@ mod tests {
         // current version allowed
         let snapshot = TableSnapshot::try_new(
             None,
-            &None,
             None,
-            &None,
             TableSchema::default(),
             Statistics::default(),
             vec![],
             None,
             None,
-            24,
-            None,
+            Default::default(),
         )
         .unwrap();
         snapshot.marshal().unwrap();

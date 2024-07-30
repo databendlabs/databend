@@ -67,10 +67,9 @@ pub async fn generate_snapshot_with_segments(
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
     let mut new_snapshot = TableSnapshot::try_from_previous(
-        current_snapshot.as_ref(),
+        current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
-        24,
-        current_snapshot.timestamp,
+        Default::default(),
     )?;
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
@@ -135,7 +134,11 @@ pub async fn generate_segments(
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator(), None);
+        let segment_writer = SegmentWriter::new(
+            dal,
+            fuse_table.meta_location_generator(),
+            Default::default(),
+        );
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
         segs.push((segment_location, segment_info))
     }
@@ -145,7 +148,11 @@ pub async fn generate_segments(
 async fn generate_blocks(fuse_table: &FuseTable, num_blocks: usize) -> Result<Vec<Arc<BlockMeta>>> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
-    let block_writer = BlockWriter::new(dal, fuse_table.meta_location_generator(), None);
+    let block_writer = BlockWriter::new(
+        dal,
+        fuse_table.meta_location_generator(),
+        Default::default(),
+    );
     let mut block_metas = vec![];
 
     // does not matter in this suite
@@ -206,16 +213,13 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
     let mut snapshot_1 = TableSnapshot::try_new(
         None,
-        &snapshot_0.timestamp,
-        Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),
-        &None,
+        None,
         schema.as_ref().clone(),
         Statistics::default(),
         locations,
         None,
         None,
-        24,
-        snapshot_0.timestamp,
+        Default::default(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =
@@ -233,7 +237,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v2[0].0.clone(),
     ];
     let mut snapshot_2 =
-        TableSnapshot::try_from_previous(&snapshot_1, None, 24, snapshot_1.timestamp)?;
+        TableSnapshot::try_from_previous(Arc::new(snapshot_1.clone()), None, Default::default())?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary =

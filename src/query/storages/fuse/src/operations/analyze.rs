@@ -261,10 +261,10 @@ impl SinkAnalyzeState {
             regenerate_statistics(table, snapshot.as_ref(), &self.ctx).await?;
         // 4. Save table statistics
         let mut new_snapshot = TableSnapshot::try_from_previous(
-            &snapshot,
+            snapshot.clone(),
             Some(table.get_table_info().ident.seq),
-            self.ctx.get_settings().get_data_retention_time_in_days()?,
-            snapshot.timestamp,
+            self.ctx
+                .get_table_meta_timestamps(table.get_id(), Some(snapshot.clone()))?,
         )?;
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;

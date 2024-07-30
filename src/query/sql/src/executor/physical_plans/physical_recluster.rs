@@ -35,7 +35,7 @@ pub struct Recluster {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -87,11 +87,9 @@ impl PhysicalPlanBuilder {
                 "No need to do recluster for '{database}'.'{table}'"
             )));
         };
-        let base_snapshot_timestamp = self
+        let table_meta_timestamps = self
             .ctx
-            .txn_mgr()
-            .lock()
-            .get_base_snapshot_timestamp(tbl.get_id(), snapshot.timestamp);
+            .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
         if parts.is_empty() {
             return Err(ErrorCode::NoNeedToRecluster(format!(
                 "No need to do recluster for '{database}'.'{table}'"
@@ -111,7 +109,7 @@ impl PhysicalPlanBuilder {
                     tasks,
                     table_info: table_info.clone(),
                     plan_id: u32::MAX,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 }));
 
                 if is_distributed {
@@ -133,7 +131,7 @@ impl PhysicalPlanBuilder {
                     merge_meta: false,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                     recluster_info: Some(ReclusterInfoSideCar {
                         merged_blocks: remained_blocks,
                         removed_segment_indexes,
@@ -148,7 +146,7 @@ impl PhysicalPlanBuilder {
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
                     plan_id: u32::MAX,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 }));
 
                 if is_distributed {
@@ -171,7 +169,7 @@ impl PhysicalPlanBuilder {
                     merge_meta,
                     deduplicated_label: None,
                     plan_id: u32::MAX,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                     recluster_info: None,
                 }))
             }

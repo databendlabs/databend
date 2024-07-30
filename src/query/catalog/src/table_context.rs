@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -59,6 +58,8 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -320,6 +321,11 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps>;
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);

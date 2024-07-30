@@ -854,7 +854,7 @@ impl TestFixture {
             ctx.clone(),
             &mut build_res.main_pipeline,
             AppendMode::Normal,
-            None,
+            Default::default(),
         )?;
         if commit {
             table.commit_insertion(
@@ -865,7 +865,7 @@ impl TestFixture {
                 overwrite,
                 None,
                 None,
-                None,
+                Default::default(),
             )?;
         } else {
             build_res

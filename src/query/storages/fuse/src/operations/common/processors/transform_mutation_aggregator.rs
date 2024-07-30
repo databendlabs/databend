@@ -82,7 +82,7 @@ pub struct TableMutationAggregator {
     start_time: Instant,
     finished_tasks: usize,
     table_id: u64,
-    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -134,7 +134,7 @@ impl TableMutationAggregator {
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
         kind: MutationKind,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Self {
         TableMutationAggregator {
             ctx,
@@ -156,7 +156,7 @@ impl TableMutationAggregator {
             finished_tasks: 0,
             start_time: Instant::now(),
             table_id: table.get_id(),
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         }
     }
 
@@ -267,7 +267,7 @@ impl TableMutationAggregator {
 
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
-            let base_snapshot_timestamp = self.base_snapshot_timestamp;
+            let table_meta_timestamps = self.table_meta_timestamps;
             tasks.push(async move {
                 write_segment(
                     op,
@@ -277,7 +277,7 @@ impl TableMutationAggregator {
                     default_cluster_key,
                     all_perfect,
                     MutationKind::Recluster,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 )
                 .await
             });
@@ -420,7 +420,7 @@ impl TableMutationAggregator {
             let location_gen = self.location_gen.clone();
             let kind = self.kind;
 
-            let base_snapshot_timestamp = self.base_snapshot_timestamp;
+            let table_meta_timestamps = self.table_meta_timestamps;
             let mut all_perfect = false;
             tasks.push(async move {
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
@@ -476,7 +476,7 @@ impl TableMutationAggregator {
                     default_cluster_key_id,
                     all_perfect,
                     kind,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 )
                 .await?;
 
@@ -549,9 +549,9 @@ async fn write_segment(
     default_cluster_key: Option<u32>,
     all_perfect: bool,
     kind: MutationKind,
-    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 ) -> Result<(String, Statistics)> {
-    let location = location_gen.gen_segment_info_location(base_snapshot_timestamp);
+    let location = location_gen.gen_segment_info_location(table_meta_timestamps);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
     if all_perfect {
         // To fix issue #13217.

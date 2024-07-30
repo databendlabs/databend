@@ -556,9 +556,6 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
@@ -572,16 +569,13 @@ impl Table for FuseTable {
 
         let new_snapshot = TableSnapshot::try_new(
             table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
-            &prev.as_ref().and_then(|v| v.least_visible_timestamp),
+            prev.clone(),
             schema,
             summary,
             segments,
             cluster_key_meta,
             prev_statistics_location,
-            ctx.get_settings().get_data_retention_time_in_days()?,
-            prev_timestamp,
+            ctx.get_table_meta_timestamps(self.get_id(), prev)?,
         )?;
 
         let mut table_info = self.table_info.clone();
@@ -612,12 +606,9 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let (summary, segments) = if let Some(v) = &prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -628,16 +619,13 @@ impl Table for FuseTable {
 
         let new_snapshot = TableSnapshot::try_new(
             table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
-            &prev.as_ref().and_then(|v| v.least_visible_timestamp),
+            prev.clone(),
             schema,
             summary,
             segments,
             None,
             prev_statistics_location,
-            ctx.get_settings().get_data_retention_time_in_days()?,
-            prev_timestamp,
+            ctx.get_table_meta_timestamps(self.get_id(), prev)?,
         )?;
 
         let mut table_info = self.table_info.clone();
@@ -682,9 +670,9 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
-        self.do_append_data(ctx, pipeline, append_mode, base_snapshot_timestamp)
+        self.do_append_data(ctx, pipeline, append_mode, table_meta_timestamps)
     }
 
     fn commit_insertion(
@@ -696,7 +684,7 @@ impl Table for FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         self.do_commit(
             ctx,
@@ -706,7 +694,7 @@ impl Table for FuseTable {
             overwrite,
             prev_snapshot_id,
             deduplicated_label,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         )
     }
 

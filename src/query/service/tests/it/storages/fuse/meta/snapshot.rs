@@ -27,16 +27,13 @@ fn default_snapshot() -> TableSnapshot {
     let stats = Default::default();
     TableSnapshot::try_new(
         None,
-        &None,
         None,
-        &None,
         schema,
         stats,
         vec![],
         None,
         None,
-        24,
-        None,
+        Default::default(),
     )
     .unwrap()
 }
@@ -53,16 +50,13 @@ fn snapshot_timestamp_monotonic_increase() {
     let schema = TableSchema::empty();
     let current = TableSnapshot::try_new(
         None,
-        &prev.timestamp,
-        prev.prev_snapshot_id,
-        &prev.least_visible_timestamp,
+        None,
         schema,
         Default::default(),
         vec![],
         None,
         None,
-        24,
-        None,
+        Default::default(),
     )
     .unwrap();
     let current_ts = current.timestamp.unwrap();
@@ -80,16 +74,13 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     let current = TableSnapshot::try_new(
         None,
-        &prev.timestamp,
-        prev.prev_snapshot_id,
-        &None,
+        None,
         schema,
         Default::default(),
         vec![],
         None,
         None,
-        24,
-        prev.timestamp,
+        Default::default(),
     )
     .unwrap();
     let current_ts = current.timestamp.unwrap();

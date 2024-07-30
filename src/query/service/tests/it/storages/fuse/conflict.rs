@@ -55,8 +55,7 @@ fn test_unresolvable_delete_conflict() {
         merged_statistics: Statistics::default(),
     });
 
-    let mut generator =
-        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete, 24);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -66,7 +65,7 @@ fn test_unresolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        None,
+        Default::default(),
     );
     assert!(result.is_err());
 }
@@ -148,8 +147,7 @@ fn test_resolvable_delete_conflict() {
         merged_statistics,
     });
 
-    let mut generator =
-        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete, 24);
+    let mut generator = MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Delete);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -159,7 +157,7 @@ fn test_resolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
-        None,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -257,7 +255,7 @@ fn test_resolvable_replace_conflict() {
     });
 
     let mut generator =
-        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Replace, 24);
+        MutationGenerator::new(Some(Arc::new(base_snapshot)), MutationKind::Replace);
     generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
@@ -267,7 +265,7 @@ fn test_resolvable_replace_conflict() {
         None,
         TxnManager::init(),
         0,
-        None,
+        Default::default(),
     );
     let snapshot = result.unwrap();
     let expected = vec![

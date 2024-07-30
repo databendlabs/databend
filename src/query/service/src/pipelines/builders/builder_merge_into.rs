@@ -63,7 +63,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             block_thresholds,
-            merge_into.base_snapshot_timestamp,
+            merge_into.table_meta_timestamps,
         );
 
         // For row_id port, create rowid_aggregate_mutator
@@ -102,7 +102,7 @@ impl PipelineBuilder {
                 io_request_semaphore,
                 merge_into.segments.clone(),
                 false,
-                merge_into.base_snapshot_timestamp,
+                merge_into.table_meta_timestamps,
             )?);
         }
 
@@ -115,7 +115,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 MutationKind::MergeInto,
-                merge_into.base_snapshot_timestamp,
+                merge_into.table_meta_timestamps,
             )?;
             pipe_items.push(serialize_block_transform.into_pipe_item());
         }

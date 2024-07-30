@@ -74,6 +74,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             self.operator.clone(),
             self.cluster_key_id(),
+            self.get_id(),
         )?;
 
         if !segment_mutator.target_select().await? {
@@ -124,7 +125,7 @@ impl FuseTable {
         parts: Partitions,
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();
@@ -215,7 +216,7 @@ impl FuseTable {
                     self,
                     cluster_stats_gen.clone(),
                     MutationKind::Compact,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 )?;
                 proc.into_processor()
             },
@@ -232,7 +233,7 @@ impl FuseTable {
                     vec![],
                     Statistics::default(),
                     MutationKind::Compact,
-                    base_snapshot_timestamp,
+                    table_meta_timestamps,
                 )
             });
         }

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backoff::backoff::Backoff;
-use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -78,7 +77,7 @@ impl FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
 
@@ -90,7 +89,7 @@ impl FuseTable {
                 output,
                 self,
                 block_thresholds,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             );
             proc.into_processor()
         })?;
@@ -104,7 +103,7 @@ impl FuseTable {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             )
         });
 
@@ -120,9 +119,7 @@ impl FuseTable {
                 None,
                 prev_snapshot_id,
                 deduplicated_label.clone(),
-                ctx.txn_mgr()
-                    .lock()
-                    .get_base_snapshot_timestamp(self.get_id(), base_snapshot_timestamp),
+                table_meta_timestamps,
             )
         })?;
 
@@ -316,17 +313,14 @@ impl FuseTable {
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
-        let base_snapshot_timestamp = ctx
-            .txn_mgr()
-            .lock()
-            .get_base_snapshot_timestamp(self.get_id(), base_snapshot.timestamp);
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(self.get_id(), Some(base_snapshot.clone()))?;
 
         loop {
             let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
-                latest_snapshot.as_ref(),
+                latest_snapshot.clone(),
                 Some(latest_table_info.ident.seq),
-                ctx.get_settings().get_data_retention_time_in_days()?,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             )?;
 
             let schema = self.schema();

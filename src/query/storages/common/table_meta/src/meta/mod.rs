@@ -38,6 +38,7 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub use utils::uuid_from_date_time;
+pub use utils::TableMetaTimestamps;
 pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;

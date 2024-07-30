@@ -131,7 +131,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 MutationKind::Delete,
-                delete.base_snapshot_timestamp,
+                delete.table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;
@@ -148,7 +148,7 @@ impl PipelineBuilder {
                     vec![],
                     Statistics::default(),
                     MutationKind::Delete,
-                    delete.base_snapshot_timestamp,
+                    delete.table_meta_timestamps,
                 )
             });
         }

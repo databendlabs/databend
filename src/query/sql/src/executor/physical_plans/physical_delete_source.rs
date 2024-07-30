@@ -28,5 +28,5 @@ pub struct DeleteSource {
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
     pub snapshot: Arc<TableSnapshot>,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }

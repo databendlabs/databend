@@ -122,7 +122,7 @@ pub struct ChunkAppendData {
 pub struct SerializableTable {
     pub target_catalog_info: Arc<CatalogInfo>,
     pub target_table_info: TableInfo,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

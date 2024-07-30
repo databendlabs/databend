@@ -41,7 +41,7 @@ pub struct CopyIntoTable {
     pub project_columns: Option<Vec<ColumnBinding>>,
     pub source: CopyIntoTableSource,
     pub is_transform: bool,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]

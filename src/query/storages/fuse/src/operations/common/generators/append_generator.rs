@@ -118,7 +118,7 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -127,15 +127,11 @@ impl SnapshotGenerator for AppendGenerator {
                 expected_schema, schema
             )));
         }
-        let mut prev_timestamp = None;
-        let mut prev_snapshot_id = None;
         let mut table_statistics_location = None;
         let mut new_segments = snapshot_merged.merged_segments.clone();
         let mut new_summary = snapshot_merged.merged_statistics.clone();
 
         if let Some(snapshot) = previous {
-            prev_timestamp = snapshot.timestamp;
-            prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
             table_statistics_location = snapshot.table_statistics_location.clone();
 
             if !self.overwrite {
@@ -226,21 +222,15 @@ impl SnapshotGenerator for AppendGenerator {
                 .set_compaction_num_block_hint(compact_num_block_hint);
         }
 
-        let data_retention_time_in_days =
-            self.ctx.get_settings().get_data_retention_time_in_days()?;
-
         TableSnapshot::try_new(
             prev_table_seq,
-            &prev_timestamp,
-            prev_snapshot_id,
-            &previous.as_ref().and_then(|v| v.least_visible_timestamp),
+            previous.clone(),
             schema,
             new_summary,
             new_segments,
             cluster_key_meta,
             table_statistics_location,
-            data_retention_time_in_days,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         )
     }
 }

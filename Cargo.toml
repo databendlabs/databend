@@ -202,7 +202,6 @@ databend-storages-common-pruner = { path = "src/query/storages/common/pruner" }
 databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 databend-storages-common-txn = { path = "src/query/storages/common/txn" }
-
 # Crates.io dependencies
 anyerror = { version = "=0.1.10" }
 anyhow = { version = "1.0.65" }

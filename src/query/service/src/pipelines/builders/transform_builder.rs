@@ -106,7 +106,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         cluster_stats_gen: ClusterStatsGenerator,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -118,7 +118,7 @@ impl PipelineBuilder {
                 fuse_table,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             )?;
             proc.into_processor()
         })
@@ -128,7 +128,7 @@ impl PipelineBuilder {
         &self,
         table: Arc<dyn Table>,
         block_thresholds: BlockThresholds,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -137,7 +137,7 @@ impl PipelineBuilder {
                 output,
                 fuse_table,
                 block_thresholds,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             );
             proc.into_processor()
         })
@@ -146,7 +146,7 @@ impl PipelineBuilder {
     pub(crate) fn mutation_aggregator_transform_builder(
         &self,
         table: Arc<dyn Table>,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         let ctx = self.ctx.clone();
         Ok(move |input, output| {
@@ -159,7 +159,7 @@ impl PipelineBuilder {
                 vec![],
                 Statistics::default(),
                 MutationKind::Insert,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,

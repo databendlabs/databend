@@ -47,7 +47,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
 
@@ -85,7 +85,7 @@ impl FuseTable {
                 self,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
-                base_snapshot_timestamp,
+                table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;

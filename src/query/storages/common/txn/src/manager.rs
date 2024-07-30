@@ -18,8 +18,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -29,10 +27,11 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
-
 #[derive(Debug, Clone)]
 pub struct TxnManager {
     state: TxnState,
@@ -62,8 +61,7 @@ pub struct TxnBuffer {
 
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
 
-    /// The key is the table_id, the value is the timestamp of the snapshot
-    pub base_snapshot_timestamps: HashMap<u64, Option<DateTime<Utc>>>,
+    pub table_meta_timestamps: HashMap<u64, TableMetaTimestamps>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,7 +78,7 @@ impl TxnBuffer {
         self.update_stream_meta.clear();
         self.deduplicated_labels.clear();
         self.stream_tables.clear();
-        self.base_snapshot_timestamps.clear();
+        self.table_meta_timestamps.clear();
     }
 
     fn update_multi_table_meta(&mut self, mut req: UpdateMultiTableMetaReq) {
@@ -289,21 +287,24 @@ impl TxnManager {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
     }
 
-    pub fn get_base_snapshot_timestamp(
+    pub fn get_table_meta_timestamps(
         &mut self,
         table_id: u64,
-        timestamp: Option<DateTime<Utc>>,
-    ) -> Option<DateTime<Utc>> {
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        data_retention_time_in_days: i64,
+    ) -> TableMetaTimestamps {
         if !self.is_active() {
-            return timestamp;
+            return TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
         }
 
-        let entry = self.txn_buffer.base_snapshot_timestamps.entry(table_id);
+        let entry = self.txn_buffer.table_meta_timestamps.entry(table_id);
         match entry {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
-                e.insert(timestamp);
-                timestamp
+                let timestamps =
+                    TableMetaTimestamps::new(previous_snapshot, data_retention_time_in_days);
+                e.insert(timestamps);
+                timestamps
             }
         }
     }

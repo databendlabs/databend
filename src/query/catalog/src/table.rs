@@ -217,7 +217,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, append_mode);
 
@@ -237,7 +237,7 @@ pub trait Table: Sync + Send {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
-        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (
             ctx,

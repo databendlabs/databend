@@ -93,7 +93,7 @@ impl Table for NullTable {
         _: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
-        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         Ok(())

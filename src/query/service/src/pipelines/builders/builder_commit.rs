@@ -21,7 +21,6 @@ use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
 use crate::pipelines::PipelineBuilder;
@@ -59,16 +58,12 @@ impl PipelineBuilder {
                     recluster_info.removed_segment_indexes,
                     recluster_info.removed_statistics,
                     plan.mutation_kind,
-                    plan.base_snapshot_timestamp,
+                    plan.table_meta_timestamps,
                 )
             });
         }
 
-        let snapshot_gen = MutationGenerator::new(
-            plan.snapshot.clone(),
-            plan.mutation_kind,
-            self.ctx.get_settings().get_data_retention_time_in_days()?,
-        );
+        let snapshot_gen = MutationGenerator::new(plan.snapshot.clone(), plan.mutation_kind);
         self.main_pipeline.add_sink(|input| {
             CommitSink::try_create(
                 table,
@@ -80,7 +75,7 @@ impl PipelineBuilder {
                 None,
                 None,
                 plan.deduplicated_label.clone(),
-                plan.base_snapshot_timestamp,
+                plan.table_meta_timestamps,
             )
         })
     }

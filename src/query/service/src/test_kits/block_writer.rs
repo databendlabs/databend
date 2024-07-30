@@ -39,19 +39,19 @@ use uuid::Uuid;
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
-    base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
-        base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         }
     }
 
@@ -65,7 +65,7 @@ impl<'a> BlockWriter<'a> {
     ) -> Result<(BlockMeta, Option<FileMetaData>)> {
         let (location, block_id) = self
             .location_generator
-            .gen_block_location(self.base_snapshot_timestamp);
+            .gen_block_location(self.table_meta_timestamps);
 
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;

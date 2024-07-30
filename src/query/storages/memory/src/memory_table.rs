@@ -254,7 +254,7 @@ impl Table for MemoryTable {
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         _: AppendMode,
-        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         Ok(())
     }
@@ -268,7 +268,7 @@ impl Table for MemoryTable {
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
-        _base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 

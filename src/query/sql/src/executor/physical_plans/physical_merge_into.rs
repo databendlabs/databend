@@ -75,7 +75,7 @@ pub struct MergeInto {
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
-    pub base_snapshot_timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -451,11 +451,9 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
-        let base_snapshot_timestamp = self
+        let table_meta_timestamps = self
             .ctx
-            .txn_mgr()
-            .lock()
-            .get_base_snapshot_timestamp(table.get_id(), base_snapshot.timestamp());
+            .get_table_meta_timestamps(table.get_id(), base_snapshot.clone())?;
         let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
@@ -468,7 +466,7 @@ impl PhysicalPlanBuilder {
             need_match: !is_insert_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         }));
 
         let commit_input = if !distributed {
@@ -495,7 +493,7 @@ impl PhysicalPlanBuilder {
             merge_meta: false,
             deduplicated_label: unsafe { settings.get_deduplicate_label()? },
             plan_id: u32::MAX,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
             recluster_info: None,
         }));
         physical_plan.adjust_plan_id(&mut 0);

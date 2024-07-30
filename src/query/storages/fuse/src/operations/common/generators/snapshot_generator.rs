@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::ClusterKey;
@@ -48,14 +46,14 @@ pub trait SnapshotGenerator {
         prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
         table_id: u64,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
         let mut snapshot = self.do_generate_new_snapshot(
             schema,
             cluster_key_meta,
             &previous,
             prev_table_seq,
-            base_snapshot_timestamp,
+            table_meta_timestamps,
         )?;
         decorate_snapshot(&mut snapshot, txn_mgr, previous, table_id)?;
         Ok(snapshot)
@@ -67,7 +65,7 @@ pub trait SnapshotGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        base_snapshot_timestamp: Option<DateTime<Utc>>,
+        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
     ) -> Result<TableSnapshot>;
 }
 
