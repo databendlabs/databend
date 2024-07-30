@@ -123,8 +123,6 @@ pub struct DatabaseCatalog {
     mutable_catalog: Arc<MutableCatalog>,
     /// table function engine factories
     table_function_factory: Arc<TableFunctionFactory>,
-
-    conf: InnerConfig,
 }
 
 impl Debug for DatabaseCatalog {
@@ -137,13 +135,12 @@ impl DatabaseCatalog {
     #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
         let immutable_catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
-        let mutable_catalog = MutableCatalog::try_create_with_config(conf.clone()).await?;
+        let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),
             mutable_catalog: Arc::new(mutable_catalog),
             table_function_factory: Arc::new(table_function_factory),
-            conf,
         };
         Ok(res)
     }
@@ -166,7 +163,7 @@ impl Catalog for DatabaseCatalog {
     fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
         let mut me = self.as_ref().clone();
         let mut mutable_catalog = me.mutable_catalog.as_ref().clone();
-        mutable_catalog.disable_table_info_refresh = true;
+        mutable_catalog.disable_table_info_refresh();
         me.mutable_catalog = Arc::new(mutable_catalog);
         Ok(Arc::new(me))
     }

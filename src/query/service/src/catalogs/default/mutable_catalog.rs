@@ -130,9 +130,9 @@ use crate::storages::Table;
 /// - Database engines are free to save table meta in metastore or not
 #[derive(Clone)]
 pub struct MutableCatalog {
-    pub(crate) ctx: CatalogContext,
+    ctx: CatalogContext,
     tenant: Tenant,
-    pub(crate) disable_table_info_refresh: bool,
+    disable_table_info_refresh: bool,
 }
 
 impl Debug for MutableCatalog {
@@ -204,6 +204,10 @@ impl MutableCatalog {
         self.ctx
             .database_factory
             .build_database_by_engine(ctx, db_info)
+    }
+
+    pub(crate) fn disable_table_info_refresh(&mut self) {
+        self.disable_table_info_refresh = true;
     }
 }
 
