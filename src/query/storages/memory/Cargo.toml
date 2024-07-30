@@ -13,7 +13,6 @@ test = true
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }

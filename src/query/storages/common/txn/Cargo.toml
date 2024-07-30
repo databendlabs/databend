@@ -7,7 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
-chrono = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
