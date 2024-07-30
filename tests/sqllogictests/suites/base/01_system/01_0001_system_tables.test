@@ -14,7 +14,7 @@ create or replace table default.tables(id int)
 
 # default.tables, system.tables, system.columns, and other table under system database
 query T
-select count() > 3 from system.tables where database='system' or name in ('tables', 'columns') order by database;
+select count() > 3 from system.tables where database='system' or name in ('tables', 'columns');
 ----
 1
 
