@@ -561,14 +561,15 @@ impl PrivilegeAccess {
         database_name: &str,
         table_name: Option<&str>,
     ) -> Result<ObjectId> {
-        let db_id = catalog
+        let cat = catalog.clone().disable_table_info_refresh()?;
+        let db_id = cat
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
             .ident
             .db_id;
         if let Some(table_name) = table_name {
-            let table_id = catalog
+            let table_id = cat
                 .get_table(tenant, database_name, table_name)
                 .await?
                 .get_id();
