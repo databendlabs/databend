@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 perform_initial_query() {
-    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(2000000000)"}')
+    local response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select avg(number) from numbers(1000000000)"}')
     local stats_uri=$(echo "$response" | jq -r '.stats_uri')
     local final_uri=$(echo "$response" | jq -r '.final_uri')
     echo "$stats_uri|$final_uri"
@@ -28,8 +28,6 @@ IFS='|' read -r stats_uri final_uri <<< $(perform_initial_query)
 
 poll_stats_uri "$stats_uri" &
 POLL_PID=$!
-
-sleep 2
 
 netstat_output=$(netstat -an | grep '9092')
 
