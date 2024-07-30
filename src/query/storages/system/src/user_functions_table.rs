@@ -101,10 +101,10 @@ impl AsyncSystemTable for UserFunctionsTable {
 
 #[derive(serde::Serialize)]
 pub struct UserFunctionArguments {
-    #[serde(skip_serializing_if = "std::option::Option::is_none")]
-    return_type: Option<String>,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
     arg_types: Vec<String>,
+    #[serde(skip_serializing_if = "std::option::Option::is_none")]
+    return_type: Option<String>,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
     parameters: Vec<String>,
 }
