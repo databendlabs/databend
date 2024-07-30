@@ -153,7 +153,7 @@ impl UserFunctionsTable {
 
     #[async_backtrace::framed]
     pub async fn get_udfs(tenant: &Tenant) -> Result<Vec<UserFunction>> {
-        let user_functions_defined = UserApiProvider::instance().list_udf(&tenant).await?;
+        let user_functions_defined = UserApiProvider::instance().list_udf(tenant).await?;
 
         Ok(user_functions_defined
             .into_iter()
@@ -167,7 +167,7 @@ impl UserFunctionsTable {
                     UDFDefinition::UDFScript(x) => x.language.clone(),
                 },
                 definition: user_function.definition.to_string(),
-                created_on: user_function.created_on.clone(),
+                created_on: user_function.created_on,
                 arguments: match &user_function.definition {
                     UDFDefinition::LambdaUDF(x) => UserFunctionArguments {
                         return_type: None,
