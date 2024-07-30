@@ -49,7 +49,7 @@ impl UdfMgr {
 
     /// Add a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn add_udf(
         &self,
         info: UserDefinedFunction,
@@ -81,7 +81,7 @@ impl UdfMgr {
 
     /// Update a UDF to /tenant/udf-name.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn update_udf(
         &self,
         info: UserDefinedFunction,
@@ -109,7 +109,7 @@ impl UdfMgr {
 
     /// Get UDF by name.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_udf(
         &self,
         udf_name: &str,
@@ -121,7 +121,7 @@ impl UdfMgr {
 
     /// Get all the UDFs for a tenant.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn list_udf(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = DirName::new(UdfIdent::new(&self.tenant, ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
@@ -133,7 +133,7 @@ impl UdfMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
         let key = UdfIdent::new(&self.tenant, "");
         let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
@@ -159,7 +159,7 @@ impl UdfMgr {
 
     /// Drop the tenant's UDF by name, return the dropped one or None if nothing is dropped.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn drop_udf(
         &self,
         udf_name: &str,

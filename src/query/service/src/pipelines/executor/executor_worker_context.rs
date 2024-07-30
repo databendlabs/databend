@@ -25,8 +25,8 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use minitrace::future::FutureExt;
-use minitrace::Span;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_graph::ProcessorWrapper;

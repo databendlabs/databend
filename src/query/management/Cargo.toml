@@ -25,7 +25,7 @@ databend-common-proto-conv = { workspace = true }
 enumflags2 = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 prost = { workspace = true }
 serde = "1.0.150"
 serde_json = { workspace = true }

@@ -31,13 +31,13 @@ use crate::Streamed;
 impl kvapi::KVApi for ClientHandle {
     type Error = MetaError;
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let reply = self.request(act).await?;
         Ok(reply)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let keys = keys.to_vec();
         let strm = self.request(Streamed(MGetKVReq { keys })).await?;
@@ -45,7 +45,7 @@ impl kvapi::KVApi for ClientHandle {
         Ok(strm.boxed())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let strm = self
             .request(Streamed(ListKVReq {
@@ -57,7 +57,7 @@ impl kvapi::KVApi for ClientHandle {
         Ok(strm.boxed())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let reply = self.request(txn).await?;
         Ok(reply)

@@ -240,10 +240,11 @@ impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
 }
 
 impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
-    async fn write(&mut self, bs: Buffer) -> Result<usize> {
+    async fn write(&mut self, bs: Buffer) -> Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
-        self.inner.write(bs).await.inspect(|&size| {
+        self.inner.write(bs).await.inspect(|_| {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
@@ -260,10 +261,11 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
 }
 
 impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
-    fn write(&mut self, bs: Buffer) -> Result<usize> {
+    fn write(&mut self, bs: Buffer) -> Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
-        self.inner.write(bs).inspect(|&size| {
+        self.inner.write(bs).inspect(|_| {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);

@@ -40,7 +40,7 @@ impl OnDisk {
     /// Steps:
     /// - Build a V003 snapshot from V002 snapshot.
     /// - Remove the V002 snapshot.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn upgrade_v002_to_v003(&mut self) -> Result<(), MetaStorageError> {
         self.begin_upgrading(DataVersion::V002).await?;
 

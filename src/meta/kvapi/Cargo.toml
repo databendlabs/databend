@@ -18,7 +18,7 @@ async-trait = { workspace = true }
 databend-common-meta-types = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

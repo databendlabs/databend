@@ -63,7 +63,7 @@ impl HookOperator {
     /// 1. Compact if needed.
     /// 2. Refresh aggregating index if needed.
     /// 3. Refresh virtual columns if needed.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute(&self, pipeline: &mut Pipeline) {
         self.execute_compact(pipeline).await;
@@ -71,7 +71,7 @@ impl HookOperator {
     }
 
     /// Execute the compact hook operator.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_compact(&self, pipeline: &mut Pipeline) {
         match self.ctx.get_settings().get_enable_compact_after_write() {
@@ -114,7 +114,7 @@ impl HookOperator {
     /// Execute the refresh hook operator.
     // 1. Refresh aggregating index.
     // 2. Refresh virtual columns.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn execute_refresh(&self, pipeline: &mut Pipeline) {
         let refresh_desc = RefreshDesc {

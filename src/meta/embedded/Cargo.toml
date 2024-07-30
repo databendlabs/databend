@@ -24,7 +24,7 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]

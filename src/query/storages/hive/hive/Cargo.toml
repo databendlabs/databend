@@ -35,7 +35,7 @@ faststr = "0.2"
 futures = { workspace = true }
 hive_metastore = "0.1.0"
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 opendal = { workspace = true }
 ordered-float = { workspace = true }
 recursive = "0.1.1"

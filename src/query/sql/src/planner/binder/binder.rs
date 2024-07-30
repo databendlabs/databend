@@ -125,7 +125,7 @@ impl<'a> Binder {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let start = Instant::now();
         self.ctx.set_status_info("binding");

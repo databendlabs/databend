@@ -26,7 +26,7 @@ databend-storages-common-table-meta = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

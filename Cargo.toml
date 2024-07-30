@@ -257,8 +257,8 @@ match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.47.1", features = [
-    "layers-minitrace",
+opendal = { version = "0.48.0", features = [
+    "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
     "services-s3",
@@ -275,6 +275,7 @@ opendal = { version = "0.47.1", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
+object_store_opendal = "0.45"
 openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.2", features = [
     "serde",
     "tracing-log",
@@ -324,8 +325,8 @@ xorfilter-rs = "0.5"
 # Observability
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-minitrace = { version = "0.6.6", features = ["enable"] }
-minitrace-opentelemetry = "0.6.6"
+fastrace = { version = "0.6", features = ["enable"] }
+fastrace-opentelemetry = "0.6"
 opentelemetry = { version = "0.23", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.16", features = [
     "trace",
@@ -399,7 +400,6 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
-object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }

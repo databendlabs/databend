@@ -37,7 +37,7 @@ hostname = "0.3.1"
 itertools = { workspace = true }
 log = { workspace = true }
 maplit = "1.0.2"
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 num = "0.4.0"
 openraft = { workspace = true }
 ordq = { workspace = true }

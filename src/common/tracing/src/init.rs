@@ -20,16 +20,16 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
+use fastrace::prelude::*;
 use log::LevelFilter;
 use log::Log;
 use log::Metadata;
-use minitrace::prelude::*;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
 use crate::loggers::formatter;
 use crate::loggers::new_file_log_writer;
-use crate::loggers::MinitraceLogger;
+use crate::loggers::FastraceLogger;
 use crate::loggers::OpenTelemetryLogger;
 use crate::structlog::StructLogReporter;
 use crate::Config;
@@ -139,7 +139,7 @@ pub fn init_logging(
                 .build()
                 .unwrap();
             let reporter = rt.block_on(async {
-                minitrace_opentelemetry::OpenTelemetryReporter::new(
+                fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
                     opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(opentelemetry_sdk::Resource::new(kvs)),
@@ -153,12 +153,12 @@ pub fn init_logging(
 
         if cfg.structlog.on {
             let reporter = StructLogReporter::wrap(otlp_reporter);
-            minitrace::set_reporter(reporter, minitrace::collector::Config::default());
+            fastrace::set_reporter(reporter, fastrace::collector::Config::default());
         } else {
-            minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+            fastrace::set_reporter(otlp_reporter, fastrace::collector::Config::default());
         }
 
-        guards.push(Box::new(defer::defer(minitrace::flush)));
+        guards.push(Box::new(defer::defer(fastrace::flush)));
         guards.push(Box::new(defer::defer(|| {
             Thread::spawn(move || std::mem::drop(reporter_rt))
                 .join()
@@ -166,8 +166,8 @@ pub fn init_logging(
         })));
     } else if cfg.structlog.on {
         let reporter = StructLogReporter::new();
-        minitrace::set_reporter(reporter, minitrace::collector::Config::default());
-        guards.push(Box::new(defer::defer(minitrace::flush)));
+        fastrace::set_reporter(reporter, fastrace::collector::Config::default());
+        guards.push(Box::new(defer::defer(fastrace::flush)));
     }
 
     // Initialize logging
@@ -207,7 +207,7 @@ pub fn init_logging(
         normal_logger = normal_logger.chain(dispatch);
     }
 
-    // Log to minitrace
+    // Log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
         let level = cfg
             .tracing
@@ -218,7 +218,7 @@ pub fn init_logging(
         normal_logger = normal_logger.chain(
             fern::Dispatch::new()
                 .level(level)
-                .chain(Box::new(MinitraceLogger) as Box<dyn Log>),
+                .chain(Box::new(FastraceLogger) as Box<dyn Log>),
         );
     }
 

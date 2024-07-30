@@ -23,7 +23,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::set_backoff;
-use minitrace::func_name;
+use fastrace::func_name;
 
 #[async_trait::async_trait]
 pub trait LockExt: Lock {

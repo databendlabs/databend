@@ -136,7 +136,7 @@ log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
 md-5 = "0.10.5"
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 naive-cityhash = "0.2.0"
 num_cpus = "1.16.0"
 once_cell = { workspace = true }

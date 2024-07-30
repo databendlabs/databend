@@ -42,7 +42,7 @@ databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

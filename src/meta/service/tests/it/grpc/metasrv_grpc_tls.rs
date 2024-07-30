@@ -32,7 +32,7 @@ use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_tls_server() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
@@ -67,7 +67,7 @@ async fn test_tls_server() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_tls_server_config_failure() -> anyhow::Result<()> {
     let mut tc = MetaSrvTestContext::new(0);
 
@@ -80,7 +80,7 @@ async fn test_tls_server_config_failure() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_tls_client_config_failure() -> anyhow::Result<()> {
     let tls_conf = RpcClientTlsConfig {
         rpc_tls_server_root_ca_cert: "../tests/data/certs/not_exist.pem".to_string(),

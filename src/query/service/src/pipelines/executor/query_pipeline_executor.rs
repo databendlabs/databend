@@ -34,13 +34,13 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
 use log::LevelFilter;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
@@ -104,7 +104,7 @@ impl QueryPipelineExecutor {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -227,7 +227,7 @@ impl QueryPipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init(self.graph.clone())?;
 

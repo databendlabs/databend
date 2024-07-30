@@ -21,7 +21,7 @@ databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 openraft = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -50,7 +50,7 @@ itertools = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 poem = { workspace = true }
 prometheus-client = "0.22"
 prost = { workspace = true }
