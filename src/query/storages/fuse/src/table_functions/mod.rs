@@ -15,6 +15,7 @@
 mod cache_admin;
 mod clustering_information;
 mod clustering_statistics;
+mod common;
 mod function_template;
 mod fuse_amend;
 mod fuse_blocks;
@@ -37,7 +38,6 @@ pub use function_template::TableFunctionTemplate;
 pub use fuse_amend::FuseAmendTable;
 pub use fuse_blocks::FuseBlock;
 pub use fuse_columns::FuseColumn;
-pub use fuse_columns::FuseColumnTable;
 pub use fuse_encodings::FuseEncoding;
 pub use fuse_encodings::FuseEncodingTable;
 pub use fuse_segments::FuseSegment;

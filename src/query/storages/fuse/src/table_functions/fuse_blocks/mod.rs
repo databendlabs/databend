@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// mod fuse_block;
-// mod fuse_block_table;
-
 mod fuse_block;
 
 pub use fuse_block::FuseBlock;
-
-// pub use fuse_block::FuseBlock;
-// pub use fuse_block_table::FuseBlockTable;

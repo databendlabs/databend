@@ -22,7 +22,7 @@ use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::table_functions::ClusteringStatisticsTable;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlock;
-use databend_common_storages_fuse::table_functions::FuseColumnTable;
+use databend_common_storages_fuse::table_functions::FuseColumn;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
@@ -153,7 +153,10 @@ impl TableFunctionFactory {
         );
         creators.insert(
             "fuse_column".to_string(),
-            (next_id(), Arc::new(FuseColumnTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseColumn>::create),
+            ),
         );
         creators.insert(
             "fuse_statistic".to_string(),

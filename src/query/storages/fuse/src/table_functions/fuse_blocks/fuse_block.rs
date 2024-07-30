@@ -37,40 +37,20 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use futures_util::TryStreamExt;
 
-use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
-use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
+use crate::table_functions::common::location_snapshot;
+use crate::table_functions::common::CommonArgs;
 use crate::table_functions::parse_db_tb_opt_args;
-use crate::table_functions::string_literal;
 use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
 const FUSE_FUNC_BLOCK: &str = "fuse_block";
 
-pub struct FuseBlockArgs {
-    arg_database_name: String,
-    arg_table_name: String,
-    arg_snapshot_id: Option<String>,
-}
-
-impl From<&FuseBlockArgs> for TableArgs {
-    fn from(value: &FuseBlockArgs) -> Self {
-        let mut args = Vec::new();
-        args.push(string_literal(value.arg_database_name.as_str()));
-        args.push(string_literal(value.arg_table_name.as_str()));
-        if let Some(arg_snapshot_id) = &value.arg_snapshot_id {
-            args.push(string_literal(arg_snapshot_id));
-        }
-        TableArgs::new_positioned(args)
-    }
-}
-
 pub struct FuseBlock {
     // pub limit: Option<usize>,
-    pub args: FuseBlockArgs,
+    pub args: CommonArgs,
 }
 
 impl FuseBlock {
@@ -81,36 +61,13 @@ impl FuseBlock {
         tbl: &FuseTable,
         limit: Option<usize>,
     ) -> Result<DataBlock> {
-        let snapshot_id = self.args.arg_snapshot_id.clone();
-        let maybe_snapshot = tbl.read_table_snapshot().await?;
-        if let Some(snapshot) = maybe_snapshot {
-            if let Some(snapshot_id) = snapshot_id {
-                // prepare the stream of snapshot
-                let snapshot_version = tbl.snapshot_format_version(None).await?;
-                let snapshot_location = tbl
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-                let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-                let mut snapshot_stream = reader.snapshot_history(
-                    snapshot_location,
-                    snapshot_version,
-                    tbl.meta_location_generator().clone(),
-                );
-
-                // find the element by snapshot_id in stream
-                while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
-                    if snapshot.snapshot_id.simple().to_string() == snapshot_id {
-                        return self.to_block(ctx, tbl, snapshot, limit).await;
-                    }
-                }
-            } else {
-                return self.to_block(ctx, tbl, snapshot, limit).await;
-            }
+        if let Some(snapshot) = location_snapshot(tbl, &self.args).await? {
+            return self.to_block(ctx, tbl, snapshot, limit).await;
+        } else {
+            Ok(DataBlock::empty_with_schema(Arc::new(
+                Self::schema().into(),
+            )))
         }
-
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            Self::table_schema().into(),
-        )))
     }
 
     #[async_backtrace::framed]
@@ -216,7 +173,7 @@ impl FuseBlock {
         ))
     }
 
-    pub fn table_schema() -> Arc<TableSchema> {
+    pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
@@ -247,7 +204,7 @@ impl SimpleTableFunc for FuseBlock {
     }
 
     fn schema(&self) -> TableSchemaRef {
-        Self::table_schema()
+        Self::schema()
     }
 
     async fn apply(
@@ -275,7 +232,7 @@ impl SimpleTableFunc for FuseBlock {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
             parse_db_tb_opt_args(&table_args, FUSE_FUNC_BLOCK)?;
         Ok(Self {
-            args: FuseBlockArgs {
+            args: CommonArgs {
                 arg_database_name,
                 arg_table_name,
                 arg_snapshot_id,

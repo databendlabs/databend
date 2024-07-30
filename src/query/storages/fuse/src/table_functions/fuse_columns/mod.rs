@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod fuse_column;
-mod fuse_column_table;
 
 pub use fuse_column::FuseColumn;
-pub use fuse_column_table::FuseColumnTable;
