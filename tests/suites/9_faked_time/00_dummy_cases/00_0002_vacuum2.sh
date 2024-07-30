@@ -3,19 +3,19 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-# set data_retention_time_in_days > 2, or this can not commit successfully
-stmt "set data_retention_time_in_days = 3;insert into test_vacuum2 values(2);"
-
-SNAPSHOTS=$(echo "select snapshot_location from fuse_snapshot('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
 SEGMENTS=$(echo "select file_location from fuse_segment('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
 BLOCKS=$(echo "select block_location from fuse_block('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
+
+stmt "insert into test_vacuum2 values(2);"
+
+SNAPSHOTS=$(echo "select snapshot_location from fuse_snapshot('default','test_vacuum2');" | $BENDSQL_CLIENT_CONNECT)
 
 IFS=$'\n' read -d '' -r -a snapshots <<< "$SNAPSHOTS"
 IFS=$'\n' read -d '' -r -a segments <<< "$SEGMENTS"
 IFS=$'\n' read -d '' -r -a blocks <<< "$BLOCKS"
 to_be_vacuumed=("${snapshots[@]}" "${segments[@]}" "${blocks[@]}")
 
-# gc root, segments and blocks that contain data '1','2' should be able to be vacuumed later
+# gc root
 stmt "set data_retention_time_in_days = 2;truncate table test_vacuum2;"
 
 stmt "insert into test_vacuum2 values(3);"
@@ -27,8 +27,13 @@ RESULTS=$(echo "set data_retention_time_in_days = 0;select * from fuse_vacuum2('
 IFS=$'\n' read -d '' -r -a results <<< "$RESULTS"
 
 # verify the vacuum result
-if [ ${#results[@]} -ne ${#to_be_vacuumed[@]} ]; then
-    echo "vacuum failed"
+sorted_results=($(printf "%s\n" "${results[@]}" | sort))
+sorted_to_be_vacuumed=($(printf "%s\n" "${to_be_vacuumed[@]}" | sort))
+
+if [ "$(printf "%s" "${sorted_results[@]}")" != "$(printf "%s" "${sorted_to_be_vacuumed[@]}")" ]; then
+    echo "Vacuum failed"
+    echo "Results array: ${sorted_results[@]}"
+    echo "To be vacuumed array: ${sorted_to_be_vacuumed[@]}"
     exit 1
 fi
 
