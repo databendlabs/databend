@@ -1,4 +1,4 @@
->>>> set data_retention_time_in_days = 3;insert into test_vacuum2 values(2);
+>>>> insert into test_vacuum2 values(2);
 >>>> set data_retention_time_in_days = 2;truncate table test_vacuum2;
 >>>> insert into test_vacuum2 values(3);
 >>>> select count(*) from fuse_snapshot('default','test_vacuum2')
