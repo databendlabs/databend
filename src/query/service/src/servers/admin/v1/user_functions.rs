@@ -12,14 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod background_tasks;
-pub mod cluster;
-pub mod config;
-pub mod instance_status;
-pub mod processes;
-pub mod query_profiling;
-pub mod settings;
-pub mod stream_status;
-pub mod system;
-pub mod tenant_tables;
-pub mod user_functions;
+use databend_common_config::GlobalConfig;
+use databend_common_storages_system::UserFunctionsTable;
+use http::StatusCode;
+use poem::web::Json;
+use poem::IntoResponse;
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn user_functions() -> poem::Result<impl IntoResponse> {
+    match UserFunctionsTable::get_udfs(&GlobalConfig::instance().query.tenant_id).await {
+        Ok(v) => Ok(Json(v)),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to user functions. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
+}
