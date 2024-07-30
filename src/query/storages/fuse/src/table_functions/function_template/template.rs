@@ -159,12 +159,14 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _plan: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
-            |output| SimpleFunctionSource::create(ctx.clone(), output, self.inner.clone()),
+            |output| {
+                SimpleFunctionSource::create(ctx.clone(), output, self.inner.clone(), plan.clone())
+            },
             1,
         )?;
 
@@ -191,6 +193,7 @@ where T: SimpleTableFunc
     finish: bool,
     ctx: Arc<dyn TableContext>,
     func: Arc<T>,
+    plan: DataSourcePlan,
 }
 
 impl<T> SimpleFunctionSource<T>
@@ -200,11 +203,13 @@ where T: SimpleTableFunc
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         func: Arc<T>,
+        plan: DataSourcePlan,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx.clone(), output, SimpleFunctionSource {
             func,
             ctx,
             finish: false,
+            plan,
         })
     }
 }
@@ -223,6 +228,6 @@ where T: SimpleTableFunc
         }
         self.finish = true;
 
-        self.func.apply(&self.ctx).await
+        self.func.apply(&self.ctx, &self.plan).await
     }
 }

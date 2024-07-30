@@ -17,28 +17,28 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
+use crate::FuseTable;
 use crate::sessions::TableContext;
+use crate::Table;
+use crate::table_functions::FuseBlock;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::FuseBlock;
 use crate::table_functions::TableArgs;
 use crate::table_functions::TableFunction;
-use crate::FuseTable;
-use crate::Table;
 
 const FUSE_FUNC_BLOCK: &str = "fuse_block";
 
