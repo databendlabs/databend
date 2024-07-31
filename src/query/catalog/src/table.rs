@@ -278,9 +278,10 @@ pub trait Table: Sync + Send {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let (_, _) = (ctx, change_type);
+        let (_, _, _) = (ctx, require_fresh, change_type);
 
         Ok(None)
     }

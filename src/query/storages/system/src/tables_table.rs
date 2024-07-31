@@ -444,7 +444,9 @@ where TablesTable<T, U>: HistoryAware
 
         if U {
             for tbl in &database_tables {
-                let stats = match tbl.table_statistics(ctx.clone(), None).await {
+                // For performance considerations, allows using stale statistics data.
+                let require_fresh = false;
+                let stats = match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
                     Ok(stats) => stats,
                     Err(err) => {
                         let msg = format!(
