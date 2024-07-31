@@ -311,7 +311,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
         database_name: &str,

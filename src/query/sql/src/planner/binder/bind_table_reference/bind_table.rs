@@ -151,7 +151,7 @@ impl Binder {
             }
 
             let query =
-                databend_common_base::runtime::block_on(table_meta.generage_changes_query(
+                databend_common_base::runtime::block_on(table_meta.generate_changes_query(
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
