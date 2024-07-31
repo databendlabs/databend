@@ -34,9 +34,3 @@ pub struct ColumnMutation {
     pub input_num_columns: usize,
     pub has_filter_column: bool,
 }
-
-impl ColumnMutation {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
-    }
-}

@@ -33,7 +33,7 @@ impl PipelineBuilder {
     //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
     //                                    |                       |   |                |                             +-+
     // +----------------------+           |                       +---+                +-----------------------------+-+
-    // |      MergeInto       +---------->|MutationSplitProcessor|
+    // |      MergeInto       +---------->|MutationSplitProcessor |
     // +----------------------+           |                       +---+                +-----------------------------+
     //                                    |                       |   | NotMatched     |                             +-+
     //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |

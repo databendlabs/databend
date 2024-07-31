@@ -84,7 +84,6 @@ pub struct Mutation {
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
-    pub output_schema: DataSchemaRef,
     pub strategy: MutationStrategy,
     pub target_table_index: usize,
     pub need_match: bool,
@@ -422,7 +421,6 @@ impl PhysicalPlanBuilder {
             unmatched,
             segments: segments.clone(),
             distributed: *distributed,
-            output_schema: DataSchemaRef::default(),
             strategy: strategy.clone(),
             target_table_index: *target_table_index,
             need_match: !is_not_matched_only,

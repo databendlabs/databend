@@ -107,6 +107,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
             mutation_action,
         )?;
+
         if table.change_tracking_enabled() {
             let stream_ctx = StreamContext::try_create(
                 self.ctx.get_function_context()?,

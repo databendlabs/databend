@@ -117,9 +117,6 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(&column_mutation.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let table = table.clone();
-
-        let ctx = self.ctx.clone();
 
         if column_mutation.mutation_type == MutationType::Delete {
             let cluster_stats_gen = table.get_cluster_stats_gen(
@@ -133,7 +130,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     input,
                     output,
-                    &table,
+                    table,
                     cluster_stats_gen.clone(),
                     MutationKind::Delete,
                 )?;
@@ -144,8 +141,8 @@ impl PipelineBuilder {
                 self.main_pipeline.try_resize(1)?;
                 self.main_pipeline.add_async_accumulating_transformer(|| {
                     TableMutationAggregator::create(
-                        &table,
-                        ctx.clone(),
+                        table,
+                        self.ctx.clone(),
                         self.ctx.get_table_snapshot().unwrap().segments.clone(),
                         vec![],
                         vec![],
@@ -156,20 +153,18 @@ impl PipelineBuilder {
             }
         } else {
             let block_thresholds = table.get_block_thresholds();
-            // sort
             let cluster_stats_gen = table.cluster_gen_for_append(
                 self.ctx.clone(),
                 &mut self.main_pipeline,
                 block_thresholds,
                 None,
             )?;
-
             self.main_pipeline.add_transform(|input, output| {
                 let proc = TransformSerializeBlock::try_create(
                     self.ctx.clone(),
                     input,
                     output,
-                    &table,
+                    table,
                     cluster_stats_gen.clone(),
                     MutationKind::Update,
                 )?;

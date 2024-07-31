@@ -496,13 +496,13 @@ impl PhysicalPlan {
             PhysicalPlan::RecursiveCteScan(plan) => plan.output_schema(),
             PhysicalPlan::Udf(plan) => plan.output_schema(),
             PhysicalPlan::MutationSource(plan) => plan.output_schema(),
-            PhysicalPlan::ColumnMutation(plan) => plan.output_schema(),
-            PhysicalPlan::Mutation(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::MutationSplit(plan) => plan.output_schema(),
             PhysicalPlan::MutationManipulate(plan) => plan.output_schema(),
             PhysicalPlan::MutationOrganize(plan) => plan.output_schema(),
             PhysicalPlan::AddStreamColumn(plan) => plan.output_schema(),
-            PhysicalPlan::ReplaceAsyncSourcer(_)
+            PhysicalPlan::Mutation(_)
+            | PhysicalPlan::ColumnMutation(_)
+            | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::CompactSource(_)

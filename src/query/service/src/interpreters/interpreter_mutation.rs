@@ -97,8 +97,7 @@ impl Interpreter for MutationInterpreter {
                 &mutation.table_name,
             )
             .await?;
-
-        // Check if the table supports DataMutation.
+        // Check if the table supports mutation.
         table.check_mutable()?;
         let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Unimplemented(format!(
@@ -117,19 +116,10 @@ impl Interpreter for MutationInterpreter {
             return Ok(build_res);
         }
 
-        // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let table_info = fuse_table.get_table_info().clone();
-        let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
-        let partitions = self
-            .mutation_source_partions(&mutation, fuse_table, table_snapshot.clone())
+        // Prepare MutationBuildInfo for PhysicalPlanBuilder to build Mutation physical plan.
+        let mutation_build_info = self
+            .build_mutation_info(&mutation, fuse_table, table_snapshot)
             .await?;
-        let mutation_build_info = MutationBuildInfo {
-            table_info,
-            table_snapshot,
-            update_stream_meta,
-            partitions,
-        };
 
         // Build physical plan.
         let physical_plan = self
@@ -190,6 +180,26 @@ impl MutationInterpreter {
         };
     }
 
+    pub async fn build_mutation_info(
+        &self,
+        mutation: &Mutation,
+        fuse_table: &FuseTable,
+        table_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<MutationBuildInfo> {
+        let table_info = fuse_table.get_table_info().clone();
+        let update_stream_meta =
+            dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
+        let partitions = self
+            .mutation_source_partions(mutation, fuse_table, table_snapshot.clone())
+            .await?;
+        Ok(MutationBuildInfo {
+            table_info,
+            table_snapshot,
+            update_stream_meta,
+            partitions,
+        })
+    }
+
     pub async fn build_physical_plan(
         &self,
         mutation: &Mutation,
@@ -219,19 +229,9 @@ impl MutationInterpreter {
             })?;
 
             // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-            let table_info = fuse_table.get_table_info().clone();
             let table_snapshot = fuse_table.read_table_snapshot().await?;
-            let update_stream_meta =
-                dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
-            let partitions = self
-                .mutation_source_partions(mutation, fuse_table, table_snapshot.clone())
-                .await?;
-            MutationBuildInfo {
-                table_info,
-                table_snapshot,
-                update_stream_meta,
-                partitions,
-            }
+            self.build_mutation_info(mutation, fuse_table, table_snapshot)
+                .await?
         };
 
         // Build physical plan.
