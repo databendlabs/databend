@@ -75,7 +75,7 @@ pub async fn stream_status_handler(
     params: Query<StreamStatusQuery>,
 ) -> poem::Result<impl IntoResponse> {
     debug!(
-        "check_stream_stauts: tenant: {}, params: {:?}",
+        "check_stream_status: tenant: {}, params: {:?}",
         tenant, params
     );
 
