@@ -37,6 +37,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_storage::MutationStatus;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
@@ -203,11 +204,7 @@ impl Processor for MutationSource {
                     };
 
                     if affect_rows != 0 {
-                        let progress_values = ProgressValues {
-                            rows: affect_rows,
-                            bytes: 0,
-                        };
-                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.update_mutation_status(affect_rows);
 
                         match self.action {
                             MutationAction::Deletion => {
@@ -271,12 +268,7 @@ impl Processor for MutationSource {
                         self.state = State::Output(self.ctx.get_partition(), DataBlock::empty());
                     }
                 } else {
-                    let progress_values = ProgressValues {
-                        rows: num_rows,
-                        // ignore the bytes.
-                        bytes: 0,
-                    };
-                    self.ctx.get_write_progress().incr(&progress_values);
+                    self.update_mutation_status(num_rows);
                     self.state = State::PerformOperator(data_block, fuse_part.location.clone());
                 }
             }
@@ -339,11 +331,7 @@ impl Processor for MutationSource {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 match Mutation::from_part(&part)? {
                     Mutation::MutationDeletedSegment(deleted_segment) => {
-                        let progress_values = ProgressValues {
-                            rows: deleted_segment.summary.row_count as usize,
-                            bytes: 0,
-                        };
-                        self.ctx.get_write_progress().incr(&progress_values);
+                        self.update_mutation_status(deleted_segment.summary.row_count as usize);
                         self.state = State::Output(
                             self.ctx.get_partition(),
                             DataBlock::empty_with_meta(Box::new(
@@ -368,11 +356,7 @@ impl Processor for MutationSource {
                             && matches!(self.action, MutationAction::Deletion)
                         {
                             // whole block deletion.
-                            let progress_values = ProgressValues {
-                                rows: fuse_part.nums_rows,
-                                bytes: 0,
-                            };
-                            self.ctx.get_write_progress().incr(&progress_values);
+                            self.update_mutation_status(fuse_part.nums_rows);
                             let meta = Box::new(SerializeDataMeta::SerializeBlock(
                                 SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
                             ));
@@ -425,5 +409,26 @@ impl Processor for MutationSource {
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
         Ok(())
+    }
+}
+
+impl MutationSource {
+    fn update_mutation_status(&self, num_rows: usize) {
+        let progress_values = ProgressValues {
+            rows: num_rows,
+            bytes: 0,
+        };
+        self.ctx.get_write_progress().incr(&progress_values);
+
+        let (update_rows, deleted_rows) = if self.action == MutationAction::Update {
+            (num_rows as u64, 0)
+        } else {
+            (0, num_rows as u64)
+        };
+        self.ctx.add_mutation_status(MutationStatus {
+            insert_rows: 0,
+            update_rows,
+            deleted_rows,
+        });
     }
 }

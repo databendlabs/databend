@@ -91,8 +91,8 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -1020,12 +1020,15 @@ impl TableContext for QueryContext {
         self.shared.copy_status.clone()
     }
 
-    fn add_merge_status(&self, merge_status: MergeStatus) {
-        self.shared.merge_status.write().merge_status(merge_status)
+    fn add_mutation_status(&self, mutation_status: MutationStatus) {
+        self.shared
+            .mutation_status
+            .write()
+            .merge_mutation_status(mutation_status)
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
-        self.shared.merge_status.clone()
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        self.shared.mutation_status.clone()
     }
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {

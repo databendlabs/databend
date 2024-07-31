@@ -244,7 +244,7 @@ impl MutationInterpreter {
     }
 
     fn get_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
-        let binding = self.ctx.get_merge_status();
+        let binding = self.ctx.get_mutation_status();
         let status = binding.read();
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {

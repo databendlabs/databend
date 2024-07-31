@@ -107,9 +107,9 @@ pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
 impl Mutation {
-    // the order of output should be (insert, update, delete),this is
+    // The order of output should be (insert, update, delete), this is
     // consistent with snowflake.
-    fn merge_into_mutations(&self) -> (bool, bool, bool) {
+    fn mutation_operations(&self) -> (bool, bool, bool) {
         let insert = matches!(self.strategy, MutationStrategy::MixedMatched)
             || matches!(self.strategy, MutationStrategy::NotMatchedOnly);
         let mut update = false;
@@ -124,26 +124,27 @@ impl Mutation {
         (insert, update, delete)
     }
 
-    fn merge_into_table_schema(&self) -> Result<DataSchemaRef> {
-        let (insert, update, delete) = self.merge_into_mutations();
+    fn mutation_table_schema(&self) -> Result<DataSchemaRef> {
+        let (insert, update, delete) = self.mutation_operations();
 
         let fields = [
             (
-                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::UInt64)),
                 insert,
             ),
             (
-                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::UInt64)),
                 update,
             ),
             (
-                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::UInt64)),
                 delete,
             ),
         ];
 
-        // Filter and collect the fields to include in the schema.
-        // Only fields with a corresponding true value in the mutation states are included.
+        // Filter and collect the fields to include in the schema, only
+        // fields with a corresponding true value in the mutation states
+        // are included.
         let schema_fields: Vec<DataField> = fields
             .iter()
             .filter_map(
@@ -153,10 +154,11 @@ impl Mutation {
             )
             .collect();
 
-        // Check if any fields are included. If none, return an error. Otherwise, return the schema.
+        // Check if any fields are included, if none, return an error,
+        // otherwise, return the schema.
         if schema_fields.is_empty() {
             Err(ErrorCode::BadArguments(
-                "at least one matched or unmatched clause for merge into",
+                "At least one matched or unmatched clause for merge into",
             ))
         } else {
             Ok(DataSchemaRefExt::create(schema_fields))
@@ -164,7 +166,7 @@ impl Mutation {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        self.merge_into_table_schema().unwrap()
+        self.mutation_table_schema().unwrap()
     }
 }
 
