@@ -79,7 +79,16 @@ async fn insert_with_stage(presign: bool) {
         ["5", "Shenzhen", "55"],
         ["6", "Beijing", "99"],
     ];
-    assert_eq!(resp.data, expect);
+    let result = resp
+        .data
+        .into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|v| v.unwrap_or_default())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(result, expect);
 
     let sql = format!("DROP TABLE `{}`;", table);
     client.query(&sql).await.unwrap();

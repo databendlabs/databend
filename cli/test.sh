@@ -32,7 +32,7 @@ case $TEST_HANDLER in
 	;;
 "http")
 	echo "==> Testing REST API handler"
-	export BENDSQL_DSN="databend+http://${DATABEND_USER}:${DATABEND_PASSWORD}@${DATABEND_HOST}:8000/?sslmode=disable&presign=on"
+	export BENDSQL_DSN="databend+http://${DATABEND_USER}:${DATABEND_PASSWORD}@${DATABEND_HOST}:8000/?sslmode=disable&presign=on&format_null_as_str=0"
 	;;
 *)
 	echo "Usage: $0 [flight|http]"

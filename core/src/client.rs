@@ -505,7 +505,7 @@ impl APIClient {
             ));
         }
         // resp.data[0]: [ "PUT", "{\"host\":\"s3.us-east-2.amazonaws.com\"}", "https://s3.us-east-2.amazonaws.com/query-storage-xxxxx/tnxxxxx/stage/user/xxxx/xxx?" ]
-        let method = resp.data[0][0].clone();
+        let method = resp.data[0][0].clone().unwrap_or_default();
         if method != "PUT" {
             return Err(Error::Request(format!(
                 "Invalid method for presigned upload request: {}",
@@ -513,8 +513,8 @@ impl APIClient {
             )));
         }
         let headers: BTreeMap<String, String> =
-            serde_json::from_str(resp.data[0][1].clone().as_str())?;
-        let url = resp.data[0][2].clone();
+            serde_json::from_str(resp.data[0][1].clone().unwrap_or("{}".to_string()).as_str())?;
+        let url = resp.data[0][2].clone().unwrap_or_default();
         Ok(PresignedResponse {
             method,
             headers,

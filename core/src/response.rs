@@ -58,7 +58,7 @@ pub struct QueryResponse {
     pub session_id: Option<String>,
     pub session: Option<SessionState>,
     pub schema: Vec<SchemaField>,
-    pub data: Vec<Vec<String>>,
+    pub data: Vec<Vec<Option<String>>>,
     pub state: String,
     pub error: Option<QueryError>,
     // make it optional for backward compatibility

@@ -147,6 +147,23 @@ impl Value {
     }
 }
 
+impl TryFrom<(&DataType, Option<&str>)> for Value {
+    type Error = Error;
+
+    fn try_from((t, v): (&DataType, Option<&str>)) -> Result<Self> {
+        match v {
+            Some(v) => Self::try_from((t, v)),
+            None => match t {
+                DataType::Null => Ok(Self::Null),
+                DataType::Nullable(_) => Ok(Self::Null),
+                _ => Err(Error::InvalidResponse(
+                    "NULL value for non-nullable field".to_string(),
+                )),
+            },
+        }
+    }
+}
+
 impl TryFrom<(&DataType, &str)> for Value {
     type Error = Error;
 

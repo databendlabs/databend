@@ -86,13 +86,14 @@ impl From<databend_client::response::QueryStats> for ServerStats {
 #[derive(Clone, Debug, Default)]
 pub struct Row(Vec<Value>);
 
-impl TryFrom<(SchemaRef, &Vec<String>)> for Row {
+impl TryFrom<(SchemaRef, Vec<Option<String>>)> for Row {
     type Error = Error;
 
-    fn try_from((schema, data): (SchemaRef, &Vec<String>)) -> Result<Self> {
+    fn try_from((schema, data): (SchemaRef, Vec<Option<String>>)) -> Result<Self> {
         let mut values: Vec<Value> = Vec::new();
         for (i, field) in schema.fields().iter().enumerate() {
-            values.push(Value::try_from((&field.data_type, data[i].as_str()))?);
+            let val: Option<&str> = data.get(i).and_then(|v| v.as_deref());
+            values.push(Value::try_from((&field.data_type, val))?);
         }
         Ok(Self(values))
     }
