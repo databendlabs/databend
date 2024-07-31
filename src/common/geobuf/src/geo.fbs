@@ -11,8 +11,8 @@ enum InnerObjectKind:ubyte {
 }
 
 table InnerObject {
-  point_offsets: [uint16];
-  ring_offsets: [uint16];
+  point_offsets: [uint32];
+  ring_offsets: [uint32];
 
   collection: [InnerObject];
 
@@ -33,8 +33,8 @@ enum ObjectKind:ubyte {
 }
 
 table Object {
-  point_offsets: [uint16];
-  ring_offsets: [uint16];
+  point_offsets: [uint32];
+  ring_offsets: [uint32];
 
   collection: [InnerObject];
 

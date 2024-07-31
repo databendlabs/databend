@@ -3,6 +3,7 @@
 mod geo_generated;
 
 use anyhow;
+use anyhow::Ok;
 use flatbuffers::FlatBufferBuilder;
 use flatbuffers::WIPOffset;
 use geo;
@@ -10,9 +11,11 @@ use geo::Coord;
 use geo::LineString;
 use geo::MultiLineString;
 use geo::MultiPoint;
+use geo::MultiPolygon;
 use geo::Point;
 use geo::Polygon;
 use geo_generated::geo_buf;
+use geo_generated::geo_buf::Object;
 use geozero::wkt::Wkt;
 use geozero::ToGeo;
 use geozero::ToWkt;
@@ -63,6 +66,8 @@ pub struct GeographyBuilder<'a> {
     fbb: flatbuffers::FlatBufferBuilder<'a>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
+    point_offsets: Vec<u32>,
+    ring_offsets: Vec<u32>,
 }
 
 impl<'a> GeographyBuilder<'a> {
@@ -71,6 +76,8 @@ impl<'a> GeographyBuilder<'a> {
             fbb: FlatBufferBuilder::new(),
             column_x: Vec::new(),
             column_y: Vec::new(),
+            point_offsets: Vec::new(),
+            ring_offsets: Vec::new(),
         }
     }
 
@@ -78,18 +85,34 @@ impl<'a> GeographyBuilder<'a> {
         self.column_x.len()
     }
 
-    pub fn push_point(&mut self, point: Coord) -> u16 {
-        let pos = self.point_len() as u16;
+    pub fn push_point(&mut self, point: Coord) {
         self.column_x.push(point.x);
         self.column_y.push(point.y);
-        pos
     }
 
-    pub fn push_line(&mut self, line: &[Coord]) -> u16 {
+    pub fn push_line(&mut self, line: &[Coord], multi: bool) {
+        if multi && self.point_offsets.is_empty() {
+            self.point_offsets.push(self.point_len() as u32)
+        }
         for p in line.iter() {
             self.push_point(*p);
         }
-        self.point_len() as u16
+        if multi {
+            self.point_offsets.push(self.point_len() as u32)
+        }
+    }
+
+    pub fn push_polygon(&mut self, polygon: &Polygon, multi: bool) {
+        if multi && self.ring_offsets.is_empty() {
+            self.ring_offsets.push(self.point_offsets.len() as u32)
+        }
+        self.push_line(&polygon.exterior().0, true);
+        for line in polygon.interiors().iter() {
+            self.push_line(&line.0, true);
+        }
+        if multi {
+            self.ring_offsets.push(self.point_offsets.len() as u32 - 1)
+        }
     }
 
     pub fn light_build(self, kind: geo_buf::ObjectKind) -> Geography {
@@ -120,6 +143,7 @@ impl<'a> GeographyBuilder<'a> {
             mut fbb,
             column_x,
             column_y,
+            ..
         } = self;
         geo_buf::finish_object_buffer(&mut fbb, object);
 
@@ -210,28 +234,27 @@ impl Geography {
         match Wkt(wkt).to_geo()? {
             geo::Geometry::Point(point) => {
                 let mut builder = GeographyBuilder::new();
-                let _ = builder.push_point(point.0);
+                builder.push_point(point.0);
                 Ok(builder.light_build(geo_buf::ObjectKind::Point))
             }
             geo::Geometry::MultiPoint(points) => {
                 let mut builder = GeographyBuilder::new();
                 for p in points.iter() {
-                    let _ = builder.push_point(p.0);
+                    builder.push_point(p.0);
                 }
                 Ok(builder.light_build(geo_buf::ObjectKind::MultiPoint))
             }
             geo::Geometry::LineString(line) => {
                 let mut builder = GeographyBuilder::new();
-                builder.push_line(&line.0);
+                builder.push_line(&line.0, false);
                 Ok(builder.light_build(geo_buf::ObjectKind::LineString))
             }
             geo::Geometry::MultiLineString(lines) => {
                 let mut builder = GeographyBuilder::new();
-                let point_offsets = std::iter::once(builder.point_len() as u16)
-                    .chain(lines.0.iter().map(|line| builder.push_line(&line.0)))
-                    .collect::<Vec<_>>();
-                let point_offsets = Some(builder.fbb.create_vector(&point_offsets));
-
+                for line in lines.0 {
+                    builder.push_line(&line.0, true)
+                }
+                let point_offsets = Some(builder.fbb.create_vector(&builder.point_offsets));
                 let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
                     point_offsets,
                     ..Default::default()
@@ -240,25 +263,28 @@ impl Geography {
             }
             geo::Geometry::Polygon(polygon) => {
                 let mut builder = GeographyBuilder::new();
-                let point_offsets = std::iter::once(builder.point_len() as u16)
-                    .chain(std::iter::once({
-                        builder.push_line(&polygon.exterior().0)
-                    }))
-                    .chain(
-                        polygon
-                            .interiors()
-                            .iter()
-                            .map(|line| builder.push_line(&line.0)),
-                    )
-                    .collect::<Vec<_>>();
-                let point_offsets = Some(builder.fbb.create_vector(&point_offsets));
+                builder.push_polygon(&polygon, false);
+                let point_offsets = Some(builder.fbb.create_vector(&builder.point_offsets));
                 let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
                     point_offsets,
                     ..Default::default()
                 });
                 Ok(builder.build(geo_buf::ObjectKind::Polygon, object))
             }
-            geo::Geometry::MultiPolygon(_) => todo!(),
+            geo::Geometry::MultiPolygon(polygons) => {
+                let mut builder = GeographyBuilder::new();
+                for polygon in polygons.iter() {
+                    builder.push_polygon(polygon, true);
+                }
+                let point_offsets = Some(builder.fbb.create_vector(&builder.point_offsets));
+                let ring_offsets = Some(builder.fbb.create_vector(&builder.ring_offsets));
+                let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                });
+                Ok(builder.build(geo_buf::ObjectKind::MultiPolygon, object))
+            }
             geo::Geometry::GeometryCollection(_) => todo!(),
             _ => unimplemented!(),
         }
@@ -317,7 +343,7 @@ impl Geography {
             geo_buf::ObjectKind::Polygon => {
                 let object = geo_buf::root_as_object(&self.buf[1..])?;
 
-                let mut lines = object
+                let mut rings_iter = object
                     .point_offsets()
                     .ok_or(anyhow::Error::msg("invalid data"))?
                     .iter()
@@ -331,11 +357,48 @@ impl Geography {
                                 .collect(),
                         )
                     });
-                let exterior = lines.next().ok_or(anyhow::Error::msg("invalid data"))?;
-                let interiors = lines.collect();
+                let exterior = rings_iter
+                    .next()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                let interiors = rings_iter.collect();
                 Ok(geo::Geometry::Polygon(Polygon::new(exterior, interiors)).to_wkt()?)
             }
-            geo_buf::ObjectKind::MultiPolygon => todo!(),
+            geo_buf::ObjectKind::MultiPolygon => {
+                let object = geo_buf::root_as_object(&self.buf[1..])?;
+
+                let point_offsets = object
+                    .point_offsets()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+
+                let mut polygons = object
+                    .ring_offsets()
+                    .ok_or(anyhow::Error::msg("invalid data"))?
+                    .iter()
+                    .map_windows(|[start, end]| {
+                        let mut rings_iter = (*start..=*end)
+                            .map(|i| point_offsets.get(i as usize))
+                            .map_windows(|[start, end]| {
+                                LineString(
+                                    (*start..*end)
+                                        .map(|pos| Coord {
+                                            x: self.column_x[pos as usize],
+                                            y: self.column_y[pos as usize],
+                                        })
+                                        .collect(),
+                                )
+                            });
+
+                        let exterior = rings_iter
+                            .next()
+                            .ok_or(anyhow::Error::msg("invalid data"))?;
+                        let interiors = rings_iter.collect();
+
+                        Ok(Polygon::new(exterior, interiors))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                Ok(geo::Geometry::MultiPolygon(MultiPolygon::new(polygons)).to_wkt()?)
+            }
             geo_buf::ObjectKind::Collection => todo!(),
             geo_buf::ObjectKind(geo_buf::ObjectKind::ENUM_MAX..) => unreachable!(),
         }
@@ -361,21 +424,21 @@ mod tests {
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)"); // geo_buf:33, ewkb:41, points:32
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)"); // geo_buf:49, ewkb:57, points:48
 
-        // geo_buf:129, ewkb:123, points:96
+        // geo_buf:133, ewkb:123, points:96
         run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
-        // geo_buf:229, ewkb:237, points:192
+        // geo_buf:237, ewkb:237, points:192
         run_from_wkt(
             &"MULTILINESTRING((-124.2 42,-120.01 41.99),(-124.2 42,-120.01 41.99,-122.5 42.01,-122.5 42.01),(-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))",
         );
-        // geo_buf:109, ewkb:93, points:80
+        // geo_buf:113, ewkb:93, points:80
         run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
-        // geo_buf:193, ewkb:177, points:160
+        // geo_buf:197, ewkb:177, points:160
         run_from_wkt(
             &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
         );
+        // geo_buf:185, ewkb:163, points:128
+        run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
 
-        const TEST_WKT_MULTIPOLYGON: &str =
-            &"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))";
         const TEST_WKT_GEOMETRYCOLLECTION: &str = &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))";
     }
 
