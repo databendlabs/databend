@@ -63,9 +63,6 @@ set data_retention_time_in_days = 0
 statement ok
 optimize table `t` purge
 
-statement ok
-set data_retention_time_in_days = 1
-
 # Flaky Tests
 # query B
 # select count(*)<5 from fuse_snapshot('db_09_0008', 't')
@@ -132,9 +129,6 @@ statement ok
 optimize table m purge
 
 statement ok
-set data_retention_time_in_days = 1
-
-statement ok
 optimize table m compact
 
 statement ok
@@ -157,9 +151,6 @@ set data_retention_time_in_days = 0
 
 statement ok
 optimize table m purge
-
-statement ok
-set data_retention_time_in_days = 1
 
 statement ok
 optimize table m compact
@@ -625,9 +616,6 @@ set data_retention_time_in_days = 0
 
 statement ok
 optimize table t10 purge limit 2
-
-statement ok
-set data_retention_time_in_days = 1
 
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
