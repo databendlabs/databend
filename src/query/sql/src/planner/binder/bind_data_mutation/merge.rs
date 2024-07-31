@@ -128,11 +128,11 @@ impl Binder {
 
 fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationStrategy> {
     if matched_len == 0 && unmatched_len > 0 {
-        Ok(DataMutationStrategy::InsertOnly)
+        Ok(DataMutationStrategy::NotMatchedOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
         Ok(DataMutationStrategy::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
-        Ok(DataMutationStrategy::FullOperation)
+        Ok(DataMutationStrategy::MixedMatched)
     } else {
         Err(ErrorCode::SemanticError(
             "we must have matched or unmatched clause at least one",

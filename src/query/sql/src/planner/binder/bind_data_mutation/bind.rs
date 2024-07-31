@@ -58,8 +58,8 @@ use crate::UdfRewriter;
 pub enum DataMutationStrategy {
     Direct,
     MatchedOnly,
-    FullOperation,
-    InsertOnly,
+    NotMatchedOnly,
+    MixedMatched,
 }
 
 pub struct DataMutation {
@@ -128,7 +128,7 @@ impl Binder {
         );
 
         // Add table lock before execution.
-        let lock_guard = if mutation_type != DataMutationStrategy::InsertOnly {
+        let lock_guard = if mutation_type != DataMutationStrategy::NotMatchedOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
@@ -219,7 +219,7 @@ impl Binder {
             None
         };
 
-        if table.change_tracking_enabled() && mutation_type != DataMutationStrategy::InsertOnly {
+        if table.change_tracking_enabled() && mutation_type != DataMutationStrategy::NotMatchedOnly {
             for stream_column in table.stream_columns() {
                 let column_index =
                     Self::find_column_index(&target_column_entries, stream_column.column_name())?;
@@ -291,7 +291,7 @@ impl Binder {
             lock_guard,
         };
 
-        if mutation_type == DataMutationStrategy::InsertOnly && !insert_only(&data_mutation) {
+        if mutation_type == DataMutationStrategy::NotMatchedOnly && !insert_only(&data_mutation) {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));

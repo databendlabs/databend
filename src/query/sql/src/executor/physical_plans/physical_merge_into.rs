@@ -255,7 +255,7 @@ impl PhysicalPlanBuilder {
             return Ok(physical_plan);
         }
 
-        let is_insert_only = matches!(mutation_type, DataMutationStrategy::InsertOnly);
+        let is_insert_only = matches!(mutation_type, DataMutationStrategy::NotMatchedOnly);
         let row_id_offset = if !is_insert_only {
             data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
@@ -279,7 +279,7 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
-        if matches!(mutation_type, DataMutationStrategy::FullOperation) {
+        if matches!(mutation_type, DataMutationStrategy::MixedMatched) {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
                 input: Box::new(plan),
@@ -595,7 +595,7 @@ fn build_data_mutation_row_fetch(
         .cloned()
         .collect::<Vec<_>>();
     let mut has_inner_column = false;
-    let need_wrap_nullable = matches!(mutation_type, DataMutationStrategy::FullOperation);
+    let need_wrap_nullable = matches!(mutation_type, DataMutationStrategy::MixedMatched);
     let fetched_fields: Vec<DataField> = lazy_columns
         .iter()
         .map(|index| {

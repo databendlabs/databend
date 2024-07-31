@@ -42,7 +42,7 @@ impl PipelineBuilder {
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
         match merge_into_organize.mutation_type {
-            DataMutationStrategy::FullOperation => {
+            DataMutationStrategy::MixedMatched => {
                 assert_eq!(self.main_pipeline.output_len() % 3, 0);
                 // merge matched update ports and not matched ports ===> data ports
                 for idx in (0..self.main_pipeline.output_len()).step_by(3) {
@@ -69,7 +69,7 @@ impl PipelineBuilder {
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             }
-            DataMutationStrategy::InsertOnly => {}
+            DataMutationStrategy::NotMatchedOnly => {}
             DataMutationStrategy::Direct => unreachable!(),
         }
         Ok(())

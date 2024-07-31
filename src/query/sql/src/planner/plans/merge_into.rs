@@ -109,8 +109,8 @@ impl DataMutation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.mutation_type, DataMutationStrategy::FullOperation)
-            || matches!(self.mutation_type, DataMutationStrategy::InsertOnly);
+        let insert = matches!(self.mutation_type, DataMutationStrategy::MixedMatched)
+            || matches!(self.mutation_type, DataMutationStrategy::NotMatchedOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {
