@@ -20,4 +20,4 @@ mod update;
 
 pub use bind::DataMutationStrategy;
 pub use data_mutation_input::target_table_position;
-pub use data_mutation_input::DataMutationInputType;
+pub use data_mutation_input::DataMutationType;

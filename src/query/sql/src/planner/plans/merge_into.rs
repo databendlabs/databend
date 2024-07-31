@@ -26,7 +26,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::LockGuard;
 
-use crate::binder::DataMutationInputType;
+use crate::binder::DataMutationType;
 use crate::binder::DataMutationStrategy;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -60,7 +60,7 @@ pub struct DataMutation {
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<HashSet<IndexType>>,
     pub metadata: MetadataRef,
-    pub input_type: DataMutationInputType,
+    pub input_type: DataMutationType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,

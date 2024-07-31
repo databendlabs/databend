@@ -26,7 +26,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
-use databend_common_sql::binder::DataMutationInputType;
+use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::DataMutationBuildInfo;
@@ -168,9 +168,9 @@ impl DataMutationInterpreter {
         };
 
         let mutation_kind = match data_mutation.input_type {
-            DataMutationInputType::Update => MutationKind::Update,
-            DataMutationInputType::Delete => MutationKind::Delete,
-            DataMutationInputType::Merge => MutationKind::MergeInto,
+            DataMutationType::Update => MutationKind::Update,
+            DataMutationType::Delete => MutationKind::Delete,
+            DataMutationType::Merge => MutationKind::MergeInto,
         };
 
         let hook_operator = HookOperator::create(
@@ -182,12 +182,12 @@ impl DataMutationInterpreter {
             hook_lock_opt,
         );
         match data_mutation.input_type {
-            DataMutationInputType::Update | DataMutationInputType::Delete => {
+            DataMutationType::Update | DataMutationType::Delete => {
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
                     .await
             }
-            DataMutationInputType::Merge => {
+            DataMutationType::Merge => {
                 hook_operator.execute(&mut build_res.main_pipeline).await
             }
         };
@@ -274,7 +274,7 @@ impl DataMutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        if data_mutation.input_type == DataMutationInputType::Merge {
+        if data_mutation.input_type == DataMutationType::Merge {
             return Ok(None);
         }
 
@@ -290,7 +290,7 @@ impl DataMutationInterpreter {
             return Ok(Some(build_res));
         }
 
-        if data_mutation.input_type == DataMutationInputType::Delete {
+        if data_mutation.input_type == DataMutationType::Delete {
             if data_mutation.truncate_table {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
@@ -333,7 +333,7 @@ impl DataMutationInterpreter {
                 } else {
                     (None, vec![])
                 };
-            let (is_lazy, is_delete) = if data_mutation.input_type == DataMutationInputType::Delete
+            let (is_lazy, is_delete) = if data_mutation.input_type == DataMutationType::Delete
             {
                 let cluster = self.ctx.get_cluster();
                 let is_lazy =

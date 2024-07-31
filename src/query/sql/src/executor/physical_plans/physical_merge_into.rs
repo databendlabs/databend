@@ -42,7 +42,7 @@ use itertools::Itertools;
 
 use super::ColumnMutation;
 use crate::binder::wrap_cast;
-use crate::binder::DataMutationInputType;
+use crate::binder::DataMutationType;
 use crate::binder::DataMutationStrategy;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
@@ -255,8 +255,8 @@ impl PhysicalPlanBuilder {
             return Ok(physical_plan);
         }
 
-        let is_insert_only = matches!(mutation_type, DataMutationStrategy::NotMatchedOnly);
-        let row_id_offset = if !is_insert_only {
+        let is_not_matched_only = matches!(mutation_type, DataMutationStrategy::NotMatchedOnly);
+        let row_id_offset = if !is_not_matched_only {
             data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
             DUMMY_COLUMN_INDEX
@@ -267,7 +267,7 @@ impl PhysicalPlanBuilder {
         // to insert just keep in local node.
         let source_is_broadcast =
             matches!(mutation_type, DataMutationStrategy::MatchedOnly) && !change_join_order;
-        if *distributed && !is_insert_only && !source_is_broadcast {
+        if *distributed && !is_not_matched_only && !source_is_broadcast {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
                 bind_context,
@@ -448,7 +448,7 @@ impl PhysicalPlanBuilder {
             output_schema: DataSchemaRef::default(),
             mutation_type: mutation_type.clone(),
             target_table_index: *target_table_index,
-            need_match: !is_insert_only,
+            need_match: !is_not_matched_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
         }));
@@ -467,13 +467,13 @@ impl PhysicalPlanBuilder {
         };
 
         let mutation_kind = match input_type {
-            DataMutationInputType::Update | DataMutationInputType::Merge => MutationKind::Update,
-            DataMutationInputType::Delete => MutationKind::Delete,
+            DataMutationType::Update | DataMutationType::Merge => MutationKind::Update,
+            DataMutationType::Delete => MutationKind::Delete,
         };
 
         let update_stream_meta = match input_type {
-            DataMutationInputType::Merge => data_mutation_build_info.update_stream_meta,
-            DataMutationInputType::Update | DataMutationInputType::Delete => vec![],
+            DataMutationType::Merge => data_mutation_build_info.update_stream_meta,
+            DataMutationType::Update | DataMutationType::Delete => vec![],
         };
 
         // build mutation_aggregate

@@ -31,7 +31,7 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
-use databend_common_sql::binder::DataMutationInputType;
+use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::DataMutation;
 use databend_common_sql::plans::InsertInputSource;
@@ -1006,9 +1006,9 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
                 let privileges = match plan.input_type {
-                    DataMutationInputType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
-                    DataMutationInputType::Update => vec![UserPrivilegeType::Update],
-                    DataMutationInputType::Delete => vec![UserPrivilegeType::Delete],
+                    DataMutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                    DataMutationType::Update => vec![UserPrivilegeType::Update],
+                    DataMutationType::Delete => vec![UserPrivilegeType::Delete],
                 };
                 for privilege in privileges {
                     self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false).await?;

@@ -19,7 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::binder::DataMutationInputType;
+use databend_common_sql::binder::DataMutationType;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::MutationAction;
@@ -38,7 +38,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(&mutation_source.table_info, None)?;
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
-        let is_delete = mutation_source.input_type == DataMutationInputType::Delete;
+        let is_delete = mutation_source.input_type == DataMutationType::Delete;
         let read_partition_columns: Vec<usize> = mutation_source
             .read_partition_columns
             .clone()
@@ -99,7 +99,7 @@ impl PipelineBuilder {
             .into_iter()
             .collect();
         let update_mutation_with_filter =
-            mutation_source.input_type == DataMutationInputType::Update && filter.is_some();
+            mutation_source.input_type == DataMutationType::Update && filter.is_some();
         table.add_mutation_source(
             self.ctx.clone(),
             filter,
