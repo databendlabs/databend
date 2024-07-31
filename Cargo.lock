@@ -884,6 +884,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomic"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59bdb34bc650a32731b31bd8f0829cc15d24a708ee31559e0bb34f2bc320cba"
+
+[[package]]
 name = "atomic-polyfill"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3131,11 +3137,11 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
+ "fastrace",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
  "logos",
- "minitrace",
  "nom",
  "nom-rule",
  "ordered-float 4.2.0",
@@ -3190,11 +3196,11 @@ dependencies = [
  "databend-common-building",
  "databend-common-exception",
  "enquote",
+ "fastrace",
  "futures",
  "libc",
  "log",
  "logcall",
- "minitrace",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -3622,9 +3628,9 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
+ "fastrace",
  "futures",
  "log",
- "minitrace",
  "mockall",
  "prost 0.12.3",
  "serde",
@@ -3649,11 +3655,11 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "enumflags2",
+ "fastrace",
  "futures",
  "log",
  "logcall",
  "maplit",
- "minitrace",
  "prost 0.12.3",
  "rand 0.8.5",
  "serde",
@@ -3713,11 +3719,11 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "derive_more",
+ "fastrace",
  "futures",
  "itertools 0.10.5",
  "log",
  "logcall",
- "minitrace",
  "once_cell",
  "parking_lot 0.12.1",
  "prost 0.12.3",
@@ -3741,8 +3747,8 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "fastrace",
  "log",
- "minitrace",
  "tempfile",
 ]
 
@@ -3753,9 +3759,9 @@ dependencies = [
  "anyhow",
  "async-trait-fn",
  "databend-common-meta-types",
+ "fastrace",
  "futures-util",
  "log",
- "minitrace",
  "serde",
  "thiserror",
  "tokio",
@@ -3800,6 +3806,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "derive_more",
+ "fastrace",
  "futures",
  "futures-async-stream",
  "futures-util",
@@ -3807,7 +3814,6 @@ dependencies = [
  "itertools 0.10.5",
  "log",
  "maplit",
- "minitrace",
  "num",
  "openraft",
  "ordq",
@@ -3834,8 +3840,8 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
+ "fastrace",
  "log",
- "minitrace",
  "openraft",
  "pretty_assertions",
  "serde",
@@ -3956,9 +3962,9 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
+ "fastrace",
  "futures",
  "log",
- "minitrace",
  "petgraph",
  "serde",
  "serde_json",
@@ -4029,8 +4035,8 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
+ "fastrace",
  "maplit",
- "minitrace",
  "num",
  "pretty_assertions",
  "prost 0.12.3",
@@ -4058,8 +4064,8 @@ dependencies = [
  "databend-common-ast",
  "databend-common-exception",
  "derive-visitor",
+ "fastrace",
  "goldenfile",
- "minitrace",
  "tokio",
  "unindent",
 ]
@@ -4155,12 +4161,12 @@ dependencies = [
  "derive-visitor",
  "educe",
  "enum-as-inner 0.5.1",
+ "fastrace",
  "globiter",
  "indexmap 2.2.5",
  "itertools 0.10.5",
  "jsonb",
  "log",
- "minitrace",
  "num-derive",
  "num-traits",
  "opendal",
@@ -4224,9 +4230,9 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "deltalake",
+ "fastrace",
  "maplit",
  "match-template",
- "minitrace",
  "object_store_opendal",
  "ordered-float 4.2.0",
  "parquet",
@@ -4303,13 +4309,13 @@ dependencies = [
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
+ "fastrace",
  "futures",
  "futures-util",
  "indexmap 2.2.5",
  "itertools 0.10.5",
  "jsonb",
  "log",
- "minitrace",
  "opendal",
  "parquet",
  "rand 0.8.5",
@@ -4350,11 +4356,11 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "fastrace",
  "faststr",
  "futures",
  "hive_metastore",
  "log",
- "minitrace",
  "opendal",
  "ordered-float 4.2.0",
  "recursive",
@@ -4383,11 +4389,11 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "fastrace",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
  "match-template",
- "minitrace",
  "parquet",
  "serde",
  "tokio",
@@ -4635,7 +4641,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "minitrace",
+ "fastrace",
 ]
 
 [[package]]
@@ -4706,12 +4712,12 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "defer",
+ "fastrace",
+ "fastrace-opentelemetry",
  "fern",
  "itertools 0.10.5",
  "libc",
  "log",
- "minitrace",
- "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -5019,6 +5025,7 @@ dependencies = [
  "deepsize",
  "derive_more",
  "env_logger",
+ "fastrace",
  "feature-set",
  "futures",
  "futures-async-stream",
@@ -5027,7 +5034,6 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace",
  "poem",
  "pretty_assertions",
  "prometheus-client",
@@ -5068,9 +5074,9 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "fastrace",
  "futures",
  "log",
- "minitrace",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -5177,6 +5183,7 @@ dependencies = [
  "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
+ "fastrace",
  "flatbuffers",
  "futures",
  "futures-util",
@@ -5196,7 +5203,6 @@ dependencies = [
  "maplit",
  "match-template",
  "md-5",
- "minitrace",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -5380,10 +5386,10 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
+ "fastrace",
  "jsonb",
  "log",
  "match-template",
- "minitrace",
  "parquet",
  "rand 0.8.5",
  "serde",
@@ -5402,8 +5408,8 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "fastrace",
  "log",
- "minitrace",
  "opendal",
 ]
 
@@ -6553,6 +6559,46 @@ name = "faster-hex"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2a2b11eda1d40935b26cf18f6833c526845ae8c41e58d09af6adeb6f0269183"
+
+[[package]]
+name = "fastrace"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dfd798348670042f0628810b10bc11b767c1f42aafbd3b1ae31f282740c549fe"
+dependencies = [
+ "fastrace-macro",
+ "minstant",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "rand 0.8.5",
+ "rtrb",
+]
+
+[[package]]
+name = "fastrace-macro"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eea27de901dc6b14aa952aeefcc41144da4dc97e4db3eb3593c19f3b80406786"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "fastrace-opentelemetry"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05895fbf0eba689978865a110fcead4a5c04724322dc6bd73ff55fe06e39ba66"
+dependencies = [
+ "fastrace",
+ "futures",
+ "log",
+ "opentelemetry",
+ "opentelemetry_sdk",
+]
 
 [[package]]
 name = "fastrand"
@@ -9137,7 +9183,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.2.0"
-source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
+source = "git+https://github.com/apache/iceberg-rust?rev=e8f8694#e8f8694541e2e4b3f09111f047045f966d400363"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -9155,12 +9201,9 @@ dependencies = [
  "bytes",
  "chrono",
  "derive_builder",
- "either",
  "fnv",
  "futures",
  "itertools 0.13.0",
- "lazy_static",
- "log",
  "murmur3",
  "once_cell",
  "opendal",
@@ -9174,16 +9217,16 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "serde_with",
- "typed-builder 0.18.1",
+ "tokio",
+ "typed-builder 0.19.1",
  "url",
- "urlencoding",
  "uuid",
 ]
 
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.2.0"
-source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
+source = "git+https://github.com/apache/iceberg-rust?rev=e8f8694#e8f8694541e2e4b3f09111f047045f966d400363"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -9194,7 +9237,7 @@ dependencies = [
  "pilota",
  "serde_json",
  "tokio",
- "typed-builder 0.18.1",
+ "typed-builder 0.19.1",
  "uuid",
  "volo-thrift",
 ]
@@ -9202,7 +9245,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.2.0"
-source = "git+https://github.com/apache/iceberg-rust?rev=c3b5364#c3b5364ef0789632e77602cec1bbf6f9c8a17739"
+source = "git+https://github.com/apache/iceberg-rust?rev=e8f8694#e8f8694541e2e4b3f09111f047045f966d400363"
 dependencies = [
  "async-trait",
  "chrono",
@@ -9215,8 +9258,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tokio",
- "typed-builder 0.18.1",
- "urlencoding",
+ "typed-builder 0.19.1",
  "uuid",
 ]
 
@@ -10374,46 +10416,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
-name = "minitrace"
-version = "0.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "197d538cd69839d49a593c8c72df44291b0ea3296ecc0c85529002c53c8fbc6f"
-dependencies = [
- "minitrace-macro",
- "minstant",
- "once_cell",
- "parking_lot 0.12.1",
- "pin-project",
- "rand 0.8.5",
- "rtrb",
-]
-
-[[package]]
-name = "minitrace-macro"
-version = "0.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14efd4b574325fcb981bce1ac700b9ccf071ec2eb94f7a6a6b583a84f228ba47"
-dependencies = [
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "minitrace-opentelemetry"
-version = "0.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fabb581e91af60aab44f6d49ee70646c87162ad25224cd6184ae67cfca08db05"
-dependencies = [
- "futures",
- "log",
- "minitrace",
- "opentelemetry",
- "opentelemetry_sdk",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10997,8 +10999,9 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.44.1"
-source = "git+https://github.com/Xuanwo/opendal?rev=d6baf68#d6baf6851f6e4ec340e79613db5e83f77092ce11"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a9bd65c28f9d7be88258a731ff9f2b32b4403503f9d3352dbfa6438caacc894"
 dependencies = [
  "async-trait",
  "bytes",
@@ -11045,9 +11048,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.47.1"
+version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "876c6655dd5b410c83e0c9edf38be60fed540a1cc1c2f3a2ac31830eb8a8ff45"
+checksum = "615d41187deea0ea7fab5b48e9afef6ae8fc742fdcfa248846ee3d92ff71e986"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -11057,6 +11060,7 @@ dependencies = [
  "bytes",
  "chrono",
  "crc32c",
+ "fastrace",
  "flagset",
  "futures",
  "getrandom 0.2.12",
@@ -11064,13 +11068,12 @@ dependencies = [
  "http 1.1.0",
  "log",
  "md-5",
- "minitrace",
  "moka",
  "once_cell",
  "percent-encoding",
  "prometheus-client",
- "prost 0.11.9",
- "quick-xml 0.31.0",
+ "prost 0.13.1",
+ "quick-xml 0.36.1",
  "reqsign",
  "reqwest 0.12.4",
  "serde",
@@ -12214,22 +12217,22 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b82eaa1d779e9a4bc1c3217db8ffbeabaae1dca241bf70183242128d48681cd"
-dependencies = [
- "bytes",
- "prost-derive 0.11.9",
-]
-
-[[package]]
-name = "prost"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "146c289cda302b98a28d40c8b3b90498d6e526dd24ac2ecea73e4e491685b94a"
 dependencies = [
  "bytes",
  "prost-derive 0.12.3",
+]
+
+[[package]]
+name = "prost"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13db3d3fde688c61e2446b4d843bc27a7e8af269a69440c0308021dc92333cc"
+dependencies = [
+ "bytes",
+ "prost-derive 0.13.1",
 ]
 
 [[package]]
@@ -12256,25 +12259,25 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d2d8d10f3c6ded6da8b05b5fb3b8a5082514344d56c9f871412d29b4e075b4"
-dependencies = [
- "anyhow",
- "itertools 0.10.5",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "prost-derive"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efb6c9a1dd1def8e2124d17e83a20af56f1570d6c2d2bd9e266ccb768df3840e"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
+name = "prost-derive"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18bec9b0adc4eba778b33684b7ba3e7137789434769ee3ce3930463ef904cfca"
+dependencies = [
+ "anyhow",
+ "itertools 0.13.0",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
@@ -12536,9 +12539,19 @@ dependencies = [
 
 [[package]]
 name = "quick-xml"
-version = "0.31.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1004a344b30a54e2ee58d66a71b32d2db2feb0a31f9a2d302bf0536f15de2a33"
+checksum = "86e446ed58cef1bbfe847bc2fda0e2e4ea9f0e57b90c507d4781292590d72a4e"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96a05e2e8efddfa51a84ca47cec303fac86c8541b686d37cac5efc0e094417bc"
 dependencies = [
  "memchr",
  "serde",
@@ -12872,9 +12885,9 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqsign"
-version = "0.15.2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70fe66d4cd0b5ed9b1abbfe639bf6baeaaf509f7da2d51b31111ba945be59286"
+checksum = "03dd4ba7c3901dd43e6b8c7446a760d45bc1ea4301002e1a6fa48f97c3a796fa"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12890,7 +12903,7 @@ dependencies = [
  "log",
  "once_cell",
  "percent-encoding",
- "quick-xml 0.31.0",
+ "quick-xml 0.35.0",
  "rand 0.8.5",
  "reqwest 0.12.4",
  "rsa 0.9.6",
@@ -15557,11 +15570,11 @@ dependencies = [
 
 [[package]]
 name = "typed-builder"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "444d8748011b93cb168770e8092458cb0f8854f931ff82fdf6ddfbd72a9c933e"
+checksum = "a06fbd5b8de54c5f7c91f6fe4cebb949be2125d7758e630bb58b1d831dbce600"
 dependencies = [
- "typed-builder-macro 0.18.1",
+ "typed-builder-macro 0.19.1",
 ]
 
 [[package]]
@@ -15577,9 +15590,9 @@ dependencies = [
 
 [[package]]
 name = "typed-builder-macro"
-version = "0.18.1"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "563b3b88238ec95680aef36bdece66896eaa7ce3c0f1b4f39d38fb2435261352"
+checksum = "f9534daa9fd3ed0bd911d462a37f172228077e7abf18c18a5f67199d959205f8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -15806,6 +15819,7 @@ version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
 dependencies = [
+ "atomic",
  "getrandom 0.2.12",
  "serde",
 ]

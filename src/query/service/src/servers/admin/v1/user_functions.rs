@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+use databend_common_config::GlobalConfig;
+use databend_common_storages_system::UserFunctionsTable;
+use http::StatusCode;
+use poem::web::Json;
+use poem::IntoResponse;
 
-use databend_common_meta_kvapi::kvapi;
-use test_harness::test;
-
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    kvapi::TestSuite {}.test_all(builder).await
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn user_functions() -> poem::Result<impl IntoResponse> {
+    match UserFunctionsTable::get_udfs(&GlobalConfig::instance().query.tenant_id).await {
+        Ok(v) => Ok(Json(v)),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to user functions. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
 }

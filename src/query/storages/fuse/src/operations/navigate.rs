@@ -41,7 +41,7 @@ use crate::FuseTable;
 use crate::FUSE_TBL_SNAPSHOT_PREFIX;
 
 impl FuseTable {
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn navigate_to_point(
         &self,

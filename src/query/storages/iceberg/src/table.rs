@@ -240,7 +240,7 @@ impl IcebergTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,

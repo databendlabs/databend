@@ -32,11 +32,11 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
 use opensrv_mysql::InitWriter;
@@ -192,7 +192,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
     ) -> Result<()> {
         let query_id = Uuid::new_v4().to_string();
         let root = Span::root(full_name!(), SpanContext::random())
-            .with_properties(|| self.base.session.to_minitrace_properties());
+            .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
@@ -342,7 +342,7 @@ impl InteractiveWorkerBase {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn do_query(
         &mut self,
         query_id: String,
@@ -398,7 +398,7 @@ impl InteractiveWorkerBase {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn exec_query(
         interpreter: Arc<dyn Interpreter>,
         context: &Arc<QueryContext>,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
@@ -183,7 +184,7 @@ mod test_accessor {
         type Lister = ();
         type BlockingLister = ();
 
-        fn info(&self) -> AccessorInfo {
+        fn info(&self) -> Arc<AccessorInfo> {
             let mut info = AccessorInfo::default();
             let cap = info.full_capability_mut();
             cap.stat = true;
@@ -191,7 +192,7 @@ mod test_accessor {
             cap.batch = true;
             cap.delete = true;
             cap.list = true;
-            info
+            info.into()
         }
 
         async fn stat(&self, _path: &str, _args: OpStat) -> opendal::Result<RpStat> {

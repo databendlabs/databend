@@ -24,7 +24,7 @@ use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::SeqV;
-use minitrace::func_name;
+use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_set_setting() -> Result<()> {

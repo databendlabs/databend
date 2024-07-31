@@ -37,7 +37,7 @@ use crate::tests::service::start_metasrv_cluster;
 /// - Shutdown node 1.
 /// - Test upsert kv, expect the client auto choose the running nodes.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metasrv_connection_error() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -84,7 +84,7 @@ async fn test_metasrv_connection_error() -> anyhow::Result<()> {
 /// - Shutdown follower node 1.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
@@ -117,7 +117,7 @@ async fn test_metasrv_one_client_follower_down() -> anyhow::Result<()> {
 /// - Shutdown leader node 0.
 /// - Test upsert kv, expect the client to auto choose the running nodes.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metasrv_one_client_leader_down() -> anyhow::Result<()> {
     info!("--- Start cluster 0,1,2");
     let mut tcs = start_metasrv_cluster(&[0, 1, 2]).await?;

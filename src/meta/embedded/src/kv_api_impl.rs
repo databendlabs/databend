@@ -27,25 +27,25 @@ use crate::MetaEmbedded;
 impl kvapi::KVApi for MetaEmbedded {
     type Error = MetaError;
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
         sm.get_kv_stream(keys).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
         sm.list_kv(prefix).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.transaction(txn).await
