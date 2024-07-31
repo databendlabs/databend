@@ -28,6 +28,7 @@ pub mod udf;
 mod user;
 
 pub mod errors;
+mod token;
 
 pub use cluster::ClusterApi;
 pub use cluster::ClusterMgr;
@@ -46,5 +47,7 @@ pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
+pub use token::TokenApi;
+pub use token::TokenMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
