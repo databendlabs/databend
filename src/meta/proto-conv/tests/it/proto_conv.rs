@@ -41,6 +41,7 @@ use databend_common_meta_app::share::ShareCredentialHmac;
 use databend_common_proto_conv::FromToProto;
 use databend_common_proto_conv::Incompatible;
 use databend_common_proto_conv::VER;
+use enumflags2::BitFlags;
 use maplit::btreemap;
 use maplit::btreeset;
 use pretty_assertions::assert_eq;
@@ -109,7 +110,7 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMetaV1 {
     }
 }
 
-fn new_share_meta() -> share::ShareMetaV1 {
+fn new_share_meta_v1() -> share::ShareMetaV1 {
     let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
 
     let db_entry = share::ShareGrantEntry::new(
@@ -134,6 +135,60 @@ fn new_share_meta() -> share::ShareMetaV1 {
         comment: Some(s("comment")),
         share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),
+    }
+}
+
+fn new_share_meta() -> share::ShareMeta {
+    let now = Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap();
+
+    let use_database = Some(share::ShareDatabase {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Usage),
+        name: "db".to_string(),
+        db_id: 4,
+        grant_on: now,
+    });
+
+    let reference_database = vec![share::ShareDatabase {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
+        name: "db1".to_string(),
+        db_id: 5,
+        grant_on: now,
+    }];
+
+    let mut reference_table = BTreeSet::new();
+    reference_table.insert(42);
+    let table = vec![share::ShareTable {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Select),
+        name: "table".to_string(),
+        db_id: 4,
+        table_id: 41,
+        grant_on: now,
+        engine: "VIEW".to_string(),
+        reference_table,
+    }];
+
+    let mut reference_by = BTreeSet::new();
+    reference_by.insert(41);
+    let reference_table = vec![share::ShareReferenceTable {
+        privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
+        name: "table".to_string(),
+        db_id: 5,
+        table_id: 42,
+        grant_on: now,
+        engine: "FUSE".to_string(),
+        reference_by,
+    }];
+
+    share::ShareMeta {
+        accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+        comment: Some(s("comment")),
+        create_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        update_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+
+        use_database,
+        reference_database,
+        table,
+        reference_table,
     }
 }
 
@@ -366,9 +421,14 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let got = mt::TableMeta::from_pb(p)?;
     assert_eq!(tbl, got);
 
+    let share_v1 = new_share_meta_v1();
+    let p = share_v1.to_pb()?;
+    let got = share::ShareMetaV1::from_pb(p)?;
+    assert_eq!(share_v1, got);
+
     let share = new_share_meta();
     let p = share.to_pb()?;
-    let got = share::ShareMetaV1::from_pb(p)?;
+    let got = share::ShareMeta::from_pb(p)?;
     assert_eq!(share, got);
 
     let share_account_meta = new_share_account_meta();
@@ -479,7 +539,18 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
-        println!("share:{:?}", buf);
+        println!("share meta v1:{:?}", buf);
+    }
+
+    // ShareMeta
+    {
+        let tbl = new_share_meta();
+
+        let p = tbl.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share meta v2:{:?}", buf);
     }
 
     // ShareAccountMeta
