@@ -24,7 +24,7 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Set up Docker Buildx
+    - name: Set up Docker Buildx for AWS Runner
       uses: docker/setup-buildx-action@v3
       if: env.RUNNER_PROVIDER == 'aws'
       with:
@@ -32,6 +32,8 @@ runs:
           image=moby/buildkit:master
           network=host
         buildkitd-config: ./.github/misc/buildkitd.toml
+    - name: Setup Docker Buildx for GitHub Hosted Runner
+      uses: docker/setup-buildx-action@v3
 
     - name: Configure AWS Credentials
       if: inputs.ecr_role_arn
