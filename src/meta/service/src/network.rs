@@ -66,13 +66,13 @@ use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
+use fastrace::func_name;
 use futures::FutureExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::func_name;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -167,7 +167,7 @@ pub struct Network {
 impl Network {
     /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn new_client(&self, addr: &str) -> Result<RaftClient, tonic::transport::Error> {
         info!(id = self.id; "Raft NetworkConnection connect: target={}: {}", self.target, addr);
 
@@ -191,7 +191,7 @@ impl Network {
 
     /// Take the last used client or create a new one.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn take_client(&mut self) -> Result<RaftClient, Unreachable> {
         let mut client = self.client.lock().await;
 
@@ -649,7 +649,7 @@ impl Network {
 
 impl RaftNetworkV2<TypeConfig> for Network {
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn append_entries(
         &mut self,
         rpc: AppendEntriesRequest,
@@ -695,7 +695,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
     }
 
     #[logcall::logcall(err = "error", input = "")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn full_snapshot(
         &mut self,
         vote: Vote,
@@ -760,7 +760,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
     }
 
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn vote(
         &mut self,
         rpc: VoteRequest,

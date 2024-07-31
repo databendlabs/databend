@@ -37,7 +37,7 @@ use crate::tests::meta_node::start_meta_node_non_voter;
 /// - Assert expired kv can not be read and write.
 /// - Bring up a learner, replicate logs from leader, rebuild the same state machine.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     let mut log_index = 0;
 

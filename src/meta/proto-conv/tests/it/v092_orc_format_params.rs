@@ -14,7 +14,7 @@
 
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::OrcFileFormatParams;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

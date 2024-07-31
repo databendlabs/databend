@@ -79,7 +79,7 @@ impl<'a> Applier<'a> {
     /// Apply an log entry to state machine.
     ///
     /// And publish kv change events to subscriber.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn apply(&mut self, entry: &Entry) -> Result<AppliedState, io::Error> {
         let log_id = &entry.log_id;
         let log_time_ms = Self::get_log_time(entry);
@@ -128,7 +128,7 @@ impl<'a> Applier<'a> {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn apply_cmd(&mut self, cmd: &Cmd) -> Result<AppliedState, io::Error> {
         debug!("apply_cmd: {}", cmd);
 
@@ -152,7 +152,7 @@ impl<'a> Applier<'a> {
     }
 
     /// Insert a node only when it does not exist or `overriding` is true.
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_add_node(&mut self, node_id: &u64, node: &Node, overriding: bool) -> AppliedState {
         let prev = self.sm.sys_data_mut().nodes_mut().get(node_id).cloned();
 
@@ -177,7 +177,7 @@ impl<'a> Applier<'a> {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_remove_node(&mut self, node_id: &u64) -> AppliedState {
         let prev = self.sm.sys_data_mut().nodes_mut().remove(node_id);
         info!("applied RemoveNode: {}={:?}", node_id, prev);
@@ -193,7 +193,7 @@ impl<'a> Applier<'a> {
     ///
     /// Thus upsert a kv entry is done in two steps:
     /// update the primary index and optionally update the secondary index.
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn apply_upsert_kv(&mut self, upsert_kv: &UpsertKV) -> Result<AppliedState, io::Error> {
         debug!(upsert_kv :? =(upsert_kv); "apply_update_kv_cmd");
 
@@ -206,7 +206,7 @@ impl<'a> Applier<'a> {
     /// Update or insert a kv entry.
     ///
     /// If the input entry has expired, it performs a delete operation.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn upsert_kv(
         &mut self,
         upsert_kv: &UpsertKV,
@@ -235,7 +235,7 @@ impl<'a> Applier<'a> {
         Ok((prev, result))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn apply_txn(&mut self, req: &TxnRequest) -> Result<AppliedState, io::Error> {
         debug!(txn :% =(req); "apply txn cmd");
 
@@ -260,7 +260,7 @@ impl<'a> Applier<'a> {
         Ok(AppliedState::TxnReply(resp))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn eval_txn_conditions(
         &mut self,
         condition: &Vec<TxnCondition>,
@@ -276,7 +276,7 @@ impl<'a> Applier<'a> {
         Ok(true)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn eval_one_condition(&self, cond: &TxnCondition) -> Result<bool, io::Error> {
         debug!(cond :% =(cond); "txn_execute_one_condition");
 
@@ -339,7 +339,7 @@ impl<'a> Applier<'a> {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn txn_execute_operation(
         &mut self,
         op: &TxnOp,
@@ -460,7 +460,7 @@ impl<'a> Applier<'a> {
     ///
     /// All expired keys will be removed before applying a log.
     /// This is different from the sled based implementation.
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn clean_expired_kvs(&mut self, log_time_ms: u64) -> Result<(), io::Error> {
         if log_time_ms == 0 {
             return Ok(());
@@ -517,7 +517,7 @@ impl<'a> Applier<'a> {
     /// Retrieve the proposing time from a raft-log.
     ///
     /// Only `Normal` log has a time embedded.
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn get_log_time(entry: &Entry) -> u64 {
         match &entry.payload {
             EntryPayload::Normal(data) => match data.time_ms {

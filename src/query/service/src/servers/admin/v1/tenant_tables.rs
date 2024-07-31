@@ -20,7 +20,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_txn::TxnManager;
-use minitrace::func_name;
+use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;

@@ -33,8 +33,8 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
-use minitrace::full_name;
-use minitrace::prelude::*;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -189,7 +189,7 @@ impl PipelinePullingExecutor {
         })
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn start(&mut self) {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 

@@ -21,7 +21,7 @@ use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -34,7 +34,7 @@ async fn test_meta_grpc_client_database_create_get_drop() -> anyhow::Result<()> 
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -47,7 +47,7 @@ async fn test_meta_grpc_client_list_database() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 
@@ -60,7 +60,7 @@ async fn test_meta_grpc_client_table_create_get_drop() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_grpc_client_list_table() -> anyhow::Result<()> {
     let tcs = start_metasrv_cluster(&[0, 1, 2]).await?;
 

@@ -158,7 +158,7 @@ impl<'a> RecursiveOptimizer<'a> {
     }
 }
 
-#[minitrace::trace]
+#[fastrace::trace]
 #[async_recursion(#[recursive::recursive])]
 pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
