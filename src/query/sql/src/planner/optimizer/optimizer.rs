@@ -26,7 +26,7 @@ use super::distributed::MergeOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::binder::target_table_position;
-use crate::binder::DataMutationType;
+use crate::binder::MutationType;
 use crate::optimizer::aggregate::RuleNormalizeAggregateOptimizer;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::decorrelate::decorrelate_subquery;
@@ -461,7 +461,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         opt_ctx.enable_distributed_optimization && !input_s_expr.has_merge_exchange();
 
     let input_s_expr = match plan.input_type {
-        DataMutationType::Merge => {
+        MutationType::Merge => {
             if plan.distributed {
                 let join_op = Join::try_from(input_s_expr.plan().clone())?;
                 let merge_optimizer = MergeOptimizer::create();
@@ -477,7 +477,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
                 input_s_expr
             }
         }
-        DataMutationType::Update | DataMutationType::Delete => input_s_expr,
+        MutationType::Update | MutationType::Delete => input_s_expr,
     };
 
     Ok(Plan::DataMutation {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::binder::DataMutationStrategy;
+use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::MergeIntoOrganize;
 
 use crate::pipelines::PipelineBuilder;
@@ -42,7 +42,7 @@ impl PipelineBuilder {
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len());
         let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
         match merge_into_organize.mutation_type {
-            DataMutationStrategy::MixedMatched => {
+            MutationStrategy::MixedMatched => {
                 assert_eq!(self.main_pipeline.output_len() % 3, 0);
                 // merge matched update ports and not matched ports ===> data ports
                 for idx in (0..self.main_pipeline.output_len()).step_by(3) {
@@ -59,7 +59,7 @@ impl PipelineBuilder {
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             }
-            DataMutationStrategy::MatchedOnly => {
+            MutationStrategy::MatchedOnly => {
                 assert_eq!(self.main_pipeline.output_len() % 2, 0);
                 let row_id_len = self.main_pipeline.output_len() / 2;
                 for idx in 0..row_id_len {
@@ -69,8 +69,8 @@ impl PipelineBuilder {
                 self.main_pipeline.reorder_inputs(rules);
                 self.resize_row_id(2)?;
             }
-            DataMutationStrategy::NotMatchedOnly => {}
-            DataMutationStrategy::Direct => unreachable!(),
+            MutationStrategy::NotMatchedOnly => {}
+            MutationStrategy::Direct => unreachable!(),
         }
         Ok(())
     }

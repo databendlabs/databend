@@ -42,8 +42,8 @@ use itertools::Itertools;
 
 use super::ColumnMutation;
 use crate::binder::wrap_cast;
-use crate::binder::DataMutationStrategy;
-use crate::binder::DataMutationType;
+use crate::binder::MutationStrategy;
+use crate::binder::MutationType;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -83,7 +83,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub mutation_type: DataMutationStrategy,
+    pub mutation_type: MutationStrategy,
     pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
@@ -255,7 +255,7 @@ impl PhysicalPlanBuilder {
             return Ok(physical_plan);
         }
 
-        let is_not_matched_only = matches!(mutation_type, DataMutationStrategy::NotMatchedOnly);
+        let is_not_matched_only = matches!(mutation_type, MutationStrategy::NotMatchedOnly);
         let row_id_offset = if !is_not_matched_only {
             data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
@@ -266,7 +266,7 @@ impl PhysicalPlanBuilder {
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
         let source_is_broadcast =
-            matches!(mutation_type, DataMutationStrategy::MatchedOnly) && !change_join_order;
+            matches!(mutation_type, MutationStrategy::MatchedOnly) && !change_join_order;
         if *distributed && !is_not_matched_only && !source_is_broadcast {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
@@ -279,7 +279,7 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
-        if matches!(mutation_type, DataMutationStrategy::MixedMatched) {
+        if matches!(mutation_type, MutationStrategy::MixedMatched) {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
                 input: Box::new(plan),
@@ -467,13 +467,13 @@ impl PhysicalPlanBuilder {
         };
 
         let mutation_kind = match input_type {
-            DataMutationType::Update | DataMutationType::Merge => MutationKind::Update,
-            DataMutationType::Delete => MutationKind::Delete,
+            MutationType::Update | MutationType::Merge => MutationKind::Update,
+            MutationType::Delete => MutationKind::Delete,
         };
 
         let update_stream_meta = match input_type {
-            DataMutationType::Merge => data_mutation_build_info.update_stream_meta,
-            DataMutationType::Update | DataMutationType::Delete => vec![],
+            MutationType::Merge => data_mutation_build_info.update_stream_meta,
+            MutationType::Update | MutationType::Delete => vec![],
         };
 
         // build mutation_aggregate
@@ -581,7 +581,7 @@ fn build_data_mutation_row_fetch(
     plan: PhysicalPlan,
     metadata: MetadataRef,
     data_mutation_input_schema: Arc<DataSchema>,
-    mutation_type: DataMutationStrategy,
+    mutation_type: MutationStrategy,
     lazy_columns: HashSet<usize>,
     target_table_index: usize,
     row_id_offset: usize,
@@ -595,7 +595,7 @@ fn build_data_mutation_row_fetch(
         .cloned()
         .collect::<Vec<_>>();
     let mut has_inner_column = false;
-    let need_wrap_nullable = matches!(mutation_type, DataMutationStrategy::MixedMatched);
+    let need_wrap_nullable = matches!(mutation_type, MutationStrategy::MixedMatched);
     let fetched_fields: Vec<DataField> = lazy_columns
         .iter()
         .map(|index| {

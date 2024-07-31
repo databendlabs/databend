@@ -26,7 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::binder::DataMutationType;
+use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -41,7 +41,7 @@ pub struct MutationSource {
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
     pub output_schema: DataSchemaRef,
-    pub input_type: DataMutationType,
+    pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
     pub snapshot: Arc<TableSnapshot>,
 }

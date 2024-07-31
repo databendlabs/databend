@@ -14,7 +14,7 @@
 
 mod aggregate;
 mod bind_context;
-mod bind_data_mutation;
+mod bind_mutation;
 mod bind_query;
 mod bind_table_reference;
 #[allow(clippy::module_inception)]
@@ -57,9 +57,9 @@ mod window;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
-pub use bind_data_mutation::target_table_position;
-pub use bind_data_mutation::DataMutationStrategy;
-pub use bind_data_mutation::DataMutationType;
+pub use bind_mutation::target_table_position;
+pub use bind_mutation::MutationStrategy;
+pub use bind_mutation::MutationType;
 pub use bind_query::bind_values;
 pub use bind_table_reference::parse_result_scan_args;
 pub use binder::Binder;

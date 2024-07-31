@@ -20,7 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::binder::DataMutationType;
+use databend_common_sql::binder::MutationType;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::ColumnMutation;
@@ -121,7 +121,7 @@ impl PipelineBuilder {
 
         let ctx = self.ctx.clone();
 
-        if column_mutation.input_type == DataMutationType::Delete {
+        if column_mutation.input_type == MutationType::Delete {
             let cluster_stats_gen = table.get_cluster_stats_gen(
                 self.ctx.clone(),
                 0,

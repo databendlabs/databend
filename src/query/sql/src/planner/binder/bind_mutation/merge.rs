@@ -21,11 +21,11 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_data_mutation::bind::DataMutation;
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpression;
+use crate::binder::bind_mutation::bind::DataMutation;
+use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::DataMutationStrategy;
+use crate::binder::MutationStrategy;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -68,7 +68,7 @@ impl Binder {
 
         let data_mutation = DataMutation {
             target_table_identifier,
-            expression: DataMutationExpression::Merge {
+            expression: MutationExpression::Merge {
                 target: target_reference,
                 source: source_reference,
                 match_expr: stmt.join_expr.clone(),
@@ -126,13 +126,13 @@ impl Binder {
     }
 }
 
-fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationStrategy> {
+fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<MutationStrategy> {
     if matched_len == 0 && unmatched_len > 0 {
-        Ok(DataMutationStrategy::NotMatchedOnly)
+        Ok(MutationStrategy::NotMatchedOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(DataMutationStrategy::MatchedOnly)
+        Ok(MutationStrategy::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
-        Ok(DataMutationStrategy::MixedMatched)
+        Ok(MutationStrategy::MixedMatched)
     } else {
         Err(ErrorCode::SemanticError(
             "we must have matched or unmatched clause at least one",

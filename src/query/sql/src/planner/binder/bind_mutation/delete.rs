@@ -12,36 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
-use databend_common_ast::ast::MergeUpdateExpr;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_data_mutation::bind::DataMutation;
-use crate::binder::bind_data_mutation::bind::DataMutationStrategy;
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpression;
+use crate::binder::bind_mutation::bind::DataMutation;
+use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
+use crate::binder::MutationStrategy;
 use crate::plans::Plan;
 use crate::BindContext;
 
-impl Binder {
+impl<'a> Binder {
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_update(
+    pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
         bind_context: &mut BindContext,
-        stmt: &UpdateStmt,
+        stamt: &DeleteStmt,
     ) -> Result<Plan> {
-        let UpdateStmt {
+        let DeleteStmt {
             table,
-            update_list,
             selection,
             with,
             ..
-        } = stmt;
+        } = stamt;
 
         self.init_cte(bind_context, with)?;
 
@@ -61,31 +59,18 @@ impl Binder {
             ));
         };
 
-        let update_exprs = update_list
-            .iter()
-            .map(|update_expr| MergeUpdateExpr {
-                table: None,
-                name: update_expr.name.clone(),
-                expr: update_expr.expr.clone(),
-            })
-            .collect::<Vec<_>>();
         let matched_clause = MatchedClause {
             selection: None,
-            operation: MatchOperation::Update {
-                update_list: update_exprs,
-                is_star: false,
-            },
+            operation: MatchOperation::Delete,
         };
-
-        // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
 
         let data_mutation = DataMutation {
             target_table_identifier,
-            expression: DataMutationExpression::Update {
+            expression: MutationExpression::Delete {
                 target: table.clone(),
                 filter: selection.clone(),
             },
-            strategy: DataMutationStrategy::MatchedOnly,
+            strategy: MutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
         };

@@ -33,10 +33,10 @@ use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::DataMutationStrategy;
-use crate::binder::DataMutationType;
 use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
+use crate::binder::MutationStrategy;
+use crate::binder::MutationType;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
@@ -55,13 +55,13 @@ use crate::ScalarExpr;
 use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
-pub enum DataMutationExpression {
+pub enum MutationExpression {
     Merge {
         target: TableReference,
         source: TableReference,
         match_expr: Expr,
         has_star_clause: bool,
-        mutation_strategy: DataMutationStrategy,
+        mutation_strategy: MutationStrategy,
     },
     Update {
         target: TableReference,
@@ -73,21 +73,7 @@ pub enum DataMutationExpression {
     },
 }
 
-pub struct DataMutationExpressionBindResult {
-    pub input: SExpr,
-    pub mutation_type: DataMutationType,
-    pub mutation_strategy: DataMutationStrategy,
-    pub required_columns: ColumnSet,
-    pub bind_context: BindContext,
-    pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
-    pub target_table_index: usize,
-    pub target_row_id_index: usize,
-    pub predicate_index: Option<usize>,
-    pub truncate_table: bool,
-    pub mutation_filter: Option<ScalarExpr>,
-}
-
-impl DataMutationExpression {
+impl MutationExpression {
     pub async fn bind(
         &self,
         binder: &mut Binder,
@@ -95,7 +81,7 @@ impl DataMutationExpression {
         target_table: Arc<dyn Table>,
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
-    ) -> Result<DataMutationExpressionBindResult> {
+    ) -> Result<MutationExpressionBindResult> {
         let target_table_index = binder
             .metadata
             .read()
@@ -109,7 +95,7 @@ impl DataMutationExpression {
         let mut update_stream_columns = target_table.change_tracking_enabled();
 
         match self {
-            DataMutationExpression::Merge {
+            MutationExpression::Merge {
                 target,
                 source,
                 match_expr,
@@ -151,21 +137,21 @@ impl DataMutationExpression {
                     target_table_identifier,
                     target_table_index,
                     &mut target_s_expr,
-                    DataMutationType::Merge,
+                    MutationType::Merge,
                 )?;
 
                 // Add target table row_id column to required columns.
-                if *mutation_strategy != DataMutationStrategy::NotMatchedOnly {
+                if *mutation_strategy != MutationStrategy::NotMatchedOnly {
                     required_columns.insert(target_row_id_index);
                 }
 
                 // If it is insert only, we don't need to update stream columns.
-                if *mutation_strategy == DataMutationStrategy::NotMatchedOnly {
+                if *mutation_strategy == MutationStrategy::NotMatchedOnly {
                     update_stream_columns = false;
                 }
-                let is_lazy_table = *mutation_strategy != DataMutationStrategy::NotMatchedOnly;
+                let is_lazy_table = *mutation_strategy != MutationStrategy::NotMatchedOnly;
                 target_s_expr =
-                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
+                    Self::update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
 
                 // Construct join, we use _row_id to check duplicate join rows.
                 let (join_s_expr, bind_context) = binder
@@ -176,16 +162,16 @@ impl DataMutationExpression {
                         target_s_expr,
                         source_s_expr,
                         match mutation_strategy {
-                            DataMutationStrategy::MatchedOnly => Inner,
-                            DataMutationStrategy::NotMatchedOnly => RightAnti,
-                            DataMutationStrategy::MixedMatched => RightOuter,
-                            DataMutationStrategy::Direct => unreachable!(),
+                            MutationStrategy::MatchedOnly => Inner,
+                            MutationStrategy::NotMatchedOnly => RightAnti,
+                            MutationStrategy::MixedMatched => RightOuter,
+                            MutationStrategy::Direct => unreachable!(),
                         },
                         JoinCondition::On(Box::new(match_expr.clone())),
                     )
                     .await?;
 
-                Ok(DataMutationExpressionBindResult {
+                Ok(MutationExpressionBindResult {
                     input: join_s_expr,
                     mutation_type,
                     mutation_strategy: mutation_strategy.clone(),
@@ -199,8 +185,8 @@ impl DataMutationExpression {
                     mutation_filter: None,
                 })
             }
-            DataMutationExpression::Update { target, filter }
-            | DataMutationExpression::Delete { target, filter } => {
+            MutationExpression::Update { target, filter }
+            | MutationExpression::Delete { target, filter } => {
                 // Bind target table reference.
                 let (mut s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
@@ -212,11 +198,11 @@ impl DataMutationExpression {
                 let mut target_row_id_index = DUMMY_COLUMN_INDEX;
                 let mut predicate_index = None;
                 let mut truncate_table = false;
-                let s_expr = if mutation_strategy == DataMutationStrategy::Direct {
+                let s_expr = if mutation_strategy == MutationStrategy::Direct {
                     let mut read_partition_columns = HashSet::new();
                     if let Some(filter) = &filter {
                         read_partition_columns.extend(filter.used_columns());
-                        if mutation_type == DataMutationType::Update {
+                        if mutation_type == MutationType::Update {
                             let predicate_column_index =
                                 binder.metadata.write().add_derived_column(
                                     "_predicate".to_string(),
@@ -226,7 +212,7 @@ impl DataMutationExpression {
                             required_columns.insert(predicate_column_index);
                             predicate_index = Some(predicate_column_index);
                         }
-                    } else if mutation_type == DataMutationType::Delete {
+                    } else if mutation_type == MutationType::Delete {
                         truncate_table = true;
                     }
                     let table_schema = target_table
@@ -249,8 +235,9 @@ impl DataMutationExpression {
                         target_mutation_source,
                     )))
                 } else {
-                    let is_lazy_table = mutation_type != DataMutationType::Delete;
-                    s_expr = update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
+                    let is_lazy_table = mutation_type != MutationType::Delete;
+                    s_expr =
+                        Self::update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
 
                     // Add internal_column row_id for target_table
                     target_row_id_index = binder.add_row_id_column(
@@ -271,7 +258,7 @@ impl DataMutationExpression {
                     rewriter.rewrite(&s_expr)?
                 };
 
-                Ok(DataMutationExpressionBindResult {
+                Ok(MutationExpressionBindResult {
                     input: s_expr,
                     mutation_type,
                     mutation_strategy,
@@ -288,11 +275,11 @@ impl DataMutationExpression {
         }
     }
 
-    pub fn data_mutation_type(&self) -> DataMutationType {
+    pub fn data_mutation_type(&self) -> MutationType {
         match self {
-            DataMutationExpression::Merge { .. } => DataMutationType::Merge,
-            DataMutationExpression::Update { .. } => DataMutationType::Update,
-            DataMutationExpression::Delete { .. } => DataMutationType::Delete,
+            MutationExpression::Merge { .. } => MutationType::Merge,
+            MutationExpression::Update { .. } => MutationType::Update,
+            MutationExpression::Delete { .. } => MutationType::Delete,
         }
     }
 
@@ -352,6 +339,33 @@ impl DataMutationExpression {
         }
         Ok(Some(all_columns))
     }
+
+    pub fn update_target_scan(
+        s_expr: &SExpr,
+        is_lazy_table: bool,
+        update_stream_columns: bool,
+    ) -> Result<SExpr> {
+        if !is_lazy_table && !update_stream_columns {
+            return Ok(s_expr.clone());
+        }
+        match s_expr.plan() {
+            RelOperator::Scan(scan) => {
+                let mut scan = scan.clone();
+                scan.is_lazy_table = is_lazy_table;
+                scan.set_update_stream_columns(update_stream_columns);
+                Ok(SExpr::create_leaf(Arc::new(scan.into())))
+            }
+            _ => {
+                let mut children = Vec::with_capacity(s_expr.arity());
+                for child in s_expr.children() {
+                    let child =
+                        Self::update_target_scan(child, is_lazy_table, update_stream_columns)?;
+                    children.push(Arc::new(child));
+                }
+                Ok(s_expr.replace_children(children))
+            }
+        }
+    }
 }
 
 impl Binder {
@@ -361,7 +375,7 @@ impl Binder {
         target_table_identifier: &TableIdentifier,
         table_index: usize,
         expr: &mut SExpr,
-        mutation_type: DataMutationType,
+        mutation_type: MutationType,
     ) -> Result<usize> {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),
@@ -435,7 +449,7 @@ impl Binder {
         &self,
         bind_context: &mut BindContext,
         filter: &Option<Expr>,
-    ) -> Result<(DataMutationStrategy, Option<ScalarExpr>)> {
+    ) -> Result<(MutationStrategy, Option<ScalarExpr>)> {
         if let Some(expr) = filter {
             let mut scalar_binder = ScalarBinder::new(
                 bind_context,
@@ -455,12 +469,12 @@ impl Binder {
                 .set_span(scalar.span()));
             }
             if !self.has_subquery(&scalar)? {
-                Ok((DataMutationStrategy::Direct, Some(scalar)))
+                Ok((MutationStrategy::Direct, Some(scalar)))
             } else {
-                Ok((DataMutationStrategy::MatchedOnly, Some(scalar)))
+                Ok((MutationStrategy::MatchedOnly, Some(scalar)))
             }
         } else {
-            Ok((DataMutationStrategy::Direct, None))
+            Ok((MutationStrategy::Direct, None))
         }
     }
 
@@ -504,30 +518,18 @@ impl Binder {
     }
 }
 
-pub fn update_target_scan(
-    s_expr: &SExpr,
-    is_lazy_table: bool,
-    update_stream_columns: bool,
-) -> Result<SExpr> {
-    if !is_lazy_table && !update_stream_columns {
-        return Ok(s_expr.clone());
-    }
-    match s_expr.plan() {
-        RelOperator::Scan(scan) => {
-            let mut scan = scan.clone();
-            scan.is_lazy_table = is_lazy_table;
-            scan.set_update_stream_columns(update_stream_columns);
-            Ok(SExpr::create_leaf(Arc::new(scan.into())))
-        }
-        _ => {
-            let mut children = Vec::with_capacity(s_expr.arity());
-            for child in s_expr.children() {
-                let child = update_target_scan(child, is_lazy_table, update_stream_columns)?;
-                children.push(Arc::new(child));
-            }
-            Ok(s_expr.replace_children(children))
-        }
-    }
+pub struct MutationExpressionBindResult {
+    pub input: SExpr,
+    pub mutation_type: MutationType,
+    pub mutation_strategy: MutationStrategy,
+    pub required_columns: ColumnSet,
+    pub bind_context: BindContext,
+    pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
+    pub target_table_index: usize,
+    pub target_row_id_index: usize,
+    pub predicate_index: Option<usize>,
+    pub truncate_table: bool,
+    pub mutation_filter: Option<ScalarExpr>,
 }
 
 pub fn target_table_position(s_expr: &SExpr, target_table_index: usize) -> Result<usize> {

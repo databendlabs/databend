@@ -13,11 +13,11 @@
 // limitations under the License.
 
 mod bind;
-mod data_mutation_input;
 mod delete;
 mod merge;
+mod mutation_expression;
 mod update;
 
-pub use bind::DataMutationStrategy;
-pub use bind::DataMutationType;
-pub use data_mutation_input::target_table_position;
+pub use bind::MutationStrategy;
+pub use bind::MutationType;
+pub use mutation_expression::target_table_position;

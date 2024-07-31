@@ -34,8 +34,8 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use indexmap::IndexMap;
 
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpression;
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpressionBindResult;
+use crate::binder::bind_mutation::mutation_expression::MutationExpression;
+use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
 use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -56,25 +56,25 @@ use crate::ScalarExpr;
 use crate::UdfRewriter;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DataMutationType {
+pub enum MutationType {
     #[default]
     Merge,
     Update,
     Delete,
 }
 
-impl fmt::Display for DataMutationType {
+impl fmt::Display for MutationType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            DataMutationType::Merge => write!(f, "MERGE"),
-            DataMutationType::Update => write!(f, "UPDATE"),
-            DataMutationType::Delete => write!(f, "DELETE"),
+            MutationType::Merge => write!(f, "MERGE"),
+            MutationType::Update => write!(f, "UPDATE"),
+            MutationType::Delete => write!(f, "DELETE"),
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DataMutationStrategy {
+pub enum MutationStrategy {
     Direct,
     MatchedOnly,
     NotMatchedOnly,
@@ -83,8 +83,8 @@ pub enum DataMutationStrategy {
 
 pub struct DataMutation {
     pub target_table_identifier: TableIdentifier,
-    pub expression: DataMutationExpression,
-    pub strategy: DataMutationStrategy,
+    pub expression: MutationExpression,
+    pub strategy: MutationStrategy,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
@@ -147,7 +147,7 @@ impl Binder {
         );
 
         // Add table lock before execution.
-        let lock_guard = if strategy != DataMutationStrategy::NotMatchedOnly {
+        let lock_guard = if strategy != MutationStrategy::NotMatchedOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
@@ -179,7 +179,7 @@ impl Binder {
             )
             .await?;
 
-        let DataMutationExpressionBindResult {
+        let MutationExpressionBindResult {
             input,
             mutation_type,
             mutation_strategy,
@@ -238,8 +238,7 @@ impl Binder {
             None
         };
 
-        if table.change_tracking_enabled()
-            && mutation_strategy != DataMutationStrategy::NotMatchedOnly
+        if table.change_tracking_enabled() && mutation_strategy != MutationStrategy::NotMatchedOnly
         {
             for stream_column in table.stream_columns() {
                 let column_index =
@@ -303,7 +302,7 @@ impl Binder {
             mutation_type: mutation_strategy.clone(),
             distributed: false,
             change_join_order: false,
-            mutation_source: mutation_strategy == DataMutationStrategy::Direct,
+            mutation_source: mutation_strategy == MutationStrategy::Direct,
             predicate_index,
             truncate_table,
             mutation_filter,
@@ -312,8 +311,7 @@ impl Binder {
             lock_guard,
         };
 
-        if mutation_strategy == DataMutationStrategy::NotMatchedOnly && !insert_only(&data_mutation)
-        {
+        if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&data_mutation) {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));
