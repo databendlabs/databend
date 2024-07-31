@@ -15,7 +15,7 @@ test-core: up
 
 test-driver: up
 	cargo test --test driver
-	TEST_DATABEND_DSN=databend+flight://root:@localhost:8900/default?sslmode=disable&format_null_as_str=0 cargo test --features flight-sql --test driver
+	TEST_DATABEND_DSN=databend+flight://root:@localhost:8900/default?sslmode=disable cargo test --features flight-sql --test driver
 
 test-bendsql: up
 	cd .. && ./cli/test.sh http

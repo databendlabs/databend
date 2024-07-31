@@ -230,13 +230,18 @@ impl TryFrom<(&DataType, &str)> for Value {
                 let decoder = ValueDecoder {};
                 decoder.read_field(t, &mut reader)
             }
-            DataType::Nullable(inner) => {
-                if v == NULL_VALUE {
-                    Ok(Self::Null)
-                } else {
-                    Self::try_from((inner.as_ref(), v))
+            DataType::Nullable(inner) => match inner.as_ref() {
+                DataType::String => Ok(Self::String(v.to_string())),
+                _ => {
+                    // not string type, try to check if it is NULL
+                    // for compatible with old version server
+                    if v == NULL_VALUE {
+                        Ok(Self::Null)
+                    } else {
+                        Self::try_from((inner.as_ref(), v))
+                    }
                 }
-            }
+            },
         }
     }
 }

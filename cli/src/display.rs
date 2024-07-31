@@ -152,21 +152,18 @@ impl<'a> FormatDisplay<'a> {
                 );
             }
             ExpandMode::Auto => {
-                if rows.len() > 1 {
-                    println!(
-                        "{}",
-                        create_table(
-                            schema,
-                            &rows,
-                            self.replace_newline,
-                            self.settings.max_display_rows,
-                            self.settings.max_width,
-                            self.settings.max_col_width
-                        )?
-                    );
-                } else {
-                    print_expanded(schema, &rows)?;
-                }
+                // FIXME: depends on terminal size
+                println!(
+                    "{}",
+                    create_table(
+                        schema,
+                        &rows,
+                        self.replace_newline,
+                        self.settings.max_display_rows,
+                        self.settings.max_width,
+                        self.settings.max_col_width
+                    )?
+                );
             }
         }
 
