@@ -184,16 +184,16 @@ impl PipelineBuilder {
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => self.build_deduplicate(deduplicate),
             PhysicalPlan::ReplaceInto(replace) => self.build_replace_into(replace),
 
-            // Merge into.
-            PhysicalPlan::Mutation(merge_into) => self.build_merge_into(merge_into),
-            PhysicalPlan::MutationSplit(merge_into_split) => {
-                self.build_merge_into_split(merge_into_split)
+            // Mutation.
+            PhysicalPlan::Mutation(mutation) => self.build_mutation(mutation),
+            PhysicalPlan::MutationSplit(mutation_split) => {
+                self.build_mutation_split(mutation_split)
             }
-            PhysicalPlan::MutationManipulate(merge_into_manipulate) => {
-                self.build_merge_into_manipulate(merge_into_manipulate)
+            PhysicalPlan::MutationManipulate(mutation_manipulate) => {
+                self.build_mutation_manipulate(mutation_manipulate)
             }
-            PhysicalPlan::MutationOrganize(merge_into_organize) => {
-                self.build_merge_into_organize(merge_into_organize)
+            PhysicalPlan::MutationOrganize(mutation_organize) => {
+                self.build_mutation_organize(mutation_organize)
             }
             PhysicalPlan::AddStreamColumn(add_stream_column) => {
                 self.build_add_stream_column(add_stream_column)

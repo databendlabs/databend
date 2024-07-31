@@ -66,7 +66,7 @@ impl Binder {
             Self::split_merge_into_clauses(&stmt.merge_options)?;
         let mutation_strategy = get_mutation_type(matched_clauses.len(), unmatched_clauses.len())?;
 
-        let data_mutation = Mutation {
+        let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Merge {
                 target: target_reference,
@@ -80,7 +80,7 @@ impl Binder {
             unmatched_clauses,
         };
 
-        self.bind_data_mutation(bind_context, data_mutation).await
+        self.bind_mutation(bind_context, mutation).await
     }
 
     pub fn split_merge_into_clauses(

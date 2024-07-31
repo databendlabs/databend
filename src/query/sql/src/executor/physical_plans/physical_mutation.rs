@@ -20,9 +20,11 @@ use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ComputedExpr;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -56,6 +58,7 @@ use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
+use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
@@ -69,7 +72,7 @@ use crate::TypeCheck;
 use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
-// predicate_column_index should not be conflict with update expr's column_binding's index.
+// The predicate_column_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -90,30 +93,10 @@ pub struct Mutation {
 }
 
 impl PhysicalPlanBuilder {
-    // DataMutation strategies:
-    // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
-    // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
-    // 2. merge into join strategies:
-    // Left,Right,Inner,Left Anti, Right Anti
-    // important flag:
-    //      I. change join order: if true, target table as build side, if false, source as build side.
-    //      II. distributed: this merge into is executed at a distributed stargety.
-    // 2.1 Left: there are matched and not matched, and change join order is true.
-    // 2.2 Left Anti: change join order is true, but it's insert-only.
-    // 2.3 Inner: this is matched only case.
-    //      2.3.1 change join order is true, target table as build side,it's matched-only.
-    //      2.3.2 change join order is false, source data as build side,it's matched-only.
-    // 2.4 Right: change join order is false, there are matched and not matched
-    // 2.5 Right Anti: change join order is false, but it's insert-only.
-    // distributed execution stargeties:
-    // I. change join order is true, we use the `optimize_distributed_query`'s result.
-    // II. change join order is false and match_pattern and not enable spill, we use right outer join with rownumber distributed strategies.
-    // III otherwise, use `merge_into_join_sexpr` as standalone execution(so if change join order is false,but doesn't match_pattern, we don't support distributed,in fact. case I
-    // can take this at most time, if that's a hash shuffle, the I can take it. We think source is always very small).
-    pub async fn build_merge_into(
+    pub async fn build_mutation(
         &mut self,
         s_expr: &SExpr,
-        data_mutation: &crate::plans::Mutation,
+        mutation: &crate::plans::Mutation,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Mutation {
@@ -125,21 +108,20 @@ impl PhysicalPlanBuilder {
             table_name_alias,
             matched_evaluators,
             unmatched_evaluators,
-            input_type,
+            mutation_type,
             target_table_index,
             field_index_map,
             strategy,
             distributed,
-            mutation_source,
             predicate_column_index,
             row_id_index,
             change_join_order,
             can_try_update_column_only,
             ..
-        } = data_mutation;
+        } = mutation;
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
-        let data_mutation_input_schema = plan.output_schema()?;
+        let mutation_input_schema = plan.output_schema()?;
 
         let table = self
             .ctx
@@ -147,9 +129,9 @@ impl PhysicalPlanBuilder {
             .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
-        let data_mutation_build_info = self.data_mutation_build_info.clone().unwrap();
+        let mutation_build_info = self.mutation_build_info.clone().unwrap();
 
-        if *mutation_source {
+        if *strategy == MutationStrategy::Direct {
             let mut field_id_to_schema_index = HashMap::new();
             let (mutation_expr, computed_expr, mutation_kind) =
                 if let Some(update_list) = &matched_evaluators[0].update {
@@ -162,7 +144,7 @@ impl PhysicalPlanBuilder {
                         bind_context,
                         update_list,
                         table.schema_with_stream().into(),
-                        data_mutation_input_schema.clone(),
+                        mutation_input_schema.clone(),
                         *predicate_column_index,
                         database,
                         &table_name,
@@ -180,7 +162,7 @@ impl PhysicalPlanBuilder {
                                 column_binding,
                             ) {
                                 let column_index = column_binding.index;
-                                let schema_index = data_mutation_input_schema
+                                let schema_index = mutation_input_schema
                                     .index_of(&column_index.to_string())
                                     .unwrap();
                                 field_id_to_schema_index.insert(field_id, schema_index);
@@ -193,7 +175,7 @@ impl PhysicalPlanBuilder {
                         self.ctx.clone(),
                         bind_context,
                         Arc::new(table.schema().into()),
-                        data_mutation_input_schema.clone(),
+                        mutation_input_schema.clone(),
                         database,
                         &table_name,
                         update_list,
@@ -208,14 +190,14 @@ impl PhysicalPlanBuilder {
                     (None, None, MutationKind::Delete)
                 };
 
-            let input_num_columns = data_mutation_input_schema.fields().len();
+            let input_num_columns = mutation_input_schema.fields().len();
             plan = PhysicalPlan::ColumnMutation(ColumnMutation {
                 plan_id: 0,
                 input: Box::new(plan),
-                table_info: data_mutation_build_info.table_info.clone(),
+                table_info: mutation_build_info.table_info.clone(),
                 mutation_expr,
                 computed_expr,
-                input_type: input_type.clone(),
+                mutation_type: mutation_type.clone(),
                 field_id_to_schema_index,
                 input_num_columns,
                 has_filter_column: predicate_column_index.is_some(),
@@ -234,12 +216,9 @@ impl PhysicalPlanBuilder {
                 })
             };
 
-            let base_snapshot = data_mutation_build_info.table_snapshot;
-
-            // build mutation_aggregate
             let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
                 input: Box::new(commit_input),
-                snapshot: base_snapshot,
+                snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
                 mutation_kind,
@@ -256,7 +235,7 @@ impl PhysicalPlanBuilder {
 
         let is_not_matched_only = matches!(strategy, MutationStrategy::NotMatchedOnly);
         let row_id_offset = if !is_not_matched_only {
-            data_mutation_input_schema.index_of(&row_id_index.to_string())?
+            mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
             DUMMY_COLUMN_INDEX
         };
@@ -270,7 +249,7 @@ impl PhysicalPlanBuilder {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
                 bind_context,
-                data_mutation_input_schema.clone(),
+                mutation_input_schema.clone(),
                 database_name,
                 &table_name,
             )?);
@@ -293,10 +272,10 @@ impl PhysicalPlanBuilder {
             .get_table_lazy_columns(target_table_index)
             && !lazy_columns.is_empty()
         {
-            plan = PhysicalPlan::RowFetch(build_data_mutation_row_fetch(
+            plan = PhysicalPlan::RowFetch(build_mutation_row_fetch(
                 plan,
                 metadata.clone(),
-                data_mutation_input_schema.clone(),
+                mutation_input_schema.clone(),
                 strategy.clone(),
                 lazy_columns.clone(),
                 *target_table_index,
@@ -383,7 +362,7 @@ impl PhysicalPlanBuilder {
                                 .as_expr(&BUILTIN_FUNCTIONS)
                                 .project_column_ref(|name| {
                                     // there will add a predicate col when we process matched clauses.
-                                    // so it's not in data_mutation_input_schema for now. But it's must be added
+                                    // so it's not in mutation_input_schema for now. But it's must be added
                                     // to the tail, so let do it like below.
                                     if *name == PREDICATE_COLUMN_INDEX.to_string() {
                                         output_schema.num_fields()
@@ -404,8 +383,6 @@ impl PhysicalPlanBuilder {
             matched.push((condition, update_list))
         }
 
-        let base_snapshot = data_mutation_build_info.table_snapshot;
-
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
             field_index_of_input_schema
@@ -422,7 +399,7 @@ impl PhysicalPlanBuilder {
             strategy: strategy.clone(),
             row_id_idx: row_id_offset,
             can_try_update_column_only: *can_try_update_column_only,
-            unmatched_schema: data_mutation_input_schema.clone(),
+            unmatched_schema: mutation_input_schema.clone(),
         }));
 
         plan = PhysicalPlan::MutationOrganize(Box::new(MutationOrganize {
@@ -431,14 +408,15 @@ impl PhysicalPlanBuilder {
             strategy: strategy.clone(),
         }));
 
-        let segments: Vec<_> = base_snapshot
+        let segments: Vec<_> = mutation_build_info
+            .table_snapshot
             .segments()
             .iter()
             .cloned()
             .enumerate()
             .collect();
 
-        let merge_into = PhysicalPlan::Mutation(Box::new(Mutation {
+        let mutation = PhysicalPlan::Mutation(Box::new(Mutation {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
             unmatched,
@@ -453,11 +431,11 @@ impl PhysicalPlanBuilder {
         }));
 
         let commit_input = if !distributed {
-            merge_into
+            mutation
         } else {
             PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
-                input: Box::new(merge_into),
+                input: Box::new(mutation),
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
@@ -465,20 +443,20 @@ impl PhysicalPlanBuilder {
             })
         };
 
-        let mutation_kind = match input_type {
+        let mutation_kind = match mutation_type {
             MutationType::Update | MutationType::Merge => MutationKind::Update,
             MutationType::Delete => MutationKind::Delete,
         };
 
-        let update_stream_meta = match input_type {
-            MutationType::Merge => data_mutation_build_info.update_stream_meta,
+        let update_stream_meta = match mutation_type {
+            MutationType::Merge => mutation_build_info.update_stream_meta,
             MutationType::Update | MutationType::Delete => vec![],
         };
 
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
-            snapshot: base_snapshot,
+            snapshot: mutation_build_info.table_snapshot,
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
             mutation_kind,
@@ -512,7 +490,7 @@ impl PhysicalPlanBuilder {
 pub fn build_block_id_shuffle_exchange(
     plan: PhysicalPlan,
     bind_context: &BindContext,
-    data_mutation_input_schema: Arc<DataSchema>,
+    mutation_input_schema: Arc<DataSchema>,
     database_name: &str,
     table_name: &str,
 ) -> Result<Exchange> {
@@ -534,12 +512,8 @@ pub fn build_block_id_shuffle_exchange(
     let row_id_column = row_id_column.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
     let row_id_expr = row_id_column
-        .type_check(data_mutation_input_schema.as_ref())?
-        .project_column_ref(|index| {
-            data_mutation_input_schema
-                .index_of(&index.to_string())
-                .unwrap()
-        });
+        .type_check(mutation_input_schema.as_ref())?
+        .project_column_ref(|index| mutation_input_schema.index_of(&index.to_string()).unwrap());
 
     let block_id_shuffle_key = check_function(
         None,
@@ -576,10 +550,10 @@ pub fn build_block_id_shuffle_exchange(
     })
 }
 
-fn build_data_mutation_row_fetch(
+fn build_mutation_row_fetch(
     plan: PhysicalPlan,
     metadata: MetadataRef,
-    data_mutation_input_schema: Arc<DataSchema>,
+    mutation_input_schema: Arc<DataSchema>,
     strategy: MutationStrategy,
     lazy_columns: HashSet<usize>,
     target_table_index: usize,
@@ -590,7 +564,7 @@ fn build_data_mutation_row_fetch(
     let lazy_columns = lazy_columns
         .iter()
         .sorted() // Needs sort because we need to make the order deterministic.
-        .filter(|index| !data_mutation_input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
+        .filter(|index| !mutation_input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
         .cloned()
         .collect::<Vec<_>>();
     let mut has_inner_column = false;
@@ -802,11 +776,6 @@ pub fn mutation_update_expr(
         },
     )
 }
-
-use databend_common_expression::type_check::check_cast;
-use databend_common_expression::ComputedExpr;
-
-use crate::parse_computed_expr;
 
 pub fn generate_stored_computed_list(
     ctx: Arc<dyn TableContext>,

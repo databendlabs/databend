@@ -20,7 +20,7 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     // Organize outputs and resize row_id
-    pub(crate) fn build_merge_into_organize(
+    pub(crate) fn build_mutation_organize(
         &mut self,
         merge_into_organize: &MutationOrganize,
     ) -> Result<()> {

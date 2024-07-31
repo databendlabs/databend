@@ -1005,7 +1005,7 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = match plan.input_type {
+                let privileges = match plan.mutation_type {
                     MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
                     MutationType::Update => vec![UserPrivilegeType::Update],
                     MutationType::Delete => vec![UserPrivilegeType::Delete],

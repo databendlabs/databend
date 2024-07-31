@@ -26,10 +26,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::DataMutationBuildInfo;
+use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
@@ -50,19 +51,19 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::DataBlockStream;
 
-pub struct DataMutationInterpreter {
+pub struct MutationInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
 }
 
-impl DataMutationInterpreter {
+impl MutationInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         schema: DataSchemaRef,
-    ) -> Result<DataMutationInterpreter> {
-        Ok(DataMutationInterpreter {
+    ) -> Result<MutationInterpreter> {
+        Ok(MutationInterpreter {
             ctx,
             s_expr,
             schema,
@@ -71,9 +72,9 @@ impl DataMutationInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DataMutationInterpreter {
+impl Interpreter for MutationInterpreter {
     fn name(&self) -> &str {
-        "DataMutationInterpreter"
+        "MutationInterpreter"
     }
 
     fn is_ddl(&self) -> bool {
@@ -86,14 +87,14 @@ impl Interpreter for DataMutationInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let data_mutation: Mutation = self.s_expr.plan().clone().try_into()?;
+        let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
         let table = self
             .ctx
             .get_table(
-                &data_mutation.catalog_name,
-                &data_mutation.database_name,
-                &data_mutation.table_name,
+                &mutation.catalog_name,
+                &mutation.database_name,
+                &mutation.table_name,
             )
             .await?;
 
@@ -104,26 +105,26 @@ impl Interpreter for DataMutationInterpreter {
                 "table {}, engine type {}, does not support {}",
                 table.name(),
                 table.get_table_info().engine(),
-                data_mutation.input_type,
+                mutation.mutation_type,
             ))
         })?;
 
         let table_snapshot = fuse_table.read_table_snapshot().await?;
         if let Some(build_res) = self
-            .fast_mutation(&data_mutation, fuse_table, &table_snapshot)
+            .fast_mutation(&mutation, fuse_table, &table_snapshot)
             .await?
         {
             return Ok(build_res);
         }
 
-        // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+        // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
         let table_info = fuse_table.get_table_info().clone();
         let update_stream_meta =
-            dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
+            dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
         let partitions = self
-            .mutation_source_partions(&data_mutation, fuse_table, table_snapshot.clone())
+            .mutation_source_partions(&mutation, fuse_table, table_snapshot.clone())
             .await?;
-        let data_mutation_build_info = DataMutationBuildInfo {
+        let mutation_build_info = MutationBuildInfo {
             table_info,
             table_snapshot,
             update_stream_meta,
@@ -132,7 +133,7 @@ impl Interpreter for DataMutationInterpreter {
 
         // Build physical plan.
         let physical_plan = self
-            .build_physical_plan(&data_mutation, Some(data_mutation_build_info))
+            .build_physical_plan(&mutation, Some(mutation_build_info))
             .await?;
 
         // Build pipeline.
@@ -140,34 +141,32 @@ impl Interpreter for DataMutationInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
         // Execute hook.
-        self.execute_hook(&data_mutation, &mut build_res).await;
+        self.execute_hook(&mutation, &mut build_res).await;
 
-        build_res
-            .main_pipeline
-            .add_lock_guard(data_mutation.lock_guard);
+        build_res.main_pipeline.add_lock_guard(mutation.lock_guard);
 
         Ok(build_res)
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let blocks = self.get_data_mutation_table_result()?;
+        let blocks = self.get_mutation_table_result()?;
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
 
-impl DataMutationInterpreter {
+impl MutationInterpreter {
     pub async fn execute_hook(
         &self,
-        data_mutation: &databend_common_sql::plans::Mutation,
+        mutation: &databend_common_sql::plans::Mutation,
         build_res: &mut PipelineBuildResult,
     ) {
-        let hook_lock_opt = if data_mutation.lock_guard.is_some() {
+        let hook_lock_opt = if mutation.lock_guard.is_some() {
             LockTableOption::NoLock
         } else {
             LockTableOption::LockNoRetry
         };
 
-        let mutation_kind = match data_mutation.input_type {
+        let mutation_kind = match mutation.mutation_type {
             MutationType::Update => MutationKind::Update,
             MutationType::Delete => MutationKind::Delete,
             MutationType::Merge => MutationKind::MergeInto,
@@ -175,13 +174,13 @@ impl DataMutationInterpreter {
 
         let hook_operator = HookOperator::create(
             self.ctx.clone(),
-            data_mutation.catalog_name.clone(),
-            data_mutation.database_name.clone(),
-            data_mutation.table_name.clone(),
+            mutation.catalog_name.clone(),
+            mutation.database_name.clone(),
+            mutation.table_name.clone(),
             mutation_kind,
             hook_lock_opt,
         );
-        match data_mutation.input_type {
+        match mutation.mutation_type {
             MutationType::Update | MutationType::Delete => {
                 hook_operator
                     .execute_refresh(&mut build_res.main_pipeline)
@@ -193,59 +192,58 @@ impl DataMutationInterpreter {
 
     pub async fn build_physical_plan(
         &self,
-        data_mutation: &Mutation,
-        data_mutation_build_info: Option<DataMutationBuildInfo>,
+        mutation: &Mutation,
+        mutation_build_info: Option<MutationBuildInfo>,
     ) -> Result<PhysicalPlan> {
-        let data_mutation_build_info =
-            if let Some(data_mutation_build_info) = data_mutation_build_info {
-                data_mutation_build_info
-            } else {
-                let table = self
-                    .ctx
-                    .get_table(
-                        &data_mutation.catalog_name,
-                        &data_mutation.database_name,
-                        &data_mutation.table_name,
-                    )
-                    .await?;
+        let mutation_build_info = if let Some(mutation_build_info) = mutation_build_info {
+            mutation_build_info
+        } else {
+            let table = self
+                .ctx
+                .get_table(
+                    &mutation.catalog_name,
+                    &mutation.database_name,
+                    &mutation.table_name,
+                )
+                .await?;
 
-                // Check if the table supports DataMutation.
-                table.check_mutable()?;
-                let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                    ErrorCode::Unimplemented(format!(
-                        "table {}, engine type {}, does not support {}",
-                        table.name(),
-                        table.get_table_info().engine(),
-                        data_mutation.input_type,
-                    ))
-                })?;
+            // Check if the table supports DataMutation.
+            table.check_mutable()?;
+            let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+                ErrorCode::Unimplemented(format!(
+                    "table {}, engine type {}, does not support {}",
+                    table.name(),
+                    table.get_table_info().engine(),
+                    mutation.mutation_type,
+                ))
+            })?;
 
-                // Prepare DataMutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-                let table_info = fuse_table.get_table_info().clone();
-                let table_snapshot = fuse_table.read_table_snapshot().await?;
-                let update_stream_meta =
-                    dml_build_update_stream_req(self.ctx.clone(), &data_mutation.metadata).await?;
-                let partitions = self
-                    .mutation_source_partions(data_mutation, fuse_table, table_snapshot.clone())
-                    .await?;
-                DataMutationBuildInfo {
-                    table_info,
-                    table_snapshot,
-                    update_stream_meta,
-                    partitions,
-                }
-            };
+            // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+            let table_info = fuse_table.get_table_info().clone();
+            let table_snapshot = fuse_table.read_table_snapshot().await?;
+            let update_stream_meta =
+                dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
+            let partitions = self
+                .mutation_source_partions(mutation, fuse_table, table_snapshot.clone())
+                .await?;
+            MutationBuildInfo {
+                table_info,
+                table_snapshot,
+                update_stream_meta,
+                partitions,
+            }
+        };
 
         // Build physical plan.
         let mut builder =
-            PhysicalPlanBuilder::new(data_mutation.metadata.clone(), self.ctx.clone(), false);
-        builder.set_data_mutation_build_info(data_mutation_build_info);
+            PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), false);
+        builder.set_mutation_build_info(mutation_build_info);
         builder
-            .build(&self.s_expr, *data_mutation.required_columns.clone())
+            .build(&self.s_expr, *mutation.required_columns.clone())
             .await
     }
 
-    fn get_data_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
+    fn get_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
         let binding = self.ctx.get_merge_status();
         let status = binding.read();
         let mut columns = Vec::new();
@@ -268,11 +266,11 @@ impl DataMutationInterpreter {
 
     async fn fast_mutation(
         &self,
-        data_mutation: &Mutation,
+        mutation: &Mutation,
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        if data_mutation.input_type == MutationType::Merge {
+        if mutation.mutation_type == MutationType::Merge {
             return Ok(None);
         }
 
@@ -288,8 +286,8 @@ impl DataMutationInterpreter {
             return Ok(Some(build_res));
         }
 
-        if data_mutation.input_type == MutationType::Delete {
-            if data_mutation.truncate_table {
+        if mutation.mutation_type == MutationType::Delete {
+            if mutation.truncate_table {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -314,16 +312,15 @@ impl DataMutationInterpreter {
 
     async fn mutation_source_partions(
         &self,
-        data_mutation: &Mutation,
+        mutation: &Mutation,
         fuse_table: &FuseTable,
         table_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<Option<Partitions>> {
-        if data_mutation.mutation_source {
+        if mutation.strategy == MutationStrategy::Direct {
             let Some(table_snapshot) = table_snapshot else {
                 return Ok(Some(Partitions::create(PartitionsShuffleKind::Mod, vec![])));
             };
-            let (filters, filter_used_columns) = if let Some(filter) = &data_mutation.direct_filter
-            {
+            let (filters, filter_used_columns) = if let Some(filter) = &mutation.direct_filter {
                 (
                     Some(create_push_down_filters(filter)?),
                     filter.used_columns().into_iter().collect(),
@@ -331,7 +328,7 @@ impl DataMutationInterpreter {
             } else {
                 (None, vec![])
             };
-            let (is_lazy, is_delete) = if data_mutation.input_type == MutationType::Delete {
+            let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
                 let cluster = self.ctx.get_cluster();
                 let is_lazy =
                     !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();

@@ -21,10 +21,7 @@ use databend_common_storages_fuse::TableContext;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_merge_into_split(
-        &mut self,
-        merge_into_split: &MutationSplit,
-    ) -> Result<()> {
+    pub(crate) fn build_mutation_split(&mut self, merge_into_split: &MutationSplit) -> Result<()> {
         self.build_pipeline(&merge_into_split.input)?;
         self.main_pipeline
             .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;

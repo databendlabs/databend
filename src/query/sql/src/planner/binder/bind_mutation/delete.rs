@@ -64,7 +64,7 @@ impl<'a> Binder {
             operation: MatchOperation::Delete,
         };
 
-        let data_mutation = Mutation {
+        let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Delete {
                 target: table.clone(),
@@ -75,6 +75,6 @@ impl<'a> Binder {
             unmatched_clauses: vec![],
         };
 
-        self.bind_data_mutation(bind_context, data_mutation).await
+        self.bind_mutation(bind_context, mutation).await
     }
 }

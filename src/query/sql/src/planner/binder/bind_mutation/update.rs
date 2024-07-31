@@ -79,7 +79,7 @@ impl Binder {
 
         // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
 
-        let data_mutation = Mutation {
+        let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Update {
                 target: table.clone(),
@@ -90,6 +90,6 @@ impl Binder {
             unmatched_clauses: vec![],
         };
 
-        self.bind_data_mutation(bind_context, data_mutation).await
+        self.bind_mutation(bind_context, mutation).await
     }
 }

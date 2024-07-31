@@ -45,7 +45,7 @@ impl PipelineBuilder {
 
     // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
     // receive matched data and not matched data parallelly.
-    pub(crate) fn build_merge_into_manipulate(
+    pub(crate) fn build_mutation_manipulate(
         &mut self,
         merge_into_manipulate: &MutationManipulate,
     ) -> Result<()> {

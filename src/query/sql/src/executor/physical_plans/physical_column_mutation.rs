@@ -29,7 +29,7 @@ pub struct ColumnMutation {
     pub table_info: TableInfo,
     pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
     pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
-    pub input_type: MutationType,
+    pub mutation_type: MutationType,
     pub field_id_to_schema_index: HashMap<usize, usize>,
     pub input_num_columns: usize,
     pub has_filter_column: bool,

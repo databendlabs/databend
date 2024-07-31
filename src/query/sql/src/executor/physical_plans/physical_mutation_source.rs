@@ -62,7 +62,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        let data_mutation_info = self.data_mutation_build_info.as_ref().unwrap();
+        let mutation_info = self.mutation_build_info.as_ref().unwrap();
 
         let metadata = self.metadata.read();
         let mut fields = Vec::with_capacity(mutation_source.columns.len());
@@ -94,13 +94,13 @@ impl PhysicalPlanBuilder {
         let output_schema = DataSchemaRefExt::create(fields);
         Ok(PhysicalPlan::MutationSource(MutationSource {
             plan_id: 0,
-            partitions: data_mutation_info.partitions.clone().unwrap(),
+            partitions: mutation_info.partitions.clone().unwrap(),
             output_schema,
-            table_info: data_mutation_info.table_info.clone(),
+            table_info: mutation_info.table_info.clone(),
             filters,
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
-            snapshot: data_mutation_info.table_snapshot.clone().unwrap(),
+            snapshot: mutation_info.table_snapshot.clone().unwrap(),
         }))
     }
 }

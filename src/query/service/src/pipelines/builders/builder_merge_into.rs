@@ -41,8 +41,8 @@ use crate::pipelines::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    // build merge into serialize and mutation pipeline
-    pub(crate) fn build_merge_into(&mut self, merge_into: &Mutation) -> Result<()> {
+    // build mutation serialize and mutation pipeline
+    pub(crate) fn build_mutation(&mut self, merge_into: &Mutation) -> Result<()> {
         self.build_pipeline(&merge_into.input)?;
 
         let tbl = self

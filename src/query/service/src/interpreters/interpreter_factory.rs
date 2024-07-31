@@ -23,9 +23,9 @@ use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
-use super::interpreter_data_mutation::DataMutationInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
+use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
@@ -358,7 +358,7 @@ impl InterpreterFactory {
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
-                DataMutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
+                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
             )),
 
             // Roles

@@ -121,7 +121,7 @@ impl PipelineBuilder {
 
         let ctx = self.ctx.clone();
 
-        if column_mutation.input_type == MutationType::Delete {
+        if column_mutation.mutation_type == MutationType::Delete {
             let cluster_stats_gen = table.get_cluster_stats_gen(
                 self.ctx.clone(),
                 0,

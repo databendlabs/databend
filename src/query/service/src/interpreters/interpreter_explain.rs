@@ -36,7 +36,7 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use crate::interpreters::interpreter_data_mutation::DataMutationInterpreter;
+use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -121,15 +121,13 @@ impl Interpreter for ExplainInterpreter {
                     schema,
                     metadata,
                 } => {
-                    let data_mutation: Mutation = s_expr.plan().clone().try_into()?;
-                    let interpreter = DataMutationInterpreter::try_create(
+                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let interpreter = MutationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
                     )?;
-                    let plan = interpreter
-                        .build_physical_plan(&data_mutation, None)
-                        .await?;
+                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -442,18 +440,16 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let data_mutation: Mutation = s_expr.plan().clone().try_into()?;
-        let interpreter = DataMutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
-        let plan = interpreter
-            .build_physical_plan(&data_mutation, None)
-            .await?;
+        let mutation: Mutation = s_expr.plan().clone().try_into()?;
+        let interpreter = MutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let plan = interpreter.build_physical_plan(&mutation, None).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
         root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
 
         let display_string = fragments_actions
-            .display_indent(&data_mutation.metadata)
+            .display_indent(&mutation.metadata)
             .to_string();
 
         let line_split_result = display_string.lines().collect::<Vec<_>>();

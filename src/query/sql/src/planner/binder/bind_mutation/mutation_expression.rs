@@ -82,7 +82,7 @@ impl MutationExpression {
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
     ) -> Result<MutationExpressionBindResult> {
-        let mutation_type = self.data_mutation_type();
+        let mutation_type = self.mutation_type();
         let mut required_columns = ColumnSet::new();
         let mut update_stream_columns = target_table.change_tracking_enabled();
 
@@ -309,7 +309,7 @@ impl MutationExpression {
         }
     }
 
-    pub fn data_mutation_type(&self) -> MutationType {
+    pub fn mutation_type(&self) -> MutationType {
         match self {
             MutationExpression::Merge { .. } => MutationType::Merge,
             MutationExpression::Update { .. } => MutationType::Update,

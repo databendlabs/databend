@@ -60,7 +60,7 @@ pub struct Mutation {
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<HashSet<IndexType>>,
     pub metadata: MetadataRef,
-    pub input_type: MutationType,
+    pub mutation_type: MutationType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
@@ -71,7 +71,6 @@ pub struct Mutation {
     // also use for split
     pub row_id_index: IndexType,
     pub change_join_order: bool,
-    pub mutation_source: bool,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:

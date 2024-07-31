@@ -73,6 +73,11 @@ impl fmt::Display for MutationType {
     }
 }
 
+// Mutation strategies:
+// (1) Direct: if the mutation filter is a simple expression, we use MutationSource to execute the mutation directly.
+// (2) MatchedOnly: INNER JOIN.
+// (3) NotMatchedOnly: LEFT/RIGHT OUTER JOIN.
+// (4) MixedMatched: LEFT/RIGHT OUTER JOIN.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MutationStrategy {
     Direct,
@@ -125,12 +130,12 @@ impl Mutation {
 }
 
 impl Binder {
-    pub async fn bind_data_mutation(
+    pub async fn bind_mutation(
         &mut self,
         bind_context: &mut BindContext,
-        data_mutation: Mutation,
+        mutation: Mutation,
     ) -> Result<Plan> {
-        data_mutation.check_semantic()?;
+        mutation.check_semantic()?;
 
         let Mutation {
             target_table_identifier,
@@ -138,7 +143,7 @@ impl Binder {
             strategy,
             matched_clauses,
             unmatched_clauses,
-        } = data_mutation;
+        } = mutation;
 
         let (catalog_name, database_name, table_name, table_name_alias) = (
             target_table_identifier.catalog_name(),
@@ -286,14 +291,14 @@ impl Binder {
             );
         }
 
-        let data_mutation = crate::plans::Mutation {
+        let mutation = crate::plans::Mutation {
             catalog_name,
             database_name,
             table_name,
             table_name_alias,
             bind_context: Box::new(bind_context),
             metadata: self.metadata.clone(),
-            input_type: mutation_type,
+            mutation_type,
             required_columns: Box::new(required_columns),
             matched_evaluators,
             unmatched_evaluators,
@@ -302,7 +307,6 @@ impl Binder {
             strategy: mutation_strategy.clone(),
             distributed: false,
             change_join_order: false,
-            mutation_source: mutation_strategy == MutationStrategy::Direct,
             row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
@@ -311,17 +315,15 @@ impl Binder {
             direct_filter,
         };
 
-        if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&data_mutation) {
+        if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));
         }
 
-        let schema = data_mutation.schema();
-        let mut s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(data_mutation)),
-            Arc::new(input),
-        );
+        let schema = mutation.schema();
+        let mut s_expr =
+            SExpr::create_unary(Arc::new(RelOperator::Mutation(mutation)), Arc::new(input));
 
         // rewrite udf for interpreter udf
         let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
@@ -592,15 +594,15 @@ impl Binder {
     }
 }
 
-fn insert_only(merge_plan: &crate::plans::Mutation) -> bool {
-    let metadata = merge_plan.metadata.read();
+fn insert_only(mutation: &crate::plans::Mutation) -> bool {
+    let metadata = mutation.metadata.read();
     let target_table_columns: HashSet<usize> = metadata
-        .columns_by_table_index(merge_plan.target_table_index)
+        .columns_by_table_index(mutation.target_table_index)
         .iter()
         .map(|column| column.index())
         .collect();
 
-    for evaluator in &merge_plan.unmatched_evaluators {
+    for evaluator in &mutation.unmatched_evaluators {
         if evaluator.condition.is_some() {
             let condition = evaluator.condition.as_ref().unwrap();
             for column in condition.used_columns() {

@@ -51,8 +51,8 @@ use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
 use super::TestFixture;
-use crate::interpreters::DataMutationInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::MutationInterpreter;
 use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
@@ -283,12 +283,12 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     fixture.execute_command(&query).await
 }
 
-pub async fn do_data_mutation(
+pub async fn do_mutation(
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
-    let interpreter = DataMutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let interpreter = MutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
     let _ = interpreter.execute(ctx).await?;
     Ok(())
 }
