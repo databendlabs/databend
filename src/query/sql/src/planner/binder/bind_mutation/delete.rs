@@ -53,7 +53,7 @@ impl<'a> Binder {
         {
             TableIdentifier::new(self, catalog, database, table, alias)
         } else {
-            // we do not support USING clause yet
+            // We do not support USING clause yet.
             return Err(ErrorCode::Internal(
                 "should not happen, parser should have report error already",
             ));
