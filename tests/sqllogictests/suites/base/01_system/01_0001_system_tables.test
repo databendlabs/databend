@@ -8,3 +8,15 @@ tables
 
 statement error 1006
 select name from system.tables where database='system' and table_id='xx'
+
+statement ok
+create or replace table default.tables(id int)
+
+# default.tables, system.tables, system.columns, and other table under system database
+query T
+select count() > 3 from system.tables where database='system' or name in ('tables', 'columns');
+----
+1
+
+statement ok
+drop table default.tables

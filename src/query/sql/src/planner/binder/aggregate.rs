@@ -649,8 +649,7 @@ impl Binder {
             if bind_context
                 .aggregate_info
                 .group_items_map
-                .get(&scalar_expr)
-                .is_some()
+                .contains_key(&scalar_expr)
             {
                 // The group key is duplicated
                 continue;

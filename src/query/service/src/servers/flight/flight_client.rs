@@ -31,12 +31,12 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use fastrace::full_name;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use futures::StreamExt;
 use futures_util::future::Either;
 use log::info;
-use minitrace::full_name;
-use minitrace::future::FutureExt;
-use minitrace::Span;
 use parking_lot::Mutex;
 use serde::Deserialize;
 use serde::Serialize;
@@ -67,7 +67,7 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_action<T, Res>(
         &mut self,
         path: &str,
@@ -153,7 +153,7 @@ impl FlightClient {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_get(
         &mut self,
         query_id: &str,

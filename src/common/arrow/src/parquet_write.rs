@@ -28,7 +28,7 @@ use crate::arrow::io::parquet::write::to_parquet_schema;
 use crate::arrow::io::parquet::write::RowGroupIterator;
 
 // a simple wrapper for code reuse
-pub fn write_parquet_file<W: Write, A, I>(
+pub fn write_parquet_file<W, A, I>(
     writer: &mut W,
     row_groups: RowGroupIterator<A, I>,
     schema: Schema,

@@ -142,7 +142,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn test_share_table<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
@@ -491,7 +491,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn test_share_database<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
@@ -871,7 +871,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -935,7 +935,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_endpoint_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -1184,7 +1184,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_add_remove_account<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -1473,7 +1473,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_grant_revoke_object<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -1803,7 +1803,7 @@ impl ShareApiTestSuite {
             }
 
             let object = ShareGrantObject::Table(table_id);
-            assert!(share_meta.entries.get(&object.to_string()).is_none());
+            assert!(!share_meta.entries.contains_key(&object.to_string()));
         }
 
         info!("--- check db and table shared_by field");
@@ -1850,7 +1850,7 @@ impl ShareApiTestSuite {
             let (_share_meta_seq, share_meta) =
                 get_share_meta_by_id_or_err(mt.as_kv_api(), share_id, "").await?;
             let object = ShareGrantObject::Table(table_id);
-            assert!(share_meta.entries.get(&object.to_string()).is_some());
+            assert!(share_meta.entries.contains_key(&object.to_string()));
 
             // then revoke the database
             let req = RevokeShareObjectReq {
@@ -1892,7 +1892,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_share_grant_objects<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -2015,7 +2015,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_grant_privileges_of_object<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -2276,7 +2276,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_share_database_and_table<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(

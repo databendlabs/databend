@@ -21,7 +21,7 @@ use databend_common_users::UserApiProvider;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sql::plans::share::CreateShareEndpointPlan;
+use crate::sql::plans::CreateShareEndpointPlan;
 
 pub struct CreateShareEndpointInterpreter {
     plan: CreateShareEndpointPlan,

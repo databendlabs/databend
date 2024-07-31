@@ -47,12 +47,12 @@ use databend_common_meta_types::StorageError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 use tonic::Response;
@@ -242,9 +242,8 @@ impl RaftServiceImpl {
         let mut strm = request.into_inner();
 
         databend_common_base::runtime::spawn(async move {
-            while let Some(chunk) = strm.try_next().await.map_err(|e| {
-                error!("fail to receive binary snapshot chunk: {:?}", &e);
-                e
+            while let Some(chunk) = strm.try_next().await.inspect_err(|e| {
+                error!("fail to receive binary snapshot chunk: {:?}", e);
             })? {
                 let res = tx.send(chunk).await;
                 if res.is_err() {

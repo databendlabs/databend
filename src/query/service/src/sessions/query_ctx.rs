@@ -62,6 +62,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -1132,6 +1133,18 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.shared.session.session_ctx.set_variable(key, value)
+    }
+
+    fn unset_variable(&self, key: &str) {
+        self.shared.session.session_ctx.unset_variable(key)
+    }
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.shared.session.session_ctx.get_variable(key)
     }
 
     #[async_backtrace::framed]

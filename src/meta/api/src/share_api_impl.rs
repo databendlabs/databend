@@ -48,8 +48,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 
 use crate::assert_table_exist;
 use crate::convert_share_meta_to_spec;
@@ -82,7 +82,7 @@ use crate::ShareApi;
 #[async_trait::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
@@ -93,7 +93,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     }
 
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 

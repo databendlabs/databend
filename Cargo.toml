@@ -256,10 +256,11 @@ itertools = "0.10.5"
 jsonb = "0.4.1"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
+object_store_opendal = "0.45"
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.47.1", features = [
-    "layers-minitrace",
+opendal = { version = "0.48.0", features = [
+    "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
     "services-s3",
@@ -323,10 +324,10 @@ walkdir = "2.3.2"
 xorfilter-rs = "0.5"
 
 # Observability
+fastrace = { version = "0.6", features = ["enable"] }
+fastrace-opentelemetry = "0.6"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-minitrace = { version = "0.6.6", features = ["enable"] }
-minitrace-opentelemetry = "0.6.6"
 opentelemetry = { version = "0.23", features = ["trace", "logs"] }
 opentelemetry-otlp = { version = "0.16", features = [
     "trace",
@@ -343,33 +344,9 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
 
-# TODO(andylokandy): Remove this once we have fixed all the issues.
-unexpected_cfgs = "allow"
-dead_code = "allow"
-for_loops_over_fallibles = "allow"
-
 [workspace.lints.clippy]
 useless_format = "allow"
 mutable_key_type = "allow"
-
-# TODO(andylokandy): Remove this once we have fixed all the issues.
-manual_clamp = "allow"
-unnecessary_get_then_check = "allow"
-missing_transmute_annotations = "allow"
-multiple_bound_locations = "allow"
-to_string_in_format_args = "allow"
-needless_borrow = "allow"
-manual_inspect = "allow"
-doc_lazy_continuation = "allow"
-manual_pattern_char_comparison = "allow"
-legacy_numeric_constants = "allow"
-unused_enumerate_index = "allow"
-to_string_trait_impl = "allow"
-useless_conversion = "allow"
-needless_borrows_for_generic_args = "allow"
-unnecessary_to_owned = "allow"
-manual_unwrap_or_default = "allow"
-manual_unwrap_or = "allow"
 
 [profile.release]
 debug = 1
@@ -424,7 +401,6 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
-object_store_opendal = { package = "object_store_opendal", git = "https://github.com/Xuanwo/opendal", rev = "d6baf68" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
 recursive = { git = "https://github.com/zhang2014/recursive.git", rev = "6af35a1" }

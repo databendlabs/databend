@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use databend_common_meta_app::schema::ShareDBParams;
 use http::header::RANGE;
 use http::Request;
 use http::Response;
 use http::StatusCode;
+use opendal::layers::FastraceLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::raw::new_request_build_error;
 use opendal::raw::parse_content_length;
@@ -75,7 +75,7 @@ pub fn create_share_table_operator(
     // Add logging
     .layer(LoggingLayer::default())
     // Add tracing
-    .layer(MinitraceLayer)
+    .layer(FastraceLayer)
     // TODO(liyz): add PrometheusClientLayer
     .finish();
 
@@ -90,14 +90,9 @@ struct SharedBuilder {
 
 impl Builder for SharedBuilder {
     const SCHEME: Scheme = Scheme::Custom("shared");
+    type Config = ();
 
-    type Accessor = SharedAccessor;
-
-    fn from_map(_: HashMap<String, String>) -> Self {
-        unreachable!("shared accessor doesn't build from map")
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
+    fn build(mut self) -> Result<impl Access> {
         Ok(SharedAccessor {
             signer: self.signer.take().expect("must be valid"),
             client: self.client.take().expect("must be valid"),
@@ -119,7 +114,7 @@ impl Access for SharedAccessor {
     type Lister = ();
     type BlockingLister = ();
 
-    fn info(&self) -> AccessorInfo {
+    fn info(&self) -> Arc<AccessorInfo> {
         let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
             .set_native_capability(Capability {
@@ -129,7 +124,7 @@ impl Access for SharedAccessor {
                 ..Default::default()
             });
 
-        meta
+        meta.into()
     }
 
     #[async_backtrace::framed]

@@ -32,9 +32,9 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::set_backoff;
+use fastrace::func_name;
 use futures::future::select;
 use futures::future::Either;
-use minitrace::func_name;
 use rand::thread_rng;
 use rand::Rng;
 

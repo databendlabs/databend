@@ -34,8 +34,8 @@ use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
+use fastrace::prelude::*;
 use log::warn;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
@@ -109,7 +109,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn init_query_env(
         &self,
         env: &QueryEnv,
@@ -316,7 +316,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -331,7 +331,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn init_query_fragments_plan(&self, fragments: &QueryFragments) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -346,7 +346,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
@@ -370,7 +370,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
@@ -405,7 +405,7 @@ impl DataExchangeManager {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -420,7 +420,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,

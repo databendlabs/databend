@@ -40,7 +40,7 @@ pub struct RaftLog {
 
 impl RaftLog {
     /// Open RaftLog
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<RaftLog, MetaStorageError> {
         info!(config :? =(config); "open RaftLog");
 

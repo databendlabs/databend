@@ -75,7 +75,7 @@ where
 
 /// Loads inverted index meta data
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_inverted_index_meta(dal: Operator, path: &str) -> Result<Arc<InvertedIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
@@ -97,7 +97,7 @@ async fn load_inverted_index_meta(dal: Operator, path: &str) -> Result<Arc<Inver
 
 /// Loads bytes of each inverted index files
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_inverted_index_file<'a>(
     index_path: &'a str,
     name: &'a str,
@@ -129,7 +129,7 @@ async fn load_inverted_index_file<'a>(
 }
 
 /// load inverted index directory
-#[minitrace::trace]
+#[fastrace::trace]
 pub(crate) async fn load_inverted_index_directory<'a>(
     dal: Operator,
     need_position: bool,

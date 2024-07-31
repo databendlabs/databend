@@ -576,7 +576,7 @@ impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CompactionLimits {
     pub segment_limit: Option<usize>,
     pub block_limit: Option<usize>,

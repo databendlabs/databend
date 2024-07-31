@@ -15,8 +15,10 @@
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyerror::AnyError;
+use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::tokio::sync::RwLockWriteGuard;
 use databend_common_meta_raft_store::config::RaftConfig;
@@ -51,6 +53,7 @@ use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
+use tokio::time::sleep;
 
 use crate::export::vec_kv_to_json;
 use crate::Opened;
@@ -107,7 +110,7 @@ impl StoreInner {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -185,7 +188,7 @@ impl StoreInner {
         self.state_machine.write().await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, StorageError> {
         // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
 
@@ -289,7 +292,7 @@ impl StoreInner {
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
         sm.install_snapshot_v003(db).await.map_err(|e| {
@@ -306,6 +309,8 @@ impl StoreInner {
     /// Returns a `BoxStream<'a, Result<String, io::Error>>` that yields a series of JSON strings.
     #[futures_async_stream::try_stream(boxed, ok = String, error = io::Error)]
     pub async fn export(self: Arc<StoreInner>) {
+        info!("StoreInner::export start");
+
         // Convert an error occurred during export to `io::Error(InvalidData)`.
         fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
             io::Error::new(ErrorKind::InvalidData, e)
@@ -320,9 +325,25 @@ impl StoreInner {
         // it is OK to export RaftState and logs without transaction protection(i.e. they do not share a lock),
         // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
         let compactor = {
-            let mut sm = self.state_machine.write().await;
-            sm.acquire_compactor().await
+            // If there is a compactor running,
+            // and it will be installed back to SM with
+            // `self.state_machine.write().await.levels_mut().replace_with_compacted()`.
+            // This compactor can not block with self.state_machine lock held.
+            // Otherwise, there is a deadlock:
+            // - This thread holds self.state_machine lock, acquiring compactor.
+            // - The other thread holds compactor, acquiring self.state_machine lock.
+            loop {
+                let got = {
+                    let mut sm = self.state_machine.write().await;
+                    sm.try_acquire_compactor()
+                };
+                if let Some(c) = got {
+                    break c;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
         };
+
         let raft_state = self.raft_state.read().await;
         let log = self.log.read().await;
 

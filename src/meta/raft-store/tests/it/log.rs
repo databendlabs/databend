@@ -25,7 +25,7 @@ use crate::testing::new_raft_test_context;
 use crate::testing::raft_store_test_harness;
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_open() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -35,7 +35,7 @@ async fn test_raft_log_open() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -99,7 +99,7 @@ async fn test_raft_log_append_and_range_get() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_insert() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -130,7 +130,7 @@ async fn test_raft_log_insert() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -165,7 +165,7 @@ async fn test_raft_log_get() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_last() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;
@@ -195,7 +195,7 @@ async fn test_raft_log_last() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_log_range_remove() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let db = &tc.db;

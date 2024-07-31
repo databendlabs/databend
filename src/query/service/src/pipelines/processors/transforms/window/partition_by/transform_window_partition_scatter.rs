@@ -79,15 +79,17 @@ impl PartitionHashTable {
         debug_assert_eq!(scatter_blocks.len(), PARTITION_COUNT);
 
         for (bucket, block) in scatter_blocks.into_iter().enumerate() {
-            self.allocated_bytes += block.memory_size();
-            match self.buckets_blocks.entry(bucket) {
-                Entry::Vacant(v) => {
-                    v.insert(vec![block]);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().push(block);
-                }
-            };
+            if !block.is_empty() {
+                self.allocated_bytes += block.memory_size();
+                match self.buckets_blocks.entry(bucket) {
+                    Entry::Vacant(v) => {
+                        v.insert(vec![block]);
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push(block);
+                    }
+                };
+            }
         }
 
         Ok(())
@@ -101,11 +103,11 @@ impl PartitionHashTable {
 
 pub fn convert_to_partitions(
     mut buckets_blocks: BTreeMap<usize, Vec<DataBlock>>,
-) -> Result<Vec<DataBlock>> {
+) -> Result<Vec<(isize, DataBlock)>> {
     let mut partitions = Vec::with_capacity(PARTITION_COUNT);
-    while let Some((_, blocks)) = buckets_blocks.pop_first() {
+    while let Some((bucket, blocks)) = buckets_blocks.pop_first() {
         let payload = DataBlock::concat(&blocks)?;
-        partitions.push(payload);
+        partitions.push((bucket as isize, payload));
     }
 
     Ok(partitions)
@@ -200,10 +202,10 @@ impl AccumulatingTransform for TransformWindowPartitionScatter {
         let hash_table = std::mem::take(&mut self.hash_table);
 
         let partitions = convert_to_partitions(hash_table.buckets_blocks)?;
-        for (bucket, block) in partitions.into_iter().enumerate() {
-            if block.num_rows() != 0 {
+        for (bucket, block) in partitions.into_iter() {
+            if !block.is_empty() {
                 blocks.push(DataBlock::empty_with_meta(
-                    WindowPartitionMeta::create_payload(bucket as isize, block),
+                    WindowPartitionMeta::create_payload(bucket, block),
                 ));
             }
         }

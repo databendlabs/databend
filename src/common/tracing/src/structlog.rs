@@ -17,12 +17,12 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Write;
 
+use fastrace::collector::EventRecord;
+use fastrace::collector::Reporter;
+use fastrace::collector::SpanId;
+use fastrace::collector::SpanRecord;
 use itertools::Itertools;
 use log::info;
-use minitrace::collector::EventRecord;
-use minitrace::collector::Reporter;
-use minitrace::collector::SpanId;
-use minitrace::collector::SpanRecord;
 pub struct DummyReporter;
 
 impl Reporter for DummyReporter {

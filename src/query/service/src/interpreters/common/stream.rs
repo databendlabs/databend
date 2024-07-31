@@ -70,7 +70,7 @@ pub async fn dml_build_update_stream_req(
         }
 
         // To be compatible with older versions, set source database id.
-        if options.get(OPT_KEY_SOURCE_DATABASE_ID).is_none() {
+        if !options.contains_key(OPT_KEY_SOURCE_DATABASE_ID) {
             let source_db_id = inner_fuse
                 .get_table_info()
                 .options()
