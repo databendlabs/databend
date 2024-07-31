@@ -33,74 +33,6 @@ use databend_storages_common_table_meta::meta::Statistics;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_column_mutation_transform(
-        &mut self,
-        mutation_expr: Vec<(usize, RemoteExpr)>,
-        computed_expr: Option<Vec<(usize, RemoteExpr)>>,
-        mut field_id_to_schema_index: HashMap<usize, usize>,
-        num_input_columns: usize,
-        has_filter_column: bool,
-    ) -> Result<()> {
-        let mut ops = Vec::new();
-        let mut exprs = Vec::with_capacity(mutation_expr.len());
-        let mut pos = num_input_columns;
-        let mut schema_index_to_new_index = HashMap::new();
-        for (id, remote_expr) in mutation_expr.into_iter() {
-            let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-            let schema_index = field_id_to_schema_index.get(&id).unwrap();
-            schema_index_to_new_index.insert(*schema_index, pos);
-            field_id_to_schema_index.entry(id).and_modify(|e| *e = pos);
-            exprs.push(expr);
-            pos += 1;
-        }
-        if !exprs.is_empty() {
-            ops.push(BlockOperator::Map {
-                exprs,
-                projections: None,
-            });
-        }
-
-        if let Some(computed_expr) = computed_expr
-            && !computed_expr.is_empty()
-        {
-            let mut exprs = Vec::with_capacity(computed_expr.len());
-            for (id, remote_expr) in computed_expr.into_iter() {
-                let expr = remote_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .project_column_ref(|index| {
-                        *schema_index_to_new_index.get(index).unwrap_or(index)
-                    });
-                let schema_index = field_id_to_schema_index.get(&id).unwrap();
-                schema_index_to_new_index.insert(*schema_index, pos);
-                field_id_to_schema_index.entry(id).and_modify(|e| *e = pos);
-                exprs.push(expr);
-                pos += 1;
-            }
-            ops.push(BlockOperator::Map {
-                exprs,
-                projections: None,
-            });
-        }
-
-        let num_output_columns = num_input_columns - has_filter_column as usize;
-        let mut projection = Vec::with_capacity(num_output_columns);
-        for idx in 0..num_output_columns {
-            if let Some(index) = schema_index_to_new_index.get(&idx) {
-                projection.push(*index);
-            } else {
-                projection.push(idx);
-            }
-        }
-
-        ops.push(BlockOperator::Project { projection });
-
-        self.main_pipeline.add_transformer(|| {
-            CompoundBlockOperator::new(ops.clone(), self.func_ctx.clone(), num_input_columns)
-        });
-
-        Ok(())
-    }
-
     pub(crate) fn build_column_mutation(&mut self, column_mutation: &ColumnMutation) -> Result<()> {
         self.build_pipeline(&column_mutation.input)?;
         if let Some(mutation_expr) = &column_mutation.mutation_expr {
@@ -171,6 +103,85 @@ impl PipelineBuilder {
                 proc.into_processor()
             })?;
         }
+
+        Ok(())
+    }
+
+    pub(crate) fn build_column_mutation_transform(
+        &mut self,
+        mutation_expr: Vec<(usize, RemoteExpr)>,
+        computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+        mut field_id_to_schema_index: HashMap<usize, usize>,
+        num_input_columns: usize,
+        has_filter_column: bool,
+    ) -> Result<()> {
+        let mut block_operators = Vec::new();
+        let mut next_column_offset = num_input_columns;
+        let mut schema_offset_to_new_offset = HashMap::new();
+
+        // Build update expression BlockOperator.
+        let mut exprs = Vec::with_capacity(mutation_expr.len());
+        for (id, remote_expr) in mutation_expr.into_iter() {
+            let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+            let schema_index = field_id_to_schema_index.get(&id).unwrap();
+            schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+            field_id_to_schema_index
+                .entry(id)
+                .and_modify(|e| *e = next_column_offset);
+            next_column_offset += 1;
+            exprs.push(expr);
+        }
+        if !exprs.is_empty() {
+            block_operators.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
+        }
+
+        // Build computed expression BlockOperator.
+        if let Some(computed_expr) = computed_expr
+            && !computed_expr.is_empty()
+        {
+            let mut exprs = Vec::with_capacity(computed_expr.len());
+            for (id, remote_expr) in computed_expr.into_iter() {
+                let expr = remote_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .project_column_ref(|index| {
+                        *schema_offset_to_new_offset.get(index).unwrap_or(index)
+                    });
+                let schema_index = field_id_to_schema_index.get(&id).unwrap();
+                schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+                field_id_to_schema_index
+                    .entry(id)
+                    .and_modify(|e| *e = next_column_offset);
+                next_column_offset += 1;
+                exprs.push(expr);
+            }
+            block_operators.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
+        }
+
+        // Keep the original order of the columns.
+        let num_output_columns = num_input_columns - has_filter_column as usize;
+        let mut projection = Vec::with_capacity(num_output_columns);
+        for idx in 0..num_output_columns {
+            if let Some(index) = schema_offset_to_new_offset.get(&idx) {
+                projection.push(*index);
+            } else {
+                projection.push(idx);
+            }
+        }
+        block_operators.push(BlockOperator::Project { projection });
+
+        self.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(
+                block_operators.clone(),
+                self.func_ctx.clone(),
+                num_input_columns,
+            )
+        });
 
         Ok(())
     }

@@ -33,6 +33,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
 use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -131,6 +132,8 @@ impl PhysicalPlanBuilder {
         let mutation_build_info = self.mutation_build_info.clone().unwrap();
 
         if *strategy == MutationStrategy::Direct {
+            // MutationStrategy::Direct: If the mutation filter is a simple expression,
+            // we use MutationSource to execute the mutation directly.
             let mut field_id_to_schema_index = HashMap::new();
             let (mutation_expr, computed_expr, mutation_kind) =
                 if let Some(update_list) = &matched_evaluators[0].update {
@@ -148,27 +151,15 @@ impl PhysicalPlanBuilder {
                         database,
                         &table_name,
                     )?;
-                    let table_schema_with_stream = table.schema_with_stream();
-                    for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
-                        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
-                            continue;
-                        }
-                        for column_binding in bind_context.columns.iter() {
-                            if BindContext::match_column_binding(
-                                database,
-                                Some(&table_name),
-                                field.name(),
-                                column_binding,
-                            ) {
-                                let column_index = column_binding.index;
-                                let schema_index = mutation_input_schema
-                                    .index_of(&column_index.to_string())
-                                    .unwrap();
-                                field_id_to_schema_index.insert(field_id, schema_index);
-                                break;
-                            }
-                        }
-                    }
+
+                    build_field_id_to_schema_index(
+                        database,
+                        &table_name,
+                        bind_context,
+                        table.schema_with_stream(),
+                        mutation_input_schema.clone(),
+                        &mut field_id_to_schema_index,
+                    );
 
                     let computed_expr = generate_stored_computed_list(
                         self.ctx.clone(),
@@ -189,7 +180,6 @@ impl PhysicalPlanBuilder {
                     (None, None, MutationKind::Delete)
                 };
 
-            let input_num_columns = mutation_input_schema.fields().len();
             plan = PhysicalPlan::ColumnMutation(ColumnMutation {
                 plan_id: 0,
                 input: Box::new(plan),
@@ -198,7 +188,7 @@ impl PhysicalPlanBuilder {
                 computed_expr,
                 mutation_type: mutation_type.clone(),
                 field_id_to_schema_index,
-                input_num_columns,
+                input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
             });
 
@@ -749,12 +739,11 @@ pub fn mutation_update_expr(
                     break;
                 }
             }
-
-            let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-
-            // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
-            // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
-            // see `cast_data_type_for_merge()`.
+            let right = right.ok_or_else(|| {
+                ErrorCode::Internal(
+                    format!("Can not find column {} in table {}", field.name(), table).to_string(),
+                )
+            })?;
 
             let scalar = ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
@@ -822,4 +811,34 @@ pub fn generate_stored_computed_list(
         }
     }
     Ok(remote_exprs)
+}
+
+fn build_field_id_to_schema_index(
+    database: Option<&str>,
+    table_name: &str,
+    bind_context: &BindContext,
+    table_schema_with_stream: Arc<TableSchema>,
+    mutation_input_schema: Arc<DataSchema>,
+    field_id_to_schema_index: &mut HashMap<usize, usize>,
+) {
+    for (field_id, field) in table_schema_with_stream.fields().iter().enumerate() {
+        if matches!(field.computed_expr(), Some(ComputedExpr::Virtual(_))) {
+            continue;
+        }
+        for column_binding in bind_context.columns.iter() {
+            if BindContext::match_column_binding(
+                database,
+                Some(table_name),
+                field.name(),
+                column_binding,
+            ) {
+                let column_index = column_binding.index;
+                let schema_index = mutation_input_schema
+                    .index_of(&column_index.to_string())
+                    .unwrap();
+                field_id_to_schema_index.insert(field_id, schema_index);
+                break;
+            }
+        }
+    }
 }

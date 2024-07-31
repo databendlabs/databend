@@ -28,7 +28,7 @@ explain fragments UPDATE t1 SET a = 3 WHERE b > '2022-12-31'
 Fragment 0:
   DataExchange: Merge
     ExchangeSink
-    ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
+    ├── output columns: []
     ├── destination fragment: [1]
     └── Mutation Source
 (empty)
@@ -36,7 +36,7 @@ Fragment 0:
 Fragment 1:
     CommitSink
     └── ExchangeSource
-        ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
+        ├── output columns: []
         └── source fragment: [0]
 (empty)
 
@@ -52,7 +52,7 @@ explain fragments UPDATE t1 SET a = 3 WHERE false
 Fragment 0:
   DataExchange: Merge
     ExchangeSink
-    ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
+    ├── output columns: []
     ├── destination fragment: [1]
     └── Mutation Source
 (empty)
@@ -60,6 +60,6 @@ Fragment 0:
 Fragment 1:
     CommitSink
     └── ExchangeSource
-        ├── output columns: [t1.a (#0), t1.b (#1), _predicate (#2)]
+        ├── output columns: []
         └── source fragment: [0]
 (empty)
