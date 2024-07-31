@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 
-use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 

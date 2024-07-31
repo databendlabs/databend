@@ -190,7 +190,7 @@ impl MutationInterpreter {
         let update_stream_meta =
             dml_build_update_stream_req(self.ctx.clone(), &mutation.metadata).await?;
         let partitions = self
-            .mutation_source_partions(mutation, fuse_table, table_snapshot.clone())
+            .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
         Ok(MutationBuildInfo {
             table_info,
@@ -310,7 +310,7 @@ impl MutationInterpreter {
         }
     }
 
-    async fn mutation_source_partions(
+    async fn mutation_source_partitions(
         &self,
         mutation: &Mutation,
         fuse_table: &FuseTable,

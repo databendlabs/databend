@@ -202,21 +202,19 @@ impl PhysicalPlanBuilder {
                 has_filter_column: predicate_column_index.is_some(),
             });
 
-            let commit_input = if !distributed {
-                plan
-            } else {
-                PhysicalPlan::Exchange(Exchange {
+            if *distributed {
+                plan = PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
                     input: Box::new(plan),
                     kind: FragmentKind::Merge,
                     keys: vec![],
                     allow_adjust_parallelism: true,
                     ignore_exchange: false,
-                })
-            };
+                });
+            }
 
-            let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-                input: Box::new(commit_input),
+            plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+                input: Box::new(plan),
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
@@ -228,8 +226,8 @@ impl PhysicalPlanBuilder {
                 recluster_info: None,
             }));
 
-            physical_plan.adjust_plan_id(&mut 0);
-            return Ok(physical_plan);
+            plan.adjust_plan_id(&mut 0);
+            return Ok(plan);
         }
 
         let is_not_matched_only = matches!(strategy, MutationStrategy::NotMatchedOnly);
