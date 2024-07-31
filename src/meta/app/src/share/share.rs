@@ -156,10 +156,10 @@ impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectNa
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectSeqAndId {
-    // db_name, db_meta_seq, db_id, DatabaseMeta
-    Database(String, u64, u64, DatabaseMeta),
-    // table_name, db_id, table_meta_seq, table_id, table_meta
-    Table(String, u64, u64, u64, TableMeta),
+    // db_meta_seq, db_id, DatabaseMeta
+    Database(u64, u64, DatabaseMeta),
+    // db_id, table_meta_seq, table_id, table_meta
+    Table(u64, u64, u64, TableMeta),
 }
 
 // share name and shared (table name, table info) map

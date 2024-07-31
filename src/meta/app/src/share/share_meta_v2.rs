@@ -20,7 +20,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use enumflags2::BitFlags;
 
-use super::ShareGrantObjectSeqAndId;
 use crate::app_error::AppError;
 use crate::app_error::WrongShareObject;
 use crate::share::ShareGrantObjectPrivilege;
@@ -141,19 +140,6 @@ pub enum ShareObject {
     Database(String, u64),
     // (table name, db_id, table id)
     Table(String, u64, u64),
-}
-
-impl ShareObject {
-    pub fn new(seq_and_id: &ShareGrantObjectSeqAndId) -> ShareObject {
-        match seq_and_id {
-            ShareGrantObjectSeqAndId::Database(name, _db_seq, db_id, _db_meta) => {
-                ShareObject::Database(name.to_owned(), *db_id)
-            }
-            ShareGrantObjectSeqAndId::Table(name, db_id, _seq, table_id, _meta) => {
-                ShareObject::Table(name.to_owned(), *db_id, *table_id)
-            }
-        }
-    }
 }
 
 impl Display for ShareObject {

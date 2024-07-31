@@ -591,13 +591,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             };
 
-            let seq_and_id =
+            let (seq_and_id, object) =
                 get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), true)
                     .await?;
 
             check_share_object(&share_meta, &seq_and_id, &req.object, req.privilege)?;
-
-            let object = ShareObject::new(&seq_and_id);
 
             // Check the object privilege has been granted
             let has_granted_privileges =
@@ -677,7 +675,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     let grant_share_table = match seq_and_id {
                         ShareGrantObjectSeqAndId::Database(..) => None,
                         ShareGrantObjectSeqAndId::Table(
-                            _db_name,
                             db_id,
                             _table_meta_seq,
                             table_id,
@@ -739,13 +736,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             };
 
-            let seq_and_id =
+            let (seq_and_id, object) =
                 get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), false)
                     .await?;
 
             check_share_object(&share_meta, &seq_and_id, &req.object, req.privilege)?;
-
-            let object = ShareObject::new(&seq_and_id);
 
             // Check the object privilege has not been granted.
             let has_granted_privileges =
@@ -787,22 +782,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 ];
 
                 // construct the revoke_object before modify share meta
-                let revoke_object = match seq_and_id {
-                    ShareGrantObjectSeqAndId::Database(
-                        db_name,
-                        db_meta_seq,
-                        db_id,
-                        mut db_meta,
-                    ) => {
+                match seq_and_id {
+                    ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, mut db_meta) => {
                         db_meta.shared_by.remove(&share_id);
                         let key = DatabaseId { db_id };
                         if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
                         condition.push(txn_cond_seq(&key, Eq, db_meta_seq));
-                        Some(ShareObject::Database(db_name, db_id))
                     }
                     ShareGrantObjectSeqAndId::Table(
-                        table_name,
-                        db_id,
+                        _db_id,
                         table_meta_seq,
                         table_id,
                         mut table_meta,
@@ -811,10 +799,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         let key = TableId { table_id };
                         if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
                         condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
-
-                        Some(ShareObject::Table(table_name, db_id, table_id))
                     }
-                };
+                }
 
                 let _ = revoke_object_privileges(
                     self,
@@ -853,7 +839,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     return Ok(RevokeShareObjectReply {
                         share_id,
                         share_spec: Some(share_spec),
-                        revoke_object,
+                        revoke_object: Some(object),
                     });
                 }
             }
@@ -1494,7 +1480,7 @@ async fn create_db_name_to_id_key_if_need(
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
     if let ShareGrantObjectName::Database(db) = obj_name {
-        if let ShareGrantObjectSeqAndId::Database(_, db_id, _, _) = seq_and_id {
+        if let ShareGrantObjectSeqAndId::Database(db_id, _, _) = seq_and_id {
             let db_id_key = DatabaseIdToName { db_id: *db_id };
             let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
                 get_pb_value(kv_api, &db_id_key).await?;
@@ -1543,8 +1529,8 @@ fn check_share_object(
     privileges: ShareGrantObjectPrivilege,
 ) -> Result<(), KVAppError> {
     let object_db_id = match seq_and_id {
-        ShareGrantObjectSeqAndId::Database(_, _, db_id, _) => *db_id,
-        ShareGrantObjectSeqAndId::Table(_, db_id, _seq, _id, _meta) => *db_id,
+        ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
+        ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
     };
 
     match obj_name {
@@ -1609,7 +1595,7 @@ async fn get_share_object_seq_and_id(
     obj_name: &ShareGrantObjectName,
     tenant: &Tenant,
     grant: bool,
-) -> Result<ShareGrantObjectSeqAndId, KVAppError> {
+) -> Result<(ShareGrantObjectSeqAndId, ShareObject), KVAppError> {
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
             let name_key = DatabaseNameIdent::new(tenant.clone(), db_name);
@@ -1630,11 +1616,9 @@ async fn get_share_object_seq_and_id(
                     ),
                 ));
             }
-            Ok(ShareGrantObjectSeqAndId::Database(
-                db_name.to_owned(),
-                db_meta_seq,
-                db_id,
-                db_meta,
+            Ok((
+                ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, db_meta),
+                ShareObject::Database(db_name.to_owned(), db_id),
             ))
         }
 
@@ -1676,12 +1660,14 @@ async fn get_share_object_seq_and_id(
                 )));
             }
 
-            Ok(ShareGrantObjectSeqAndId::Table(
-                table_name.to_owned(),
-                db_id,
-                table_meta_seq,
-                table_id,
-                table_meta.unwrap(),
+            Ok((
+                ShareGrantObjectSeqAndId::Table(
+                    db_id,
+                    table_meta_seq,
+                    table_id,
+                    table_meta.unwrap(),
+                ),
+                ShareObject::Table(table_name.to_owned(), db_id, table_id),
             ))
         }
     }
@@ -1689,11 +1675,11 @@ async fn get_share_object_seq_and_id(
 
 fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<TxnCondition>) {
     match seq_and_id {
-        ShareGrantObjectSeqAndId::Database(_db_name, db_meta_seq, db_id, _meta) => {
+        ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, _meta) => {
             let key = DatabaseId { db_id: *db_id };
             condition.push(txn_cond_seq(&key, Eq, *db_meta_seq))
         }
-        ShareGrantObjectSeqAndId::Table(_table_name, _db_id, table_meta_seq, table_id, _) => {
+        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id, _) => {
             let key = TableId {
                 table_id: *table_id,
             };
@@ -1709,7 +1695,7 @@ fn add_grant_object_txn_if_then(
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
     match seq_and_id {
-        ShareGrantObjectSeqAndId::Database(_, db_meta_seq, db_id, mut db_meta) => {
+        ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, mut db_meta) => {
             // modify db_meta add share_id into shared_by
             if !db_meta.shared_by.contains(&share_id) {
                 db_meta.shared_by.insert(share_id);
@@ -1718,7 +1704,7 @@ fn add_grant_object_txn_if_then(
                 condition.push(txn_cond_seq(&key, Eq, db_meta_seq));
             }
         }
-        ShareGrantObjectSeqAndId::Table(_, _db_id, table_meta_seq, table_id, mut table_meta) => {
+        ShareGrantObjectSeqAndId::Table(_db_id, table_meta_seq, table_id, mut table_meta) => {
             // modify table_meta add share_id into shared_by
             if !table_meta.shared_by.contains(&share_id) {
                 table_meta.shared_by.insert(share_id);

@@ -183,7 +183,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObjectSeqAndId;
 use databend_common_meta_app::share::ShareId;
 use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareObject;
@@ -666,13 +665,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // check if database if shared
             let share_spec = if !db_meta.shared_by.is_empty() {
-                let seq_and_id = ShareGrantObjectSeqAndId::Database(
-                    tenant_dbname.database_name().to_string(),
-                    db_meta_seq,
-                    old_db_id,
-                    db_meta.clone(),
-                );
-                let object = ShareObject::new(&seq_and_id);
+                let object =
+                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id);
                 let update_on = Utc::now();
                 let mut share_spec_vec = vec![];
                 for share_id in &db_meta.shared_by {
