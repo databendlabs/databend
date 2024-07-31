@@ -25,7 +25,7 @@ use crate::binder::bind_data_mutation::bind::DataMutation;
 use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::DataMutationType;
+use crate::binder::DataMutationStrategy;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -126,13 +126,13 @@ impl Binder {
     }
 }
 
-fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationType> {
+fn get_mutation_type(matched_len: usize, unmatched_len: usize) -> Result<DataMutationStrategy> {
     if matched_len == 0 && unmatched_len > 0 {
-        Ok(DataMutationType::InsertOnly)
+        Ok(DataMutationStrategy::InsertOnly)
     } else if unmatched_len == 0 && matched_len > 0 {
-        Ok(DataMutationType::MatchedOnly)
+        Ok(DataMutationStrategy::MatchedOnly)
     } else if unmatched_len > 0 && matched_len > 0 {
-        Ok(DataMutationType::FullOperation)
+        Ok(DataMutationStrategy::FullOperation)
     } else {
         Err(ErrorCode::SemanticError(
             "we must have matched or unmatched clause at least one",

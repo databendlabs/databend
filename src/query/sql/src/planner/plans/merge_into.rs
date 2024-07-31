@@ -27,7 +27,7 @@ use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::LockGuard;
 
 use crate::binder::DataMutationInputType;
-use crate::binder::DataMutationType;
+use crate::binder::DataMutationStrategy;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;
@@ -65,7 +65,7 @@ pub struct DataMutation {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
-    pub mutation_type: DataMutationType,
+    pub mutation_type: DataMutationStrategy,
     pub distributed: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
@@ -109,8 +109,8 @@ impl DataMutation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.mutation_type, DataMutationType::FullOperation)
-            || matches!(self.mutation_type, DataMutationType::InsertOnly);
+        let insert = matches!(self.mutation_type, DataMutationStrategy::FullOperation)
+            || matches!(self.mutation_type, DataMutationStrategy::InsertOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {

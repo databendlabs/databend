@@ -55,7 +55,8 @@ use crate::ScalarExpr;
 use crate::UdfRewriter;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DataMutationType {
+pub enum DataMutationStrategy {
+    Direct,
     MatchedOnly,
     FullOperation,
     InsertOnly,
@@ -64,7 +65,7 @@ pub enum DataMutationType {
 pub struct DataMutation {
     pub target_table_identifier: TableIdentifier,
     pub input: DataMutationInput,
-    pub mutation_type: DataMutationType,
+    pub mutation_type: DataMutationStrategy,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
@@ -127,7 +128,7 @@ impl Binder {
         );
 
         // Add table lock before execution.
-        let lock_guard = if mutation_type != DataMutationType::InsertOnly {
+        let lock_guard = if mutation_type != DataMutationStrategy::InsertOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
@@ -164,7 +165,7 @@ impl Binder {
             input_type,
             mut required_columns,
             mut bind_context,
-            update_or_insert_columns_star,
+            all_source_columns,
             target_table_index,
             target_row_id_index,
             mutation_source,
@@ -218,7 +219,7 @@ impl Binder {
             None
         };
 
-        if table.change_tracking_enabled() && mutation_type != DataMutationType::InsertOnly {
+        if table.change_tracking_enabled() && mutation_type != DataMutationStrategy::InsertOnly {
             for stream_column in table.stream_columns() {
                 let column_index =
                     Self::find_column_index(&target_column_entries, stream_column.column_name())?;
@@ -244,7 +245,7 @@ impl Binder {
                     &mut scalar_binder,
                     clause,
                     table_schema.clone(),
-                    update_or_insert_columns_star.clone(),
+                    all_source_columns.clone(),
                     update_row_version.clone(),
                     &target_table_name,
                 )
@@ -259,7 +260,7 @@ impl Binder {
                     &mut scalar_binder,
                     clause,
                     table_schema.clone(),
-                    update_or_insert_columns_star.clone(),
+                    all_source_columns.clone(),
                 )
                 .await?,
             );
@@ -290,7 +291,7 @@ impl Binder {
             lock_guard,
         };
 
-        if mutation_type == DataMutationType::InsertOnly && !insert_only(&data_mutation) {
+        if mutation_type == DataMutationStrategy::InsertOnly && !insert_only(&data_mutation) {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));
@@ -343,7 +344,7 @@ impl Binder {
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &MatchedClause,
         schema: TableSchemaRef,
-        update_or_insert_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
+        all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
         update_row_version: Option<(FieldIndex, ScalarExpr)>,
         target_name: &str,
     ) -> Result<MatchedEvaluator> {
@@ -367,7 +368,7 @@ impl Binder {
         } = &clause.operation
         {
             if *is_star {
-                update_or_insert_columns_star
+                all_source_columns
             } else {
                 let mut update_columns = HashMap::with_capacity(update_list.len());
                 for update_expr in update_list {
@@ -431,7 +432,7 @@ impl Binder {
         scalar_binder: &mut ScalarBinder<'a>,
         clause: &UnmatchedClause,
         table_schema: TableSchemaRef,
-        update_or_insert_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
+        all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
@@ -449,9 +450,9 @@ impl Binder {
         if clause.insert_operation.is_star {
             let default_schema = table_schema.remove_computed_fields();
             let mut values = Vec::with_capacity(default_schema.num_fields());
-            let update_or_insert_columns_star = update_or_insert_columns_star.unwrap();
+            let all_source_columns = all_source_columns.unwrap();
             for idx in 0..default_schema.num_fields() {
-                let scalar = update_or_insert_columns_star.get(&idx).unwrap().clone();
+                let scalar = all_source_columns.get(&idx).unwrap().clone();
                 // cast expr
                 values.push(wrap_cast(
                     &scalar,

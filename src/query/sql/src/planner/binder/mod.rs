@@ -59,7 +59,7 @@ pub use aggregate::AggregateInfo;
 pub use bind_context::*;
 pub use bind_data_mutation::target_table_position;
 pub use bind_data_mutation::DataMutationInputType;
-pub use bind_data_mutation::DataMutationType;
+pub use bind_data_mutation::DataMutationStrategy;
 pub use bind_query::bind_values;
 pub use bind_table_reference::parse_result_scan_args;
 pub use binder::Binder;

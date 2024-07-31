@@ -23,7 +23,7 @@ use crate::binder::bind_data_mutation::bind::DataMutation;
 use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::DataMutationType;
+use crate::binder::DataMutationStrategy;
 use crate::plans::Plan;
 use crate::BindContext;
 
@@ -70,7 +70,7 @@ impl<'a> Binder {
                 target: table.clone(),
                 filter: selection.clone(),
             },
-            mutation_type: DataMutationType::MatchedOnly,
+            mutation_type: DataMutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
         };

@@ -18,6 +18,6 @@ mod delete;
 mod merge;
 mod update;
 
-pub use bind::DataMutationType;
+pub use bind::DataMutationStrategy;
 pub use data_mutation_input::target_table_position;
 pub use data_mutation_input::DataMutationInputType;

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_core::Pipe;
-use databend_common_sql::binder::DataMutationType;
+use databend_common_sql::binder::DataMutationStrategy;
 use databend_common_sql::executor::physical_plans::MergeIntoManipulate;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
@@ -52,9 +52,10 @@ impl PipelineBuilder {
         self.build_pipeline(&merge_into_manipulate.input)?;
 
         let (step, need_match, need_unmatch) = match merge_into_manipulate.mutation_type {
-            DataMutationType::FullOperation => (2, true, true),
-            DataMutationType::InsertOnly => (1, false, true),
-            DataMutationType::MatchedOnly => (1, true, false),
+            DataMutationStrategy::FullOperation => (2, true, true),
+            DataMutationStrategy::InsertOnly => (1, false, true),
+            DataMutationStrategy::MatchedOnly => (1, true, false),
+            DataMutationStrategy::Direct => unreachable!(),
         };
 
         let tbl = self

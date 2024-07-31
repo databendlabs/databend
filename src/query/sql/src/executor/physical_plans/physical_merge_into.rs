@@ -43,7 +43,7 @@ use itertools::Itertools;
 use super::ColumnMutation;
 use crate::binder::wrap_cast;
 use crate::binder::DataMutationInputType;
-use crate::binder::DataMutationType;
+use crate::binder::DataMutationStrategy;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -67,6 +67,7 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 use crate::Visibility;
+use crate::plans::DataMutation;
 use crate::DUMMY_COLUMN_INDEX;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
@@ -82,7 +83,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub mutation_type: DataMutationType,
+    pub mutation_type: DataMutationStrategy,
     pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
@@ -90,7 +91,7 @@ pub struct MergeInto {
 }
 
 impl PhysicalPlanBuilder {
-    // MergeInto strategies:
+    // DataMutation strategies:
     // 1. target_build_optimization, this is enabled in standalone mode and in this case we don't need rowid column anymore.
     // but we just support for `merge into xx using source on xxx when matched then update xxx when not matched then insert xxx`.
     // 2. merge into join strategies:
@@ -113,10 +114,10 @@ impl PhysicalPlanBuilder {
     pub async fn build_merge_into(
         &mut self,
         s_expr: &SExpr,
-        merge_into: &crate::plans::DataMutation,
+        data_mutation: &DataMutation,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let crate::plans::DataMutation {
+        let DataMutation {
             bind_context,
             metadata,
             catalog_name,
@@ -136,7 +137,7 @@ impl PhysicalPlanBuilder {
             change_join_order,
             can_try_update_column_only,
             ..
-        } = merge_into;
+        } = data_mutation;
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
         let data_mutation_input_schema = plan.output_schema()?;
@@ -254,7 +255,7 @@ impl PhysicalPlanBuilder {
             return Ok(physical_plan);
         }
 
-        let is_insert_only = matches!(mutation_type, DataMutationType::InsertOnly);
+        let is_insert_only = matches!(mutation_type, DataMutationStrategy::InsertOnly);
         let row_id_offset = if !is_insert_only {
             data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
@@ -265,7 +266,7 @@ impl PhysicalPlanBuilder {
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
         let source_is_broadcast =
-            matches!(mutation_type, DataMutationType::MatchedOnly) && !change_join_order;
+            matches!(mutation_type, DataMutationStrategy::MatchedOnly) && !change_join_order;
         if *distributed && !is_insert_only && !source_is_broadcast {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
@@ -278,7 +279,7 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
-        if matches!(mutation_type, DataMutationType::FullOperation) {
+        if matches!(mutation_type, DataMutationStrategy::FullOperation) {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
                 input: Box::new(plan),
@@ -316,7 +317,7 @@ impl PhysicalPlanBuilder {
 
         for item in unmatched_evaluators {
             let filter = if let Some(filter_expr) = &item.condition {
-                Some(self.transform_scalar_expr2expr(filter_expr, output_schema.clone())?)
+                Some(self.scalar_expr_to_remote_expr(filter_expr, output_schema.clone())?)
             } else {
                 None
             };
@@ -325,7 +326,7 @@ impl PhysicalPlanBuilder {
 
             for scalar_expr in &item.values {
                 values_exprs
-                    .push(self.transform_scalar_expr2expr(scalar_expr, output_schema.clone())?)
+                    .push(self.scalar_expr_to_remote_expr(scalar_expr, output_schema.clone())?)
             }
 
             unmatched.push((item.source_schema.clone(), filter, values_exprs))
@@ -339,7 +340,7 @@ impl PhysicalPlanBuilder {
         for item in matched_evaluators {
             let condition = if let Some(condition) = &item.condition {
                 let expr = self
-                    .transform_scalar_expr2expr(condition, output_schema.clone())?
+                    .scalar_expr_to_remote_expr(condition, output_schema.clone())?
                     .as_expr(&BUILTIN_FUNCTIONS);
                 let (expr, _) = ConstantFolder::fold(
                     &expr,
@@ -492,7 +493,7 @@ impl PhysicalPlanBuilder {
         Ok(physical_plan)
     }
 
-    fn transform_scalar_expr2expr(
+    fn scalar_expr_to_remote_expr(
         &self,
         scalar_expr: &ScalarExpr,
         schema: DataSchemaRef,
@@ -580,7 +581,7 @@ fn build_data_mutation_row_fetch(
     plan: PhysicalPlan,
     metadata: MetadataRef,
     data_mutation_input_schema: Arc<DataSchema>,
-    mutation_type: DataMutationType,
+    mutation_type: DataMutationStrategy,
     lazy_columns: HashSet<usize>,
     target_table_index: usize,
     row_id_offset: usize,
@@ -594,7 +595,7 @@ fn build_data_mutation_row_fetch(
         .cloned()
         .collect::<Vec<_>>();
     let mut has_inner_column = false;
-    let need_wrap_nullable = matches!(mutation_type, DataMutationType::FullOperation);
+    let need_wrap_nullable = matches!(mutation_type, DataMutationStrategy::FullOperation);
     let fetched_fields: Vec<DataField> = lazy_columns
         .iter()
         .map(|index| {
