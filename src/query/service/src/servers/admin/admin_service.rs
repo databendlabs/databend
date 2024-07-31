@@ -77,10 +77,6 @@ impl AdminService {
                 "v1/queries/:query_id/profiling",
                 get(super::v1::query_profiling::query_profiling_handler),
             )
-            .at(
-                "/v1/user_functions",
-                get(super::v1::user_functions::user_functions),
-            )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
             .at("/debug/async_tasks/dump", get(debug_dump_stack));
@@ -112,6 +108,10 @@ impl AdminService {
                     "/v1/tenants/:tenant/settings/:key",
                     post(super::v1::settings::set_settings)
                         .delete(super::v1::settings::unset_settings),
+                )
+                .at(
+                    "/v1/tenants/:tenant/user_functions",
+                    get(super::v1::user_functions::user_functions),
                 );
         }
 
