@@ -33,6 +33,7 @@ runs:
           network=host
         buildkitd-config: ./.github/misc/buildkitd.toml
     - name: Setup Docker Buildx for GitHub Hosted Runner
+      if: env.RUNNER_PROVIDER != 'aws'
       uses: docker/setup-buildx-action@v3
 
     - name: Configure AWS Credentials
