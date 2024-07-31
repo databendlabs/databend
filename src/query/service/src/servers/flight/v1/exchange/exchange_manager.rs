@@ -581,11 +581,11 @@ struct QueryCoordinator {
     // FlightExchange in statistics_exchanges and fragment_exchanges
     // will be moved after pipeline build
     statistics_exchanges: HashMap<String, FlightExchange>,
-    // key of `fragment_exchanges` is (query_id, fragment_id, sender/receiver)
+    // key of `fragment_exchanges` is (target, fragment_id, sender/receiver)
     fragment_exchanges: HashMap<(String, usize, u8), FlightExchange>,
 
     // FlightSender in senders_map also have a reference in exchange writer
-    // key of `senders_map` is (query_id, fragment_id, fragment/statistics)
+    // key of `senders_map` is (target, fragment_id, fragment/statistics)
     senders_map: HashMap<(String, usize, u8), Arc<FlightSender>>,
 }
 
@@ -933,13 +933,12 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
-        let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
+        let (target, request_server_exchange) =
+            request_server_exchanges.into_iter().next().unwrap();
 
         let flight_sender = Arc::new(request_server_exchange.convert_to_sender());
-        self.senders_map.insert(
-            (query_id.clone(), 0, STATISTICS_SENDER),
-            flight_sender.clone(),
-        );
+        self.senders_map
+            .insert((target, 0, STATISTICS_SENDER), flight_sender.clone());
         let mut statistics_sender = StatisticsSender::spawn(
             &query_id,
             ctx,
