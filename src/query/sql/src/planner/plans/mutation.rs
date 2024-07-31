@@ -52,7 +52,7 @@ pub struct MatchedEvaluator {
 }
 
 #[derive(Clone)]
-pub struct DataMutation {
+pub struct Mutation {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
@@ -65,16 +65,13 @@ pub struct DataMutation {
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
-    pub mutation_type: MutationStrategy,
+    pub strategy: MutationStrategy,
     pub distributed: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
     pub row_id_index: IndexType,
     pub change_join_order: bool,
     pub mutation_source: bool,
-    pub predicate_index: Option<usize>,
-    pub truncate_table: bool,
-    pub mutation_filter: Option<ScalarExpr>,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:
@@ -82,9 +79,14 @@ pub struct DataMutation {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub lock_guard: Option<Arc<LockGuard>>,
+
+    // MutationStrategy::Direct related variables.
+    pub predicate_column_index: Option<usize>,
+    pub truncate_table: bool,
+    pub direct_filter: Option<ScalarExpr>,
 }
 
-impl std::fmt::Debug for DataMutation {
+impl std::fmt::Debug for Mutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
             .field("catalog", &self.catalog_name)
@@ -105,12 +107,12 @@ pub const INSERT_NAME: &str = "number of rows inserted";
 pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
-impl DataMutation {
+impl Mutation {
     // the order of output should be (insert, update, delete),this is
     // consistent with snowflake.
     fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.mutation_type, MutationStrategy::MixedMatched)
-            || matches!(self.mutation_type, MutationStrategy::NotMatchedOnly);
+        let insert = matches!(self.strategy, MutationStrategy::MixedMatched)
+            || matches!(self.strategy, MutationStrategy::NotMatchedOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {
@@ -167,9 +169,9 @@ impl DataMutation {
     }
 }
 
-impl Eq for DataMutation {}
+impl Eq for Mutation {}
 
-impl PartialEq for DataMutation {
+impl PartialEq for Mutation {
     fn eq(&self, other: &Self) -> bool {
         self.catalog_name == other.catalog_name
             && self.database_name == other.database_name
@@ -181,13 +183,13 @@ impl PartialEq for DataMutation {
     }
 }
 
-impl std::hash::Hash for DataMutation {
+impl std::hash::Hash for Mutation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.row_id_index.hash(state);
     }
 }
 
-impl Operator for DataMutation {
+impl Operator for Mutation {
     fn rel_op(&self) -> RelOp {
         RelOp::MergeInto
     }

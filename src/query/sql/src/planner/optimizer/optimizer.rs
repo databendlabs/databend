@@ -44,9 +44,9 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyIntoLocationPlan;
-use crate::plans::DataMutation;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Mutation;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
@@ -447,7 +447,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
         opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
     }
 
-    let mut plan: DataMutation = s_expr.plan().clone().try_into()?;
+    let mut plan: Mutation = s_expr.plan().clone().try_into()?;
     let original_target_table_position =
         target_table_position(s_expr.child(0)?, plan.target_table_index)?;
     let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
@@ -483,7 +483,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     Ok(Plan::DataMutation {
         schema: plan.schema(),
         s_expr: Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::DataMutation(plan)),
+            Arc::new(RelOperator::Mutation(plan)),
             Arc::new(input_s_expr),
         )),
         metadata: opt_ctx.metadata.clone(),

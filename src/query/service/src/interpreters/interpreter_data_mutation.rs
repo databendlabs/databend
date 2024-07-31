@@ -34,7 +34,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans;
-use databend_common_sql::plans::DataMutation;
+use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
@@ -86,7 +86,7 @@ impl Interpreter for DataMutationInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let data_mutation: DataMutation = self.s_expr.plan().clone().try_into()?;
+        let data_mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
         let table = self
             .ctx
@@ -158,7 +158,7 @@ impl Interpreter for DataMutationInterpreter {
 impl DataMutationInterpreter {
     pub async fn execute_hook(
         &self,
-        data_mutation: &databend_common_sql::plans::DataMutation,
+        data_mutation: &databend_common_sql::plans::Mutation,
         build_res: &mut PipelineBuildResult,
     ) {
         let hook_lock_opt = if data_mutation.lock_guard.is_some() {
@@ -193,7 +193,7 @@ impl DataMutationInterpreter {
 
     pub async fn build_physical_plan(
         &self,
-        data_mutation: &DataMutation,
+        data_mutation: &Mutation,
         data_mutation_build_info: Option<DataMutationBuildInfo>,
     ) -> Result<PhysicalPlan> {
         let data_mutation_build_info =
@@ -268,7 +268,7 @@ impl DataMutationInterpreter {
 
     async fn fast_mutation(
         &self,
-        data_mutation: &DataMutation,
+        data_mutation: &Mutation,
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
@@ -314,7 +314,7 @@ impl DataMutationInterpreter {
 
     async fn mutation_source_partions(
         &self,
-        data_mutation: &DataMutation,
+        data_mutation: &Mutation,
         fuse_table: &FuseTable,
         table_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<Option<Partitions>> {
@@ -322,15 +322,15 @@ impl DataMutationInterpreter {
             let Some(table_snapshot) = table_snapshot else {
                 return Ok(Some(Partitions::create(PartitionsShuffleKind::Mod, vec![])));
             };
-            let (filters, filter_used_columns) =
-                if let Some(filter) = &data_mutation.mutation_filter {
-                    (
-                        Some(create_push_down_filters(filter)?),
-                        filter.used_columns().into_iter().collect(),
-                    )
-                } else {
-                    (None, vec![])
-                };
+            let (filters, filter_used_columns) = if let Some(filter) = &data_mutation.direct_filter
+            {
+                (
+                    Some(create_push_down_filters(filter)?),
+                    filter.used_columns().into_iter().collect(),
+                )
+            } else {
+                (None, vec![])
+            };
             let (is_lazy, is_delete) = if data_mutation.input_type == MutationType::Delete {
                 let cluster = self.ctx.get_cluster();
                 let is_lazy =

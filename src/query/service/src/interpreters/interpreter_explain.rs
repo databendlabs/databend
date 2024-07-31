@@ -27,7 +27,7 @@ use databend_common_expression::FromData;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
-use databend_common_sql::plans::DataMutation;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
@@ -121,7 +121,7 @@ impl Interpreter for ExplainInterpreter {
                     schema,
                     metadata,
                 } => {
-                    let data_mutation: DataMutation = s_expr.plan().clone().try_into()?;
+                    let data_mutation: Mutation = s_expr.plan().clone().try_into()?;
                     let interpreter = DataMutationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
@@ -169,7 +169,7 @@ impl Interpreter for ExplainInterpreter {
                     .await?
                 }
                 Plan::DataMutation { s_expr, .. } => {
-                    let plan: DataMutation = s_expr.plan().clone().try_into()?;
+                    let plan: Mutation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.metadata,
@@ -442,7 +442,7 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let data_mutation: DataMutation = s_expr.plan().clone().try_into()?;
+        let data_mutation: Mutation = s_expr.plan().clone().try_into()?;
         let interpreter = DataMutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
         let plan = interpreter
             .build_physical_plan(&data_mutation, None)

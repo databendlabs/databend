@@ -82,14 +82,6 @@ impl MutationExpression {
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
     ) -> Result<MutationExpressionBindResult> {
-        let target_table_index = binder
-            .metadata
-            .read()
-            .get_table_index(
-                Some(target_table_identifier.database_name().as_str()),
-                target_table_identifier.table_name().as_str(),
-            )
-            .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
         let mutation_type = self.data_mutation_type();
         let mut required_columns = ColumnSet::new();
         let mut update_stream_columns = target_table.change_tracking_enabled();
@@ -109,6 +101,16 @@ impl MutationExpression {
                 // Bind target table reference.
                 let (mut target_s_expr, mut target_context) =
                     binder.bind_table_reference(bind_context, target)?;
+
+                // Get target table index.
+                let target_table_index = binder
+                    .metadata
+                    .read()
+                    .get_table_index(
+                        Some(target_table_identifier.database_name().as_str()),
+                        target_table_identifier.table_name().as_str(),
+                    )
+                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
 
                 // Remove stream columns in source context.
                 source_context
@@ -132,7 +134,7 @@ impl MutationExpression {
 
                 // TODO(Dousir9): do not add row_id column for insert only.
                 // Add internal column _row_id for target_table.
-                let target_row_id_index = binder.add_row_id_column(
+                let target_table_row_id_index = binder.add_row_id_column(
                     &mut target_context,
                     target_table_identifier,
                     target_table_index,
@@ -142,7 +144,7 @@ impl MutationExpression {
 
                 // Add target table row_id column to required columns.
                 if *mutation_strategy != MutationStrategy::NotMatchedOnly {
-                    required_columns.insert(target_row_id_index);
+                    required_columns.insert(target_table_row_id_index);
                 }
 
                 // If it is insert only, we don't need to update stream columns.
@@ -179,10 +181,10 @@ impl MutationExpression {
                     bind_context,
                     all_source_columns,
                     target_table_index,
-                    target_row_id_index,
-                    predicate_index: None,
+                    target_table_row_id_index,
                     truncate_table: false,
-                    mutation_filter: None,
+                    predicate_column_index: None,
+                    direct_filter: None,
                 })
             }
             MutationExpression::Update { target, filter }
@@ -191,86 +193,118 @@ impl MutationExpression {
                 let (mut s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
 
+                // Get target table index.
+                let target_table_index = binder
+                    .metadata
+                    .read()
+                    .get_table_index(
+                        Some(target_table_identifier.database_name().as_str()),
+                        target_table_identifier.table_name().as_str(),
+                    )
+                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+
+                // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
                 let (mutation_strategy, filter) =
                     binder.process_filter(&mut bind_context, filter)?;
 
-                let mut required_columns = ColumnSet::new();
-                let mut target_row_id_index = DUMMY_COLUMN_INDEX;
-                let mut predicate_index = None;
-                let mut truncate_table = false;
-                let s_expr = if mutation_strategy == MutationStrategy::Direct {
+                // Build bind result according to mutation strategy.
+                if mutation_strategy == MutationStrategy::Direct {
+                    let mut truncate_table = false;
+                    let mut predicate_column_index = None;
                     let mut read_partition_columns = HashSet::new();
+
                     if let Some(filter) = &filter {
                         read_partition_columns.extend(filter.used_columns());
                         if mutation_type == MutationType::Update {
-                            let predicate_column_index =
-                                binder.metadata.write().add_derived_column(
-                                    "_predicate".to_string(),
-                                    DataType::Boolean,
-                                    None,
-                                );
-                            required_columns.insert(predicate_column_index);
-                            predicate_index = Some(predicate_column_index);
+                            let column_index = binder.metadata.write().add_derived_column(
+                                "_predicate".to_string(),
+                                DataType::Boolean,
+                                None,
+                            );
+                            required_columns.insert(column_index);
+                            predicate_column_index = Some(column_index);
                         }
                     } else if mutation_type == MutationType::Delete {
+                        // There is no filter and the mutation type is delete,
+                        // we can truncate the table directly.
                         truncate_table = true;
                     }
-                    let table_schema = target_table
-                        .schema_with_stream()
-                        .remove_virtual_computed_fields();
-                    let target_mutation_source = MutationSource {
-                        table_index: target_table_index,
-                        schema: table_schema,
-                        columns: bind_context.column_set(),
-                        update_stream_columns,
-                        filter: filter.clone(),
-                        predicate_index,
-                        input_type: mutation_type.clone(),
-                        read_partition_columns,
-                    };
+
                     for column_index in bind_context.column_set().iter() {
                         required_columns.insert(*column_index);
                     }
-                    SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
-                        target_mutation_source,
-                    )))
+
+                    let table_schema = target_table
+                        .schema_with_stream()
+                        .remove_virtual_computed_fields();
+                    let mutation_source = MutationSource {
+                        schema: table_schema,
+                        columns: bind_context.column_set(),
+                        table_index: target_table_index,
+                        mutation_type: mutation_type.clone(),
+                        filter: filter.clone(),
+                        predicate_column_index,
+                        read_partition_columns,
+                        update_stream_columns,
+                    };
+
+                    s_expr =
+                        SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
+
+                    Ok(MutationExpressionBindResult {
+                        input: s_expr,
+                        mutation_type,
+                        mutation_strategy,
+                        required_columns,
+                        bind_context,
+                        all_source_columns: None,
+                        target_table_index,
+                        target_table_row_id_index: DUMMY_COLUMN_INDEX,
+                        truncate_table,
+                        predicate_column_index,
+                        direct_filter: filter,
+                    })
                 } else {
                     let is_lazy_table = mutation_type != MutationType::Delete;
                     s_expr =
                         Self::update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
 
-                    // Add internal_column row_id for target_table
-                    target_row_id_index = binder.add_row_id_column(
+                    // Add internal column _row_id for target table.
+                    let target_table_row_id_index = binder.add_row_id_column(
                         &mut bind_context,
                         target_table_identifier,
                         target_table_index,
                         &mut s_expr,
                         mutation_type.clone(),
                     )?;
+
                     // Add target table row_id column to required columns.
-                    required_columns.insert(target_row_id_index);
+                    required_columns.insert(target_table_row_id_index);
 
                     let predicates = Binder::flatten_and_scalar_expr(filter.as_ref().unwrap());
-                    let filter: Filter = Filter { predicates };
-                    s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr));
+                    s_expr = SExpr::create_unary(
+                        Arc::new(Filter { predicates }.into()),
+                        Arc::new(s_expr),
+                    );
+
                     let mut rewriter =
                         SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
-                    rewriter.rewrite(&s_expr)?
-                };
+                    let s_expr = rewriter.rewrite(&s_expr)?;
 
-                Ok(MutationExpressionBindResult {
-                    input: s_expr,
-                    mutation_type,
-                    mutation_strategy,
-                    required_columns,
-                    bind_context,
-                    all_source_columns: None,
-                    target_table_index,
-                    target_row_id_index,
-                    predicate_index,
-                    truncate_table,
-                    mutation_filter: filter,
-                })
+                    Ok(MutationExpressionBindResult {
+                        input: s_expr,
+                        mutation_type,
+                        mutation_strategy,
+                        required_columns,
+                        bind_context,
+                        all_source_columns: None,
+                        target_table_index,
+                        target_table_row_id_index,
+                        truncate_table: false,
+                        predicate_column_index: None,
+                        direct_filter: None,
+                    })
+                }
             }
         }
     }
@@ -520,16 +554,18 @@ impl Binder {
 
 pub struct MutationExpressionBindResult {
     pub input: SExpr,
+    pub bind_context: BindContext,
     pub mutation_type: MutationType,
     pub mutation_strategy: MutationStrategy,
-    pub required_columns: ColumnSet,
-    pub bind_context: BindContext,
-    pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
     pub target_table_index: usize,
-    pub target_row_id_index: usize,
-    pub predicate_index: Option<usize>,
+    pub target_table_row_id_index: usize,
+    pub required_columns: ColumnSet,
+    pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
+
+    // MutationStrategy::Direct related variables.
     pub truncate_table: bool,
-    pub mutation_filter: Option<ScalarExpr>,
+    pub predicate_column_index: Option<usize>,
+    pub direct_filter: Option<ScalarExpr>,
 }
 
 pub fn target_table_position(s_expr: &SExpr, target_table_index: usize) -> Result<usize> {

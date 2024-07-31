@@ -36,14 +36,14 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, Default)]
 pub struct MutationSource {
-    pub table_index: IndexType,
     pub schema: TableSchema,
     pub columns: ColumnSet,
-    pub update_stream_columns: bool,
+    pub table_index: IndexType,
+    pub mutation_type: MutationType,
     pub filter: Option<ScalarExpr>,
-    pub predicate_index: Option<usize>,
-    pub input_type: MutationType,
+    pub predicate_column_index: Option<usize>,
     pub read_partition_columns: ColumnSet,
+    pub update_stream_columns: bool,
 }
 
 impl PartialEq for MutationSource {

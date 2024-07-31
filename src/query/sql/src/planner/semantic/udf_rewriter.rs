@@ -97,7 +97,7 @@ impl UdfRewriter {
                 let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
                 Ok(new_expr)
             }
-            RelOperator::DataMutation(mut plan) => {
+            RelOperator::Mutation(mut plan) => {
                 for matched_evaluator in plan.matched_evaluators.iter_mut() {
                     if let Some(condition) = matched_evaluator.condition.as_mut() {
                         self.visit(condition)?;

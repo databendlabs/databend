@@ -31,7 +31,6 @@ use crate::plans::AsyncFunction;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
-use crate::plans::DataMutation;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Exchange;
@@ -39,6 +38,7 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Recluster;
@@ -149,7 +149,7 @@ pub enum RelOperator {
     Udf(Udf),
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
-    DataMutation(DataMutation),
+    Mutation(Mutation),
     Recluster(Recluster),
     CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
@@ -178,7 +178,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.rel_op(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
             RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
-            RelOperator::DataMutation(rel_op) => rel_op.rel_op(),
+            RelOperator::Mutation(rel_op) => rel_op.rel_op(),
             RelOperator::Recluster(rel_op) => rel_op.rel_op(),
             RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
             RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
@@ -207,7 +207,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.arity(),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
             RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
-            RelOperator::DataMutation(rel_op) => rel_op.arity(),
+            RelOperator::Mutation(rel_op) => rel_op.arity(),
             RelOperator::Recluster(rel_op) => rel_op.arity(),
             RelOperator::CompactBlock(rel_op) => rel_op.arity(),
             RelOperator::MutationSource(rel_op) => rel_op.arity(),
@@ -236,7 +236,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::DataMutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::Mutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -265,7 +265,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::DataMutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::Mutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
@@ -294,7 +294,7 @@ impl Operator for RelOperator {
             RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::DataMutation(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::Mutation(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::Recluster(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
@@ -369,7 +369,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
-            RelOperator::DataMutation(rel_op) => {
+            RelOperator::Mutation(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
             RelOperator::Recluster(rel_op) => {
@@ -451,7 +451,7 @@ impl Operator for RelOperator {
             RelOperator::AsyncFunction(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
-            RelOperator::DataMutation(rel_op) => {
+            RelOperator::Mutation(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::Recluster(rel_op) => {
@@ -834,16 +834,16 @@ impl TryFrom<RelOperator> for AsyncFunction {
     }
 }
 
-impl From<DataMutation> for RelOperator {
-    fn from(v: DataMutation) -> Self {
-        Self::DataMutation(v)
+impl From<Mutation> for RelOperator {
+    fn from(v: Mutation) -> Self {
+        Self::Mutation(v)
     }
 }
 
-impl TryFrom<RelOperator> for DataMutation {
+impl TryFrom<RelOperator> for Mutation {
     type Error = ErrorCode;
     fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::DataMutation(value) = value {
+        if let RelOperator::Mutation(value) = value {
             Ok(value)
         } else {
             Err(ErrorCode::Internal(format!(

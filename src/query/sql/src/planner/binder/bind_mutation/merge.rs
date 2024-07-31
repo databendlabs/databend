@@ -21,7 +21,7 @@ use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_mutation::bind::DataMutation;
+use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
@@ -66,7 +66,7 @@ impl Binder {
             Self::split_merge_into_clauses(&stmt.merge_options)?;
         let mutation_strategy = get_mutation_type(matched_clauses.len(), unmatched_clauses.len())?;
 
-        let data_mutation = DataMutation {
+        let data_mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Merge {
                 target: target_reference,

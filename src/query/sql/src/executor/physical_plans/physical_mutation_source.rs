@@ -84,7 +84,7 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if let Some(predicate_index) = mutation_source.predicate_index {
+        if let Some(predicate_index) = mutation_source.predicate_column_index {
             fields.push(DataField::new(
                 &predicate_index.to_string(),
                 DataType::Boolean,
@@ -98,7 +98,7 @@ impl PhysicalPlanBuilder {
             output_schema,
             table_info: data_mutation_info.table_info.clone(),
             filters,
-            input_type: mutation_source.input_type.clone(),
+            input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             snapshot: data_mutation_info.table_snapshot.clone().unwrap(),
         }))

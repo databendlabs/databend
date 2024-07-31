@@ -20,7 +20,7 @@ use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::binder::bind_mutation::bind::DataMutation;
+use crate::binder::bind_mutation::bind::Mutation;
 use crate::binder::bind_mutation::bind::MutationStrategy;
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
@@ -79,7 +79,7 @@ impl Binder {
 
         // WindowFunction, AggregateFunction, AsyncFunctionCall, UDFCall
 
-        let data_mutation = DataMutation {
+        let data_mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Update {
                 target: table.clone(),

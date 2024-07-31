@@ -20,7 +20,7 @@ use itertools::Itertools;
 use crate::format_scalar;
 use crate::optimizer::SExpr;
 use crate::plans::CreateTablePlan;
-use crate::plans::DataMutation;
+use crate::plans::Mutation;
 use crate::plans::Plan;
 
 impl Plan {
@@ -235,7 +235,7 @@ fn format_create_table(create_table: &CreateTablePlan) -> Result<String> {
 }
 
 fn format_merge_into(s_expr: &SExpr) -> Result<String> {
-    let merge_into: DataMutation = s_expr.plan().clone().try_into()?;
+    let merge_into: Mutation = s_expr.plan().clone().try_into()?;
     // add merge into target_table
     let table_index = merge_into
         .metadata

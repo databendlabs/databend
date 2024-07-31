@@ -58,8 +58,8 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
-use crate::plans::DataMutation;
 use crate::plans::FunctionCall;
+use crate::plans::Mutation;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
@@ -70,7 +70,7 @@ use crate::TypeCheck;
 use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
-// predicate_index should not be conflict with update expr's column_binding's index.
+// predicate_column_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -83,7 +83,7 @@ pub struct MergeInto {
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
     pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
-    pub mutation_type: MutationStrategy,
+    pub strategy: MutationStrategy,
     pub target_table_index: usize,
     pub need_match: bool,
     pub distributed: bool,
@@ -114,10 +114,10 @@ impl PhysicalPlanBuilder {
     pub async fn build_merge_into(
         &mut self,
         s_expr: &SExpr,
-        data_mutation: &DataMutation,
+        data_mutation: &Mutation,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let DataMutation {
+        let Mutation {
             bind_context,
             metadata,
             catalog_name,
@@ -129,10 +129,10 @@ impl PhysicalPlanBuilder {
             input_type,
             target_table_index,
             field_index_map,
-            mutation_type,
+            strategy,
             distributed,
             mutation_source,
-            predicate_index,
+            predicate_column_index,
             row_id_index,
             change_join_order,
             can_try_update_column_only,
@@ -164,7 +164,7 @@ impl PhysicalPlanBuilder {
                         update_list,
                         table.schema_with_stream().into(),
                         data_mutation_input_schema.clone(),
-                        *predicate_index,
+                        *predicate_column_index,
                         database,
                         &table_name,
                     )?;
@@ -219,7 +219,7 @@ impl PhysicalPlanBuilder {
                 input_type: input_type.clone(),
                 field_id_to_schema_index,
                 input_num_columns,
-                has_filter_column: predicate_index.is_some(),
+                has_filter_column: predicate_column_index.is_some(),
             });
 
             let commit_input = if !distributed {
@@ -255,7 +255,7 @@ impl PhysicalPlanBuilder {
             return Ok(physical_plan);
         }
 
-        let is_not_matched_only = matches!(mutation_type, MutationStrategy::NotMatchedOnly);
+        let is_not_matched_only = matches!(strategy, MutationStrategy::NotMatchedOnly);
         let row_id_offset = if !is_not_matched_only {
             data_mutation_input_schema.index_of(&row_id_index.to_string())?
         } else {
@@ -266,7 +266,7 @@ impl PhysicalPlanBuilder {
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
         let source_is_broadcast =
-            matches!(mutation_type, MutationStrategy::MatchedOnly) && !change_join_order;
+            matches!(strategy, MutationStrategy::MatchedOnly) && !change_join_order;
         if *distributed && !is_not_matched_only && !source_is_broadcast {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
@@ -279,7 +279,7 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
-        if matches!(mutation_type, MutationStrategy::MixedMatched) {
+        if matches!(strategy, MutationStrategy::MixedMatched) {
             plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
                 plan_id: 0,
                 input: Box::new(plan),
@@ -298,7 +298,7 @@ impl PhysicalPlanBuilder {
                 plan,
                 metadata.clone(),
                 data_mutation_input_schema.clone(),
-                mutation_type.clone(),
+                strategy.clone(),
                 lazy_columns.clone(),
                 *target_table_index,
                 row_id_offset,
@@ -420,7 +420,7 @@ impl PhysicalPlanBuilder {
             unmatched: unmatched.clone(),
             matched: matched.clone(),
             field_index_of_input_schema: field_index_of_input_schema.clone(),
-            mutation_type: mutation_type.clone(),
+            strategy: strategy.clone(),
             row_id_idx: row_id_offset,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: data_mutation_input_schema.clone(),
@@ -429,7 +429,7 @@ impl PhysicalPlanBuilder {
         plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
-            mutation_type: mutation_type.clone(),
+            strategy: strategy.clone(),
         }));
 
         let segments: Vec<_> = base_snapshot
@@ -446,7 +446,7 @@ impl PhysicalPlanBuilder {
             segments: segments.clone(),
             distributed: *distributed,
             output_schema: DataSchemaRef::default(),
-            mutation_type: mutation_type.clone(),
+            strategy: strategy.clone(),
             target_table_index: *target_table_index,
             need_match: !is_not_matched_only,
             target_build_optimization: false,
@@ -581,7 +581,7 @@ fn build_data_mutation_row_fetch(
     plan: PhysicalPlan,
     metadata: MetadataRef,
     data_mutation_input_schema: Arc<DataSchema>,
-    mutation_type: MutationStrategy,
+    strategy: MutationStrategy,
     lazy_columns: HashSet<usize>,
     target_table_index: usize,
     row_id_offset: usize,
@@ -595,7 +595,7 @@ fn build_data_mutation_row_fetch(
         .cloned()
         .collect::<Vec<_>>();
     let mut has_inner_column = false;
-    let need_wrap_nullable = matches!(mutation_type, MutationStrategy::MixedMatched);
+    let need_wrap_nullable = matches!(strategy, MutationStrategy::MixedMatched);
     let fetched_fields: Vec<DataField> = lazy_columns
         .iter()
         .map(|index| {
@@ -731,14 +731,14 @@ pub fn mutation_update_expr(
     update_list: &HashMap<FieldIndex, ScalarExpr>,
     schema: DataSchema,
     input_schema: Arc<DataSchema>,
-    predicate_index: Option<usize>,
+    predicate_column_index: Option<usize>,
     database: Option<&str>,
     table: &str,
 ) -> Result<Vec<(FieldIndex, RemoteExpr)>> {
-    let predicate = if let Some(predicate_index) = predicate_index {
+    let predicate = if let Some(predicate_column_index) = predicate_column_index {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            predicate_index,
+            predicate_column_index,
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )

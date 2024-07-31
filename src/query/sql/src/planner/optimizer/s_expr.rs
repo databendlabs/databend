@@ -332,7 +332,7 @@ impl SExpr {
             | RelOperator::CacheScan(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::DataMutation(_)
+            | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_) => {}
         };
@@ -433,7 +433,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::CacheScan(_)
         | RelOperator::AsyncFunction(_)
         | RelOperator::RecursiveCteScan(_)
-        | RelOperator::DataMutation(_)
+        | RelOperator::Mutation(_)
         | RelOperator::Recluster(_)
         | RelOperator::CompactBlock(_) => false,
         RelOperator::Join(op) => {

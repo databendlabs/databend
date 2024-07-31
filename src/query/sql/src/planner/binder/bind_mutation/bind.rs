@@ -81,7 +81,7 @@ pub enum MutationStrategy {
     MixedMatched,
 }
 
-pub struct DataMutation {
+pub struct Mutation {
     pub target_table_identifier: TableIdentifier,
     pub expression: MutationExpression,
     pub strategy: MutationStrategy,
@@ -89,7 +89,7 @@ pub struct DataMutation {
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
 
-impl DataMutation {
+impl Mutation {
     pub fn check_semantic(&self) -> Result<()> {
         Self::check_multi_match_clauses_semantic(&self.matched_clauses)?;
         Self::check_multi_unmatch_clauses_semantic(&self.unmatched_clauses)
@@ -128,10 +128,11 @@ impl Binder {
     pub async fn bind_data_mutation(
         &mut self,
         bind_context: &mut BindContext,
-        data_mutation: DataMutation,
+        data_mutation: Mutation,
     ) -> Result<Plan> {
         data_mutation.check_semantic()?;
-        let DataMutation {
+
+        let Mutation {
             target_table_identifier,
             expression,
             strategy,
@@ -166,7 +167,6 @@ impl Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
-
         let table_schema = table.schema();
 
         let bind_result = expression
@@ -181,16 +181,16 @@ impl Binder {
 
         let MutationExpressionBindResult {
             input,
+            mut bind_context,
             mutation_type,
             mutation_strategy,
-            mut required_columns,
-            mut bind_context,
-            all_source_columns,
             target_table_index,
-            target_row_id_index,
-            predicate_index,
+            target_table_row_id_index,
+            mut required_columns,
+            all_source_columns,
             truncate_table,
-            mutation_filter,
+            predicate_column_index,
+            direct_filter,
         } = bind_result;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -286,7 +286,7 @@ impl Binder {
             );
         }
 
-        let data_mutation = crate::plans::DataMutation {
+        let data_mutation = crate::plans::Mutation {
             catalog_name,
             database_name,
             table_name,
@@ -299,16 +299,16 @@ impl Binder {
             unmatched_evaluators,
             target_table_index,
             field_index_map,
-            mutation_type: mutation_strategy.clone(),
+            strategy: mutation_strategy.clone(),
             distributed: false,
             change_join_order: false,
             mutation_source: mutation_strategy == MutationStrategy::Direct,
-            predicate_index,
-            truncate_table,
-            mutation_filter,
-            row_id_index: target_row_id_index,
+            row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
+            truncate_table,
+            predicate_column_index,
+            direct_filter,
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&data_mutation) {
@@ -319,7 +319,7 @@ impl Binder {
 
         let schema = data_mutation.schema();
         let mut s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::DataMutation(data_mutation)),
+            Arc::new(RelOperator::Mutation(data_mutation)),
             Arc::new(input),
         );
 
@@ -592,7 +592,7 @@ impl Binder {
     }
 }
 
-fn insert_only(merge_plan: &crate::plans::DataMutation) -> bool {
+fn insert_only(merge_plan: &crate::plans::Mutation) -> bool {
     let metadata = merge_plan.metadata.read();
     let target_table_columns: HashSet<usize> = metadata
         .columns_by_table_index(merge_plan.target_table_index)

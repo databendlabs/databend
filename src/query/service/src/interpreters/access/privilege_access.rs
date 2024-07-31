@@ -33,8 +33,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
-use databend_common_sql::plans::DataMutation;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
@@ -967,7 +967,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::DataMutation { s_expr, .. } => {
-                let plan: DataMutation = s_expr.plan().clone().try_into()?;
+                let plan: Mutation = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {
