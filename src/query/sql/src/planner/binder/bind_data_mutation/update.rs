@@ -22,7 +22,7 @@ use databend_common_exception::Result;
 
 use crate::binder::bind_data_mutation::bind::DataMutation;
 use crate::binder::bind_data_mutation::bind::DataMutationStrategy;
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::plans::Plan;
@@ -81,7 +81,7 @@ impl Binder {
 
         let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataMutationInput::Update {
+            input: DataMutationExpression::Update {
                 target: table.clone(),
                 filter: selection.clone(),
             },
