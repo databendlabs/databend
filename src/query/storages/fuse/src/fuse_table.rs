@@ -740,6 +740,7 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         if let Some(desc) = &self.changes_desc {
@@ -750,7 +751,7 @@ impl Table for FuseTable {
         }
 
         let stats = match self.table_type {
-            FuseTableType::Attached => {
+            FuseTableType::Attached if require_fresh => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
