@@ -23,10 +23,10 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
+use super::physical_plans::MutationManipulate;
+use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
+use super::physical_plans::MutationSplit;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -58,7 +58,7 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
@@ -118,11 +118,11 @@ pub enum PhysicalPlan {
     ReplaceDeduplicate(Box<ReplaceDeduplicate>),
     ReplaceInto(Box<ReplaceInto>),
 
-    /// MergeInto
-    MergeInto(Box<MergeInto>),
-    MergeIntoSplit(Box<MergeIntoSplit>),
-    MergeIntoManipulate(Box<MergeIntoManipulate>),
-    MergeIntoOrganize(Box<MergeIntoOrganize>),
+    /// Mutation
+    Mutation(Box<Mutation>),
+    MutationSplit(Box<MutationSplit>),
+    MutationManipulate(Box<MutationManipulate>),
+    MutationOrganize(Box<MutationOrganize>),
     AddStreamColumn(Box<AddStreamColumn>),
     ColumnMutation(ColumnMutation),
     MutationSource(MutationSource),
@@ -313,22 +313,22 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeInto(plan) => {
+            PhysicalPlan::Mutation(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeIntoSplit(plan) => {
+            PhysicalPlan::MutationSplit(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeIntoManipulate(plan) => {
+            PhysicalPlan::MutationManipulate(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
-            PhysicalPlan::MergeIntoOrganize(plan) => {
+            PhysicalPlan::MutationOrganize(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
@@ -439,10 +439,10 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(v) => v.plan_id,
             PhysicalPlan::MutationSource(v) => v.plan_id,
             PhysicalPlan::ColumnMutation(v) => v.plan_id,
-            PhysicalPlan::MergeInto(v) => v.plan_id,
-            PhysicalPlan::MergeIntoSplit(v) => v.plan_id,
-            PhysicalPlan::MergeIntoManipulate(v) => v.plan_id,
-            PhysicalPlan::MergeIntoOrganize(v) => v.plan_id,
+            PhysicalPlan::Mutation(v) => v.plan_id,
+            PhysicalPlan::MutationSplit(v) => v.plan_id,
+            PhysicalPlan::MutationManipulate(v) => v.plan_id,
+            PhysicalPlan::MutationOrganize(v) => v.plan_id,
             PhysicalPlan::AddStreamColumn(v) => v.plan_id,
             PhysicalPlan::CommitSink(v) => v.plan_id,
             PhysicalPlan::CopyIntoTable(v) => v.plan_id,
@@ -497,10 +497,10 @@ impl PhysicalPlan {
             PhysicalPlan::Udf(plan) => plan.output_schema(),
             PhysicalPlan::MutationSource(plan) => plan.output_schema(),
             PhysicalPlan::ColumnMutation(plan) => plan.output_schema(),
-            PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
-            PhysicalPlan::MergeIntoSplit(plan) => plan.output_schema(),
-            PhysicalPlan::MergeIntoManipulate(plan) => plan.output_schema(),
-            PhysicalPlan::MergeIntoOrganize(plan) => plan.output_schema(),
+            PhysicalPlan::Mutation(plan) => Ok(plan.output_schema.clone()),
+            PhysicalPlan::MutationSplit(plan) => plan.output_schema(),
+            PhysicalPlan::MutationManipulate(plan) => plan.output_schema(),
+            PhysicalPlan::MutationOrganize(plan) => plan.output_schema(),
             PhysicalPlan::AddStreamColumn(plan) => plan.output_schema(),
             PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::ReplaceDeduplicate(_)
@@ -558,10 +558,10 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MutationSource(_) => "MutationSource".to_string(),
             PhysicalPlan::ColumnMutation(_) => "ColumnMutation".to_string(),
-            PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
-            PhysicalPlan::MergeIntoSplit(_) => "MergeIntoSplit".to_string(),
-            PhysicalPlan::MergeIntoManipulate(_) => "MergeIntoManipulate".to_string(),
-            PhysicalPlan::MergeIntoOrganize(_) => "MergeIntoOrganize".to_string(),
+            PhysicalPlan::Mutation(_) => "MergeInto".to_string(),
+            PhysicalPlan::MutationSplit(_) => "MutationSplit".to_string(),
+            PhysicalPlan::MutationManipulate(_) => "MutationManipulate".to_string(),
+            PhysicalPlan::MutationOrganize(_) => "MutationOrganize".to_string(),
             PhysicalPlan::AddStreamColumn(_) => "AddStreamColumn".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
@@ -629,12 +629,12 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MutationSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::ColumnMutation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MergeIntoSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MergeIntoManipulate(plan) => {
+            PhysicalPlan::Mutation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationSplit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationManipulate(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
-            PhysicalPlan::MergeIntoOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
@@ -688,10 +688,10 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MutationSource(_)
             | PhysicalPlan::ColumnMutation(_)
-            | PhysicalPlan::MergeInto(_)
-            | PhysicalPlan::MergeIntoSplit(_)
-            | PhysicalPlan::MergeIntoManipulate(_)
-            | PhysicalPlan::MergeIntoOrganize(_)
+            | PhysicalPlan::Mutation(_)
+            | PhysicalPlan::MutationSplit(_)
+            | PhysicalPlan::MutationManipulate(_)
+            | PhysicalPlan::MutationOrganize(_)
             | PhysicalPlan::AddStreamColumn(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)

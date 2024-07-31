@@ -29,7 +29,7 @@ use databend_common_pipeline_transforms::processors::BlockCompactor;
 use databend_common_pipeline_transforms::processors::TransformCompact;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
-use databend_common_sql::executor::physical_plans::MergeInto;
+use databend_common_sql::executor::physical_plans::Mutation;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::TransformSerializeSegment;
@@ -42,7 +42,7 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     // build merge into serialize and mutation pipeline
-    pub(crate) fn build_merge_into(&mut self, merge_into: &MergeInto) -> Result<()> {
+    pub(crate) fn build_merge_into(&mut self, merge_into: &Mutation) -> Result<()> {
         self.build_pipeline(&merge_into.input)?;
 
         let tbl = self
@@ -67,7 +67,7 @@ impl PipelineBuilder {
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
-        let serialize_len = match merge_into.mutation_type {
+        let serialize_len = match merge_into.strategy {
             MutationStrategy::NotMatchedOnly => self.main_pipeline.output_len(),
             MutationStrategy::MixedMatched | MutationStrategy::MatchedOnly => {
                 // remove row id port

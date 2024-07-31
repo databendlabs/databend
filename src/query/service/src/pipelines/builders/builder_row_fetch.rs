@@ -34,7 +34,7 @@ impl PipelineBuilder {
             row_fetch.cols_to_fetch.clone(),
             row_fetch.need_wrap_nullable,
         )?;
-        if !matches!(&*row_fetch.input, PhysicalPlan::MergeIntoSplit(_)) {
+        if !matches!(&*row_fetch.input, PhysicalPlan::MutationSplit(_)) {
             self.main_pipeline.add_transform(processor)?;
         } else {
             let output_len = self.main_pipeline.output_len();

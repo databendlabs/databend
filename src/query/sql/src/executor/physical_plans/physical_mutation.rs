@@ -48,10 +48,10 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
-use crate::executor::physical_plans::MergeIntoManipulate;
-use crate::executor::physical_plans::MergeIntoOrganize;
-use crate::executor::physical_plans::MergeIntoSplit;
 use crate::executor::physical_plans::MutationKind;
+use crate::executor::physical_plans::MutationManipulate;
+use crate::executor::physical_plans::MutationOrganize;
+use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -59,7 +59,6 @@ use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
-use crate::plans::Mutation;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
@@ -75,7 +74,7 @@ pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeInto {
+pub struct Mutation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
@@ -114,10 +113,10 @@ impl PhysicalPlanBuilder {
     pub async fn build_merge_into(
         &mut self,
         s_expr: &SExpr,
-        data_mutation: &Mutation,
+        data_mutation: &crate::plans::Mutation,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let Mutation {
+        let crate::plans::Mutation {
             bind_context,
             metadata,
             catalog_name,
@@ -280,7 +279,7 @@ impl PhysicalPlanBuilder {
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
         if matches!(strategy, MutationStrategy::MixedMatched) {
-            plan = PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
+            plan = PhysicalPlan::MutationSplit(Box::new(MutationSplit {
                 plan_id: 0,
                 input: Box::new(plan),
                 split_index: row_id_offset,
@@ -413,7 +412,7 @@ impl PhysicalPlanBuilder {
                 .insert(*field_index, output_schema.index_of(value).unwrap());
         }
 
-        plan = PhysicalPlan::MergeIntoManipulate(Box::new(MergeIntoManipulate {
+        plan = PhysicalPlan::MutationManipulate(Box::new(MutationManipulate {
             plan_id: 0,
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
@@ -426,7 +425,7 @@ impl PhysicalPlanBuilder {
             unmatched_schema: data_mutation_input_schema.clone(),
         }));
 
-        plan = PhysicalPlan::MergeIntoOrganize(Box::new(MergeIntoOrganize {
+        plan = PhysicalPlan::MutationOrganize(Box::new(MutationOrganize {
             plan_id: 0,
             input: Box::new(plan.clone()),
             strategy: strategy.clone(),
@@ -439,7 +438,7 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
-        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
+        let merge_into = PhysicalPlan::Mutation(Box::new(Mutation {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
             unmatched,

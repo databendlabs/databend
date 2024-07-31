@@ -17,9 +17,9 @@ use databend_common_exception::Result;
 use super::physical_plans::AddStreamColumn;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
-use super::physical_plans::MergeIntoManipulate;
-use super::physical_plans::MergeIntoOrganize;
-use super::physical_plans::MergeIntoSplit;
+use super::physical_plans::MutationManipulate;
+use super::physical_plans::MutationOrganize;
+use super::physical_plans::MutationSplit;
 use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
@@ -50,7 +50,7 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
+use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -100,10 +100,10 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MutationSource(plan) => self.replace_mutation_source(plan),
             PhysicalPlan::ColumnMutation(plan) => self.replace_column_mutation(plan),
-            PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
-            PhysicalPlan::MergeIntoSplit(plan) => self.replace_merge_into_split(plan),
-            PhysicalPlan::MergeIntoManipulate(plan) => self.replace_merge_into_manipulate(plan),
-            PhysicalPlan::MergeIntoOrganize(plan) => self.replace_merge_into_organize(plan),
+            PhysicalPlan::Mutation(plan) => self.replace_mutation(plan),
+            PhysicalPlan::MutationSplit(plan) => self.replace_mutation_split(plan),
+            PhysicalPlan::MutationManipulate(plan) => self.replace_mutation_manipulate(plan),
+            PhysicalPlan::MutationOrganize(plan) => self.replace_mutation_organize(plan),
             PhysicalPlan::AddStreamColumn(plan) => self.replace_add_stream_column(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
@@ -485,43 +485,38 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
             input: Box::new(input),
             ..plan.clone()
         })))
     }
 
-    fn replace_merge_into_split(&mut self, plan: &MergeIntoSplit) -> Result<PhysicalPlan> {
+    fn replace_mutation_split(&mut self, plan: &MutationSplit) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoSplit(Box::new(MergeIntoSplit {
+        Ok(PhysicalPlan::MutationSplit(Box::new(MutationSplit {
             input: Box::new(input),
             ..plan.clone()
         })))
     }
 
-    fn replace_merge_into_manipulate(
-        &mut self,
-        plan: &MergeIntoManipulate,
-    ) -> Result<PhysicalPlan> {
+    fn replace_mutation_manipulate(&mut self, plan: &MutationManipulate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoManipulate(Box::new(
-            MergeIntoManipulate {
+        Ok(PhysicalPlan::MutationManipulate(Box::new(
+            MutationManipulate {
                 input: Box::new(input),
                 ..plan.clone()
             },
         )))
     }
 
-    fn replace_merge_into_organize(&mut self, plan: &MergeIntoOrganize) -> Result<PhysicalPlan> {
+    fn replace_mutation_organize(&mut self, plan: &MutationOrganize) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoOrganize(Box::new(
-            MergeIntoOrganize {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
+        Ok(PhysicalPlan::MutationOrganize(Box::new(MutationOrganize {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_add_stream_column(&mut self, plan: &AddStreamColumn) -> Result<PhysicalPlan> {
@@ -735,16 +730,16 @@ impl PhysicalPlan {
                 PhysicalPlan::ColumnMutation(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeInto(plan) => {
+                PhysicalPlan::Mutation(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoSplit(plan) => {
+                PhysicalPlan::MutationSplit(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoManipulate(plan) => {
+                PhysicalPlan::MutationManipulate(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoOrganize(plan) => {
+                PhysicalPlan::MutationOrganize(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::AddStreamColumn(plan) => {

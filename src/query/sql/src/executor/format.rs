@@ -50,11 +50,11 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoManipulate;
-use crate::executor::physical_plans::MergeIntoOrganize;
-use crate::executor::physical_plans::MergeIntoSplit;
+use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::MutationManipulate;
+use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSource;
+use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::RangeJoinType;
@@ -252,12 +252,12 @@ fn to_format_tree(
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
         PhysicalPlan::MutationSource(plan) => format_mutation_source(plan, metadata, profs),
         PhysicalPlan::ColumnMutation(plan) => format_column_mutation(plan, metadata, profs),
-        PhysicalPlan::MergeInto(plan) => format_merge_into(plan, metadata, profs),
-        PhysicalPlan::MergeIntoSplit(plan) => format_merge_into_split(plan, metadata, profs),
-        PhysicalPlan::MergeIntoManipulate(plan) => {
+        PhysicalPlan::Mutation(plan) => format_merge_into(plan, metadata, profs),
+        PhysicalPlan::MutationSplit(plan) => format_merge_into_split(plan, metadata, profs),
+        PhysicalPlan::MutationManipulate(plan) => {
             format_merge_into_manipulate(plan, metadata, profs)
         }
-        PhysicalPlan::MergeIntoOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
+        PhysicalPlan::MutationOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
         PhysicalPlan::AddStreamColumn(plan) => format_add_stream_column(plan, metadata, profs),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
@@ -397,7 +397,7 @@ fn format_column_mutation(
 }
 
 fn format_merge_into(
-    merge_into: &MergeInto,
+    merge_into: &Mutation,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
@@ -412,15 +412,15 @@ fn format_merge_into(
 
     let merge_into_organize: &PhysicalPlan = &merge_into.input;
     let merge_into_manipulate: &PhysicalPlan =
-        if let PhysicalPlan::MergeIntoOrganize(plan) = merge_into_organize {
+        if let PhysicalPlan::MutationOrganize(plan) = merge_into_organize {
             &plan.input
         } else {
             return Err(ErrorCode::Internal(
-                "Expect MergeIntoOrganize after MergeIntoSerialize ".to_string(),
+                "Expect MutationOrganize after MergeIntoSerialize ".to_string(),
             ));
         };
 
-    let children = if let PhysicalPlan::MergeIntoManipulate(plan) = merge_into_manipulate {
+    let children = if let PhysicalPlan::MutationManipulate(plan) = merge_into_manipulate {
         // Matched clauses.
         let mut matched_children = Vec::with_capacity(plan.matched.len());
         for evaluator in &plan.matched {
@@ -497,7 +497,7 @@ fn format_merge_into(
         .concat()
     } else {
         return Err(ErrorCode::Internal(
-            "Expect MergeIntoManipulate after MergeIntoOrganize ".to_string(),
+            "Expect MutationManipulate after MutationOrganize ".to_string(),
         ));
     };
     Ok(FormatTreeNode::with_children(
@@ -507,7 +507,7 @@ fn format_merge_into(
 }
 
 fn format_merge_into_split(
-    plan: &MergeIntoSplit,
+    plan: &MutationSplit,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
@@ -515,7 +515,7 @@ fn format_merge_into_split(
 }
 
 fn format_merge_into_manipulate(
-    plan: &MergeIntoManipulate,
+    plan: &MutationManipulate,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
@@ -523,7 +523,7 @@ fn format_merge_into_manipulate(
 }
 
 fn format_merge_into_organize(
-    plan: &MergeIntoOrganize,
+    plan: &MutationOrganize,
     metadata: &Metadata,
     profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {

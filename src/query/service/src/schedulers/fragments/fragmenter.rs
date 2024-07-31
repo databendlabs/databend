@@ -40,7 +40,7 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::MergeInto;
+use crate::sql::executor::physical_plans::Mutation;
 use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
@@ -162,9 +162,9 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::MutationSource(plan.clone()))
     }
 
-    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
             input: Box::new(input),
             ..plan.clone()
         })))

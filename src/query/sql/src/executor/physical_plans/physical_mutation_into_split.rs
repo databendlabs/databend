@@ -19,13 +19,13 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoSplit {
+pub struct MutationSplit {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub split_index: IndexType,
 }
 
-impl MergeIntoSplit {
+impl MutationSplit {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.input.output_schema()
     }

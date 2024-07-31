@@ -42,11 +42,11 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
 use crate::executor::physical_plans::MaterializedCte;
-use crate::executor::physical_plans::MergeInto;
-use crate::executor::physical_plans::MergeIntoManipulate;
-use crate::executor::physical_plans::MergeIntoOrganize;
-use crate::executor::physical_plans::MergeIntoSplit;
+use crate::executor::physical_plans::Mutation;
+use crate::executor::physical_plans::MutationManipulate;
+use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSource;
+use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
 use crate::executor::physical_plans::Recluster;
@@ -109,12 +109,12 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ReplaceDeduplicate(deduplicate) => write!(f, "{}", deduplicate)?,
             PhysicalPlan::ReplaceInto(replace) => write!(f, "{}", replace)?,
             PhysicalPlan::ColumnMutation(column_mutation) => write!(f, "{}", column_mutation)?,
-            PhysicalPlan::MergeInto(merge_into) => write!(f, "{}", merge_into)?,
-            PhysicalPlan::MergeIntoSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
-            PhysicalPlan::MergeIntoManipulate(merge_into_manipulate) => {
+            PhysicalPlan::Mutation(merge_into) => write!(f, "{}", merge_into)?,
+            PhysicalPlan::MutationSplit(merge_into_split) => write!(f, "{}", merge_into_split)?,
+            PhysicalPlan::MutationManipulate(merge_into_manipulate) => {
                 write!(f, "{}", merge_into_manipulate)?
             }
-            PhysicalPlan::MergeIntoOrganize(merge_into_organize) => {
+            PhysicalPlan::MutationOrganize(merge_into_organize) => {
                 write!(f, "{}", merge_into_organize)?
             }
             PhysicalPlan::AddStreamColumn(add_stream_column) => write!(f, "{}", add_stream_column)?,
@@ -527,27 +527,27 @@ impl Display for ColumnMutation {
     }
 }
 
-impl Display for MergeInto {
+impl Display for Mutation {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeInto")
+        write!(f, "Mutation")
     }
 }
 
-impl Display for MergeIntoSplit {
+impl Display for MutationSplit {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoSplit")
+        write!(f, "MutationSplit")
     }
 }
 
-impl Display for MergeIntoManipulate {
+impl Display for MutationManipulate {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoManipulate")
+        write!(f, "MutationManipulate")
     }
 }
 
-impl Display for MergeIntoOrganize {
+impl Display for MutationOrganize {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "MergeIntoOrganize")
+        write!(f, "MutationOrganize")
     }
 }
 
