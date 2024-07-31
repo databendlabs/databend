@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_config::GlobalConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::UserFunctionsTable;
 use http::StatusCode;
