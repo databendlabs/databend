@@ -18,6 +18,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::share;
 use enumflags2::BitFlags;
+use minitrace::func_name;
 
 use crate::common;
 
