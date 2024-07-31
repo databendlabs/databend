@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -34,6 +33,7 @@ use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
+use crate::binder::DataMutationStrategy;
 use crate::binder::DataMutationType;
 use crate::binder::Finder;
 use crate::binder::InternalColumnBinding;
@@ -55,13 +55,13 @@ use crate::ScalarExpr;
 use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 
-pub enum DataMutationInput {
+pub enum DataMutationExpression {
     Merge {
         target: TableReference,
         source: TableReference,
         match_expr: Expr,
         has_star_clause: bool,
-        mutation_type: DataMutationType,
+        mutation_strategy: DataMutationStrategy,
     },
     Update {
         target: TableReference,
@@ -73,39 +73,21 @@ pub enum DataMutationInput {
     },
 }
 
-#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum DataMutationInputType {
-    #[default]
-    Merge,
-    Update,
-    Delete,
-}
-
-impl fmt::Display for DataMutationInputType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            DataMutationInputType::Merge => write!(f, "MERGE"),
-            DataMutationInputType::Update => write!(f, "UPDATE"),
-            DataMutationInputType::Delete => write!(f, "DELETE"),
-        }
-    }
-}
-
-pub struct DataMutationInputBindResult {
+pub struct DataMutationExpressionBindResult {
     pub input: SExpr,
-    pub input_type: DataMutationInputType,
+    pub mutation_type: DataMutationType,
+    pub mutation_strategy: DataMutationStrategy,
     pub required_columns: ColumnSet,
     pub bind_context: BindContext,
-    pub update_or_insert_columns_star: Option<HashMap<usize, ScalarExpr>>,
+    pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
     pub target_table_index: usize,
     pub target_row_id_index: usize,
-    pub mutation_source: bool,
     pub predicate_index: Option<usize>,
     pub truncate_table: bool,
     pub mutation_filter: Option<ScalarExpr>,
 }
 
-impl DataMutationInput {
+impl DataMutationExpression {
     pub async fn bind(
         &self,
         binder: &mut Binder,
@@ -113,187 +95,128 @@ impl DataMutationInput {
         target_table: Arc<dyn Table>,
         target_table_identifier: &TableIdentifier,
         target_table_schema: Arc<TableSchema>,
-    ) -> Result<DataMutationInputBindResult> {
+    ) -> Result<DataMutationExpressionBindResult> {
+        let target_table_index = binder
+            .metadata
+            .read()
+            .get_table_index(
+                Some(target_table_identifier.database_name().as_str()),
+                target_table_identifier.table_name().as_str(),
+            )
+            .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+        let mutation_type = self.data_mutation_type();
+        let mut required_columns = ColumnSet::new();
+        let mut update_stream_columns = target_table.change_tracking_enabled();
+
         match self {
-            DataMutationInput::Merge {
+            DataMutationExpression::Merge {
                 target,
                 source,
                 match_expr,
                 has_star_clause,
-                mutation_type,
+                mutation_strategy,
             } => {
-                // Bind source reference.
+                // Bind source table reference.
                 let (mut source_s_expr, mut source_context) =
                     binder.bind_table_reference(bind_context, source)?;
 
-                // Remove stream column.
+                // Bind target table reference.
+                let (mut target_s_expr, mut target_context) =
+                    binder.bind_table_reference(bind_context, target)?;
+
+                // Remove stream columns in source context.
                 source_context
                     .columns
                     .retain(|v| v.visibility == Visibility::Visible);
 
-                let source_columns: ColumnSet =
-                    source_context.columns.iter().map(|col| col.index).collect();
+                // Add source table columns to required columns.
+                for column_index in source_context.column_set().iter() {
+                    required_columns.insert(*column_index);
+                }
 
                 // Wrap `LogicalMaterializedCte` to `source_expr`.
                 source_s_expr = binder.wrap_cte(source_s_expr);
 
-                let update_or_insert_columns_star = if *has_star_clause {
-                    // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
-                    let default_target_table_schema = target_table_schema.remove_computed_fields();
-                    let mut update_columns =
-                        HashMap::with_capacity(default_target_table_schema.num_fields());
-                    // we use Vec as the value, because there could be duplicate names
-                    let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
-                    for column in source_context.columns.iter() {
-                        name_map
-                            .entry(column.column_name.clone())
-                            .or_default()
-                            .push(column.clone());
-                    }
+                // When there is "update *" or "insert *", prepare all source columns.
+                let all_source_columns = Self::all_source_columns(
+                    *has_star_clause,
+                    &source_context,
+                    target_table_schema,
+                )?;
 
-                    for (field_idx, field) in default_target_table_schema.fields.iter().enumerate()
-                    {
-                        let column = match name_map.get(field.name()) {
-                            None => {
-                                return Err(ErrorCode::SemanticError(
-                                    format!("can't find {} in source output", field.name)
-                                        .to_string(),
-                                ));
-                            }
-                            Some(indices) => {
-                                if indices.len() != 1 {
-                                    return Err(ErrorCode::SemanticError(
-                                        format!(
-                                            "there should be only one {} in source output,but we get {}",
-                                            field.name,
-                                            indices.len()
-                                        )
-                                        .to_string(),
-                                    ));
-                                }
-
-                                indices[0].clone()
-                            }
-                        };
-                        let column = ColumnBindingBuilder::new(
-                            field.name.to_string(),
-                            column.index,
-                            column.data_type.clone(),
-                            Visibility::Visible,
-                        )
-                        .build();
-                        let col = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
-
-                        update_columns.insert(field_idx, col);
-                    }
-                    Some(update_columns)
-                } else {
-                    None
-                };
-
-                let (mut target_s_expr, mut target_context) =
-                    binder.bind_table_reference(bind_context, target)?;
-
-                let update_stream_columns = target_table.change_tracking_enabled()
-                    && *mutation_type != DataMutationType::InsertOnly;
-                let is_lazy_table = *mutation_type != DataMutationType::InsertOnly;
-                target_s_expr =
-                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
-
-                // Add internal_column row_id for target_table
-                let target_table_index = binder
-                    .metadata
-                    .read()
-                    .get_table_index(
-                        Some(target_table_identifier.database_name().as_str()),
-                        target_table_identifier.table_name().as_str(),
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+                // TODO(Dousir9): do not add row_id column for insert only.
+                // Add internal column _row_id for target_table.
                 let target_row_id_index = binder.add_row_id_column(
                     &mut target_context,
                     target_table_identifier,
                     target_table_index,
                     &mut target_s_expr,
-                    DataMutationInputType::Merge,
+                    DataMutationType::Merge,
                 )?;
 
-                let join_op = match mutation_type {
-                    DataMutationType::MatchedOnly => Inner,
-                    DataMutationType::InsertOnly => RightAnti,
-                    DataMutationType::FullOperation => RightOuter,
-                };
+                // Add target table row_id column to required columns.
+                if *mutation_strategy != DataMutationStrategy::NotMatchedOnly {
+                    required_columns.insert(target_row_id_index);
+                }
 
-                // Add join, we use _row_id to check_duplicate join row.
-                let (join_sexpr, bind_context) = binder
+                // If it is insert only, we don't need to update stream columns.
+                if *mutation_strategy == DataMutationStrategy::NotMatchedOnly {
+                    update_stream_columns = false;
+                }
+                let is_lazy_table = *mutation_strategy != DataMutationStrategy::NotMatchedOnly;
+                target_s_expr =
+                    update_target_scan(&target_s_expr, is_lazy_table, update_stream_columns)?;
+
+                // Construct join, we use _row_id to check duplicate join rows.
+                let (join_s_expr, bind_context) = binder
                     .bind_merge_into_join(
                         bind_context,
                         target_context.clone(),
                         source_context,
                         target_s_expr,
                         source_s_expr,
-                        join_op,
+                        match mutation_strategy {
+                            DataMutationStrategy::MatchedOnly => Inner,
+                            DataMutationStrategy::NotMatchedOnly => RightAnti,
+                            DataMutationStrategy::MixedMatched => RightOuter,
+                            DataMutationStrategy::Direct => unreachable!(),
+                        },
                         JoinCondition::On(Box::new(match_expr.clone())),
                     )
                     .await?;
 
-                let mut required_columns = ColumnSet::new();
-                // Add target table row_id column to required columns.
-                if *mutation_type != DataMutationType::InsertOnly {
-                    required_columns.insert(target_row_id_index);
-                }
-                // Add source table columns to required columns.
-                for column_index in bind_context.column_set().iter() {
-                    if source_columns.contains(column_index) {
-                        required_columns.insert(*column_index);
-                    }
-                }
-                Ok(DataMutationInputBindResult {
-                    input: join_sexpr,
-                    input_type: DataMutationInputType::Merge,
+                Ok(DataMutationExpressionBindResult {
+                    input: join_s_expr,
+                    mutation_type,
+                    mutation_strategy: mutation_strategy.clone(),
                     required_columns,
                     bind_context,
-                    update_or_insert_columns_star,
+                    all_source_columns,
                     target_table_index,
                     target_row_id_index,
-                    mutation_source: false,
                     predicate_index: None,
                     truncate_table: false,
                     mutation_filter: None,
                 })
             }
-            DataMutationInput::Update { target, filter }
-            | DataMutationInput::Delete { target, filter } => {
-                let input_type = if matches!(self, DataMutationInput::Update { .. }) {
-                    DataMutationInputType::Update
-                } else {
-                    DataMutationInputType::Delete
-                };
-
+            DataMutationExpression::Update { target, filter }
+            | DataMutationExpression::Delete { target, filter } => {
+                // Bind target table reference.
                 let (mut s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
 
-                let target_table_index = binder
-                    .metadata
-                    .read()
-                    .get_table_index(
-                        Some(target_table_identifier.database_name().as_str()),
-                        target_table_identifier.table_name().as_str(),
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
-                let update_stream_columns = target_table.change_tracking_enabled();
-
-                let (mutation_source, mutation_filter) =
+                let (mutation_strategy, filter) =
                     binder.process_filter(&mut bind_context, filter)?;
 
                 let mut required_columns = ColumnSet::new();
                 let mut target_row_id_index = DUMMY_COLUMN_INDEX;
                 let mut predicate_index = None;
                 let mut truncate_table = false;
-                let s_expr = if mutation_source {
+                let s_expr = if mutation_strategy == DataMutationStrategy::Direct {
                     let mut read_partition_columns = HashSet::new();
-                    if let Some(filter) = &mutation_filter {
+                    if let Some(filter) = &filter {
                         read_partition_columns.extend(filter.used_columns());
-                        if input_type == DataMutationInputType::Update {
+                        if mutation_type == DataMutationType::Update {
                             let predicate_column_index =
                                 binder.metadata.write().add_derived_column(
                                     "_predicate".to_string(),
@@ -303,7 +226,7 @@ impl DataMutationInput {
                             required_columns.insert(predicate_column_index);
                             predicate_index = Some(predicate_column_index);
                         }
-                    } else if input_type == DataMutationInputType::Delete {
+                    } else if mutation_type == DataMutationType::Delete {
                         truncate_table = true;
                     }
                     let table_schema = target_table
@@ -314,9 +237,9 @@ impl DataMutationInput {
                         schema: table_schema,
                         columns: bind_context.column_set(),
                         update_stream_columns,
-                        filter: mutation_filter.clone(),
+                        filter: filter.clone(),
                         predicate_index,
-                        input_type: input_type.clone(),
+                        input_type: mutation_type.clone(),
                         read_partition_columns,
                     };
                     for column_index in bind_context.column_set().iter() {
@@ -326,7 +249,7 @@ impl DataMutationInput {
                         target_mutation_source,
                     )))
                 } else {
-                    let is_lazy_table = input_type != DataMutationInputType::Delete;
+                    let is_lazy_table = mutation_type != DataMutationType::Delete;
                     s_expr = update_target_scan(&s_expr, is_lazy_table, update_stream_columns)?;
 
                     // Add internal_column row_id for target_table
@@ -335,13 +258,12 @@ impl DataMutationInput {
                         target_table_identifier,
                         target_table_index,
                         &mut s_expr,
-                        input_type.clone(),
+                        mutation_type.clone(),
                     )?;
                     // Add target table row_id column to required columns.
                     required_columns.insert(target_row_id_index);
 
-                    let predicates =
-                        Binder::flatten_and_scalar_expr(mutation_filter.as_ref().unwrap());
+                    let predicates = Binder::flatten_and_scalar_expr(filter.as_ref().unwrap());
                     let filter: Filter = Filter { predicates };
                     s_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s_expr));
                     let mut rewriter =
@@ -349,21 +271,86 @@ impl DataMutationInput {
                     rewriter.rewrite(&s_expr)?
                 };
 
-                Ok(DataMutationInputBindResult {
+                Ok(DataMutationExpressionBindResult {
                     input: s_expr,
-                    input_type,
+                    mutation_type,
+                    mutation_strategy,
                     required_columns,
                     bind_context,
-                    update_or_insert_columns_star: None,
+                    all_source_columns: None,
                     target_table_index,
                     target_row_id_index,
-                    mutation_source,
                     predicate_index,
                     truncate_table,
-                    mutation_filter,
+                    mutation_filter: filter,
                 })
             }
         }
+    }
+
+    pub fn data_mutation_type(&self) -> DataMutationType {
+        match self {
+            DataMutationExpression::Merge { .. } => DataMutationType::Merge,
+            DataMutationExpression::Update { .. } => DataMutationType::Update,
+            DataMutationExpression::Delete { .. } => DataMutationType::Delete,
+        }
+    }
+
+    // When there is "update *" or "insert *", prepare all source columns.
+    pub fn all_source_columns(
+        has_star_clause: bool,
+        source_context: &BindContext,
+        target_table_schema: Arc<TableSchema>,
+    ) -> Result<Option<HashMap<usize, ScalarExpr>>> {
+        if !has_star_clause {
+            return Ok(None);
+        }
+
+        let default_target_table_schema = target_table_schema.remove_computed_fields();
+        let mut all_columns = HashMap::with_capacity(default_target_table_schema.num_fields());
+        // Use Vec as value, since there may be duplicate names.
+        let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
+        for column in source_context.columns.iter() {
+            name_map
+                .entry(column.column_name.clone())
+                .or_default()
+                .push(column.clone());
+        }
+
+        for (field_idx, field) in default_target_table_schema.fields.iter().enumerate() {
+            let column = match name_map.get(field.name()) {
+                None => {
+                    return Err(ErrorCode::SemanticError(
+                        format!("can't find {} in source output", field.name).to_string(),
+                    ));
+                }
+                Some(indices) => {
+                    if indices.len() != 1 {
+                        return Err(ErrorCode::SemanticError(
+                            format!(
+                                "there should be only one {} in source output,but we get {}",
+                                field.name,
+                                indices.len()
+                            )
+                            .to_string(),
+                        ));
+                    }
+
+                    indices[0].clone()
+                }
+            };
+            let column = ColumnBindingBuilder::new(
+                field.name.to_string(),
+                column.index,
+                column.data_type.clone(),
+                Visibility::Visible,
+            )
+            .build();
+            let col = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+
+            all_columns.insert(field_idx, col);
+        }
+        Ok(Some(all_columns))
     }
 }
 
@@ -374,7 +361,7 @@ impl Binder {
         target_table_identifier: &TableIdentifier,
         table_index: usize,
         expr: &mut SExpr,
-        input_type: DataMutationInputType,
+        mutation_type: DataMutationType,
     ) -> Result<usize> {
         let row_id_column_binding = InternalColumnBinding {
             database_name: Some(target_table_identifier.database_name().clone()),
@@ -395,7 +382,7 @@ impl Binder {
                 return Err(ErrorCode::Unimplemented(format!(
                     "Table {} does not support {}",
                     target_table_identifier.table_name(),
-                    input_type,
+                    mutation_type,
                 )));
             }
         };
@@ -448,7 +435,7 @@ impl Binder {
         &self,
         bind_context: &mut BindContext,
         filter: &Option<Expr>,
-    ) -> Result<(bool, Option<ScalarExpr>)> {
+    ) -> Result<(DataMutationStrategy, Option<ScalarExpr>)> {
         if let Some(expr) = filter {
             let mut scalar_binder = ScalarBinder::new(
                 bind_context,
@@ -468,12 +455,12 @@ impl Binder {
                 .set_span(scalar.span()));
             }
             if !self.has_subquery(&scalar)? {
-                Ok((true, Some(scalar)))
+                Ok((DataMutationStrategy::Direct, Some(scalar)))
             } else {
-                Ok((false, Some(scalar)))
+                Ok((DataMutationStrategy::MatchedOnly, Some(scalar)))
             }
         } else {
-            Ok((true, None))
+            Ok((DataMutationStrategy::Direct, None))
         }
     }
 

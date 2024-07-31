@@ -66,11 +66,11 @@ impl<'a> Binder {
 
         let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataMutationExpression::Delete {
+            expression: DataMutationExpression::Delete {
                 target: table.clone(),
                 filter: selection.clone(),
             },
-            mutation_type: DataMutationStrategy::MatchedOnly,
+            strategy: DataMutationStrategy::MatchedOnly,
             matched_clauses: vec![matched_clause],
             unmatched_clauses: vec![],
         };

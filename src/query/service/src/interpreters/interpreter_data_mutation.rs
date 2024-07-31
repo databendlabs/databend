@@ -187,9 +187,7 @@ impl DataMutationInterpreter {
                     .execute_refresh(&mut build_res.main_pipeline)
                     .await
             }
-            DataMutationType::Merge => {
-                hook_operator.execute(&mut build_res.main_pipeline).await
-            }
+            DataMutationType::Merge => hook_operator.execute(&mut build_res.main_pipeline).await,
         };
     }
 
@@ -333,8 +331,7 @@ impl DataMutationInterpreter {
                 } else {
                     (None, vec![])
                 };
-            let (is_lazy, is_delete) = if data_mutation.input_type == DataMutationType::Delete
-            {
+            let (is_lazy, is_delete) = if data_mutation.input_type == DataMutationType::Delete {
                 let cluster = self.ctx.get_cluster();
                 let is_lazy =
                     !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();

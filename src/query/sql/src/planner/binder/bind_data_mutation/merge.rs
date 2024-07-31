@@ -64,18 +64,18 @@ impl Binder {
 
         let (matched_clauses, unmatched_clauses) =
             Self::split_merge_into_clauses(&stmt.merge_options)?;
-        let mutation_type = get_mutation_type(matched_clauses.len(), unmatched_clauses.len())?;
+        let mutation_strategy = get_mutation_type(matched_clauses.len(), unmatched_clauses.len())?;
 
         let data_mutation = DataMutation {
             target_table_identifier,
-            input: DataMutationExpression::Merge {
+            expression: DataMutationExpression::Merge {
                 target: target_reference,
                 source: source_reference,
                 match_expr: stmt.join_expr.clone(),
                 has_star_clause: self.has_star_clause(&matched_clauses, &unmatched_clauses),
-                mutation_type: mutation_type.clone(),
+                mutation_strategy: mutation_strategy.clone(),
             },
-            mutation_type: mutation_type.clone(),
+            strategy: mutation_strategy,
             matched_clauses,
             unmatched_clauses,
         };

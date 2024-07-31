@@ -42,8 +42,8 @@ use itertools::Itertools;
 
 use super::ColumnMutation;
 use crate::binder::wrap_cast;
-use crate::binder::DataMutationType;
 use crate::binder::DataMutationStrategy;
+use crate::binder::DataMutationType;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -58,6 +58,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
+use crate::plans::DataMutation;
 use crate::plans::FunctionCall;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
@@ -67,7 +68,6 @@ use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 use crate::Visibility;
-use crate::plans::DataMutation;
 use crate::DUMMY_COLUMN_INDEX;
 
 // predicate_index should not be conflict with update expr's column_binding's index.

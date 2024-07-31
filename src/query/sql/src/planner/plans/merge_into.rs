@@ -26,8 +26,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::LockGuard;
 
-use crate::binder::DataMutationType;
 use crate::binder::DataMutationStrategy;
+use crate::binder::DataMutationType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;

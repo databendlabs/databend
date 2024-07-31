@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -33,8 +34,8 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use indexmap::IndexMap;
 
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInput;
-use crate::binder::bind_data_mutation::data_mutation_input::DataMutationInputBindResult;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpression;
+use crate::binder::bind_data_mutation::data_mutation_input::DataMutationExpressionBindResult;
 use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
@@ -54,6 +55,24 @@ use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::UdfRewriter;
 
+#[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum DataMutationType {
+    #[default]
+    Merge,
+    Update,
+    Delete,
+}
+
+impl fmt::Display for DataMutationType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            DataMutationType::Merge => write!(f, "MERGE"),
+            DataMutationType::Update => write!(f, "UPDATE"),
+            DataMutationType::Delete => write!(f, "DELETE"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum DataMutationStrategy {
     Direct,
@@ -64,8 +83,8 @@ pub enum DataMutationStrategy {
 
 pub struct DataMutation {
     pub target_table_identifier: TableIdentifier,
-    pub input: DataMutationInput,
-    pub mutation_type: DataMutationStrategy,
+    pub expression: DataMutationExpression,
+    pub strategy: DataMutationStrategy,
     pub matched_clauses: Vec<MatchedClause>,
     pub unmatched_clauses: Vec<UnmatchedClause>,
 }
@@ -114,8 +133,8 @@ impl Binder {
         data_mutation.check_semantic()?;
         let DataMutation {
             target_table_identifier,
-            input,
-            mutation_type,
+            expression,
+            strategy,
             matched_clauses,
             unmatched_clauses,
         } = data_mutation;
@@ -128,7 +147,7 @@ impl Binder {
         );
 
         // Add table lock before execution.
-        let lock_guard = if mutation_type != DataMutationStrategy::NotMatchedOnly {
+        let lock_guard = if strategy != DataMutationStrategy::NotMatchedOnly {
             self.ctx
                 .clone()
                 .acquire_table_lock(
@@ -150,7 +169,7 @@ impl Binder {
 
         let table_schema = table.schema();
 
-        let input = input
+        let bind_result = expression
             .bind(
                 self,
                 bind_context,
@@ -160,19 +179,19 @@ impl Binder {
             )
             .await?;
 
-        let DataMutationInputBindResult {
+        let DataMutationExpressionBindResult {
             input,
-            input_type,
+            mutation_type,
+            mutation_strategy,
             mut required_columns,
             mut bind_context,
             all_source_columns,
             target_table_index,
             target_row_id_index,
-            mutation_source,
             predicate_index,
             truncate_table,
             mutation_filter,
-        } = input;
+        } = bind_result;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
             table_name_alias.clone()
@@ -219,7 +238,9 @@ impl Binder {
             None
         };
 
-        if table.change_tracking_enabled() && mutation_type != DataMutationStrategy::NotMatchedOnly {
+        if table.change_tracking_enabled()
+            && mutation_strategy != DataMutationStrategy::NotMatchedOnly
+        {
             for stream_column in table.stream_columns() {
                 let column_index =
                     Self::find_column_index(&target_column_entries, stream_column.column_name())?;
@@ -273,16 +294,16 @@ impl Binder {
             table_name_alias,
             bind_context: Box::new(bind_context),
             metadata: self.metadata.clone(),
-            input_type,
+            input_type: mutation_type,
             required_columns: Box::new(required_columns),
             matched_evaluators,
             unmatched_evaluators,
             target_table_index,
             field_index_map,
-            mutation_type: mutation_type.clone(),
+            mutation_type: mutation_strategy.clone(),
             distributed: false,
             change_join_order: false,
-            mutation_source,
+            mutation_source: mutation_strategy == DataMutationStrategy::Direct,
             predicate_index,
             truncate_table,
             mutation_filter,
@@ -291,7 +312,8 @@ impl Binder {
             lock_guard,
         };
 
-        if mutation_type == DataMutationStrategy::NotMatchedOnly && !insert_only(&data_mutation) {
+        if mutation_strategy == DataMutationStrategy::NotMatchedOnly && !insert_only(&data_mutation)
+        {
             return Err(ErrorCode::SemanticError(
                 "For unmatched clause, then condition and exprs can only have source fields",
             ));
