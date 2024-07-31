@@ -2206,13 +2206,13 @@ impl<'a> TypeChecker<'a> {
         // convert query text to lowercase and remove punctuation characters,
         // so that tantivy query parser can parse the query text as plain text
         // without syntax
-        let formated_query_text: String = query_text
+        let formatted_query_text: String = query_text
             .to_lowercase()
             .chars()
             .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
             .collect();
 
-        self.resolve_search_function(span, column_refs, &formated_query_text)
+        self.resolve_search_function(span, column_refs, &formatted_query_text)
     }
 
     /// Resolve query search function.

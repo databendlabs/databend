@@ -39,12 +39,12 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use fastrace::full_name;
+use fastrace::future::FutureExt;
+use fastrace::Span;
 use indexmap::IndexSet;
 use log::debug;
 use log::warn;
-use minitrace::full_name;
-use minitrace::future::FutureExt;
-use minitrace::Span;
 
 use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;

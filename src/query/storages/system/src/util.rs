@@ -108,39 +108,3 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
         }
     }
 }
-
-pub fn find_eq_and_or_filter(
-    expr: &Expr<String>,
-    visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>,
-) {
-    match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
-        Expr::Cast { expr, .. } => crate::util::find_eq_filter(expr, visitor),
-        Expr::FunctionCall { function, args, .. } => {
-            // Like: select * from (select * from system.tables where database='default') where name='t'
-            // push downs: [filters: [and_filters(and_filters(tables.database (#1) = 'default', tables.name (#2) = 't'), tables.database (#1) = 'default')], limit: NONE]
-            // database generate twice, so when call find_eq_filter, should check uniq.
-            if function.signature.name == "eq" {
-                match args.as_slice() {
-                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
-                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
-                        let _ = visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" || function.signature.name == "or" {
-                // only support this:
-                // 1. where xx and xx and xx or yy
-                // 2. filter: Column `table`, Column `database` `table_id`
-                for arg in args {
-                    crate::util::find_eq_filter(arg, visitor)
-                }
-            }
-        }
-        Expr::LambdaFunctionCall { args, .. } => {
-            for arg in args {
-                crate::util::find_eq_filter(arg, visitor)
-            }
-        }
-    }
-}

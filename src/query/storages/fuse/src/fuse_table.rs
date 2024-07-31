@@ -296,7 +296,7 @@ impl FuseTable {
         Ok(table_storage_prefix(db_id, table_id))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_statistics(
         &self,
@@ -324,14 +324,14 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         self.read_table_snapshot_with_reader(reader).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
@@ -655,7 +655,7 @@ impl Table for FuseTable {
         .await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -666,7 +666,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -707,13 +707,13 @@ impl Table for FuseTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
         self.do_truncate(ctx, pipeline, TruncateMode::Normal).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn purge(
         &self,
@@ -740,6 +740,7 @@ impl Table for FuseTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         if let Some(desc) = &self.changes_desc {
@@ -750,7 +751,7 @@ impl Table for FuseTable {
         }
 
         let stats = match self.table_type {
-            FuseTableType::Attached => {
+            FuseTableType::Attached if require_fresh => {
                 let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
                     // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
@@ -811,7 +812,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(
         &self,
@@ -846,7 +847,7 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         _ctx: Arc<dyn TableContext>,
         database_name: &str,

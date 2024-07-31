@@ -47,7 +47,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_and_or_filter;
+use crate::util::find_eq_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -248,7 +248,7 @@ where TablesTable<T, U>: HistoryAware
         if let Some(push_downs) = &push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_and_or_filter(&expr, &mut |col_name, scalar| {
+                find_eq_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "database" {
                         if let Scalar::String(database) = scalar {
                             if !db_name.contains(database) {
@@ -444,7 +444,9 @@ where TablesTable<T, U>: HistoryAware
 
         if U {
             for tbl in &database_tables {
-                let stats = match tbl.table_statistics(ctx.clone(), None).await {
+                // For performance considerations, allows using stale statistics data.
+                let require_fresh = false;
+                let stats = match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
                     Ok(stats) => stats,
                     Err(err) => {
                         let msg = format!(

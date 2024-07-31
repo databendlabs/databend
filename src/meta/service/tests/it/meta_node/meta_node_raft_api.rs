@@ -34,7 +34,7 @@ use crate::tests::meta_node::start_meta_node_cluster;
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;
@@ -80,7 +80,7 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
 /// 1. Dumping the state machine to a in-memory struct.
 /// 2. Serialize the dumped data.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> anyhow::Result<()> {
     info!("--- initialize cluster 2 voters");
     let (mut _log_index, mut tcs) = start_meta_node_cluster(btreeset![0, 1], btreeset![]).await?;

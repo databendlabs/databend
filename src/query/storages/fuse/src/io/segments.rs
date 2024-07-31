@@ -26,8 +26,8 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
-use minitrace::full_name;
-use minitrace::prelude::*;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use opendal::Operator;
 
 use crate::io::MetaReaders;
@@ -78,7 +78,7 @@ impl SegmentsIO {
 
     // Read all segments information from s3 in concurrently.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn read_segments<T>(
         &self,
         segment_locations: &[Location],

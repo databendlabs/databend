@@ -81,7 +81,7 @@ impl Interpreter for CreateNotificationInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let config = GlobalConfig::instance();

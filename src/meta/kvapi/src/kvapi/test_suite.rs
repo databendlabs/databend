@@ -37,10 +37,10 @@ use databend_common_meta_types::TxnPutResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
+use fastrace::full_name;
+use fastrace::func_name;
 use log::debug;
 use log::info;
-use minitrace::full_name;
-use minitrace::func_name;
 
 use crate::kvapi;
 use crate::kvapi::UpsertKVReq;
@@ -48,7 +48,7 @@ use crate::kvapi::UpsertKVReq;
 pub struct TestSuite {}
 
 impl kvapi::TestSuite {
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
         KV: kvapi::KVApi,
@@ -92,7 +92,7 @@ impl kvapi::TestSuite {
 }
 
 impl kvapi::TestSuite {
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
         {
@@ -137,7 +137,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_delete<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_delete() start");
         let test_key = "test_key";
@@ -195,7 +195,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_update<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_update() start");
         let test_key = "test_key_for_update";
@@ -241,7 +241,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
 
@@ -335,7 +335,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_upsert_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add with ttl
 
@@ -364,7 +364,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_meta<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_meta() start");
 
@@ -432,7 +432,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_list<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_list() start");
 
@@ -463,7 +463,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_mget<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_mget() start");
 
@@ -910,7 +910,7 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add a record via transaction with ttl
 
@@ -1049,7 +1049,7 @@ impl kvapi::TestSuite {
 
 /// Test that write and read should be forwarded to leader
 impl kvapi::TestSuite {
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,
         kv1: &KV,

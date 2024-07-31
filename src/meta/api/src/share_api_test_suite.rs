@@ -157,7 +157,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn test_share_table<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
@@ -501,7 +501,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn test_share_database<MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi>(
         &self,
         mt: &MT,
@@ -873,7 +873,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -937,7 +937,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_endpoint_create_show_drop<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -1186,7 +1186,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_add_remove_account<MT: ShareApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -1475,7 +1475,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn share_grant_revoke_object<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -1865,7 +1865,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_share_grant_objects<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -1988,7 +1988,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_grant_privileges_of_object<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -2249,7 +2249,7 @@ impl ShareApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_share_database_and_table<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(

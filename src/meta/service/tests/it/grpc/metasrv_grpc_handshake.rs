@@ -37,7 +37,7 @@ use crate::tests::start_metasrv;
 /// - Test client version < serverside min-compatible-client-ver.
 /// - Test metasrv version < client min-compatible-metasrv-ver.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_metasrv_handshake() -> anyhow::Result<()> {
     fn smaller_ver(v: &Version) -> Version {
         if v.major > 0 {

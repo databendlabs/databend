@@ -474,7 +474,7 @@ impl HiveTable {
         Ok(vec![(location, None)])
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_files_from_dirs(
         &self,
@@ -505,7 +505,7 @@ impl HiveTable {
         Ok(all_files)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,
@@ -621,6 +621,7 @@ impl Table for HiveTable {
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
         _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         Ok(None)

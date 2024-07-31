@@ -38,8 +38,8 @@ use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnRequest;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 
 use crate::databend_common_meta_types::With;
 use crate::get_pb_value;

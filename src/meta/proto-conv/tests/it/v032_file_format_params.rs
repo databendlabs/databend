@@ -17,7 +17,7 @@ use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_meta_app::principal::TsvFileFormatParams;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 use crate::v032_file_format_params::mt::principal::JsonFileFormatParams;

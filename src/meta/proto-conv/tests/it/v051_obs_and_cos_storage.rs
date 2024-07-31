@@ -16,7 +16,7 @@ use databend_common_meta_app as mt;
 use databend_common_meta_app::storage::StorageCosConfig;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageParams;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

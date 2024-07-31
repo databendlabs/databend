@@ -19,7 +19,7 @@ use chrono::Utc;
 use databend_common_meta_app::share::ShareCredential;
 use databend_common_meta_app::share::ShareCredentialHmac;
 use databend_common_meta_app::share::ShareEndpointMeta;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

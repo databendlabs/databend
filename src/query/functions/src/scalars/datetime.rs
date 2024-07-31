@@ -257,7 +257,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestmap(
+            |timestamp, format, output, ctx| match string_to_format_timestamp(
                 timestamp, format, ctx,
             ) {
                 Ok((ts, need_null)) => {
@@ -279,7 +279,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
-            |timestamp, format, output, ctx| match string_to_format_timestmap(
+            |timestamp, format, output, ctx| match string_to_format_timestamp(
                 timestamp, format, ctx,
             ) {
                 Ok((ts, need_null)) => {
@@ -340,7 +340,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 }
 
-fn string_to_format_timestmap(
+fn string_to_format_timestamp(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,

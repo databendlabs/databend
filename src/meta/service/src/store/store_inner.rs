@@ -110,7 +110,7 @@ impl StoreInner {
     /// 1. If `open` is `Some`, try to open an existent one.
     /// 2. If `create` is `Some`, try to create one.
     /// Otherwise it panic
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open_create(
         config: &RaftConfig,
         open: Option<()>,
@@ -188,7 +188,7 @@ impl StoreInner {
         self.state_machine.write().await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn do_build_snapshot(&self) -> Result<Snapshot, StorageError> {
         // NOTE: building snapshot is guaranteed to be serialized called by RaftCore.
 
@@ -292,7 +292,7 @@ impl StoreInner {
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn do_install_snapshot(&self, db: DB) -> Result<(), MetaStorageError> {
         let mut sm = self.state_machine.write().await;
         sm.install_snapshot_v003(db).await.map_err(|e| {

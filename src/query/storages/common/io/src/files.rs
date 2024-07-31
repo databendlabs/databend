@@ -34,7 +34,7 @@ impl Files {
 
     /// Removes a batch of files asynchronously by splitting a list of file locations into smaller groups of size 1000,
     /// and then deleting each group of files using the delete_files function.
-    #[minitrace::trace]
+    #[fastrace::trace]
     // #[async_backtrace::framed]
     pub async fn remove_file_in_batch(
         &self,
