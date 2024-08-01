@@ -150,13 +150,7 @@ impl<'fbb> GeometryBuilder<'fbb> {
                 })
             }
             geo::Geometry::LineString(line) => {
-                if self.point_offsets.is_empty() {
-                    self.point_offsets.push(self.point_len() as u32)
-                }
-                for p in line.0.iter() {
-                    self.push_point(*p);
-                }
-                self.point_offsets.push(self.point_len() as u32);
+                self.push_line(&line.0, true);
                 let point_offsets = self.create_point_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
                     wkb_type: geo_buf::InnerObjectKind::LineString.0 as u32,
@@ -164,7 +158,62 @@ impl<'fbb> GeometryBuilder<'fbb> {
                     ..Default::default()
                 })
             }
-            _ => todo!(),
+            geo::Geometry::MultiLineString(lines) => {
+                if self.ring_offsets.is_empty() {
+                    self.ring_offsets.push(self.point_offsets.len() as u32)
+                }
+                for line in lines.iter() {
+                    self.push_line(&line.0, true);
+                }
+                self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::MultiLineString.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo::Geometry::Polygon(polygon) => {
+                self.push_polygon(polygon, true);
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::Polygon.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo::Geometry::MultiPolygon(polygons) => {
+                for polygon in polygons.0.iter() {
+                    self.push_polygon(polygon, true);
+                }
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::MultiPolygon.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo::Geometry::GeometryCollection(collection) => {
+                let geometrys = collection
+                    .0
+                    .iter()
+                    .map(|geom| self.push_inner_object(geom))
+                    .collect::<Vec<_>>();
+
+                let collection = Some(self.fbb.create_vector(&geometrys));
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::Collection.0 as u32,
+                    collection,
+                    ..Default::default()
+                })
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -283,9 +332,9 @@ pub struct GeometryRef<'a> {
 }
 
 impl Geometry {
-    pub fn try_from_wkt(wkt: &str) -> Result<Self, anyhow::Error> {
+    pub fn try_from_geo(geo: geo::Geometry<f64>) -> Result<Self, anyhow::Error> {
         let mut builder = GeometryBuilder::new();
-        match Wkt(wkt).to_geo()? {
+        match geo {
             geo::Geometry::Point(point) => {
                 builder.push_point(point.0);
                 Ok(builder.build_light(geo_buf::ObjectKind::Point))
@@ -334,11 +383,12 @@ impl Geometry {
                 Ok(builder.build(geo_buf::ObjectKind::MultiPolygon, object))
             }
             geo::Geometry::GeometryCollection(collection) => {
-                let mut geometrys = Vec::with_capacity(collection.0.len());
-                for geom in collection.0.iter() {
-                    let inner_object = builder.push_inner_object(geom);
-                    geometrys.push(inner_object)
-                }
+                let geometrys = collection
+                    .0
+                    .iter()
+                    .map(|geom| builder.push_inner_object(geom))
+                    .collect::<Vec<_>>();
+
                 let collection = Some(builder.fbb.create_vector(&geometrys));
                 let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
                     collection,
@@ -350,7 +400,7 @@ impl Geometry {
         }
     }
 
-    pub fn try_to_wkt(&self) -> Result<String, anyhow::Error> {
+    pub fn try_to_geo(&self) -> Result<geo::Geometry, anyhow::Error> {
         debug_assert!(self.column_x.len() == self.column_y.len());
         match geo_buf::ObjectKind(self.buf[0]) {
             geo_buf::ObjectKind::Point => {
@@ -358,8 +408,7 @@ impl Geometry {
                 Ok(geo::Geometry::Point(Point(Coord {
                     x: self.column_x[0],
                     y: self.column_y[0],
-                }))
-                .to_wkt()?)
+                })))
             }
             geo_buf::ObjectKind::MultiPoint => {
                 let points = self
@@ -369,7 +418,7 @@ impl Geometry {
                     .zip(self.column_y.iter().cloned())
                     .map(|(x, y)| Point(Coord { x, y }))
                     .collect::<Vec<_>>();
-                Ok(geo::Geometry::MultiPoint(MultiPoint(points)).to_wkt()?)
+                Ok(geo::Geometry::MultiPoint(MultiPoint(points)))
             }
             geo_buf::ObjectKind::LineString => {
                 let points = self
@@ -379,85 +428,19 @@ impl Geometry {
                     .zip(self.column_y.iter().cloned())
                     .map(|(x, y)| Coord { x, y })
                     .collect::<Vec<_>>();
-                Ok(geo::Geometry::LineString(LineString(points)).to_wkt()?)
+                Ok(geo::Geometry::LineString(LineString(points)))
             }
             geo_buf::ObjectKind::MultiLineString => {
                 let object = geo_buf::root_as_object(&self.buf[1..])?;
-                let lines: Vec<_> = object
-                    .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?
-                    .iter()
-                    .map_windows(|[start, end]| {
-                        LineString(
-                            (*start..*end)
-                                .map(|pos| Coord {
-                                    x: self.column_x[pos as usize],
-                                    y: self.column_y[pos as usize],
-                                })
-                                .collect(),
-                        )
-                    })
-                    .collect();
-                Ok(geo::Geometry::MultiLineString(MultiLineString(lines)).to_wkt()?)
+                self.lines_from_offsets(&object.point_offsets())
             }
             geo_buf::ObjectKind::Polygon => {
                 let object = geo_buf::root_as_object(&self.buf[1..])?;
-
-                let mut rings_iter = object
-                    .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?
-                    .iter()
-                    .map_windows(|[start, end]| {
-                        LineString(
-                            (*start..*end)
-                                .map(|pos| Coord {
-                                    x: self.column_x[pos as usize],
-                                    y: self.column_y[pos as usize],
-                                })
-                                .collect(),
-                        )
-                    });
-                let exterior = rings_iter
-                    .next()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
-                let interiors = rings_iter.collect();
-                Ok(geo::Geometry::Polygon(Polygon::new(exterior, interiors)).to_wkt()?)
+                self.polygon_from_offsets(&object.point_offsets())
             }
             geo_buf::ObjectKind::MultiPolygon => {
                 let object = geo_buf::root_as_object(&self.buf[1..])?;
-
-                let point_offsets = object
-                    .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
-
-                let polygons = object
-                    .ring_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?
-                    .iter()
-                    .map_windows(|[start, end]| {
-                        let mut rings_iter = (*start..=*end)
-                            .map(|i| point_offsets.get(i as usize))
-                            .map_windows(|[start, end]| {
-                                LineString(
-                                    (*start..*end)
-                                        .map(|pos| Coord {
-                                            x: self.column_x[pos as usize],
-                                            y: self.column_y[pos as usize],
-                                        })
-                                        .collect(),
-                                )
-                            });
-
-                        let exterior = rings_iter
-                            .next()
-                            .ok_or(anyhow::Error::msg("invalid data"))?;
-                        let interiors = rings_iter.collect();
-
-                        Ok(Polygon::new(exterior, interiors))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                Ok(geo::Geometry::MultiPolygon(MultiPolygon::new(polygons)).to_wkt()?)
+                self.polygons_from_offsets(&object.point_offsets(), &object.ring_offsets())
             }
             geo_buf::ObjectKind::Collection => {
                 let object = geo_buf::root_as_object(&self.buf[1..])?;
@@ -468,33 +451,190 @@ impl Geometry {
 
                 let geoms = collection
                     .iter()
-                    .map(|geom| {
-                        let geom = match geo_buf::InnerObjectKind(geom.wkb_type() as u8) {
-                            geo_buf::InnerObjectKind::Point => {
-                                let pos = geom
-                                    .point_offsets()
-                                    .ok_or(anyhow::Error::msg("invalid data"))?
-                                    .get(0);
-
-                                geo::Geometry::Point(Point(Coord {
-                                    x: self.column_x[pos as usize],
-                                    y: self.column_y[pos as usize],
-                                }))
-                            }
-                            _ => todo!(),
-                        };
-                        Ok(geom)
-                    })
+                    .map(|geom| self.inner_to_geo(&geom))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                Ok(geo::Geometry::GeometryCollection(GeometryCollection::from(geoms)).to_wkt()?)
+                Ok(geo::Geometry::GeometryCollection(GeometryCollection(geoms)))
             }
             geo_buf::ObjectKind(geo_buf::ObjectKind::ENUM_MAX..) => unreachable!(),
         }
     }
 
+    fn inner_to_geo(&self, object: &InnerObject) -> Result<geo::Geometry, anyhow::Error> {
+        let geom = match geo_buf::InnerObjectKind(object.wkb_type() as u8) {
+            geo_buf::InnerObjectKind::Point => {
+                let pos = object
+                    .point_offsets()
+                    .ok_or(anyhow::Error::msg("invalid data"))?
+                    .get(0);
+
+                geo::Geometry::Point(Point(Coord {
+                    x: self.column_x[pos as usize],
+                    y: self.column_y[pos as usize],
+                }))
+            }
+            geo_buf::InnerObjectKind::MultiPoint => {
+                let point_offsets = object
+                    .point_offsets()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+
+                let start = point_offsets.get(0);
+                let end = point_offsets.get(1);
+
+                let points = (start as usize..end as usize)
+                    .map(|pos| {
+                        Point(Coord {
+                            x: self.column_x[pos as usize],
+                            y: self.column_y[pos as usize],
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                geo::Geometry::MultiPoint(MultiPoint(points))
+            }
+            geo_buf::InnerObjectKind::LineString => {
+                let point_offsets = object
+                    .point_offsets()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+
+                let start = point_offsets.get(0);
+                let end = point_offsets.get(1);
+
+                let points = (start as usize..end as usize)
+                    .map(|pos| Coord {
+                        x: self.column_x[pos as usize],
+                        y: self.column_y[pos as usize],
+                    })
+                    .collect::<Vec<_>>();
+
+                geo::Geometry::LineString(LineString(points))
+            }
+            geo_buf::InnerObjectKind::MultiLineString => {
+                self.lines_from_offsets(&object.point_offsets())?
+            }
+            geo_buf::InnerObjectKind::Polygon => {
+                self.polygon_from_offsets(&object.point_offsets())?
+            }
+            geo_buf::InnerObjectKind::MultiPolygon => {
+                self.polygons_from_offsets(&object.point_offsets(), &object.ring_offsets())?
+            }
+            geo_buf::InnerObjectKind::Collection => {
+                let collection = object
+                    .collection()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+
+                let geoms = collection
+                    .iter()
+                    .map(|geom| self.inner_to_geo(&geom))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                geo::Geometry::GeometryCollection(GeometryCollection(geoms))
+            }
+            _ => unreachable!(),
+        };
+        Ok(geom)
+    }
+
+    fn lines_from_offsets(
+        &self,
+        point_offsets: &Option<Vector<u32>>,
+    ) -> Result<geo::Geometry, anyhow::Error> {
+        let lines = point_offsets
+            .ok_or(anyhow::Error::msg("invalid data"))?
+            .iter()
+            .map_windows(|[start, end]| {
+                LineString(
+                    (*start..*end)
+                        .map(|pos| Coord {
+                            x: self.column_x[pos as usize],
+                            y: self.column_y[pos as usize],
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+
+        Ok(geo::Geometry::MultiLineString(lines))
+    }
+
+    fn polygon_from_offsets(
+        &self,
+        point_offsets: &Option<Vector<u32>>,
+    ) -> Result<geo::Geometry, anyhow::Error> {
+        let mut rings_iter = point_offsets
+            .ok_or(anyhow::Error::msg("invalid data"))?
+            .iter()
+            .map_windows(|[start, end]| {
+                LineString(
+                    (*start..*end)
+                        .map(|pos| Coord {
+                            x: self.column_x[pos as usize],
+                            y: self.column_y[pos as usize],
+                        })
+                        .collect(),
+                )
+            });
+        let exterior = rings_iter
+            .next()
+            .ok_or(anyhow::Error::msg("invalid data"))?;
+        let interiors = rings_iter.collect();
+        Ok(geo::Geometry::Polygon(Polygon::new(exterior, interiors)))
+    }
+
+    fn polygons_from_offsets(
+        &self,
+        point_offsets: &Option<Vector<u32>>,
+        ring_offsets: &Option<Vector<u32>>,
+    ) -> Result<geo::Geometry, anyhow::Error> {
+        let point_offsets = point_offsets.ok_or(anyhow::Error::msg("invalid data"))?;
+
+        let polygons = ring_offsets
+            .ok_or(anyhow::Error::msg("invalid data"))?
+            .iter()
+            .map_windows(|[start, end]| {
+                let mut rings_iter = (*start..=*end)
+                    .map(|i| point_offsets.get(i as usize))
+                    .map_windows(|[start, end]| {
+                        LineString(
+                            (*start..*end)
+                                .map(|pos| Coord {
+                                    x: self.column_x[pos as usize],
+                                    y: self.column_y[pos as usize],
+                                })
+                                .collect(),
+                        )
+                    });
+
+                let exterior = rings_iter
+                    .next()
+                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                let interiors = rings_iter.collect();
+
+                Ok(Polygon::new(exterior, interiors))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(geo::Geometry::MultiPolygon(MultiPolygon::new(polygons)))
+    }
+
     pub fn memory_size(&self) -> usize {
         self.buf.len() + self.column_x.len() * 16
+    }
+}
+
+impl<B: AsRef<[u8]>> TryFrom<Wkt<B>> for Geometry {
+    type Error = anyhow::Error;
+
+    fn try_from(wkt: Wkt<B>) -> Result<Self, Self::Error> {
+        Geometry::try_from_geo(wkt.to_geo()?)
+    }
+}
+
+impl TryInto<Wkt<String>> for Geometry {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Wkt<String>, Self::Error> {
+        Ok(Wkt(self.try_to_geo()?.to_wkt()?))
     }
 }
 
@@ -539,13 +679,22 @@ mod tests {
         );
         // geo_buf:185, ewkb:163, points:128
         run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
-        // geo_buf:117, ewkb:51, points:32
-        run_from_wkt(&"GEOMETRYCOLLECTION(POINT(99 11),POINT(99 10))");
-        const TEST_WKT_GEOMETRYCOLLECTION: &str = &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60, 50 50, 60 40), POINT(99 11))";
+        // geo_buf:205, ewkb:108, points:80
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))",
+        );
+        // geo_buf:285, ewkb:164, points:128
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
+        );
+        // geo_buf:357, ewkb:194, points:144
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
+        );
     }
 
     fn run_from_wkt(want: &str) {
-        let geom = Geometry::try_from_wkt(want).unwrap();
+        let geom = Geometry::try_from(Wkt(want)).unwrap();
         let ewkb = Wkt(want).to_ewkb(CoordDimensions::xy(), None).unwrap();
         println!(
             "geo_buf:{}, ewkb:{}, points:{}",
@@ -554,7 +703,7 @@ mod tests {
             geom.column_x.len() * 16
         );
 
-        let got = geom.try_to_wkt().unwrap();
+        let Wkt(got) = geom.try_into().unwrap();
         assert_eq!(want, got)
     }
 }
