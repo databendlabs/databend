@@ -1290,7 +1290,7 @@ HashJoin
 ├── output columns: [t1.a (#0), t1.b (#1)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
-├── probe keys: [CAST(subquery_2 (#2) AS Int32 NULL)]
+├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
 ├── filters: []
 ├── estimated rows: 3.00
 ├── TableScan(Build)
@@ -1328,6 +1328,7 @@ Filter
     ├── join type: LEFT MARK
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [CAST(subquery_2 (#2) AS Int32 NULL)]
+    ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
     ├── filters: []
     ├── estimated rows: 3.00
     ├── TableScan(Build)
