@@ -17,3 +17,4 @@ geo = { workspace = true }
 geos = { workspace = true }
 geozero = { workspace = true }
 ordered-float = { workspace = true }
+wkt = { version = "0.10.3" }

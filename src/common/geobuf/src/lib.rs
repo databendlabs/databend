@@ -2,6 +2,9 @@
 
 mod geo_adapter;
 mod geo_generated;
+mod wkt_adapter;
+
+use std::str::FromStr;
 
 use anyhow;
 use anyhow::Ok;
@@ -655,11 +658,15 @@ impl Geometry {
     }
 }
 
-impl<B: AsRef<[u8]>> TryFrom<Wkt<B>> for Geometry {
+impl TryFrom<Wkt<&str>> for Geometry {
     type Error = anyhow::Error;
 
-    fn try_from(wkt: Wkt<B>) -> Result<Self, Self::Error> {
-        Geometry::try_from(wkt.to_geo()?)
+    fn try_from(wkt: Wkt<&str>) -> Result<Self, Self::Error> {
+        let wkt = wkt::Wkt::<f64>::from_str(wkt.0).map_err(|e| anyhow::Error::msg(e))?;
+        let mut builder = GeometryBuilder::new();
+        wkt.accept(&mut builder)?;
+        Ok(builder.build())
+        // Geometry::try_from(wkt.to_geo()?)
     }
 }
 
