@@ -4468,34 +4468,22 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall]
     #[minitrace::trace]
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
-        let tenant_dbname = &req.inner;
-
-        // Get db by name to ensure presence
-        let res = get_db_or_err(
-            self,
-            tenant_dbname,
-            format!("list_dictionaries: {}", tenant_dbname.display()),
-        )
-        .await;
-
-        let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        let dbid_dict_name = DBIdDictionaryName {
-            db_id,
-            dictionary_name: "".to_string(),
-        };
-
-        let (dbid_dict_names, ids) = list_u64_value(kv_api, &dbid_dict_name).await?;
-        
-        
+        // debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+       
+        //     // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        // let ident = DictionaryNameIdent::new(&req.inner.tenant() ,"dummy_db", "dummy_dict");
+        // let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(ident.tenant_name()).push_raw("").done();
+        // let id_list = self.prefix_list_kv(&prefix_key).await?;
+        // let mut id_name_list = Vec::with_capacity(id_list.len());
+        // for (key, seq) in id_list.iter() {
+        //     let name_ident = DictionaryNameIdent::from_str_key(key).map_err(|e| {
+        //         KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+        //     })?;
+        //     let index_id = deserialize_u64(&seq.data)?;
+        //     id_name_list.push((index_id.0, name_ident.index_name().to_string()));
+        // }
         Ok(())
-    }
+    }   
 }
 
 async fn construct_drop_virtual_column_txn_operations(
