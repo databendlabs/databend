@@ -24,7 +24,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
 
-use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate:: tenant::ToTenant;
 
@@ -52,7 +51,7 @@ impl Display for DictionaryMeta {
             self.source,
             self.options,
             self.schema,
-            self.primary_column_id,
+            self.primary_column_ids,
             self.created_on
         )
     }
@@ -140,7 +139,7 @@ pub struct DropDictionaryReq {
 
 impl DropDictionaryReq {
     pub fn dict_name(&self) -> String {
-        self.name_ident.dictionary_name
+        self.name_ident.dictionary_name.clone()
     }
 }
 
@@ -287,18 +286,12 @@ impl ListDictionaryReq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EmptyProto {}
-
 mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::schema::DatabaseId;
     use crate::schema::DictionaryIdHistoryIdent;
-    use crate::schema::DictionaryIdList;
 
     impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {

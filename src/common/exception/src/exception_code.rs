@@ -385,7 +385,7 @@ build_exceptions! {
 
     // dictionary
     DictionaryAlreadyExists(3112),
-    UnKnownDictionary(3113),
+    UnknownDictionary(3113),
     DropDictionaryWithDropTime(3114),
     GetDictionaryWithDropTime(3115),
 }
