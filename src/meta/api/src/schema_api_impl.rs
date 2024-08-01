@@ -38,6 +38,7 @@ use databend_common_meta_app::app_error::DropDictionaryWithDropTime;
 use databend_common_meta_app::app_error::DropIndexWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
+use databend_common_meta_app::app_error::GetDictionaryWithDropTime;
 use databend_common_meta_app::app_error::GetIndexWithDropTime;
 use databend_common_meta_app::app_error::IndexAlreadyExists;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
@@ -111,7 +112,7 @@ use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropDictionaryByIdReq;
+use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropDictionaryReply;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
@@ -127,6 +128,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -4376,15 +4378,122 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
         
-    async fn drop_dictionary_by_id(&self, req: DropDictionaryByIdReq) -> Result<DropDictionaryReply, KVAppError> {
-        Ok(())
+    #[logcall::logcall]
+    #[minitrace::trace]
+    async fn drop_dictionary(&self, req: DropDictionaryReq) -> Result<DropDictionaryReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        
+        let tenant_dictionary = &req.name_ident;
+        let mut trials = txn_backoff(None, func_name!());
+
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            let (dict_id, dict_id_seq) = construct_drop_dictionary_txn_operations(
+                self,
+                tenant_dictionary,
+                req.if_exists,
+                true,
+                &mut condition,
+                &mut if_then,
+            )
+            .await?;
+            
+            if dict_id_seq == 0 {
+                return Ok(DropDictionaryReply {});
+            }
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name :? = (tenant_dictionary),
+                id :? = (&DictionaryId { dictionary_id: dict_id }),
+                succ = succ;
+                "drop_dictionary"
+            );
+
+            if succ {
+                break;
+            }
+        }
+        Ok(DropDictionaryReply {})
     }
 
-    async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<Arc<DictionaryMeta>, KVAppError> {
-        Ok(())
+    #[logcall::logcall]
+    #[minitrace::trace]
+    async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<GetDictionaryReply, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        
+        let tenant_dict = &req.name_ident;
+        let res = get_dictionary_or_err(self, tenant_dict).await?;
+        let (dict_id_seq, dict_id, _, dict_meta) = res;
+        
+        if dict_id_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(tenant_dict.dictionary_name(), "get_dictionary"),
+            )));
+        }
+
+        // Safe unwrap(): dict_meta_seq > 0 implies dict_meta is not None.
+        let dict_meta = dict_meta.unwrap();
+
+        debug!(
+            dict_id = dict_id,
+            name_key :? =(tenant_dict);
+            "drop_dictionary"
+        );
+
+         // get an dictionary with drop time
+         if dict_meta.dropped_on.is_some() {
+            return Err(KVAppError::AppError(AppError::GetDictionaryWithDropTime(
+                GetDictionaryWithDropTime::new(tenant_dict.dictionary_name()),
+            )));
+        }
+
+        Ok(GetDictionaryReply {
+            dictionary_id: dict_id,
+            dictionary_meta: dict_meta,
+        })
     }
 
+    #[logcall::logcall]
+    #[minitrace::trace]
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        let tenant_dbname = &req.inner;
+
+        // Get db by name to ensure presence
+        let res = get_db_or_err(
+            self,
+            tenant_dbname,
+            format!("list_dictionaries: {}", tenant_dbname.display()),
+        )
+        .await;
+
+        let (_db_id_seq, db_id, _db_meta_seq, db_meta) = match res {
+            Ok(x) => x,
+            Err(e) => {
+                return Err(e);
+            }
+        };
+
+        let dbid_dict_name = DBIdDictionaryName {
+            db_id,
+            dictionary_name: "".to_string(),
+        };
+
+        let (dbid_dict_names, ids) = list_u64_value(kv_api, &dbid_dict_name).await?;
+        
+        
         Ok(())
     }
 }

@@ -55,6 +55,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
@@ -315,9 +316,9 @@ pub trait SchemaApi: Send + Sync {
     // dictionary
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply, KVAppError>;
     
-    async fn drop_dictionary_by_id(&self, req: DropDictionaryByIdReq) -> Result<DropDictionaryReply, KVAppError>;
+    async fn drop_dictionary(&self, req: DropDictionaryByIdReq) -> Result<DropDictionaryReply, KVAppError>;
 
-    async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<Arc<DictionaryMeta>, KVAppError>;
+    async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<GetDictionaryReply, KVAppError>;
 
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError>;
 }

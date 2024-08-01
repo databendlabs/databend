@@ -23,7 +23,6 @@ use std::ops::Deref;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
-use databend_common_meta_types::MetaId;
 
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
@@ -121,6 +120,10 @@ impl DictionaryNameIdent {
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
         DatabaseNameIdent::new(&self.tenant, &self.db_name)
     }
+
+    pub fn tenant_name(&self) -> &str {
+        &self.tenant.tenant_name()
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -129,44 +132,43 @@ pub struct CreateDictionaryReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropDictionaryByIdReq {
+pub struct DropDictionaryReq {
     pub if_exists: bool,
 
-    pub tenant: Tenant,
-
-    pub dict_id: MetaId,
-
-    pub dictionary_name: String,
-
-    pub db_id: MetaId,
+    pub name_ident: DictionaryNameIdent,
 }
 
-impl DropDictionaryByIdReq {
-    pub fn dict_id(&self) -> MetaId {
-        self.dict_id
+impl DropDictionaryReq {
+    pub fn dict_name(&self) -> String {
+        self.name_ident.dictionary_name
     }
 }
 
-impl Display for DropDictionaryByIdReq {
+impl Display for DropDictionaryReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(
             f,
-            "drop_dictionary_by_id(if_exists={}):{}",
+            "drop_dictionary(if_exists={}):{}/{}",
             self.if_exists,
-            self.dict_id(),
+            self.name_ident.tenant_name(),
+            self.name_ident.dictionary_name(),
         )
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReply {
-    //db id, share spec vector
-    pub spec_vec: Option<(u64, Vec<ShareSpec>)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReq {
-    pub inner: DictionaryNameIdent,
+    pub name_ident: DictionaryNameIdent,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetDictionaryReply {
+    pub dictionary_id: u64,
+    pub dictionary_meta: DictionaryMeta,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]

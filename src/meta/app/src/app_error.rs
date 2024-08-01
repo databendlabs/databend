@@ -1107,6 +1107,20 @@ impl DropDictionaryWithDropTime {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("GetDictionaryWithDropTime: get {dictionary_name} with drop time")]
+pub struct GetDictionaryWithDropTime {
+    dictionary_name: String,
+}
+
+impl GetDictionaryWithDropTime {
+    pub fn new(dictionary_name: impl Into<String>) -> Self {
+        Self {
+            dictionary_name: dictionary_name.into(),
+        }
+    }
+}
+
 
 /// Application error.
 ///
@@ -1304,6 +1318,9 @@ pub enum AppError {
 
     #[error(transparent)]
     DropDictionaryWithDropTime(#[from] DropDictionaryWithDropTime),
+
+    #[error(transparent)]
+    GetDictionaryWithDropTime(#[from] GetDictionaryWithDropTime),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1760,6 +1777,12 @@ impl AppErrorMessage for DropDictionaryWithDropTime {
     }
 }
 
+impl AppErrorMessage for GetDictionaryWithDropTime {
+    fn message(&self) -> String {
+        format!("Get Dictionary '{}' with drop time", self.dictionary_name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1873,7 +1896,8 @@ impl From<AppError> for ErrorCode {
             AppError::DictionaryAlreadyExists(err) => ErrorCode::DictionaryAlreadyExists(err.message()),
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
             AppError::DropDictionaryWithDropTime(err) => ErrorCode::DropDictionaryWithDropTime(err.message()),
-            
+            AppError::GetDictionaryWithDropTime(err) => ErrorCode::GetDictionaryWithDropTime(err.message()),
+
         }
     }
 }

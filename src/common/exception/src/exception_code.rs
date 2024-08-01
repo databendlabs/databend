@@ -387,6 +387,7 @@ build_exceptions! {
     DictionaryAlreadyExists(3112),
     UnKnownDictionary(3113),
     DropDictionaryWithDropTime(3114),
+    GetDictionaryWithDropTime(3115),
 }
 
 // Storage errors [3001, 4000].
