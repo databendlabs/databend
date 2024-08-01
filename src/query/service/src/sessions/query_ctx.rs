@@ -1136,7 +1136,7 @@ impl TableContext for QueryContext {
                     previous_snapshot,
                     self.get_settings().get_data_retention_time_in_days()? as i64,
                 );
-                cache.lock().insert(table_id, ts.clone());
+                cache.lock().insert(table_id, ts);
                 Ok(ts)
             }
         }
