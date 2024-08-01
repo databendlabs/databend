@@ -123,9 +123,6 @@ statement ok
 optimize table m all
 
 statement ok
-set data_retention_time_in_days = 0
-
-statement ok
 optimize table m purge
 
 statement ok
@@ -145,9 +142,6 @@ insert into m values(2)
 
 statement ok
 optimize table m all
-
-statement ok
-set data_retention_time_in_days = 0
 
 statement ok
 optimize table m purge
@@ -612,9 +606,6 @@ select count() from fuse_snapshot('db_09_0008', 't10')
 8
 
 statement ok
-set data_retention_time_in_days = 0
-
-statement ok
 optimize table t10 purge limit 2
 
 query I
@@ -857,4 +848,3 @@ select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t1
 
 statement ok
 DROP DATABASE db_09_0008
-
