@@ -22,6 +22,7 @@ use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -35,6 +36,8 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::TryStreamExt;
 use log::info;
 use uuid::Version;
+
+use crate::inverted_index;
 
 #[async_backtrace::framed]
 pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Vec<String>> {
@@ -160,15 +163,54 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         slice_summary(&blocks_to_gc)
     );
 
+    let catalog = ctx.get_default_catalog()?;
+    let table_agg_index_ids = catalog
+        .list_index_ids_by_table_id(ListIndexesByIdReq::new(
+            ctx.get_tenant(),
+            fuse_table.get_id(),
+        ))
+        .await?;
+    let inverted_indexes = &fuse_table.get_table_info().meta.indexes;
+    let mut indexes_to_gc = Vec::with_capacity(
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
+    );
+    for loc in &blocks_to_gc {
+        for index_id in table_agg_index_ids {
+            indexes_to_gc.push(
+                TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                    loc, *index_id,
+                ),
+            );
+        }
+        for idx in inverted_indexes.values() {
+            indexes.push(
+                TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
+                    loc,
+                    idx.name.as_str(),
+                    idx.version.as_str(),
+                ),
+            );
+        }
+        indexes_to_gc
+            .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
+    }
+
     let start = std::time::Instant::now();
-    let files_to_gc = snapshots_to_gc
-        .iter()
-        .chain(segments_to_gc.iter())
-        .chain(blocks_to_gc.iter())
-        .map(|p| p.to_string())
-        .collect::<Vec<_>>();
+    let subject_files_to_gc: Vec<_> = segments_to_gc
+        .into_iter()
+        .chain(blocks_to_gc.into_iter())
+        .chain(indexes_to_gc.into_iter())
+        .collect();
     let op = Files::create(ctx, fuse_table.get_operator());
-    op.remove_file_in_batch(&files_to_gc).await?;
+
+    // remove subject files first, then remove snapshots, if vacuum failed, we can retry
+    op.remove_file_in_batch(&subject_files_to_gc).await?;
+    op.remove_file_in_batch(snapshots_to_gc).await?;
+
+    let files_to_gc: Vec<_> = subject_files_to_gc
+        .into_iter()
+        .chain(snapshots_to_gc.into_iter())
+        .collect();
     info!(
         "remove files for table {} takes {:?}, files_to_gc: {:?}",
         fuse_table.get_table_info().desc,
