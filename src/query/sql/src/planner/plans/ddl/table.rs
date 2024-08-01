@@ -267,6 +267,7 @@ pub struct AddTableColumnPlan {
     pub field: TableField,
     pub comment: String,
     pub option: AddColumnOption,
+    pub is_deterministic: bool,
 }
 
 impl AddTableColumnPlan {
