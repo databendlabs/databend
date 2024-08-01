@@ -1127,16 +1127,16 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let cache = self.shared.get_table_meta_timestamps();
-        let mut cache = cache.lock();
-        match cache.entry(table_id) {
-            Entry::Occupied(v) => Ok(*v.get()),
-            Entry::Vacant(v) => {
+        let cached_item = cache.lock().get(&table_id).copied();
+        match cached_item {
+            Some(ts) => Ok(ts),
+            None => {
                 let ts = self.txn_mgr().lock().get_table_meta_timestamps(
                     table_id,
                     previous_snapshot,
                     self.get_settings().get_data_retention_time_in_days()? as i64,
                 );
-                v.insert(ts);
+                cache.lock().insert(table_id, ts.clone());
                 Ok(ts)
             }
         }
