@@ -28,6 +28,7 @@ use crate::share::ShareGrantObjectName;
 use crate::share::ShareGrantObjectPrivilege;
 use crate::share::ShareGrantObjectSeqAndId;
 
+// a unify data struct for saving granted share object: database, table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareGrantEntry {
     pub object: ShareGrantObject,

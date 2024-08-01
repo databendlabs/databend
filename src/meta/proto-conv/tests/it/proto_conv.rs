@@ -143,35 +143,35 @@ fn new_share_meta() -> share::ShareMeta {
 
     let use_database = Some(share::ShareDatabase {
         privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Usage),
-        name: "db".to_string(),
+        db_name: "db".to_string(),
         db_id: 4,
         grant_on: now,
     });
 
     let reference_database = vec![share::ShareDatabase {
         privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
-        name: "db1".to_string(),
+        db_name: "db1".to_string(),
         db_id: 5,
         grant_on: now,
     }];
 
-    let mut reference_table = BTreeSet::new();
-    reference_table.insert(42);
+    let mut view_reference_table = BTreeSet::new();
+    view_reference_table.insert(42);
     let table = vec![share::ShareTable {
         privileges: BitFlags::from(share::ShareGrantObjectPrivilege::Select),
-        name: "table".to_string(),
+        table_name: "table".to_string(),
         db_id: 4,
         table_id: 41,
         grant_on: now,
         engine: "VIEW".to_string(),
-        reference_table,
+        view_reference_table,
     }];
 
     let mut reference_by = BTreeSet::new();
     reference_by.insert(41);
     let reference_table = vec![share::ShareReferenceTable {
         privileges: BitFlags::from(share::ShareGrantObjectPrivilege::ReferenceUsage),
-        name: "table".to_string(),
+        table_name: "table".to_string(),
         db_id: 5,
         table_id: 42,
         grant_on: now,

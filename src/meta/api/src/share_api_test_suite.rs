@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -100,27 +101,27 @@ async fn is_all_share_data_removed(
     }
 
     if let Some(use_database) = &share_meta.use_database {
-        let object = ShareObject::Database(use_database.name.clone(), use_database.db_id);
+        let object = ShareObject::Database(use_database.db_name.clone(), use_database.db_id);
         if if_share_object_data_exists(kv_api, &object).await? {
             return Ok(false);
         }
     }
     for db in &share_meta.reference_database {
-        let object = ShareObject::Database(db.name.clone(), db.db_id);
+        let object = ShareObject::Database(db.db_name.clone(), db.db_id);
         if if_share_object_data_exists(kv_api, &object).await? {
             return Ok(false);
         }
     }
 
     for table in &share_meta.table {
-        let object = ShareObject::Table(table.name.clone(), table.db_id, table.table_id);
+        let object = ShareObject::Table(table.table_name.clone(), table.db_id, table.table_id);
         if if_share_object_data_exists(kv_api, &object).await? {
             return Ok(false);
         }
     }
 
     for table in &share_meta.reference_table {
-        let object = ShareObject::Table(table.name.clone(), table.db_id, table.table_id);
+        let object = ShareObject::Table(table.table_name.clone(), table.db_id, table.table_id);
         if if_share_object_data_exists(kv_api, &object).await? {
             return Ok(false);
         }
@@ -484,11 +485,9 @@ impl ShareApiTestSuite {
             assert!(share_names.contains(&share2.to_string()));
             assert_eq!(share_specs[0].tables.len(), 0);
             assert_eq!(share_specs[1].tables.len(), 0);
-            if let ShareObject::Table(share_table_name, share_db_id, share_table_id) = share_object
-            {
+            if let ReplyShareObject::Table(share_db_id, share_table_id) = share_object {
                 assert_eq!(table_id, share_table_id);
                 assert_eq!(db_id, share_db_id);
-                assert_eq!(table_name.to_string(), share_table_name);
             } else {
                 unreachable!()
             }
@@ -847,7 +846,7 @@ impl ShareApiTestSuite {
             let res = mt.rename_database(req).await?;
             info!("rename database res: {:?}", res);
             let (share_specs, object) = res.share_spec.unwrap();
-            if let ShareObject::Database(_name, old_db_id) = object {
+            if let ReplyShareObject::Database(old_db_id) = object {
                 assert_eq!(old_db_id, db_id);
             } else {
                 unreachable!()
@@ -1756,7 +1755,7 @@ impl ShareApiTestSuite {
             assert_eq!(share_spec.name, share_name.share_name().to_string());
             assert_eq!(
                 res.revoke_object,
-                Some(ShareObject::Table(tbl_name.to_string(), db_id, table_id,))
+                Some(ReplyShareObject::Table(db_id, table_id,))
             );
 
             let (_share_meta_seq, share_meta) =
@@ -1833,10 +1832,7 @@ impl ShareApiTestSuite {
             let res = mt.revoke_share_object(req).await?;
             info!("revoke object res: {:?}", res);
             assert_eq!(res.share_spec.unwrap().name, *share_name.name());
-            assert_eq!(
-                res.revoke_object,
-                Some(ShareObject::Database(db_name.to_string(), db_id))
-            );
+            assert_eq!(res.revoke_object, Some(ReplyShareObject::Database(db_id)));
 
             // assert share_meta.database is none, and share_meta.entries is empty
             let (_share_meta_seq, share_meta) =

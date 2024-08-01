@@ -21,7 +21,7 @@ message ShareDatabase {
   uint64 min_reader_ver = 101;
 
   uint64 privileges = 1;
-  string name = 2;
+  string db_name = 2;
   uint64 db_id = 3;
   string grant_on = 4;
 }
@@ -31,12 +31,12 @@ message ShareTable {
   uint64 min_reader_ver = 101;
 
   uint64 privileges = 1;
-  string name = 2;
+  string table_name = 2;
   uint64 db_id = 3;
   uint64 table_id = 4;
   string grant_on = 5;
   string engine = 6;
-  repeated uint64 reference_table = 7;
+  repeated uint64 view_reference_table = 7;
 }
 
 message ShareReferenceTable {
@@ -44,7 +44,7 @@ message ShareReferenceTable {
   uint64 min_reader_ver = 101;
 
   uint64 privileges = 1;
-  string name = 2;
+  string table_name = 2;
   uint64 db_id = 3;
   uint64 table_id = 4;
   string grant_on = 5;

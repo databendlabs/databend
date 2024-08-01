@@ -15,9 +15,9 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
-use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableSpec;
 use log::error;
@@ -100,16 +100,16 @@ pub async fn remove_share_table_object(
     tenant: &str,
     operator: Operator,
     share_name: &str,
-    revoke_share_object: &[ShareObject],
+    revoke_share_object: &[ReplyShareObject],
 ) -> Result<()> {
     for share_object in revoke_share_object {
         match share_object {
-            ShareObject::Table(_share_table, db_id, table_id) => {
+            ReplyShareObject::Table(db_id, table_id) => {
                 let location = share_table_info_location(tenant, share_name, *db_id, *table_id);
 
                 operator.delete(&location).await?;
             }
-            ShareObject::Database(_db_name, db_id) => {
+            ReplyShareObject::Database(db_id) => {
                 let dir = get_share_database_dir(tenant, share_name, *db_id);
                 operator.remove_all(&dir).await?;
             }

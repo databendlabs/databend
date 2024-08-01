@@ -839,7 +839,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     return Ok(RevokeShareObjectReply {
                         share_id,
                         share_spec: Some(share_spec),
-                        revoke_object: Some(object),
+                        revoke_object: Some(object.into()),
                     });
                 }
             }
@@ -870,7 +870,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         };
 
         if let Some(use_database) = share_meta.use_database {
-            let database_name = use_database.name.clone();
+            let database_name = use_database.db_name.clone();
 
             let mut objects = vec![];
             objects.push(ShareGrantReplyObject {
@@ -880,7 +880,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             });
             for table in &share_meta.table {
                 objects.push(ShareGrantReplyObject {
-                    object: ShareGrantObjectName::Table(database_name.clone(), table.name.clone()),
+                    object: ShareGrantObjectName::Table(
+                        database_name.clone(),
+                        table.table_name.clone(),
+                    ),
                     privileges: table.privileges,
                     grant_on: use_database.grant_on,
                 });
@@ -941,7 +944,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     )
                     .await?;
                     if let Some(use_database) = share_meta.use_database {
-                        if use_database.name == db_name {
+                        if use_database.db_name == db_name {
                             privileges.push(ObjectGrantPrivilege {
                                 share_name: share_name.share_name().to_string(),
                                 privileges: use_database.privileges,
@@ -1380,7 +1383,7 @@ async fn construct_drop_share_endpoint_txn_operations(
 
 async fn get_share_use_database_name(share_meta: &ShareMeta) -> Result<Option<String>, KVAppError> {
     if let Some(use_database) = &share_meta.use_database {
-        Ok(Some(use_database.name.clone()))
+        Ok(Some(use_database.db_name.clone()))
     } else {
         Ok(None)
     }
@@ -1754,7 +1757,7 @@ async fn remove_share_id_from_share_database(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    let object = ShareObject::Database(database.name.to_owned(), database.db_id);
+    let object = ShareObject::Database(database.db_name.to_owned(), database.db_id);
     if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &object).await {
         share_ids.remove(share_id);
 
@@ -1772,7 +1775,7 @@ async fn remove_share_id_from_share_table(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    let object = ShareObject::Table(table.name.clone(), table.db_id, table.table_id);
+    let object = ShareObject::Table(table.table_name.clone(), table.db_id, table.table_id);
     if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &object).await {
         share_ids.remove(share_id);
 

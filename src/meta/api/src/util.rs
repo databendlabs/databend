@@ -1195,13 +1195,13 @@ pub async fn get_table_info_by_share(
     let mut db_name: Option<DatabaseNameIdent> = None;
     if let Some(use_database) = &share_meta.use_database {
         if use_database.db_id == db_id {
-            db_name = Some(DatabaseNameIdent::new(tenant, &use_database.name));
+            db_name = Some(DatabaseNameIdent::new(tenant, &use_database.db_name));
         }
     }
     if db_name.is_none() {
         for db in &share_meta.reference_database {
             if db.db_id == db_id {
-                db_name = Some(DatabaseNameIdent::new(tenant, &db.name));
+                db_name = Some(DatabaseNameIdent::new(tenant, &db.db_name));
             }
         }
     }

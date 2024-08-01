@@ -26,6 +26,7 @@ use enumflags2::BitFlags;
 use super::ShareObject;
 use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
+use crate::schema::ReplyShareObject;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 use crate::share::share_name_ident::ShareNameIdent;
@@ -195,7 +196,7 @@ pub struct RevokeShareObjectReq {
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
     pub share_spec: Option<ShareSpec>,
-    pub revoke_object: Option<ShareObject>,
+    pub revoke_object: Option<ReplyShareObject>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -551,9 +552,12 @@ pub struct ShareSpec {
     pub reference_tables: Vec<ShareTableSpec>,
 }
 
+// meta key of `ObjectSharedByShareIds`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObject {
+    // db id
     Database(u64),
+    // table id
     Table(u64),
 }
 

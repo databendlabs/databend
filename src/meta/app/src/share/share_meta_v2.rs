@@ -27,7 +27,7 @@ use crate::share::ShareGrantObjectPrivilege;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareDatabase {
     pub privileges: BitFlags<ShareGrantObjectPrivilege>,
-    pub name: String,
+    pub db_name: String,
     pub db_id: u64,
     pub grant_on: DateTime<Utc>,
 }
@@ -55,14 +55,14 @@ impl ShareDatabase {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareTable {
     pub privileges: BitFlags<ShareGrantObjectPrivilege>,
-    pub name: String,
+    pub table_name: String,
     pub db_id: u64,
     pub table_id: u64,
     pub grant_on: DateTime<Utc>,
     // fuse/view
     pub engine: String,
     // if table is a view, save all the reference table ids
-    pub reference_table: BTreeSet<u64>,
+    pub view_reference_table: BTreeSet<u64>,
 }
 
 impl ShareTable {
@@ -88,7 +88,7 @@ impl ShareTable {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareReferenceTable {
     pub privileges: BitFlags<ShareGrantObjectPrivilege>,
-    pub name: String,
+    pub table_name: String,
     pub db_id: u64,
     pub table_id: u64,
     pub grant_on: DateTime<Utc>,
@@ -134,7 +134,8 @@ pub struct ShareMetaV2 {
     pub reference_table: Vec<ShareReferenceTable>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+//#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShareObject {
     // (db name, db id)
     Database(String, u64),
@@ -210,7 +211,7 @@ impl ShareMetaV2 {
                     } else {
                         self.use_database = Some(ShareDatabase {
                             privileges: BitFlags::from(privileges),
-                            name: name.to_string(),
+                            db_name: name.to_string(),
                             grant_on,
                             db_id: *db_id,
                         });
@@ -224,7 +225,7 @@ impl ShareMetaV2 {
                     }
                     self.reference_database.push(ShareDatabase {
                         privileges: BitFlags::from(privileges),
-                        name: name.to_string(),
+                        db_name: name.to_string(),
                         grant_on,
                         db_id: *db_id,
                     });
@@ -241,12 +242,12 @@ impl ShareMetaV2 {
                     }
                     self.table.push(ShareTable {
                         privileges: BitFlags::from(privileges),
-                        name: name.to_string(),
+                        table_name: name.to_string(),
                         db_id: *db_id,
                         grant_on,
                         table_id: *table_id,
                         engine: "FUSE".to_string(),
-                        reference_table: BTreeSet::new(),
+                        view_reference_table: BTreeSet::new(),
                     })
                 }
                 ShareGrantObjectPrivilege::ReferenceUsage => {
@@ -258,7 +259,7 @@ impl ShareMetaV2 {
 
                     self.reference_table.push(ShareReferenceTable {
                         privileges: BitFlags::from(privileges),
-                        name: name.to_string(),
+                        table_name: name.to_string(),
                         db_id: *db_id,
                         grant_on,
                         table_id: *table_id,

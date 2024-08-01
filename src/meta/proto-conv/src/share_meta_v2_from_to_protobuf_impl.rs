@@ -42,7 +42,7 @@ impl FromToProto for mt::ShareDatabase {
         let v = Self {
             privileges,
             db_id: p.db_id,
-            name: p.name,
+            db_name: p.db_name,
             grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
         };
         Ok(v)
@@ -54,7 +54,7 @@ impl FromToProto for mt::ShareDatabase {
             min_reader_ver: MIN_READER_VER,
             privileges: self.privileges.bits(),
             db_id: self.db_id,
-            name: self.name.clone(),
+            db_name: self.db_name.clone(),
             grant_on: self.grant_on.to_pb()?,
         };
         Ok(p)
@@ -71,18 +71,18 @@ impl FromToProto for mt::ShareTable {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let privileges =
             BitFlags::<mt::ShareGrantObjectPrivilege, u64>::from_bits_truncate(p.privileges);
-        let mut reference_table = BTreeSet::new();
-        for ref_table in p.reference_table {
-            reference_table.insert(ref_table);
+        let mut view_reference_table = BTreeSet::new();
+        for ref_table in p.view_reference_table {
+            view_reference_table.insert(ref_table);
         }
         let v = Self {
             privileges,
-            name: p.name,
+            table_name: p.table_name,
             db_id: p.db_id,
             table_id: p.table_id,
             grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
             engine: p.engine.clone(),
-            reference_table,
+            view_reference_table,
         };
         Ok(v)
     }
@@ -92,12 +92,12 @@ impl FromToProto for mt::ShareTable {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             privileges: self.privileges.bits(),
-            name: self.name.clone(),
+            table_name: self.table_name.clone(),
             db_id: self.db_id,
             table_id: self.table_id,
             grant_on: self.grant_on.to_pb()?,
             engine: self.engine.clone(),
-            reference_table: self.reference_table.iter().cloned().collect(),
+            view_reference_table: self.view_reference_table.iter().cloned().collect(),
         };
         Ok(p)
     }
@@ -119,7 +119,7 @@ impl FromToProto for mt::ShareReferenceTable {
         }
         let v = Self {
             privileges,
-            name: p.name,
+            table_name: p.table_name,
             db_id: p.db_id,
             table_id: p.table_id,
             grant_on: DateTime::<Utc>::from_pb(p.grant_on)?,
@@ -134,7 +134,7 @@ impl FromToProto for mt::ShareReferenceTable {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             privileges: self.privileges.bits(),
-            name: self.name.clone(),
+            table_name: self.table_name.clone(),
             db_id: self.db_id,
             table_id: self.table_id,
             grant_on: self.grant_on.to_pb()?,

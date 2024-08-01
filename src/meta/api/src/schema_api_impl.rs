@@ -145,6 +145,7 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -716,10 +717,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_meta.shared_by.clear();
                 let db_id_key = DatabaseId { db_id: old_db_id };
                 if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
-                Some((
-                    share_spec_vec,
-                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id),
-                ))
+                Some((share_spec_vec, ReplyShareObject::Database(old_db_id)))
             } else {
                 None
             };
@@ -2142,11 +2140,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
                             then_ops.push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
 
-                            let share_object = ShareObject::Table(
-                                tenant_dbname_tbname.table_name.clone(),
-                                db_id,
-                                table_id,
-                            );
+                            let share_object = ReplyShareObject::Table(db_id, table_id);
                             Some((spec_vec, share_object))
                         } else {
                             None
