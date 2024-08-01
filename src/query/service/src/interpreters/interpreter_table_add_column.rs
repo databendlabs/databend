@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::Expr;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DatabaseType;
@@ -34,13 +38,20 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use log::debug;
 use log::info;
 
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_table_create::is_valid_column;
+use crate::interpreters::interpreter_update::build_update_physical_plan;
+use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::physical_plans::MutationKind;
+use crate::sql::parse_computed_expr;
 
 pub struct AddTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -60,7 +71,7 @@ impl Interpreter for AddTableColumnInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        self.plan.is_deterministic
     }
 
     #[async_backtrace::framed]
@@ -69,81 +80,167 @@ impl Interpreter for AddTableColumnInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
-            .await
-            .ok();
+        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        // check mutability
+        tbl.check_mutable()?;
 
-        if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
+        let table_info = tbl.get_table_info();
+        let engine = table_info.engine();
+        if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} engine is {} that doesn't support alter",
+                &self.plan.database, &self.plan.table, engine
+            )));
+        }
+        if table_info.db_type != DatabaseType::NormalDB {
+            return Err(ErrorCode::TableEngineNotSupported(format!(
+                "{}.{} doesn't support alter",
+                &self.plan.database, &self.plan.table
+            )));
+        }
 
-            let table_info = table.get_table_info();
-            let engine = table_info.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
-                )));
-            }
-            if table_info.db_type != DatabaseType::NormalDB {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
-                )));
-            }
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let mut new_table_meta = table_info.meta.clone();
+        let field = self.plan.field.clone();
+        if field.computed_expr().is_some() {
+            let license_manager = get_license_manager();
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
+        }
 
-            let catalog = self.ctx.get_catalog(catalog_name).await?;
-            let mut new_table_meta = table.get_table_info().meta.clone();
-            let field = self.plan.field.clone();
-            if field.computed_expr().is_some() {
-                let license_manager = get_license_manager();
-                license_manager
-                    .manager
-                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
-            }
+        if field.default_expr().is_some() {
+            let _ = field_default_value(self.ctx.clone(), &field)?;
+        }
+        is_valid_column(field.name())?;
+        let index = match &self.plan.option {
+            AddColumnOption::First => 0,
+            AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
+            AddColumnOption::End => new_table_meta.schema.num_fields(),
+        };
+        new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
-            if field.default_expr().is_some() {
-                let _ = field_default_value(self.ctx.clone(), &field)?;
-            }
-            is_valid_column(field.name())?;
-            let index = match &self.plan.option {
-                AddColumnOption::First => 0,
-                AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
-                AddColumnOption::End => new_table_meta.schema.num_fields(),
-            };
-            new_table_meta.add_column(&field, &self.plan.comment, index)?;
+        let _ = generate_new_snapshot(tbl.as_ref(), &mut new_table_meta).await?;
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
 
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            generate_new_snapshot(table.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta,
-            };
-
-            let resp = catalog.update_single_table_meta(req, table_info).await?;
-
-            if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
-                for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
-                    update_share_table_info(
-                        self.ctx.get_tenant().tenant_name(),
-                        self.ctx.get_application_level_data_operator()?.operator(),
-                        share_name_vec,
-                        *db_id,
-                        share_table_info,
-                    )
-                    .await?;
-                }
-            }
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta,
         };
 
+        let resp = catalog.update_single_table_meta(req, table_info).await?;
+
+        if let Some(share_vec_table_infos) = &resp.share_vec_table_infos {
+            for (share_name_vec, db_id, share_table_info) in share_vec_table_infos {
+                update_share_table_info(
+                    self.ctx.get_tenant().tenant_name(),
+                    self.ctx.get_application_level_data_operator()?.operator(),
+                    share_name_vec,
+                    *db_id,
+                    share_table_info,
+                )
+                .await?;
+            }
+        }
+
+        // if the column is not deterministic, update to refresh the value with default expr
+        if !self.plan.is_deterministic {
+            debug!("ctx.id" = self.ctx.get_id().as_str(); "table_add_column_interpreter_execute");
+
+            if check_deduplicate_label(self.ctx.clone()).await? {
+                return Ok(PipelineBuildResult::create());
+            }
+
+            // clear tables cache and get table again.
+            self.ctx.clear_tables_cache();
+            let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+
+            if let Some(fuse_table) = tbl.as_any().downcast_ref::<FuseTable>() {
+                let col_indices = vec![];
+                let mut filters = None;
+                let query_row_id_col = false;
+                if let Some(snapshot) = fuse_table
+                    .fast_update(
+                        self.ctx.clone(),
+                        &mut filters,
+                        col_indices.clone(),
+                        query_row_id_col,
+                    )
+                    .await?
+                {
+                    let partitions = fuse_table
+                        .mutation_read_partitions(
+                            self.ctx.clone(),
+                            snapshot.clone(),
+                            col_indices.clone(),
+                            filters.clone(),
+                            false,
+                            false,
+                        )
+                        .await?;
+
+                    let field_sql = field.default_expr().unwrap();
+                    let expr = parse_computed_expr(
+                        self.ctx.clone(),
+                        DataSchemaRefExt::create(vec![]),
+                        field_sql,
+                    )?;
+                    let expr: Expr<String> = expr.project_column_ref(|_| unreachable!());
+                    let update_list = vec![(index, expr.as_remote_expr())];
+                    // TODO
+                    let computed_list = BTreeMap::new();
+
+                    let is_distributed = !self.ctx.get_cluster().is_empty();
+                    let physical_plan = build_update_physical_plan(
+                        filters,
+                        update_list,
+                        computed_list,
+                        partitions,
+                        fuse_table.get_table_info().clone(),
+                        col_indices,
+                        snapshot,
+                        query_row_id_col,
+                        is_distributed,
+                        self.ctx.clone(),
+                    )?;
+
+                    let mut build_res =
+                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
+                            .await?;
+                    {
+                        let hook_operator = HookOperator::create(
+                            self.ctx.clone(),
+                            catalog_name.to_string(),
+                            db_name.to_string(),
+                            tbl_name.to_string(),
+                            MutationKind::Update,
+                            // table lock has been added, no need to check.
+                            LockTableOption::NoLock,
+                        );
+                        hook_operator
+                            .execute_refresh(&mut build_res.main_pipeline)
+                            .await;
+                    }
+
+                    // Add table lock.
+                    let lock_guard = self
+                        .ctx
+                        .clone()
+                        .acquire_table_lock(
+                            catalog_name,
+                            db_name,
+                            tbl_name,
+                            &LockTableOption::LockWithRetry,
+                        )
+                        .await?;
+
+                    build_res.main_pipeline.add_lock_guard(lock_guard.clone());
+                    return Ok(build_res);
+                }
+            }
+        }
         Ok(PipelineBuildResult::create())
     }
 }

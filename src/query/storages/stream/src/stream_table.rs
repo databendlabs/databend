@@ -290,6 +290,7 @@ impl Table for StreamTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let table = self.source_table(ctx.clone()).await?;
@@ -310,7 +311,7 @@ impl Table for StreamTable {
     }
 
     #[async_backtrace::framed]
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
         database_name: &str,

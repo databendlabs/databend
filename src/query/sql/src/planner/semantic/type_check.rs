@@ -2206,13 +2206,13 @@ impl<'a> TypeChecker<'a> {
         // convert query text to lowercase and remove punctuation characters,
         // so that tantivy query parser can parse the query text as plain text
         // without syntax
-        let formated_query_text: String = query_text
+        let formatted_query_text: String = query_text
             .to_lowercase()
             .chars()
             .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
             .collect();
 
-        self.resolve_search_function(span, column_refs, &formated_query_text)
+        self.resolve_search_function(span, column_refs, &formatted_query_text)
     }
 
     /// Resolve query search function.
@@ -2797,7 +2797,7 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        let mut data_type = output_context.columns[0].data_type.clone();
+        let box mut data_type = output_context.columns[0].data_type.clone();
 
         let rel_expr = RelExpr::with_s_expr(&s_expr);
         let rel_prop = rel_expr.derive_relational_prop()?;
@@ -2805,12 +2805,16 @@ impl<'a> TypeChecker<'a> {
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            let box (scalar, _) = self.resolve(&expr)?;
+            let box (scalar, expr_ty) = self.resolve(&expr)?;
             child_scalar = Some(Box::new(scalar));
+            // wrap nullable to make sure expr and list values have common type.
+            if expr_ty.is_nullable() {
+                data_type = data_type.wrap_nullable();
+            }
         }
 
         if typ.eq(&SubqueryType::Scalar) {
-            data_type = Box::new(data_type.wrap_nullable());
+            data_type = data_type.wrap_nullable();
         }
         let subquery_expr = SubqueryExpr {
             span: subquery.span,
@@ -2819,7 +2823,7 @@ impl<'a> TypeChecker<'a> {
             compare_op,
             output_column: output_context.columns[0].clone(),
             projection_index: None,
-            data_type: data_type.clone(),
+            data_type: Box::new(data_type),
             typ,
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg,
@@ -3946,10 +3950,14 @@ impl<'a> TypeChecker<'a> {
             Arc::new(const_scan),
         );
 
-        let data_type = ctx.columns[0].data_type.clone();
+        let box mut data_type = ctx.columns[0].data_type.clone();
         let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
         let rel_prop = rel_expr.derive_relational_prop()?;
-        let box (scalar, _) = self.resolve(expr)?;
+        let box (scalar, expr_ty) = self.resolve(expr)?;
+        // wrap nullable to make sure expr and list values have common type.
+        if expr_ty.is_nullable() {
+            data_type = data_type.wrap_nullable();
+        }
         let child_scalar = Some(Box::new(scalar));
         let subquery_expr = SubqueryExpr {
             span: None,
@@ -3958,7 +3966,7 @@ impl<'a> TypeChecker<'a> {
             compare_op: Some(ComparisonOp::Equal),
             output_column: ctx.columns[0].clone(),
             projection_index: None,
-            data_type: data_type.clone(),
+            data_type: Box::new(data_type),
             typ: SubqueryType::Any,
             outer_columns: rel_prop.outer_columns.clone(),
             contain_agg: None,

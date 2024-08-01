@@ -276,7 +276,7 @@ where F: SnapshotGenerator + Send + 'static
                 // now:
                 // - either current txn IS append-only
                 //    even if this is a conflict txn T (in the meaning of table version) has been
-                // commited, which has changed the change-tracking state from disabled to enabled,
+                // committed, which has changed the change-tracking state from disabled to enabled,
                 // merging with transaction T is still safe, since the CDC mechanism allows it.
                 // - or change-tracking state is NOT changed.
                 //    in this case, we only need standard conflict resolution.

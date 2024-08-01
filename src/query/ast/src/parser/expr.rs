@@ -1248,56 +1248,57 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         }
     });
 
-    let (rest, (span, elem)) = consumed(alt((
-        // Note: each `alt` call supports maximum of 21 parsers
-        rule!(
-            #is_null : "`... IS [NOT] NULL`"
-            | #in_list : "`[NOT] IN (<expr>, ...)`"
-            | #in_subquery : "`[NOT] IN (SELECT ...)`"
-            | #exists : "`[NOT] EXISTS (SELECT ...)`"
-            | #between : "`[NOT] BETWEEN ... AND ...`"
-            | #binary_op : "<operator>"
-            | #json_op : "<operator>"
-            | #unary_op : "<operator>"
-            | #cast : "`CAST(... AS ...)`"
-            | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-            | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-            | #date_expr: "`DATE <str_literal>`"
-            | #timestamp_expr: "`TIMESTAMP <str_literal>`"
-            | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
-            | #pg_cast : "`::<type_name>`"
-            | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-            | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-            | #position : "`POSITION(... IN ...)`"
-            | #variable_access: "`$<ident>`"
-        ),
-        rule!(
-            #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-            | #trim : "`TRIM(...)`"
-            | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
-            | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #chain_function_call : "x.function(...)"
-            | #list_comprehensions: "[expr for x in ... [if ...]]"
-            | #count_all_with_window : "`COUNT(*) OVER ...`"
-            | #function_call_with_lambda : "`function(..., x -> ...)`"
-            | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-            | #function_call_with_params : "`function(...)(...)`"
-            | #function_call : "`function(...)`"
-            | #case : "`CASE ... END`"
-            | #tuple : "`(<expr> [, ...])`"
-            | #subquery : "`(SELECT ...)`"
-            | #column_ref : "<column>"
-            | #dot_access : "<dot_access>"
-            | #map_access : "[<key>] | .<key> | :<key>"
-            | #literal : "<literal>"
-            | #current_timestamp: "CURRENT_TIMESTAMP"
-            | #array : "`[<expr>, ...]`"
-            | #map_expr : "`{ <literal> : <expr>, ... }`"
-        ),
-    )))(i)?;
-
-    Ok((rest, WithSpan { span, elem }))
+    map(
+        consumed(alt((
+            // Note: each `alt` call supports maximum of 21 parsers
+            rule!(
+                #is_null : "`... IS [NOT] NULL`"
+                | #in_list : "`[NOT] IN (<expr>, ...)`"
+                | #in_subquery : "`[NOT] IN (SELECT ...)`"
+                | #exists : "`[NOT] EXISTS (SELECT ...)`"
+                | #between : "`[NOT] BETWEEN ... AND ...`"
+                | #binary_op : "<operator>"
+                | #json_op : "<operator>"
+                | #unary_op : "<operator>"
+                | #cast : "`CAST(... AS ...)`"
+                | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #date_expr: "`DATE <str_literal>`"
+                | #timestamp_expr: "`TIMESTAMP <str_literal>`"
+                | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #pg_cast : "`::<type_name>`"
+                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #position : "`POSITION(... IN ...)`"
+                | #variable_access: "`$<ident>`"
+            ),
+            rule!(
+                #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
+                | #trim : "`TRIM(...)`"
+                | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
+                | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
+                | #chain_function_call : "x.function(...)"
+                | #list_comprehensions: "[expr for x in ... [if ...]]"
+                | #count_all_with_window : "`COUNT(*) OVER ...`"
+                | #function_call_with_lambda : "`function(..., x -> ...)`"
+                | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                | #function_call_with_params : "`function(...)(...)`"
+                | #function_call : "`function(...)`"
+                | #case : "`CASE ... END`"
+                | #tuple : "`(<expr> [, ...])`"
+                | #subquery : "`(SELECT ...)`"
+                | #column_ref : "<column>"
+                | #dot_access : "<dot_access>"
+                | #map_access : "[<key>] | .<key> | :<key>"
+                | #literal : "<literal>"
+                | #current_timestamp: "CURRENT_TIMESTAMP"
+                | #array : "`[<expr>, ...]`"
+                | #map_expr : "`{ <literal> : <expr>, ... }`"
+            ),
+        ))),
+        |(span, elem)| WithSpan { span, elem },
+    )(i)
 }
 
 pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
