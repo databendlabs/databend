@@ -27,7 +27,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::FunctionCall;
@@ -38,10 +40,12 @@ use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
+use log::info;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use super::UpdateInterpreter;
+use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -425,7 +429,12 @@ impl ExplainInterpreter {
         let settings = self.ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-
+        let ctx = self.ctx.clone();
+        build_res
+            .main_pipeline
+            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                on_execution_finished(info, ctx)
+            }));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
                 let mut pipelines = build_res.sources_pipelines;
@@ -444,7 +453,6 @@ impl ExplainInterpreter {
                     .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
         }
-
         Ok(self
             .ctx
             .get_query_profiles()
