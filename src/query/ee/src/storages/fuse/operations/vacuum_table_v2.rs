@@ -37,8 +37,6 @@ use futures_util::TryStreamExt;
 use log::info;
 use uuid::Version;
 
-use crate::inverted_index;
-
 #[async_backtrace::framed]
 pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> Result<Vec<String>> {
     let start = std::time::Instant::now();
@@ -176,7 +174,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
     );
     for loc in &blocks_to_gc {
-        for index_id in table_agg_index_ids {
+        for index_id in &table_agg_index_ids {
             indexes_to_gc.push(
                 TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                     loc, *index_id,
@@ -184,7 +182,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
             );
         }
         for idx in inverted_indexes.values() {
-            indexes.push(
+            indexes_to_gc.push(
                 TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                     loc,
                     idx.name.as_str(),
@@ -210,7 +208,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
 
     let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()
-        .chain(snapshots_to_gc.into_iter())
+        .chain(snapshots_to_gc.iter().cloned())
         .collect();
     info!(
         "remove files for table {} takes {:?}, files_to_gc: {:?}",
@@ -319,7 +317,7 @@ async fn select_gc_root<'a>(
         // safe to unwrap, as if it is None, we should have stopped vacuuming
         let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
         let snapshot = read_snapshot_from_location(fuse_table, &snapshot_loc).await?;
-        let gc_root_idx = snapshots_before_lvt.binary_search(&gc_root_path).unwrap();
+        let gc_root_idx = snapshots_before_lvt.binary_search(&snapshot_loc).unwrap();
         let snapshots_to_gc = &snapshots_before_lvt[..gc_root_idx];
         return Ok(Some((snapshot, snapshots_to_gc)));
     }
