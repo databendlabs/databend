@@ -87,6 +87,7 @@ mod udf_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
 mod virtual_column_from_to_protobuf_impl;
+mod dictionary_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::FromToProtoEnum;

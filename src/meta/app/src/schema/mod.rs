@@ -33,6 +33,7 @@ mod ownership;
 mod sequence;
 mod table;
 mod virtual_column;
+mod dictionary;
 
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
@@ -144,3 +145,4 @@ pub use virtual_column::UpdateVirtualColumnReply;
 pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
 pub use virtual_column_ident::VirtualColumnIdent;
+pub use dictionary::*;
