@@ -25,8 +25,8 @@ use databend_common_meta_types::protobuf::meta_service_server::MetaServiceServer
 use databend_common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::MetaNetworkError;
+use fastrace::prelude::*;
 use log::info;
-use minitrace::prelude::*;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;

@@ -189,10 +189,6 @@ impl AsyncSource for FuseStatisticSource {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        Ok(Some(
-            FuseStatistic::new(self.ctx.clone(), tbl)
-                .get_statistic()
-                .await?,
-        ))
+        Ok(Some(FuseStatistic::new(tbl).get_statistic().await?))
     }
 }

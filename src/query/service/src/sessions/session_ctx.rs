@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -20,6 +21,7 @@ use std::sync::Weak;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -67,6 +69,8 @@ pub struct SessionContext {
     /// We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     /// query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
+    // Used in set variables inside session
+    variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
 }
@@ -87,6 +91,7 @@ impl SessionContext {
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
+            variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
         })
@@ -298,5 +303,17 @@ impl SessionContext {
 
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         *self.txn_mgr.lock() = txn_mgr;
+    }
+
+    pub fn set_variable(&self, key: String, value: Scalar) {
+        self.variables.write().insert(key, value);
+    }
+
+    pub fn unset_variable(&self, key: &str) {
+        self.variables.write().remove(key);
+    }
+
+    pub fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.variables.read().get(key).cloned()
     }
 }

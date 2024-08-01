@@ -72,7 +72,7 @@ impl Session {
         })
     }
 
-    pub fn to_minitrace_properties(&self) -> Vec<(String, String)> {
+    pub fn to_fastrace_properties(&self) -> Vec<(String, String)> {
         let mut properties = vec![
             ("session_id".to_string(), self.id.clone()),
             ("session_database".to_string(), self.get_current_database()),

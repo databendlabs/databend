@@ -94,12 +94,12 @@ where I: Iterator<Item = Result<(NestedState, Box<dyn Array>)>> + Send + Sync
 
 pub type NestedIters<'a> = DynIter<'a, Result<(NestedState, Box<dyn Array>)>>;
 
-fn deserialize_simple<'a, I: 'a>(
+fn deserialize_simple<'a, I>(
     reader: I,
     field: Field,
 ) -> Result<DynIter<'a, Result<Box<dyn Array>>>>
 where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
     use PhysicalType::*;
 
@@ -134,14 +134,14 @@ where
     })
 }
 
-fn deserialize_nested<'a, I: 'a>(
+fn deserialize_nested<'a, I>(
     mut readers: Vec<I>,
     mut leaves: Vec<ColumnDescriptor>,
     field: Field,
     mut init: Vec<InitNested>,
 ) -> Result<NestedIters<'a>>
 where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
     use PhysicalType::*;
 
@@ -231,14 +231,14 @@ where
 }
 
 /// An iterator adapter that maps [`PageIterator`]s into an iterator of [`Array`]s.
-pub fn column_iter_to_arrays<'a, I: 'a>(
+pub fn column_iter_to_arrays<'a, I>(
     mut readers: Vec<I>,
     leaves: Vec<ColumnDescriptor>,
     field: Field,
     is_nested: bool,
 ) -> Result<ArrayIter<'a>>
 where
-    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync,
+    I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
     if is_nested {
         let iter = deserialize_nested(readers, leaves, field, vec![])?;

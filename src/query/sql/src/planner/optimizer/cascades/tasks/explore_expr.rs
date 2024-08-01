@@ -161,9 +161,8 @@ impl ExploreExprTask {
         let rule_set = &optimizer.explore_rule_set;
 
         for rule_id in rule_set.iter() {
-            let apply_rule_task =
-                ApplyRuleTask::new(self.ctx.clone(), rule_id, m_expr.group_index, m_expr.index)
-                    .with_parent(self.ref_count.clone());
+            let apply_rule_task = ApplyRuleTask::new(rule_id, m_expr.group_index, m_expr.index)
+                .with_parent(self.ref_count.clone());
             scheduler.add_task(Task::ApplyRule(apply_rule_task));
         }
 

@@ -80,7 +80,7 @@ impl Interpreter for UpdateInterpreter {
         false
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "update_interpreter_execute");
@@ -241,7 +241,7 @@ impl UpdateInterpreter {
                 .await?;
 
             let is_distributed = !self.ctx.get_cluster().is_empty();
-            let physical_plan = Self::build_physical_plan(
+            let physical_plan = build_update_physical_plan(
                 filters,
                 update_list,
                 computed_list,
@@ -257,53 +257,54 @@ impl UpdateInterpreter {
         }
         Ok(None)
     }
-    #[allow(clippy::too_many_arguments)]
-    pub fn build_physical_plan(
-        filters: Option<Filters>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        partitions: Partitions,
-        table_info: TableInfo,
-        col_indices: Vec<usize>,
-        snapshot: Arc<TableSnapshot>,
-        query_row_id_col: bool,
-        is_distributed: bool,
-        ctx: Arc<QueryContext>,
-    ) -> Result<PhysicalPlan> {
-        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
-        let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
-            parts: partitions,
-            filters,
-            table_info: table_info.clone(),
-            col_indices,
-            query_row_id_col,
-            update_list,
-            computed_list,
-            plan_id: u32::MAX,
-        }));
+}
 
-        if is_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-            });
-        }
-        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+#[allow(clippy::too_many_arguments)]
+pub fn build_update_physical_plan(
+    filters: Option<Filters>,
+    update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+    computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+    partitions: Partitions,
+    table_info: TableInfo,
+    col_indices: Vec<usize>,
+    snapshot: Arc<TableSnapshot>,
+    query_row_id_col: bool,
+    is_distributed: bool,
+    ctx: Arc<QueryContext>,
+) -> Result<PhysicalPlan> {
+    let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
+    let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
+        parts: partitions,
+        filters,
+        table_info: table_info.clone(),
+        col_indices,
+        query_row_id_col,
+        update_list,
+        computed_list,
+        plan_id: u32::MAX,
+    }));
+
+    if is_distributed {
+        root = PhysicalPlan::Exchange(Exchange {
+            plan_id: 0,
             input: Box::new(root),
-            snapshot: Some(snapshot),
-            table_info,
-            mutation_kind: MutationKind::Update,
-            update_stream_meta: vec![],
-            merge_meta,
-            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
-            plan_id: u32::MAX,
-            recluster_info: None,
-        }));
-        plan.adjust_plan_id(&mut 0);
-        Ok(plan)
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            allow_adjust_parallelism: true,
+            ignore_exchange: false,
+        });
     }
+    let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+        input: Box::new(root),
+        snapshot: Some(snapshot),
+        table_info,
+        mutation_kind: MutationKind::Update,
+        update_stream_meta: vec![],
+        merge_meta,
+        deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
+        plan_id: u32::MAX,
+        recluster_info: None,
+    }));
+    plan.adjust_plan_id(&mut 0);
+    Ok(plan)
 }

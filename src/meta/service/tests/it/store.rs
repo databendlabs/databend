@@ -37,12 +37,12 @@ use databend_meta::meta_service::meta_node::LogStore;
 use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
 use databend_meta::Opened;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
 use maplit::btreeset;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 
@@ -63,7 +63,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
 }
 
 #[test(harness = meta_service_test_harness_sync)]
-#[minitrace::trace]
+#[fastrace::trace]
 fn test_impl_raft_storage() -> anyhow::Result<()> {
     let root = Span::root(full_name!(), SpanContext::random());
     let _guard = root.set_local_parent();
@@ -74,7 +74,7 @@ fn test_impl_raft_storage() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Create a meta store
     // - Update meta store
@@ -122,7 +122,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -170,7 +170,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -212,7 +212,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Feed logs

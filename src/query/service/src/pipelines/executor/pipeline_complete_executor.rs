@@ -22,8 +22,8 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
-use minitrace::full_name;
-use minitrace::prelude::*;
+use fastrace::full_name;
+use fastrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
@@ -95,7 +95,7 @@ impl PipelineCompleteExecutor {
         self.executor.finish(cause);
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute(&self) -> Result<()> {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
 

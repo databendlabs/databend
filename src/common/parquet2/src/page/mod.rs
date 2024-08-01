@@ -290,13 +290,6 @@ impl CompressedPage {
         }
     }
 
-    pub(crate) fn num_values(&self) -> usize {
-        match self {
-            CompressedPage::Data(page) => page.num_values(),
-            CompressedPage::Dict(_) => 0,
-        }
-    }
-
     pub(crate) fn selected_rows(&self) -> Option<&[Interval]> {
         match self {
             CompressedPage::Data(page) => page.selected_rows(),

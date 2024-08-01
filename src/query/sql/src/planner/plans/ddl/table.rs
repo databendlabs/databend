@@ -17,8 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
-use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
@@ -198,32 +196,6 @@ pub struct VacuumTableOption {
     pub dry_run: Option<bool>,
 }
 
-/// Optimize.
-#[derive(Clone, Debug)]
-pub struct OptimizeTablePlan {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub action: OptimizeTableAction,
-    pub limit: Option<usize>,
-    pub lock_opt: LockTableOption,
-}
-
-impl OptimizeTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum OptimizeTableAction {
-    All,
-    Purge(Option<NavigationPoint>),
-    // Optionally, specify the limit on the number of blocks to be compacted.
-    CompactBlocks(Option<usize>),
-    CompactSegments,
-}
-
 #[derive(Clone, Debug)]
 pub struct AnalyzeTablePlan {
     pub catalog: String,
@@ -295,6 +267,7 @@ pub struct AddTableColumnPlan {
     pub field: TableField,
     pub comment: String,
     pub option: AddColumnOption,
+    pub is_deterministic: bool,
 }
 
 impl AddTableColumnPlan {

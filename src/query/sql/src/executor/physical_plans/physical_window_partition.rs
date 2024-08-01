@@ -15,19 +15,23 @@
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct LocalShuffle {
+pub struct WindowPartition {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub shuffle_by: Vec<IndexType>,
-    // For explain
-    pub column_index: Vec<IndexType>,
+    pub partition_by: Vec<IndexType>,
+    pub order_by: Vec<SortDesc>,
+    pub after_exchange: Option<bool>,
+
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl LocalShuffle {
+impl WindowPartition {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.input.output_schema()
     }

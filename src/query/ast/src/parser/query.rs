@@ -186,18 +186,20 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         |(_, set_expr, _)| SetOperationElement::Group(set_expr),
     );
 
-    let (rest, (span, elem)) = consumed(rule! {
-        #group
-        | #with
-        | #set_operator
-        | #select_stmt
-        | #values
-        | #order_by
-        | #limit
-        | #offset
-        | #ignore_result
-    })(i)?;
-    Ok((rest, WithSpan { span, elem }))
+    map(
+        consumed(rule! {
+            #group
+            | #with
+            | #set_operator
+            | #select_stmt
+            | #values
+            | #order_by
+            | #limit
+            | #offset
+            | #ignore_result
+        }),
+        |(span, elem)| WithSpan { span, elem },
+    )(i)
 }
 
 struct SetOperationParser;

@@ -80,7 +80,7 @@ impl BloomBlockFilterReader for Location {
 }
 
 /// load index column data
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
@@ -144,7 +144,7 @@ async fn load_bloom_filter_by_columns<'a>(
 
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
     col_chunk_meta: &'a SingleColumnMeta,
@@ -170,7 +170,7 @@ async fn load_column_xor8_filter<'a>(
 
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
-#[minitrace::trace]
+#[fastrace::trace]
 async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {

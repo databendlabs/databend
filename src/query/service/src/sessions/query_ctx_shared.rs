@@ -78,6 +78,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in group by
     pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in window partition
+    pub(in crate::sessions) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
@@ -179,6 +181,7 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),

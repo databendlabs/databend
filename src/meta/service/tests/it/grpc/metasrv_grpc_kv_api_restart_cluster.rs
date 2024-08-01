@@ -35,7 +35,7 @@ use crate::tests::start_metasrv_with_context;
 /// - Stop and restart the cluster.
 /// - Test upsert kv and read on different nodes.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;
@@ -121,7 +121,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
 /// - Stop and restart the cluster.
 /// - Test read kv using same grpc client.
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     fn make_key(tc: &MetaSrvTestContext, k: impl std::fmt::Display) -> String {
         let x = &tc.config.raft_config;

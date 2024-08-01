@@ -52,9 +52,9 @@ impl HttpQueryContext {
         Ok(self.session.clone())
     }
 
-    pub fn to_minitrace_properties(&self) -> BTreeMap<String, String> {
+    pub fn to_fastrace_properties(&self) -> BTreeMap<String, String> {
         let mut result = BTreeMap::new();
-        let properties = self.session.to_minitrace_properties();
+        let properties = self.session.to_fastrace_properties();
         result.extend(properties);
         result.extend([
             ("query_id".to_string(), self.query_id.clone()),

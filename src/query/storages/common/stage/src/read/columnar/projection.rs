@@ -25,6 +25,7 @@ use crate::read::cast::load_can_auto_cast_to;
 
 /// 1. try auto cast
 /// 2. fill missing value according to NullAs
+///
 /// used for orc and parquet now
 pub fn project_columnar(
     input_schema: &TableSchemaRef,

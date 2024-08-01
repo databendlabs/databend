@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::principal::ParquetFileFormatParams;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

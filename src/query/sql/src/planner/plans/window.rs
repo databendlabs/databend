@@ -33,7 +33,6 @@ use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
@@ -107,14 +106,6 @@ impl Window {
 impl Operator for Window {
     fn rel_op(&self) -> RelOp {
         RelOp::Window
-    }
-
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
     }
 
     fn compute_required_prop_child(

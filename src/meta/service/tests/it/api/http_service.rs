@@ -30,7 +30,7 @@ use crate::tests::tls_constants::TEST_SERVER_KEY;
 
 // TODO(zhihanz) add tls fail case
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_http_service_tls_server() -> anyhow::Result<()> {
     let mut conf = Config::default();
     let addr_str = "127.0.0.1:30002";
