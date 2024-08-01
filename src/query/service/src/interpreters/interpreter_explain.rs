@@ -40,7 +40,6 @@ use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
-use log::info;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
