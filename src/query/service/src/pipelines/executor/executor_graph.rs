@@ -767,7 +767,7 @@ impl RunningGraph {
                         let plan_profile = v.get_mut();
                         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
                             plan_profile.statistics[index] +=
-                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                                profile.statistics[index].fetch_max(0, Ordering::SeqCst);
                         }
                     }
                     Entry::Vacant(v) => {
@@ -775,7 +775,7 @@ impl RunningGraph {
 
                         for index in 0..std::mem::variant_count::<ProfileStatisticsName>() {
                             plan_profile.statistics[index] +=
-                                profile.statistics[index].fetch_min(0, Ordering::SeqCst);
+                                profile.statistics[index].fetch_max(0, Ordering::SeqCst);
                         }
 
                         let node_id = node_id.as_ref();
