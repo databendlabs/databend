@@ -71,14 +71,17 @@ pub struct DeltaTableMeta {
 
 /// In a delta table, partition columns are not stored in parquet file.
 /// so it needs a few efforts to make pushdown work:
+///
 /// - context:
 ///   - Table store partition column names in meta.engine_options.
 ///   - Each partition carries all partition column values in the same order.
 ///   - With this order, we can get need info with a PartitionIndex.
+///
 /// - pushdown:
 ///   - projections (mask): partition columns are excluded when read parquet file and inserted at last.
 ///   - filter pass to parquet reader: all partition columns are appended to the filter input columns.
 ///   - pruner: ColumnRef of partition columns in filter expr are replace with const scalars.
+///
 /// Type of partition columns can only be simple primitive types.
 impl DeltaTable {
     #[async_backtrace::framed]
@@ -265,7 +268,7 @@ impl DeltaTable {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn do_read_partitions(
         &self,

@@ -87,7 +87,6 @@ impl LoadContext {
             error_handler: ErrorHandler {
                 on_error_mode,
                 on_error_count: AtomicU64::new(0),
-                on_error_map: None,
             },
         })
     }

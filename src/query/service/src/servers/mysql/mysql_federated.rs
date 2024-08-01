@@ -91,7 +91,7 @@ impl MySQLFederated {
         if vars.len() > 1 {
             vars.remove(0);
             for var in vars {
-                let var = var.trim_end_matches(|c| c == ' ' || c == ',');
+                let var = var.trim_end_matches([' ', ',']);
                 let vars_as: Vec<&str> = var.split(" as ").collect();
                 if vars_as.len() == 2 {
                     // @@cc as yy:

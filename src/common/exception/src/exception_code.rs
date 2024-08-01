@@ -403,6 +403,9 @@ build_exceptions! {
 
     // recluster error codes
     NoNeedToRecluster(4011),
+    NoNeedToCompact(4012),
+
+    RefreshTableInfoFailure(4012),
 }
 
 // Service errors [5001,6000].

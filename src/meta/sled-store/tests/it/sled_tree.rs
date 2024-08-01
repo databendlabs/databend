@@ -34,7 +34,7 @@ use crate::testing::new_sled_test_context;
 use crate::testing::sled_test_harness;
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_sled_tree_open() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -44,7 +44,7 @@ async fn test_sled_tree_open() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_as_range() -> anyhow::Result<()> {
     // This test assumes the following order.
     // to check the range boundary.
@@ -115,7 +115,7 @@ async fn test_as_range() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_last() -> anyhow::Result<()> {
     // This test assumes the following order.
     // To ensure a last() does not returns item from another key space with smaller prefix
@@ -170,7 +170,7 @@ async fn test_key_space_last() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_append() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -224,7 +224,7 @@ async fn test_key_space_append() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -294,7 +294,7 @@ async fn test_key_space_append_and_range_get() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_range_kvs() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -329,7 +329,7 @@ async fn test_key_space_range_kvs() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -371,7 +371,7 @@ async fn test_key_space_scan_prefix() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_insert() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -428,7 +428,7 @@ async fn test_key_space_insert() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_get() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -465,7 +465,7 @@ async fn test_key_space_get() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_range_remove() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -521,7 +521,7 @@ async fn test_key_space_range_remove() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_key_space_multi_types() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;
@@ -586,7 +586,7 @@ async fn test_key_space_multi_types() -> anyhow::Result<()> {
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     let tc = new_sled_test_context();
     let db = &tc.db;

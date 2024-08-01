@@ -185,9 +185,15 @@ impl StorageFactory {
                 )
                 .await
                 .map_err(|elapsed| {
-                    ErrorCode::StorageOther(format!(
+                    ErrorCode::RefreshTableInfoFailure(format!(
                         "failed to refresh table meta {} in time. Elapsed: {}",
                         table_description, elapsed
+                    ))
+                })
+                .map_err(|e| {
+                    ErrorCode::RefreshTableInfoFailure(format!(
+                        "failed to refresh table meta {} : {}",
+                        table_description, e
                     ))
                 })?
             }

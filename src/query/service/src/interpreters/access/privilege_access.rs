@@ -34,6 +34,7 @@ use databend_common_meta_types::SeqV;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::MergeInto;
+use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RewriteKind;
@@ -559,14 +560,15 @@ impl PrivilegeAccess {
         database_name: &str,
         table_name: Option<&str>,
     ) -> Result<ObjectId> {
-        let db_id = catalog
+        let cat = catalog.clone().disable_table_info_refresh()?;
+        let db_id = cat
             .get_database(tenant, database_name)
             .await?
             .get_db_info()
             .ident
             .db_id;
         if let Some(table_name) = table_name {
-            let table_id = catalog
+            let table_id = cat
                 .get_table(tenant, database_name, table_name)
                 .await?
                 .get_id();
@@ -908,9 +910,16 @@ impl AccessChecker for PrivilegeAccess {
             Plan::TruncateTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Delete, false).await?
             }
-            Plan::OptimizeTable(plan) => {
+            Plan::OptimizePurge(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
-            }
+            },
+            Plan::OptimizeCompactSegment(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+            },
+            Plan::OptimizeCompactBlock { s_expr, .. } => {
+                let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
+            },
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false).await?
             }
@@ -1006,7 +1015,7 @@ impl AccessChecker for PrivilegeAccess {
                         let udf = get_udf_names(selection)?;
                         self.validate_udf_access(udf).await?;
                     }
-                    for subquery in &plan.subquery_desc {
+                    if let Some(subquery) = &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
@@ -1031,7 +1040,7 @@ impl AccessChecker for PrivilegeAccess {
                         let udf = get_udf_names(selection)?;
                         self.validate_udf_access(udf).await?;
                     }
-                    for subquery in &plan.subquery_desc {
+                    if let Some(subquery) = &plan.subquery_desc {
                         match subquery.input_expr.get_udfs() {
                             Ok(udfs) => {
                                 if !udfs.is_empty() {
@@ -1115,7 +1124,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false)
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            Plan::Set(_) | Plan::Unset(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false)
                     .await?;
             }

@@ -30,9 +30,9 @@ use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures_util::stream;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -107,8 +107,16 @@ impl FlightService for DatabendQueryFlightService {
             "request_server_exchange" => {
                 let target = request.get_metadata("x-target")?;
                 let query_id = request.get_metadata("x-query-id")?;
+                let continue_from = request
+                    .get_metadata("x-continue-from")?
+                    .parse::<usize>()
+                    .unwrap();
                 Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance().handle_statistics_exchange(query_id, target)?,
+                    DataExchangeManager::instance().handle_statistics_exchange(
+                        query_id,
+                        target,
+                        continue_from,
+                    )?,
                 )))
             }
             "exchange_fragment" => {
@@ -118,10 +126,17 @@ impl FlightService for DatabendQueryFlightService {
                     .get_metadata("x-fragment-id")?
                     .parse::<usize>()
                     .unwrap();
-
+                let continue_from = request
+                    .get_metadata("x-continue-from")?
+                    .parse::<usize>()
+                    .unwrap();
                 Ok(RawResponse::new(Box::pin(
-                    DataExchangeManager::instance()
-                        .handle_exchange_fragment(query_id, target, fragment)?,
+                    DataExchangeManager::instance().handle_exchange_fragment(
+                        query_id,
+                        target,
+                        fragment,
+                        continue_from,
+                    )?,
                 )))
             }
             exchange_type => Err(Status::unimplemented(format!(

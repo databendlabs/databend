@@ -23,9 +23,9 @@ use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::anyerror::AnyError;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
+use fastrace::func_name;
 use log::debug;
 use log::warn;
-use minitrace::func_name;
 use sled::transaction::ConflictableTransactionError;
 use sled::transaction::TransactionResult;
 use sled::transaction::TransactionalTree;
@@ -232,7 +232,7 @@ impl SledTree {
     }
 
     /// Delete kvs that are in `range`.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn range_remove<KV, R>(
         &self,
         range: R,
@@ -418,7 +418,7 @@ impl SledTree {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn flush_async(&self, flush: bool) -> Result<(), MetaStorageError> {
         debug!("{}: flush: {}", func_name!(), flush);
 

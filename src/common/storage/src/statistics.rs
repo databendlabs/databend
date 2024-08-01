@@ -72,6 +72,16 @@ impl Datum {
         }
     }
 
+    pub fn to_string(&self) -> Result<String> {
+        match self {
+            Datum::Bool(v) => Ok(v.to_string()),
+            Datum::Int(v) => Ok(v.to_string()),
+            Datum::UInt(v) => Ok(v.to_string()),
+            Datum::Float(v) => Ok(v.to_string()),
+            Datum::Bytes(v) => Ok(String::from_utf8_lossy(v).to_string()),
+        }
+    }
+
     pub fn max(a: Option<Datum>, b: Option<Datum>) -> Option<Datum> {
         match (a, b) {
             (Some(x), Some(y)) if Self::type_comparable(&x, &y) => {

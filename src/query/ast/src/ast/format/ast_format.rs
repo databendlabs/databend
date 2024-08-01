@@ -143,6 +143,28 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &'ast Option<Identifier>,
+        database: &'ast Option<Identifier>,
+        dictionary_name: &'ast Identifier,
+    ) {
+        let mut name = String::new();
+        name.push_str("DictionaryIdentifier ");
+        if let Some(catalog) = catalog {
+            name.push_str(&catalog.to_string());
+            name.push('.');
+        }
+        if let Some(database) = database {
+            name.push_str(&database.to_string());
+            name.push('.');
+        }
+        name.push_str(&dictionary_name.to_string());
+        let format_ctx = AstFormatContext::new(name);
+        let node = FormatTreeNode::new(format_ctx);
+        self.children.push(node);
+    }
+
     fn visit_column_ref(
         &mut self,
         _span: Span,
@@ -1027,32 +1049,49 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        is_global: bool,
-        variable: &'ast Identifier,
-        value: &'ast Expr,
+        set_type: SetType,
+        identifiers: &'ast [Identifier],
+        values: &'ast SetValues,
     ) {
-        let mut children = Vec::with_capacity(1);
-        self.visit_expr(value);
-        children.push(self.children.pop().unwrap());
+        let mut children = vec![];
 
-        let name = if is_global {
-            format!("SetGlobal {}", variable)
+        let old_len = self.children.len();
+        match values {
+            SetValues::Expr(exprs) => {
+                for arg in exprs {
+                    self.visit_expr(arg.as_ref());
+                }
+            }
+            SetValues::Query(query) => self.visit_query(query.as_ref()),
+        }
+        children.extend(self.children.drain(old_len..));
+
+        let ids = identifiers.iter().map(|id| id.to_string()).join(",");
+        let name = if set_type == SetType::SettingsGlobal {
+            format!("Set SettingsGlobal {}", ids)
+        } else if set_type == SetType::Variable {
+            format!("Set Variable {}", ids)
         } else {
-            format!("Set {}", variable)
+            format!("Set SettingsSession{}", ids)
         };
+
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
-    fn visit_unset_variable(&mut self, stmt: &'ast UnSetStmt) {
-        let name = if stmt.session_level {
-            format!("UnSet SESSION {}", stmt)
+    fn visit_unset(&mut self, unset_type: SetType, args: &'ast [Identifier]) {
+        let ids = args.iter().map(|id| id.to_string()).join(",");
+        let name = if unset_type == SetType::SettingsSession {
+            format!("UnSet SettingsSession {}", ids)
+        } else if unset_type == SetType::Variable {
+            format!("UnSet Variable {}", ids)
         } else {
-            format!("UnSet {}", stmt)
+            format!("UnSet SettingsGlobal {}", ids)
         };
+
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);
         self.children.push(node);
@@ -1747,6 +1786,93 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
+    }
+
+    fn visit_create_dictionary(&mut self, stmt: &'ast CreateDictionaryStmt) {
+        let mut children = Vec::new();
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
+        children.push(self.children.pop().unwrap());
+        if !stmt.columns.is_empty() {
+            let mut columns_children = Vec::with_capacity(stmt.columns.len());
+            for column in &stmt.columns {
+                self.visit_column_definition(column);
+                columns_children.push(self.children.pop().unwrap());
+            }
+            let columns_name = "Columns".to_string();
+            let columns_format_ctx =
+                AstFormatContext::with_children(columns_name, columns_children.len());
+            let columns_node = FormatTreeNode::with_children(columns_format_ctx, columns_children);
+            children.push(columns_node);
+        }
+        if !stmt.primary_keys.is_empty() {
+            let mut primary_keys_children = Vec::with_capacity(stmt.primary_keys.len());
+            for primary_key in &stmt.primary_keys {
+                self.visit_identifier(primary_key);
+                primary_keys_children.push(self.children.pop().unwrap());
+            }
+            let primary_keys_name = "PrimaryKeys".to_string();
+            let primary_keys_format_ctx =
+                AstFormatContext::with_children(primary_keys_name, primary_keys_children.len());
+            let primary_keys_node =
+                FormatTreeNode::with_children(primary_keys_format_ctx, primary_keys_children);
+            children.push(primary_keys_node);
+        }
+        let mut source_name_children = Vec::with_capacity(1);
+        self.visit_identifier(&stmt.source_name);
+        source_name_children.push(self.children.pop().unwrap());
+        let source_name_name = "SourceName".to_string();
+        let source_name_format_ctx =
+            AstFormatContext::with_children(source_name_name, source_name_children.len());
+        let source_name_node =
+            FormatTreeNode::with_children(source_name_format_ctx, source_name_children);
+        children.push(source_name_node);
+        if !stmt.source_options.is_empty() {
+            let mut source_options_children = Vec::with_capacity(stmt.source_options.len());
+            for (k, v) in stmt.source_options.iter() {
+                let source_option_name = format!("SourceOption {} = {:?}", k, v);
+                let source_option_format_ctx = AstFormatContext::new(source_option_name);
+                let source_option_node = FormatTreeNode::new(source_option_format_ctx);
+                source_options_children.push(source_option_node);
+            }
+            let source_options_format_name = "SourceOptions".to_string();
+            let source_options_format_ctx = AstFormatContext::with_children(
+                source_options_format_name,
+                source_options_children.len(),
+            );
+            let source_options_node =
+                FormatTreeNode::with_children(source_options_format_ctx, source_options_children);
+            children.push(source_options_node);
+        }
+        let comment_name = "Comment".to_string();
+        let comment_format_ctx = AstFormatContext::new(comment_name);
+        let comment_node = FormatTreeNode::new(comment_format_ctx);
+        children.push(comment_node);
+        let name = "CreateDictionary".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_drop_dictionary(&mut self, stmt: &'ast DropDictionaryStmt) {
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
+        let child = self.children.pop().unwrap();
+        let name = "DropDictionary".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_create_dictionary(&mut self, stmt: &'ast ShowCreateDictionaryStmt) {
+        self.visit_dictionary_ref(&stmt.catalog, &stmt.database, &stmt.dictionary_name);
+        let child = self.children.pop().unwrap();
+        let name = "ShowCreateDictionary".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_show_dictionaries(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowDictionaries".to_string());
     }
 
     fn visit_create_view(&mut self, stmt: &'ast CreateViewStmt) {

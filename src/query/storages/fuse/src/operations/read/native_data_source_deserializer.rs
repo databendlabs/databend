@@ -84,11 +84,13 @@ struct ReadPartState {
     /// The number of pages need to be skipped for each iter in `array_iters`.
     array_skip_pages: BTreeMap<usize, usize>,
     /// `read_column_ids` is the columns that are in the block to read.
+    ///
     /// The not read columns may have two cases:
     /// 1. the columns added after `alter table`.
     /// 2. the source columns used to generate virtual columns,
     ///    and all the virtual columns have been generated,
     ///    then the source columns are not needed.
+    ///
     /// These columns need to be filled with their default values.
     read_column_ids: HashSet<ColumnId>,
     /// If the block to read has default values, this flag is used for a short path.

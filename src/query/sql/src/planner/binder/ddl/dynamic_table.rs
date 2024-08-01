@@ -193,7 +193,7 @@ impl Binder {
             field_comments,
             cluster_key,
             as_query: as_query.to_string(),
-            traget_lag: target_lag.clone(),
+            target_lag: target_lag.clone(),
             warehouse_opts: warehouse_opts.clone(),
             refresh_mode: refresh_mode.clone(),
             initialize: initialize.clone(),

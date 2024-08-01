@@ -53,7 +53,7 @@ fn try_convert_share_credential(p: &BTreeMap<String, String>) -> Result<Option<S
             }
         } else {
             Err(ErrorCode::ErrorShareEndpointCredential(format!(
-                "Unsupport Credential type {}",
+                "Unsupported Credential type {}",
                 typ
             )))
         }

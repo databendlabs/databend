@@ -52,7 +52,7 @@ use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
 use databend_common_users::UserApiProvider;
-use minitrace::func_name;
+use fastrace::func_name;
 
 pub struct TenantQuotaTable {
     table_info: TableInfo,

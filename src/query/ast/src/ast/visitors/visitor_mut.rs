@@ -61,6 +61,23 @@ pub trait VisitorMut: Sized {
         walk_identifier_mut(self, table);
     }
 
+    fn visit_dictionary_ref(
+        &mut self,
+        catalog: &mut Option<Identifier>,
+        database: &mut Option<Identifier>,
+        dictionary_name: &mut Identifier,
+    ) {
+        if let Some(catalog) = catalog {
+            walk_identifier_mut(self, catalog);
+        }
+
+        if let Some(database) = database {
+            walk_identifier_mut(self, database);
+        }
+
+        walk_identifier_mut(self, dictionary_name);
+    }
+
     fn visit_column_ref(
         &mut self,
         _span: Span,
@@ -421,15 +438,15 @@ pub trait VisitorMut: Sized {
 
     fn visit_kill(&mut self, _kill_target: &mut KillTarget, _object_id: &mut String) {}
 
-    fn visit_set_variable(
+    fn visit_set(
         &mut self,
-        _is_global: bool,
-        _variable: &mut Identifier,
-        _value: &mut Box<Expr>,
+        _set_type: SetType,
+        _idens: &mut Vec<Identifier>,
+        _values: &mut SetValues,
     ) {
     }
 
-    fn visit_unset_variable(&mut self, _stmt: &mut UnSetStmt) {}
+    fn visit_unset(&mut self, _set_type: SetType, _args: &mut Vec<Identifier>) {}
 
     fn visit_set_role(&mut self, _is_default: bool, _role_name: &mut String) {}
     fn visit_set_secondary_roles(&mut self, _option: &mut SecondaryRolesOption) {}
@@ -566,6 +583,14 @@ pub trait VisitorMut: Sized {
     fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
+
+    fn visit_create_dictionary(&mut self, _stmt: &mut CreateDictionaryStmt) {}
+
+    fn visit_drop_dictionary(&mut self, _stmt: &mut DropDictionaryStmt) {}
+
+    fn visit_show_create_dictionary(&mut self, _stmt: &mut ShowCreateDictionaryStmt) {}
+
+    fn visit_show_dictionaries(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_create_view(&mut self, _stmt: &mut CreateViewStmt) {}
 

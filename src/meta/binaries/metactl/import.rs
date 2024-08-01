@@ -210,7 +210,7 @@ async fn import_v003(
     eprintln!(
         "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
         n,
-        snapshot_id.to_string(),
+        snapshot_id,
         db.path(),
         db.stat()
     );

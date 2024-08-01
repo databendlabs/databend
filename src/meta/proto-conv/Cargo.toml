@@ -19,7 +19,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-protos = { workspace = true }
 enumflags2 = { workspace = true }
-minitrace = { workspace = true }
+fastrace = { workspace = true }
 num = "0.4.0"
 prost = { workspace = true }
 thiserror = { workspace = true }

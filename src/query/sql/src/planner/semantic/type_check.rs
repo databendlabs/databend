@@ -2206,13 +2206,13 @@ impl<'a> TypeChecker<'a> {
         // convert query text to lowercase and remove punctuation characters,
         // so that tantivy query parser can parse the query text as plain text
         // without syntax
-        let formated_query_text: String = query_text
+        let formatted_query_text: String = query_text
             .to_lowercase()
             .chars()
             .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
             .collect();
 
-        self.resolve_search_function(span, column_refs, &formated_query_text)
+        self.resolve_search_function(span, column_refs, &formatted_query_text)
     }
 
     /// Resolve query search function.
@@ -2857,6 +2857,7 @@ impl<'a> TypeChecker<'a> {
             "greatest",
             "least",
             "stream_has_data",
+            "getvariable",
         ]
     }
 
@@ -3208,6 +3209,30 @@ impl<'a> TypeChecker<'a> {
             ("least", args) => {
                 let (array, _) = *self.resolve_function(span, "array", vec![], args).ok()?;
                 Some(self.resolve_scalar_function_call(span, "array_min", vec![], vec![array]))
+            }
+            ("getvariable", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, _) = self.resolve(args[0]).ok()?;
+
+                if let Ok(arg) = ConstantExpr::try_from(scalar) {
+                    if let Scalar::String(var_name) = arg.value {
+                        let var_value = self.ctx.get_variable(&var_name).unwrap_or(Scalar::Null);
+                        let var_value = shrink_scalar(var_value);
+                        let data_type = var_value.as_ref().infer_data_type();
+                        return Some(Ok(Box::new((
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span,
+                                value: var_value,
+                            }),
+                            data_type,
+                        ))));
+                    }
+                }
+                Some(Err(ErrorCode::SemanticError(
+                    "Variable name must be a constant string",
+                )))
             }
             _ => None,
         }

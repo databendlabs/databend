@@ -27,9 +27,9 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -106,7 +106,7 @@ impl PipelinePushingExecutor {
         })
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn start(&mut self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();

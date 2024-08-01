@@ -40,8 +40,8 @@ use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;

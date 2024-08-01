@@ -61,7 +61,20 @@ impl Interpreter for DropTableInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-        let tbl = match self.ctx.get_table(catalog_name, db_name, tbl_name).await {
+
+        let maybe_table = async {
+            let catalog = self
+                .ctx
+                .get_catalog(catalog_name)
+                .await?
+                .disable_table_info_refresh()?;
+
+            catalog
+                .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+                .await
+        };
+
+        let tbl = match maybe_table.await {
             Ok(table) => table,
             Err(error) => {
                 if (error.code() == ErrorCode::UNKNOWN_TABLE

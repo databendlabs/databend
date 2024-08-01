@@ -108,6 +108,10 @@ impl AdminService {
                     "/v1/tenants/:tenant/settings/:key",
                     post(super::v1::settings::set_settings)
                         .delete(super::v1::settings::unset_settings),
+                )
+                .at(
+                    "/v1/tenants/:tenant/user_functions",
+                    get(super::v1::user_functions::user_functions),
                 );
         }
 

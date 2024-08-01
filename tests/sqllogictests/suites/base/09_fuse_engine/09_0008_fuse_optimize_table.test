@@ -504,8 +504,16 @@ alter table t9 recluster
 query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
 ----
-1 2
+1 1
 2 2
+
+query I
+select a from t9
+----
+1
+2
+4
+-5
 
 statement ok
 insert into t9 values(-3)
@@ -517,25 +525,29 @@ query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
 ----
 1 2
-2 3
+2 2
 
 statement ok
-alter table t9 recluster
+insert into t9 values(6)
+
+statement ok
+optimize table t9 compact
 
 query II
 select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
 ----
-1 1
 1 2
+2 3
 
 query I
-select a from t9
+select a from t9 order by a
 ----
+-5
+-3
 1
 2
--3
 4
--5
+6
 
 
 
@@ -564,26 +576,34 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 
 # recluster the unclustered block.
 statement ok
-optimize table t10 compact
+alter table t10 recluster
 
 query F
 select average_depth from clustering_information('db_09_0008','t10')
 ----
 2.75
 
-# recluster
+# compact
 statement ok
 optimize table t10 compact
 
-query I
-select count() from fuse_snapshot('db_09_0008', 't10')
+query TIIFFT
+select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
-7
+(abs(a)) 3 0 2.0 3.0 {"00003":3}
+
+statement ok
+alter table t10 recluster
 
 query F
 select average_depth from clustering_information('db_09_0008','t10')
 ----
 1.0
+
+query I
+select count() from fuse_snapshot('db_09_0008', 't10')
+----
+8
 
 statement ok
 optimize table t10 purge limit 2
@@ -591,7 +611,7 @@ optimize table t10 purge limit 2
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-5
+6
 
 
 

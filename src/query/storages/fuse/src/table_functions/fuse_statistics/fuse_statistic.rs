@@ -27,17 +27,15 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
-use crate::sessions::TableContext;
 use crate::FuseTable;
 
 pub struct FuseStatistic<'a> {
-    pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
 }
 
 impl<'a> FuseStatistic<'a> {
-    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
-        Self { ctx, table }
+    pub fn new(table: &'a FuseTable) -> Self {
+        Self { table }
     }
 
     #[async_backtrace::framed]
@@ -62,18 +60,38 @@ impl<'a> FuseStatistic<'a> {
     ) -> Result<DataBlock> {
         let mut col_names = vec![];
         let mut col_ndvs = vec![];
+        let mut col_his = vec![];
         if let Some(table_statistics) = table_statistics {
             for (i, n) in table_statistics.column_distinct_values().iter() {
                 // Get column name by column id
                 let table_filed = self.table.table_info.meta.schema.field_of_column_id(*i)?;
                 col_names.push(table_filed.name.clone());
                 col_ndvs.push(*n);
+                let his_info = table_statistics.histograms.get(i);
+                if let Some(his_info) = his_info {
+                    let mut his_infos = vec![];
+                    for (i, bucket) in his_info.buckets.iter().enumerate() {
+                        let min = bucket.lower_bound().to_string()?;
+                        let max = bucket.upper_bound().to_string()?;
+                        let ndv = bucket.num_distinct();
+                        let count = bucket.num_values();
+                        let his_info = format!(
+                            "[bucket id: {:?}, min: {:?}, max: {:?}, ndv: {:?}, count: {:?}]",
+                            i, min, max, ndv, count
+                        );
+                        his_infos.push(his_info);
+                    }
+                    col_his.push(his_infos.join(", "));
+                } else {
+                    col_his.push("".to_string());
+                }
             }
         };
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(col_names),
             UInt64Type::from_data(col_ndvs),
+            StringType::from_data(col_his),
         ]))
     }
 
@@ -84,6 +102,7 @@ impl<'a> FuseStatistic<'a> {
                 "distinct_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
+            TableField::new("histogram", TableDataType::String),
         ])
     }
 }

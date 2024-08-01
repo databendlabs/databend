@@ -34,9 +34,9 @@ use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_txn::TxnState;
+use fastrace::prelude::*;
 use log::info;
 use log::warn;
-use minitrace::prelude::*;
 use poem::web::Json;
 use poem::IntoResponse;
 use serde::Deserialize;
@@ -319,7 +319,7 @@ fn try_set_txn(
 
 impl HttpQuery {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -466,7 +466,7 @@ impl HttpQuery {
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root(std::any::type_name::<ExecuteState>(), parent)
-                .with_properties(|| http_ctx.to_minitrace_properties())
+                .with_properties(|| http_ctx.to_fastrace_properties())
         } else {
             Span::noop()
         };
@@ -527,7 +527,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;

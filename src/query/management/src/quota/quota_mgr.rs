@@ -29,7 +29,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use super::quota_api::QuotaApi;
 use crate::serde::check_and_upgrade_to_pb;
