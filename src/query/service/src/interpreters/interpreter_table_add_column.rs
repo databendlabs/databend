@@ -137,7 +137,7 @@ impl Interpreter for AddTableColumnInterpreter {
             }
         }
 
-        // If the column is not deterministic, update to refresh the value with default expr
+        // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {
             self.ctx
                 .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
