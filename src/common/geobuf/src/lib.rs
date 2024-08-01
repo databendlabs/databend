@@ -1,5 +1,6 @@
 #![feature(iter_map_windows)]
 
+mod geo_adapter;
 mod geo_generated;
 
 use anyhow;
@@ -71,6 +72,10 @@ pub struct GeometryBuilder<'fbb> {
     column_y: Vec<f64>,
     point_offsets: Vec<u32>,
     ring_offsets: Vec<u32>,
+
+    kind: Option<geo_buf::ObjectKind>,
+    stack: Vec<Vec<WIPOffset<InnerObject<'fbb>>>>,
+    object: Option<WIPOffset<Object<'fbb>>>,
 }
 
 impl<'fbb> GeometryBuilder<'fbb> {
@@ -81,6 +86,9 @@ impl<'fbb> GeometryBuilder<'fbb> {
             column_y: Vec::new(),
             point_offsets: Vec::new(),
             ring_offsets: Vec::new(),
+            kind: None,
+            stack: Vec::new(),
+            object: None,
         }
     }
 
@@ -88,133 +96,9 @@ impl<'fbb> GeometryBuilder<'fbb> {
         self.column_x.len()
     }
 
-    pub fn push_point(&mut self, point: Coord) {
+    pub fn push_point(&mut self, point: &Coord) {
         self.column_x.push(point.x);
         self.column_y.push(point.y);
-    }
-
-    pub fn push_line(&mut self, line: &[Coord], multi: bool) {
-        if multi && self.point_offsets.is_empty() {
-            self.point_offsets.push(self.point_len() as u32)
-        }
-        for p in line.iter() {
-            self.push_point(*p);
-        }
-        if multi {
-            self.point_offsets.push(self.point_len() as u32)
-        }
-    }
-
-    pub fn push_polygon(&mut self, polygon: &Polygon, multi: bool) {
-        if multi && self.ring_offsets.is_empty() {
-            self.ring_offsets.push(self.point_offsets.len() as u32)
-        }
-        self.push_line(&polygon.exterior().0, true);
-        for line in polygon.interiors().iter() {
-            self.push_line(&line.0, true);
-        }
-        if multi {
-            self.ring_offsets.push(self.point_offsets.len() as u32 - 1)
-        }
-    }
-
-    fn push_inner_object(&mut self, geometry: &geo::Geometry) -> WIPOffset<InnerObject<'fbb>> {
-        match geometry {
-            geo::Geometry::Point(point) => {
-                if self.point_offsets.is_empty() {
-                    self.point_offsets.push(self.point_len() as u32)
-                }
-                self.push_point(point.0);
-                self.point_offsets.push(self.point_len() as u32);
-
-                let point_offsets = self.create_point_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Point.0 as u32,
-                    point_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::MultiPoint(points) => {
-                if self.point_offsets.is_empty() {
-                    self.point_offsets.push(self.point_len() as u32)
-                }
-                for p in points.iter() {
-                    self.push_point(p.0);
-                }
-                self.point_offsets.push(self.point_len() as u32);
-                let point_offsets = self.create_point_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiPoint.0 as u32,
-                    point_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::LineString(line) => {
-                self.push_line(&line.0, true);
-                let point_offsets = self.create_point_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::LineString.0 as u32,
-                    point_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::MultiLineString(lines) => {
-                if self.ring_offsets.is_empty() {
-                    self.ring_offsets.push(self.point_offsets.len() as u32)
-                }
-                for line in lines.iter() {
-                    self.push_line(&line.0, true);
-                }
-                self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
-                let point_offsets = self.create_point_offsets();
-                let ring_offsets = self.create_ring_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiLineString.0 as u32,
-                    point_offsets,
-                    ring_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::Polygon(polygon) => {
-                self.push_polygon(polygon, true);
-                let point_offsets = self.create_point_offsets();
-                let ring_offsets = self.create_ring_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Polygon.0 as u32,
-                    point_offsets,
-                    ring_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::MultiPolygon(polygons) => {
-                for polygon in polygons.0.iter() {
-                    self.push_polygon(polygon, true);
-                }
-                let point_offsets = self.create_point_offsets();
-                let ring_offsets = self.create_ring_offsets();
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiPolygon.0 as u32,
-                    point_offsets,
-                    ring_offsets,
-                    ..Default::default()
-                })
-            }
-            geo::Geometry::GeometryCollection(collection) => {
-                let geometrys = collection
-                    .0
-                    .iter()
-                    .map(|geom| self.push_inner_object(geom))
-                    .collect::<Vec<_>>();
-
-                let collection = Some(self.fbb.create_vector(&geometrys));
-                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Collection.0 as u32,
-                    collection,
-                    ..Default::default()
-                })
-            }
-            _ => unreachable!(),
-        }
     }
 
     fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
@@ -229,52 +113,269 @@ impl<'fbb> GeometryBuilder<'fbb> {
         v
     }
 
-    pub fn build_light(self, kind: geo_buf::ObjectKind) -> Geometry {
-        debug_assert!(
-            [
-                geo_buf::ObjectKind::Point,
-                geo_buf::ObjectKind::MultiPoint,
-                geo_buf::ObjectKind::LineString
-            ]
-            .contains(&kind)
-        );
-        let GeometryBuilder {
-            column_x, column_y, ..
-        } = self;
-        Geometry {
-            buf: vec![kind.0],
-            column_x,
-            column_y,
-        }
-    }
-
-    pub fn build(
-        self,
-        kind: geo_buf::ObjectKind,
-        object: WIPOffset<geo_buf::Object<'fbb>>,
-    ) -> Geometry {
+    pub fn build(self) -> Geometry {
         let GeometryBuilder {
             mut fbb,
             column_x,
             column_y,
+            kind,
+            object,
             ..
         } = self;
-        geo_buf::finish_object_buffer(&mut fbb, object);
 
-        let (mut buf, index) = fbb.collapse();
-        let buf = if index > 0 {
-            let index = index - 1;
-            buf[index] = kind.0;
-            buf[index..].to_vec()
+        match kind.unwrap() {
+            kind @ geo_buf::ObjectKind::Point
+            | kind @ geo_buf::ObjectKind::MultiPoint
+            | kind @ geo_buf::ObjectKind::LineString => Geometry {
+                buf: vec![kind.0],
+                column_x,
+                column_y,
+            },
+            kind => {
+                geo_buf::finish_object_buffer(&mut fbb, object.unwrap());
+
+                let kind = kind.0;
+                let (mut buf, index) = fbb.collapse();
+                let buf = if index > 0 {
+                    let index = index - 1;
+                    buf[index] = kind;
+                    buf[index..].to_vec()
+                } else {
+                    [vec![kind], buf].concat()
+                };
+
+                Geometry {
+                    buf,
+                    column_x,
+                    column_y,
+                }
+            }
+        }
+    }
+}
+
+impl<'fbb> Visitor for GeometryBuilder<'fbb> {
+    fn visit_point(&mut self, point: &Coord, multi: bool) -> Result<(), anyhow::Error> {
+        if self.stack.is_empty() {
+            self.push_point(point);
+            return Ok(());
+        }
+
+        if multi {
+            self.push_point(point);
         } else {
-            [vec![kind.0], buf].concat()
+            if self.point_offsets.is_empty() {
+                self.point_offsets.push(self.point_len() as u32)
+            }
+            self.push_point(point);
+            self.point_offsets.push(self.point_len() as u32);
+        }
+
+        Ok(())
+    }
+
+    fn visit_points_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+        if !self.stack.is_empty() && self.point_offsets.is_empty() {
+            self.point_offsets.push(self.point_len() as u32)
+        }
+        Ok(())
+    }
+
+    fn visit_points_end(&mut self, multi: bool) -> Result<(), anyhow::Error> {
+        if multi || !self.stack.is_empty() {
+            self.point_offsets.push(self.point_len() as u32);
+        }
+        Ok(())
+    }
+
+    fn visit_lines_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+        if self.point_offsets.is_empty() {
+            self.point_offsets.push(self.point_len() as u32)
+        }
+        Ok(())
+    }
+
+    fn visit_lines_end(&mut self) -> Result<(), anyhow::Error> {
+        if !self.stack.is_empty() {
+            self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
+        }
+        Ok(())
+    }
+
+    fn visit_polygon_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+        if self.point_offsets.is_empty() {
+            self.point_offsets.push(self.point_len() as u32)
+        }
+        Ok(())
+    }
+
+    fn visit_polygon_end(&mut self, multi: bool) -> Result<(), anyhow::Error> {
+        if multi || !self.stack.is_empty() {
+            self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
+        }
+        Ok(())
+    }
+
+    fn visit_polygons_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+        if self.ring_offsets.is_empty() {
+            self.ring_offsets.push(self.point_len() as u32)
+        }
+        Ok(())
+    }
+
+    fn visit_polygons_end(&mut self) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
+
+    fn visit_collection_start(&mut self, n: usize) -> Result<(), anyhow::Error> {
+        self.stack.push(Vec::with_capacity(n));
+        Ok(())
+    }
+
+    fn visit_collection_end(&mut self) -> Result<(), anyhow::Error> {
+        Ok(())
+    }
+
+    fn finish(&mut self, kind: geo_buf::ObjectKind) -> Result<(), anyhow::Error> {
+        if self.stack.is_empty() {
+            let object = match kind {
+                geo_buf::ObjectKind::Point => {
+                    let point_offsets = self.create_point_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ..Default::default()
+                    })
+                }
+                geo_buf::ObjectKind::MultiPoint => {
+                    let point_offsets = self.create_point_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ..Default::default()
+                    })
+                }
+                geo_buf::ObjectKind::LineString => {
+                    let point_offsets = self.create_point_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ..Default::default()
+                    })
+                }
+                geo_buf::ObjectKind::MultiLineString => {
+                    let point_offsets = self.create_point_offsets();
+                    let ring_offsets = self.create_ring_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ring_offsets,
+                        ..Default::default()
+                    })
+                }
+                geo_buf::ObjectKind::Polygon => {
+                    let point_offsets = self.create_point_offsets();
+                    let ring_offsets = self.create_ring_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ring_offsets,
+                        ..Default::default()
+                    })
+                }
+                geo_buf::ObjectKind::MultiPolygon => {
+                    let point_offsets = self.create_point_offsets();
+                    let ring_offsets = self.create_ring_offsets();
+                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                        point_offsets,
+                        ring_offsets,
+                        ..Default::default()
+                    })
+                }
+                _ => unreachable!(),
+            };
+            self.kind = Some(kind);
+            self.object = Some(object);
+            return Ok(());
+        }
+
+        if self.stack.len() == 1 && kind == geo_buf::ObjectKind::Collection {
+            let geometrys = self.stack.pop().unwrap();
+            let collection = Some(self.fbb.create_vector(&geometrys));
+            let object = geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
+                collection,
+                ..Default::default()
+            });
+            self.kind = Some(kind);
+            self.object = Some(object);
+            return Ok(());
+        }
+
+        let object = match kind {
+            geo_buf::ObjectKind::Point => {
+                let point_offsets = self.create_point_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::Point.0 as u32,
+                    point_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::MultiPoint => {
+                let point_offsets = self.create_point_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::MultiPoint.0 as u32,
+                    point_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::LineString => {
+                let point_offsets = self.create_point_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::LineString.0 as u32,
+                    point_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::MultiLineString => {
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::MultiLineString.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::Polygon => {
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::Polygon.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::MultiPolygon => {
+                let point_offsets = self.create_point_offsets();
+                let ring_offsets = self.create_ring_offsets();
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::MultiPolygon.0 as u32,
+                    point_offsets,
+                    ring_offsets,
+                    ..Default::default()
+                })
+            }
+            geo_buf::ObjectKind::Collection => {
+                let geometrys = self.stack.pop().unwrap();
+                let collection = Some(self.fbb.create_vector(&geometrys));
+                geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
+                    wkb_type: geo_buf::InnerObjectKind::Collection.0 as u32,
+                    collection,
+                    ..Default::default()
+                })
+            }
+            _ => unreachable!(),
         };
 
-        Geometry {
-            buf,
-            column_x,
-            column_y,
-        }
+        self.stack.last_mut().unwrap().push(object);
+
+        Ok(())
     }
 }
 
@@ -332,74 +433,6 @@ pub struct GeometryRef<'a> {
 }
 
 impl Geometry {
-    pub fn try_from_geo(geo: geo::Geometry<f64>) -> Result<Self, anyhow::Error> {
-        let mut builder = GeometryBuilder::new();
-        match geo {
-            geo::Geometry::Point(point) => {
-                builder.push_point(point.0);
-                Ok(builder.build_light(geo_buf::ObjectKind::Point))
-            }
-            geo::Geometry::MultiPoint(points) => {
-                for p in points.iter() {
-                    builder.push_point(p.0);
-                }
-                Ok(builder.build_light(geo_buf::ObjectKind::MultiPoint))
-            }
-            geo::Geometry::LineString(line) => {
-                builder.push_line(&line.0, false);
-                Ok(builder.build_light(geo_buf::ObjectKind::LineString))
-            }
-            geo::Geometry::MultiLineString(lines) => {
-                for line in lines.0 {
-                    builder.push_line(&line.0, true)
-                }
-                let point_offsets = builder.create_point_offsets();
-                let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
-                    point_offsets,
-                    ..Default::default()
-                });
-                Ok(builder.build(geo_buf::ObjectKind::MultiLineString, object))
-            }
-            geo::Geometry::Polygon(polygon) => {
-                builder.push_polygon(&polygon, false);
-                let point_offsets = builder.create_point_offsets();
-                let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
-                    point_offsets,
-                    ..Default::default()
-                });
-                Ok(builder.build(geo_buf::ObjectKind::Polygon, object))
-            }
-            geo::Geometry::MultiPolygon(polygons) => {
-                for polygon in polygons.iter() {
-                    builder.push_polygon(polygon, true);
-                }
-                let point_offsets = builder.create_point_offsets();
-                let ring_offsets = builder.create_ring_offsets();
-                let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
-                    point_offsets,
-                    ring_offsets,
-                    ..Default::default()
-                });
-                Ok(builder.build(geo_buf::ObjectKind::MultiPolygon, object))
-            }
-            geo::Geometry::GeometryCollection(collection) => {
-                let geometrys = collection
-                    .0
-                    .iter()
-                    .map(|geom| builder.push_inner_object(geom))
-                    .collect::<Vec<_>>();
-
-                let collection = Some(builder.fbb.create_vector(&geometrys));
-                let object = geo_buf::Object::create(&mut builder.fbb, &geo_buf::ObjectArgs {
-                    collection,
-                    ..Default::default()
-                });
-                Ok(builder.build(geo_buf::ObjectKind::Collection, object))
-            }
-            _ => unreachable!(),
-        }
-    }
-
     pub fn try_to_geo(&self) -> Result<geo::Geometry, anyhow::Error> {
         debug_assert!(self.column_x.len() == self.column_y.len());
         match geo_buf::ObjectKind(self.buf[0]) {
@@ -626,7 +659,17 @@ impl<B: AsRef<[u8]>> TryFrom<Wkt<B>> for Geometry {
     type Error = anyhow::Error;
 
     fn try_from(wkt: Wkt<B>) -> Result<Self, Self::Error> {
-        Geometry::try_from_geo(wkt.to_geo()?)
+        Geometry::try_from(wkt.to_geo()?)
+    }
+}
+
+impl TryFrom<geo::Geometry<f64>> for Geometry {
+    type Error = anyhow::Error;
+
+    fn try_from(geo: geo::Geometry<f64>) -> Result<Self, Self::Error> {
+        let mut builder = GeometryBuilder::new();
+        geo.accept(&mut builder)?;
+        Ok(builder.build())
     }
 }
 
@@ -650,6 +693,36 @@ pub struct GeographyRef<'a> {
     column_y: &'a [f64],
 }
 
+trait Visitor {
+    fn visit_point(&mut self, point: &Coord, multi: bool) -> Result<(), anyhow::Error>;
+
+    fn visit_points_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+
+    fn visit_points_end(&mut self, multi: bool) -> Result<(), anyhow::Error>;
+
+    fn visit_lines_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+
+    fn visit_lines_end(&mut self) -> Result<(), anyhow::Error>;
+
+    fn visit_polygon_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+
+    fn visit_polygon_end(&mut self, multi: bool) -> Result<(), anyhow::Error>;
+
+    fn visit_polygons_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+
+    fn visit_polygons_end(&mut self) -> Result<(), anyhow::Error>;
+
+    fn visit_collection_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+
+    fn visit_collection_end(&mut self) -> Result<(), anyhow::Error>;
+
+    fn finish(&mut self, kind: geo_buf::ObjectKind) -> Result<(), anyhow::Error>;
+}
+
+trait Element<V: Visitor> {
+    fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error>;
+}
+
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
@@ -665,15 +738,15 @@ mod tests {
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)"); // geo_buf:33, ewkb:41, points:32
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)"); // geo_buf:49, ewkb:57, points:48
 
-        // geo_buf:133, ewkb:123, points:96
+        // geo_buf:141, ewkb:123, points:96
         run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
-        // geo_buf:237, ewkb:237, points:192
+        // geo_buf:245, ewkb:237, points:192
         run_from_wkt(
             &"MULTILINESTRING((-124.2 42,-120.01 41.99),(-124.2 42,-120.01 41.99,-122.5 42.01,-122.5 42.01),(-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))",
         );
-        // geo_buf:113, ewkb:93, points:80
+        // geo_buf:121, ewkb:93, points:80
         run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
-        // geo_buf:197, ewkb:177, points:160
+        // geo_buf:205, ewkb:177, points:160
         run_from_wkt(
             &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
         );
@@ -683,11 +756,11 @@ mod tests {
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))",
         );
-        // geo_buf:285, ewkb:164, points:128
+        // geo_buf:281, ewkb:164, points:128
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
         );
-        // geo_buf:357, ewkb:194, points:144
+        // geo_buf:353, ewkb:194, points:144
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
         );
