@@ -15,20 +15,22 @@
 use core::fmt;
 use std::collections::BTreeSet;
 use std::collections::BTreeMap;
-use std::ffi::os_str::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
+use std::fmt::Display;
+use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
+use databend_common_meta_types::MetaId;
 
 use crate::share::ShareSpec;
 use crate::tenant::Tenant;
 use crate:: tenant::ToTenant;
 
 use super::database_name_ident::DatabaseNameIdent;
-use super::DatabaseType;
-use super::CatalogInfo;
+use super::CreateOption;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
@@ -290,18 +292,11 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyError;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
-    use crate::schema::DBIdDictionaryName;
     use crate::schema::DatabaseId;
-    use crate::schema::LeastVisibleTime;
-    use crate::schema::LeastVisibleTimeKey;
-    use crate::schema::DictionaryId;
     use crate::schema::DictionaryIdHistoryIdent;
     use crate::schema::DictionaryIdList;
-    use crate::schema::DictionaryIdToName;
-    use crate::schema::DictionaryMeta;
 
     impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
@@ -317,17 +312,5 @@ mod kvapi_key_impl {
             })
         }
     }
-
-    /// "_fd_dictionary_id_list/<db_id>/<dict_name> -> id_list"
-    impl kvapi::Key for DictionaryIdHistoryIdent {
-        const PREFIX: &'static str = "__fd_dictionary_id_list";
-
-        type ValueType = DictionaryIdList;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.database_id).to_string_key())
-        }
-    }
-
 
 }

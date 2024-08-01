@@ -1300,7 +1300,7 @@ pub enum AppError {
     DictionaryAlreadyExists(#[from] DictionaryAlreadyExists),
 
     #[error(transparent)]
-    UnKnownDictionary(#[from] UnKnownDictionary),
+    UnknownDictionary(#[from] UnknownDictionary),
 
     #[error(transparent)]
     DropDictionaryWithDropTime(#[from] DropDictionaryWithDropTime),
@@ -1871,7 +1871,7 @@ impl From<AppError> for ErrorCode {
             AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
             // dictionary
             AppError::DictionaryAlreadyExists(err) => ErrorCode::DictionaryAlreadyExists(err.message()),
-            AppError::UnKnownDictionary(err) => ErrorCode::UnKnownDictionary(err.message()),
+            AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
             AppError::DropDictionaryWithDropTime(err) => ErrorCode::DropDictionaryWithDropTime(err.message()),
             
         }
