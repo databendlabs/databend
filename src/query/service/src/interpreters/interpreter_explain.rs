@@ -38,7 +38,6 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use super::UpdateInterpreter;
 use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
