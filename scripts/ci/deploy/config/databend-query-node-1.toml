@@ -98,15 +98,23 @@ password = "root"
 client_timeout_in_second = 60
 auto_sync_interval = 60
 
-# Storage config.
-[storage]
-# fs | s3 | azblob | obs | oss
-type = "fs"
+# # Storage config.
+# [storage]
+# # fs | s3 | azblob | obs | oss
+# type = "fs"
 
-# Set a local folder to store your data.
-# Comment out this block if you're NOT using local file system as storage.
-[storage.fs]
-data_path = "./.databend/stateless_test_data"
+# # Set a local folder to store your data.
+# # Comment out this block if you're NOT using local file system as storage.
+# [storage.fs]
+# data_path = "./.databend/stateless_test_data"
+[storage]
+type = "s3"
+
+[storage.s3]
+bucket = "databend"
+endpoint_url = "http://0.0.0.0:9001"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
 
 # To use S3-compatible object storage, uncomment this block and set your values.
 # [storage.s3]

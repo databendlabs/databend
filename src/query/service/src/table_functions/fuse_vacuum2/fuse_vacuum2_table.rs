@@ -85,9 +85,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
             ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
         })?;
 
-        self.handler.do_vacuum2(tbl, ctx.clone()).await?;
-
-        let col: Vec<String> = vec!["Ok".to_owned()];
+        let col: Vec<String> = self.handler.do_vacuum2(tbl, ctx.clone()).await?;
 
         Ok(Some(DataBlock::new_from_columns(vec![
             StringType::from_data(col),
