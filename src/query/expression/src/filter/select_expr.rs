@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use crate::filter::like::gerenate_like_pattern;
+use crate::filter::like::generate_like_pattern;
 use crate::filter::like::LikePattern;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
@@ -169,7 +169,7 @@ impl SelectExprBuilder {
                             if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
                                 && let Scalar::String(like_str) = scalar
                             {
-                                let like_pattern = gerenate_like_pattern(like_str.as_bytes());
+                                let like_pattern = generate_like_pattern(like_str.as_bytes());
                                 SelectExprBuildResult::new(SelectExpr::Like((
                                     column.clone(),
                                     like_pattern,

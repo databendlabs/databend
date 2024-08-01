@@ -27,10 +27,9 @@ use futures_util::future::Either;
 use log::warn;
 
 use crate::pipelines::executor::PipelineExecutor;
+use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
-use crate::servers::flight::FlightExchange;
-use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
@@ -43,11 +42,10 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
+        tx: FlightSenderWrapper,
         executor: Arc<PipelineExecutor>,
     ) -> Self {
         let spawner = ctx.clone();
-        let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner.spawn({
@@ -145,14 +143,17 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
+    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSenderWrapper) -> Result<()> {
         let progress = Self::fetch_progress(ctx);
         let data_packet = DataPacket::SerializeProgress(progress);
         tx.send(data_packet).await
     }
 
     #[async_backtrace::framed]
-    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
+    async fn send_copy_status(
+        ctx: &Arc<QueryContext>,
+        flight_sender: &FlightSenderWrapper,
+    ) -> Result<()> {
         let copy_status = ctx.get_copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
@@ -164,7 +165,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_mutation_status(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSender,
+        flight_sender: &FlightSenderWrapper,
     ) -> Result<()> {
         let mutation_status = {
             let binding = ctx.get_mutation_status();
@@ -182,7 +183,7 @@ impl StatisticsSender {
 
     async fn send_profile(
         executor: &PipelineExecutor,
-        tx: &FlightSender,
+        tx: &FlightSenderWrapper,
         collect_metrics: bool,
     ) -> Result<()> {
         let plans_profile = executor.fetch_profiling(collect_metrics);
@@ -198,7 +199,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_scan_cache_metrics(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSender,
+        flight_sender: &FlightSenderWrapper,
     ) -> Result<()> {
         let data_cache_metrics = ctx.get_data_cache_metrics();
         let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
@@ -231,8 +232,4 @@ impl StatisticsSender {
 
         progress_info
     }
-
-    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
-    //     // ctx.get_exchange_manager()
-    // }
 }

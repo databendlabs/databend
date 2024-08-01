@@ -68,7 +68,7 @@ pub struct TransformSerializeBlock {
 
     block_builder: BlockBuilder,
     dal: Operator,
-    table_id: Option<u64>, // Only used in mutli table insert
+    table_id: Option<u64>, // Only used in multi table insert
     kind: MutationKind,
 }
 
