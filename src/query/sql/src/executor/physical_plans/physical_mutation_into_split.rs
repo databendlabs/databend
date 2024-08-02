@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 
-use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::Partitions;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::RemoteExpr;
-use databend_common_meta_app::schema::TableInfo;
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct UpdateSource {
+pub struct MutationSplit {
     pub plan_id: u32,
-    pub parts: Partitions,
-    pub table_info: TableInfo,
-    pub col_indices: Vec<usize>,
-    pub query_row_id_col: bool,
+    pub input: Box<PhysicalPlan>,
+    pub split_index: IndexType,
+}
 
-    pub filters: Option<Filters>,
-    pub update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-    pub computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+impl MutationSplit {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }

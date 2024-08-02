@@ -82,7 +82,8 @@ impl BlockOperator {
             }
 
             BlockOperator::Project { projection } => {
-                let mut result = DataBlock::new(vec![], input.num_rows());
+                let mut result =
+                    DataBlock::new_with_meta(vec![], input.num_rows(), input.take_meta());
                 for index in projection {
                     result.add_column(input.get_by_offset(*index).clone());
                 }

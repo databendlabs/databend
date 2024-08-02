@@ -78,7 +78,7 @@ pub use copy::FileStatus;
 pub use histogram::Histogram;
 pub use histogram::HistogramBucket;
 pub use histogram::DEFAULT_HISTOGRAM_BUCKETS;
-pub use merge::MergeStatus;
+pub use merge::MutationStatus;
 pub use multi_table_insert::MultiTableInsertStatus;
 pub use statistics::Datum;
 pub use statistics::F64;

@@ -206,7 +206,6 @@ impl Binder {
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
-            allow_internal_columns: true,
             window_definitions: DashMap::new(),
         };
 

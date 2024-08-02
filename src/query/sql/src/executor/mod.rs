@@ -24,7 +24,7 @@ mod util;
 pub mod table_read_plan;
 
 pub use physical_plan::PhysicalPlan;
-pub use physical_plan_builder::MergeIntoBuildInfo;
+pub use physical_plan_builder::MutationBuildInfo;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use util::*;

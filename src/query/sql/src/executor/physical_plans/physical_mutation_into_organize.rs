@@ -15,17 +15,17 @@
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::binder::MutationStrategy;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoSplit {
+pub struct MutationOrganize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub split_index: IndexType,
+    pub strategy: MutationStrategy,
 }
 
-impl MergeIntoSplit {
+impl MutationOrganize {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.input.output_schema()
     }
