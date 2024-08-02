@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::broadcast::channel;
@@ -27,7 +26,6 @@ use futures_util::future::select;
 use futures_util::future::Either;
 
 use crate::servers::flight::v1::packets::DataPacket;
-use crate::servers::flight::FlightExchange;
 use crate::servers::flight::RetryableFlightReceiver;
 use crate::sessions::QueryContext;
 

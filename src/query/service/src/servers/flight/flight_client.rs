@@ -29,8 +29,7 @@ use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
-use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -80,9 +79,9 @@ impl FlightClient {
         message: T,
         timeout: u64,
     ) -> Result<Res>
-        where
-            T: Serialize,
-            Res: for<'a> Deserialize<'a>,
+    where
+        T: Serialize,
+        Res: for<'a> Deserialize<'a>,
     {
         let mut body = Vec::with_capacity(512);
         let mut serializer = serde_json::Serializer::new(&mut body);
@@ -237,7 +236,7 @@ impl FlightClient {
                 tx.close();
             }
         }
-            .in_span(Span::enter_with_local_parent(full_name!()));
+        .in_span(Span::enter_with_local_parent(full_name!()));
 
         databend_common_base::runtime::spawn(fut);
 
@@ -349,11 +348,11 @@ impl RetryableFlightReceiver {
                 let Ok(recv) = flight_client
                     .reconnect(connection_info, self.seq.load(Ordering::Acquire))
                     .await
-                    else {
-                        info!("Reconnect attempt {} failed", attempts);
-                        sleep(connection_info.retry_interval).await;
-                        continue;
-                    };
+                else {
+                    info!("Reconnect attempt {} failed", attempts);
+                    sleep(connection_info.retry_interval).await;
+                    continue;
+                };
 
                 let ptr = self
                     .inner
@@ -379,7 +378,7 @@ impl RetryableFlightReceiver {
             let inner = self.inner.load(Ordering::SeqCst);
 
             if !inner.is_null() {
-                (&*inner).close();
+                (*inner).close();
             }
         }
     }
@@ -415,7 +414,8 @@ impl FlightSender {
 }
 
 pub struct SenderPayload {
-    sender: Sender<Result<FlightData, Status>>,
+    pub state: Arc<Mutex<FlightDataAckState>>,
+    pub sender: Option<Sender<Result<FlightData, Status>>>,
 }
 
 pub struct ReceiverPayload {
@@ -434,8 +434,14 @@ pub enum FlightExchange {
 }
 
 impl FlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
-        FlightExchange::Sender(SenderPayload { sender })
+    pub fn create_sender(
+        state: Arc<Mutex<FlightDataAckState>>,
+        sender: Sender<Result<FlightData, Status>>,
+    ) -> FlightExchange {
+        FlightExchange::Sender(SenderPayload {
+            state,
+            sender: Some(sender),
+        })
     }
 
     pub fn create_receiver(
@@ -456,8 +462,8 @@ impl FlightExchange {
         let mut flight_sender = FlightExchange::Dummy;
         std::mem::swap(self, &mut flight_sender);
 
-        if let FlightExchange::Sender(v) = flight_sender {
-            let flight_sender = FlightSender::create(v.sender.clone());
+        if let FlightExchange::Sender(mut v) = flight_sender {
+            let flight_sender = FlightSender::create(v.sender.take().unwrap());
             *self = FlightExchange::MovedSender(v);
             return flight_sender;
         }
@@ -486,26 +492,13 @@ impl FlightExchange {
 }
 
 mod impls {
-    use std::collections::VecDeque;
-    use std::pin::Pin;
-    use std::sync::atomic::AtomicUsize;
-    use std::sync::atomic::Ordering;
     use std::sync::Arc;
-    use std::task::Context;
-    use std::task::Poll;
 
     use async_channel::Receiver;
     use databend_common_arrow::arrow_format::flight::data::FlightData;
     use databend_common_base::base::WatchNotify;
-    use databend_common_exception::ErrorCode;
     use databend_common_exception::Result;
-    use futures::Stream;
-    use futures_util::StreamExt;
-    use log::info;
-    use parking_lot::Mutex;
-    use tonic::Status;
 
-    use crate::servers::flight::flight_client::ConnectionInfo;
     use crate::servers::flight::v1::packets::DataPacket;
 
     pub struct FlightRxInner {
@@ -534,7 +527,7 @@ mod impls {
     }
 }
 
-struct FlightDataAckState {
+pub struct FlightDataAckState {
     seq: AtomicUsize,
     auto_ack_window_size: usize,
 
@@ -544,6 +537,19 @@ struct FlightDataAckState {
 }
 
 impl FlightDataAckState {
+    pub fn create(
+        window_size: usize,
+        receiver: Receiver<Result<FlightData, Status>>,
+    ) -> Arc<Mutex<FlightDataAckState>> {
+        Arc::new(Mutex::new(FlightDataAckState {
+            receiver,
+            may_retry: true,
+            seq: AtomicUsize::new(0),
+            auto_ack_window_size: window_size,
+            confirmation_queue: VecDeque::with_capacity(window_size),
+        }))
+    }
+
     fn ack_message(&mut self, seq: usize) {
         while let Some((id, _)) = self.confirmation_queue.front() {
             if *id <= seq {
@@ -569,7 +575,8 @@ impl FlightDataAckState {
             self.ack_message(message_seq - self.auto_ack_window_size);
         }
 
-        self.confirmation_queue.push_back((message_seq, Err(cause.clone())));
+        self.confirmation_queue
+            .push_back((message_seq, Err(cause.clone())));
         Poll::Ready(Some(Err(cause)))
     }
 
@@ -602,12 +609,21 @@ pub struct FlightDataAckStream {
     state: Arc<Mutex<FlightDataAckState>>,
 }
 
+impl FlightDataAckStream {
+    pub fn create(state: Arc<Mutex<FlightDataAckState>>, _i: usize) -> Result<FlightDataAckStream> {
+        // TODO: reset begin
+        Ok(FlightDataAckStream { state })
+    }
+}
+
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
         let state = self.state.lock();
 
         if state.may_retry {
-            // todo: wait retry connection and add timer
+            GlobalIORuntime::instance().spawn(async move {
+                // todo: wait retry connection and add timer
+            });
         }
     }
 }

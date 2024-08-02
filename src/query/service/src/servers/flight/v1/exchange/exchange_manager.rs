@@ -21,8 +21,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_channel::Receiver;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -41,7 +39,6 @@ use parking_lot::ReentrantMutex;
 use petgraph::prelude::EdgeRef;
 use petgraph::Direction;
 use tokio::task::JoinHandle;
-use tonic::Status;
 
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::MergeExchangeParams;
@@ -57,6 +54,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
+use crate::servers::flight::flight_client::FlightDataAckState;
 use crate::servers::flight::flight_client::FlightDataAckStream;
 use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
@@ -294,7 +292,7 @@ impl DataExchangeManager {
                         None,
                         Some(config.query.to_rpc_client_tls_config()),
                     )
-                        .await?,
+                    .await?,
                 ))),
                 false => Ok(FlightClient::new(FlightServiceClient::new(
                     ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -375,9 +373,13 @@ impl DataExchangeManager {
         match queries_coordinator.entry(id) {
             Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target, continue_from),
             Entry::Vacant(v) => match continue_from == 0 {
-                true => v.insert(QueryCoordinator::create()).add_statistics_exchange(target, 0),
-                false => Err(ErrorCode::Timeout("Reconnection timeout, the state has been cleared.")),
-            }
+                true => v
+                    .insert(QueryCoordinator::create())
+                    .add_statistics_exchange(target, 0),
+                false => Err(ErrorCode::Timeout(
+                    "Reconnection timeout, the state has been cleared.",
+                )),
+            },
         }
     }
 
@@ -393,11 +395,18 @@ impl DataExchangeManager {
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(target, fragment, continue_from),
-            Entry::Vacant(v) => match continue_from == 0 {
-                true => v.insert(QueryCoordinator::create()).add_fragment_exchange(target, fragment, 0),
-                false => Err(ErrorCode::Timeout("Reconnection timeout, the state has been cleared.")),
+            Entry::Occupied(mut v) => {
+                v.get_mut()
+                    .add_fragment_exchange(target, fragment, continue_from)
             }
+            Entry::Vacant(v) => match continue_from == 0 {
+                true => v
+                    .insert(QueryCoordinator::create())
+                    .add_fragment_exchange(target, fragment, 0),
+                false => Err(ErrorCode::Timeout(
+                    "Reconnection timeout, the state has been cleared.",
+                )),
+            },
         }
     }
 
@@ -574,14 +583,8 @@ struct QueryInfo {
     query_executor: Option<Arc<PipelineCompleteExecutor>>,
 }
 
-static FLIGHT_SENDER: u8 = 1;
-static FLIGHT_RECEIVER: u8 = 2;
-
-static FRAGMENT_SENDER: u8 = 1;
-static STATISTICS_SENDER: u8 = 2;
-
 #[derive(Hash, Eq, PartialEq)]
-struct FragmentExchangeIdentifier {
+pub struct FragmentExchangeIdentifier {
     target: String,
     fragment: usize,
 }
@@ -643,7 +646,7 @@ impl QueryCoordinator {
     }
 
     pub fn assert_leak_fragment_exchanges(&self) {
-        for (identifier, exchange) in &mut self.exchanges {
+        for (identifier, exchange) in &self.exchanges {
             if !matches!(identifier, ExchangeIdentifier::Statistics(_)) {
                 assert!(matches!(
                     exchange,
@@ -653,28 +656,29 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn add_statistics_exchange(&mut self, target: String, begin: usize) -> Result<FlightDataAckStream> {
+    pub fn add_statistics_exchange(
+        &mut self,
+        target: String,
+        begin: usize,
+    ) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::Statistics(target);
 
         match self.exchanges.entry(identifier) {
             Entry::Vacant(v) => {
-                // v.insert(FlightExchange::Sender())
-                unimplemented!()
+                let state = FlightDataAckState::create(10, rx);
+                v.insert(FlightExchange::create_sender(state.clone(), tx));
+                FlightDataAckStream::create(state, begin)
             }
             Entry::Occupied(mut v) => match v.get_mut() {
-                FlightExchange::MovedSender(_) => unimplemented!(),
-                _ => Err(ErrorCode::Internal("statistics exchanges can only have one")),
-            }
+                FlightExchange::MovedSender(v) => {
+                    FlightDataAckStream::create(v.state.clone(), begin)
+                }
+                _ => Err(ErrorCode::Internal(
+                    "statistics exchanges can only have one",
+                )),
+            },
         }
-
-        // let flight_exchange = FlightExchange::create_sender(tx);
-        // match self.exchanges.insert(identifier, flight_exchange) {
-        //     None => Ok(rx),
-        //     Some(_) => Err(ErrorCode::Internal(
-        //         "statistics exchanges can only have one",
-        //     )),
-        // }
     }
 
     pub fn add_statistics_exchanges(
@@ -693,29 +697,34 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn add_fragment_exchange(&mut self, target: String, fragment: usize, begin: usize) -> Result<FlightDataAckStream> {
+    pub fn add_fragment_exchange(
+        &mut self,
+        target: String,
+        fragment: usize,
+        begin: usize,
+    ) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
 
         match self.exchanges.entry(identifier) {
             Entry::Vacant(v) => {
-                // v.insert(FlightExchange::Sender())
-                unimplemented!()
+                let state = FlightDataAckState::create(10, rx);
+                v.insert(FlightExchange::create_sender(state.clone(), tx));
+                FlightDataAckStream::create(state, begin)
             }
             Entry::Occupied(mut v) => match v.get_mut() {
-                FlightExchange::MovedSender(_) => unimplemented!(),
+                FlightExchange::MovedSender(v) => {
+                    FlightDataAckStream::create(v.state.clone(), begin)
+                }
                 _ => Err(ErrorCode::Internal("fragment exchange can only have one")),
-            }
+            },
         }
-
-        // let (tx, rx) = async_channel::bounded(8);
-        // let exchange = FlightExchange::create_sender(tx);
-        // let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
-        // self.exchanges.insert(identifier, exchange);
-        // Ok(rx)
     }
 
-    pub fn add_fragment_exchanges(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
+    pub fn add_fragment_exchanges(
+        &mut self,
+        exchanges: HashMap<(String, usize), FlightExchange>,
+    ) -> Result<()> {
         for ((source, fragment), exchange) in exchanges.into_iter() {
             let identifier = ExchangeIdentifier::fragment_receiver(source, fragment);
 
@@ -963,7 +972,7 @@ impl QueryCoordinator {
         let query_ctx = info_mut.query_ctx.clone();
 
         let ctx = query_ctx.clone();
-        let statistics_senders = self.take_statistics_senders();
+        let mut statistics_senders = self.take_statistics_senders();
 
         let Some(statistics_sender) = statistics_senders.pop() else {
             return Err(ErrorCode::Internal(
