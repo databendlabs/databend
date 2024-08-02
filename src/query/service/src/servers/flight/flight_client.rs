@@ -80,9 +80,9 @@ impl FlightClient {
         message: T,
         timeout: u64,
     ) -> Result<Res>
-    where
-        T: Serialize,
-        Res: for<'a> Deserialize<'a>,
+        where
+            T: Serialize,
+            Res: for<'a> Deserialize<'a>,
     {
         let mut body = Vec::with_capacity(512);
         let mut serializer = serde_json::Serializer::new(&mut body);
@@ -237,7 +237,7 @@ impl FlightClient {
                 tx.close();
             }
         }
-        .in_span(Span::enter_with_local_parent(full_name!()));
+            .in_span(Span::enter_with_local_parent(full_name!()));
 
         databend_common_base::runtime::spawn(fut);
 
@@ -349,11 +349,11 @@ impl RetryableFlightReceiver {
                 let Ok(recv) = flight_client
                     .reconnect(connection_info, self.seq.load(Ordering::Acquire))
                     .await
-                else {
-                    info!("Reconnect attempt {} failed", attempts);
-                    sleep(connection_info.retry_interval).await;
-                    continue;
-                };
+                    else {
+                        info!("Reconnect attempt {} failed", attempts);
+                        sleep(connection_info.retry_interval).await;
+                        continue;
+                    };
 
                 let ptr = self
                     .inner
@@ -535,24 +535,56 @@ mod impls {
 }
 
 struct FlightDataAckState {
+    seq: AtomicUsize,
+    auto_ack_window_size: usize,
+
     receiver: Receiver<Result<FlightData, Status>>,
     // TODO: ack in exchange stream
-    confirmation_queue: VecDeque<Result<FlightData, Status>>,
+    confirmation_queue: VecDeque<(usize, Result<FlightData, Status>)>,
     ack_pos: usize,
 }
 
 impl FlightDataAckState {
+    fn ack_message(&mut self, seq: usize) {
+        while let Some((id, _)) = self.confirmation_queue.front() {
+            if *id <= seq {
+                self.confirmation_queue.pop_front();
+            }
+        }
+    }
+
     fn end_of_stream(&mut self) -> Poll<Option<Result<FlightData, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+        self.ack_message(message_seq);
         Poll::Ready(None)
     }
 
     fn error_of_stream(&mut self, cause: Status) -> Poll<Option<Result<FlightData, Status>>> {
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
+        }
+
+        self.confirmation_queue.push_back((message_seq, Err(cause.clone())));
         Poll::Ready(Some(Err(cause)))
     }
 
     fn message(&mut self, data: FlightData) -> Poll<Option<Result<FlightData, Status>>> {
-        // TODO: auto commit
-        unimplemented!()
+        let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
+
+        let (data, duplicate) = duplicate_flight_data(data);
+
+        // Automatically acknowledge messages outside the ACK window.
+        // A better approach is for the client to send back an ACK.
+        if message_seq >= self.auto_ack_window_size {
+            self.ack_message(message_seq - self.auto_ack_window_size);
+        }
+
+        self.confirmation_queue.push_back((message_seq, Ok(data)));
+        Poll::Ready(Some(Ok(duplicate)))
     }
 
     pub fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<FlightData, Status>>> {
@@ -571,7 +603,7 @@ pub struct FlightDataAckStream {
 
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
-        // todo:
+        // todo: wait retry connection
     }
 }
 
@@ -579,7 +611,10 @@ impl Stream for FlightDataAckStream {
     type Item = Result<FlightData, Status>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut guard = self.state.lock();
-        guard.poll_next(cx)
+        self.state.lock().poll_next(cx)
     }
+}
+
+fn duplicate_flight_data(flight_data: FlightData) -> (FlightData, FlightData) {
+    (flight_data.clone(), flight_data)
 }

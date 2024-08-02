@@ -117,10 +117,6 @@ impl Processor for ExchangeSourceReader {
         if self.output_data.is_empty() {
             let mut dictionaries = Vec::new();
             while let Some(output_data) = self.flight_receiver.recv().await? {
-                if matches!(&output_data, DataPacket::RetryConnectSuccess) {
-                    // retry connect only re-establish connection, need to continue call recv
-                    continue;
-                }
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
                     dictionaries.push(output_data);
                     self.output_data = dictionaries;

@@ -44,8 +44,7 @@ use crate::servers::flight::v1::actions::flight_actions;
 use crate::servers::flight::v1::actions::FlightActions;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 
-pub type FlightStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
+pub type FlightStream<T> = Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct DatabendQueryFlightService {
     actions: FlightActions,
