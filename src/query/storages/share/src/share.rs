@@ -15,31 +15,35 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareDatabaseSpec;
-use databend_common_meta_app::share::ShareObject;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTableSpec;
 use log::error;
 use opendal::Operator;
 
+const SHARE_CONFIG_VERSION: u16 = 2;
 const SHARE_CONFIG_PREFIX: &str = "_share_config";
 
+fn share_dir_prefix() -> String {
+    format!("{}/V{}", SHARE_CONFIG_PREFIX, SHARE_CONFIG_VERSION)
+}
+
 pub fn get_share_dir(tenant: &str, share_name: &str) -> String {
-    format!("{}/{}/{}", SHARE_CONFIG_PREFIX, tenant, share_name)
+    format!("{}/{}/{}", share_dir_prefix(), tenant, share_name)
 }
 
 pub fn get_share_database_dir(tenant: &str, share_name: &str, db_id: u64) -> String {
-    format!(
-        "{}/{}/{}/{}",
-        SHARE_CONFIG_PREFIX, tenant, share_name, db_id
-    )
+    format!("{}/{}/{}/{}", share_dir_prefix(), tenant, share_name, db_id)
 }
 
 pub fn get_share_spec_location(tenant: &str, share_name: &str) -> String {
     format!(
         "{}/{}/{}/share_specs.json",
-        SHARE_CONFIG_PREFIX, tenant, share_name
+        share_dir_prefix(),
+        tenant,
+        share_name
     )
 }
 
@@ -51,7 +55,11 @@ pub fn share_table_info_location(
 ) -> String {
     format!(
         "{}/{}/{}/{}/{}_table_info.json",
-        SHARE_CONFIG_PREFIX, tenant, share_name, db_id, table_id
+        share_dir_prefix(),
+        tenant,
+        share_name,
+        db_id,
+        table_id
     )
 }
 
@@ -92,16 +100,16 @@ pub async fn remove_share_table_object(
     tenant: &str,
     operator: Operator,
     share_name: &str,
-    revoke_share_object: &[ShareObject],
+    revoke_share_object: &[ReplyShareObject],
 ) -> Result<()> {
     for share_object in revoke_share_object {
         match share_object {
-            ShareObject::Table((db_id, table_id, _share_table)) => {
+            ReplyShareObject::Table(db_id, table_id) => {
                 let location = share_table_info_location(tenant, share_name, *db_id, *table_id);
 
                 operator.delete(&location).await?;
             }
-            ShareObject::Db(db_id) => {
+            ReplyShareObject::Database(db_id) => {
                 let dir = get_share_database_dir(tenant, share_name, *db_id);
                 operator.remove_all(&dir).await?;
             }
@@ -165,10 +173,8 @@ pub async fn remove_share_db_dir(
 }
 
 mod ext {
-    use databend_common_meta_app::share::ShareGrantObjectPrivilege;
     use databend_storages_common_table_meta::table::database_storage_prefix;
     use databend_storages_common_table_meta::table::table_storage_prefix;
-    use enumflags2::BitFlags;
 
     use super::*;
 
@@ -186,12 +192,13 @@ mod ext {
         name: String,
         share_id: u64,
         version: u64,
-        database: Option<WithLocation<ShareDatabaseSpec>>,
+        use_database: Option<WithLocation<ShareDatabaseSpec>>,
+        reference_database: Vec<WithLocation<ShareDatabaseSpec>>,
         tables: Vec<WithLocation<ShareTableSpec>>,
+        reference_tables: Vec<WithLocation<ShareTableSpec>>,
         tenants: Vec<String>,
-        db_privileges: Option<BitFlags<ShareGrantObjectPrivilege>>,
         comment: Option<String>,
-        share_on: Option<DateTime<Utc>>,
+        create_on: DateTime<Utc>,
     }
 
     impl ShareSpecExt {
@@ -200,10 +207,18 @@ mod ext {
                 name: spec.name,
                 share_id: spec.share_id,
                 version: spec.version,
-                database: spec.database.map(|db_spec| WithLocation {
+                use_database: spec.use_database.map(|db_spec| WithLocation {
                     location: shared_database_prefix(operator, db_spec.id),
                     t: db_spec,
                 }),
+                reference_database: spec
+                    .reference_database
+                    .into_iter()
+                    .map(|db_spec| WithLocation {
+                        location: shared_database_prefix(operator, db_spec.id),
+                        t: db_spec,
+                    })
+                    .collect(),
                 tables: spec
                     .tables
                     .into_iter()
@@ -216,10 +231,21 @@ mod ext {
                         t: tbl_spec,
                     })
                     .collect(),
+                reference_tables: spec
+                    .reference_tables
+                    .into_iter()
+                    .map(|tbl_spec| WithLocation {
+                        location: shared_table_prefix(
+                            operator,
+                            tbl_spec.database_id,
+                            tbl_spec.table_id,
+                        ),
+                        t: tbl_spec,
+                    })
+                    .collect(),
                 tenants: spec.tenants,
-                db_privileges: spec.db_privileges,
                 comment: spec.comment.clone(),
-                share_on: spec.share_on,
+                create_on: spec.create_on,
             }
         }
     }
