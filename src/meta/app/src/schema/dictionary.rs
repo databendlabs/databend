@@ -314,11 +314,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl<R, N> kvapi::Key for DictionaryNameIdent
-    where 
-        R: TenantResource,
-        N: KeyCodec,
-        N: Debug,
+    impl<R: TenantResource, N: KeyCodec + Debug> kvapi::Key for DictionaryNameIdent
     {
         const PREFIX: &'static str = R::PREFIX;
         type ValueType = R::ValueType;
