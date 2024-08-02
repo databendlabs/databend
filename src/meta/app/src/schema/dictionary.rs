@@ -127,8 +127,8 @@ impl DictionaryNameIdent {
     pub fn new_generic(tenant: impl ToTenant, dictionary_name: impl ToString, db_name: impl ToString) -> Self {
         Self {
             tenant: tenant.to_tenant(),
-            dictionary_name,
-            db_name,
+            dictionary_name: dictionary_name.to_string(),
+            db_name: db_name.to_string(),
         }
     }
 }
