@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod default;
-pub mod share;
-pub use databend_common_catalog::catalog::Catalog;
-pub use databend_common_storages_hive as hive;
-pub use default::table_id_ranges::*;
-pub use default::table_memory_meta::InMemoryMetas;
-pub use default::DatabaseCatalog;
-pub use share::ShareCatalog;
-pub use share::ShareCatalogCreator;
+mod share_catalog;
+
+pub use share_catalog::ShareCatalog;
+pub use share_catalog::ShareCatalogCreator;
