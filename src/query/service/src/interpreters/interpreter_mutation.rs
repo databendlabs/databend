@@ -286,8 +286,8 @@ impl MutationInterpreter {
             if mutation.mutation_type == MutationType::Delete && filter_result {
                 // The delete condition is always true, truncate the table.
                 truncate_table = true;
-            } else if mutation.mutation_type == MutationType::Update && !filter_result {
-                // The update condition is always false, do nothing.
+            } else if !filter_result {
+                // The update/delete condition is always false, do nothing.
                 return Ok(Some(build_res));
             }
         }
