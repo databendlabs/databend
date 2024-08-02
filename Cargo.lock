@@ -3363,7 +3363,6 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "hyper 0.14.28",
  "opendal",
  "parquet",
  "paste",
