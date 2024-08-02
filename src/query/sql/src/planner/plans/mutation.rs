@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::TableAlias;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -25,10 +24,10 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FieldIndex;
-use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::LockGuard;
 
-use crate::binder::MergeIntoType;
+use crate::binder::MutationStrategy;
+use crate::binder::MutationType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::BindContext;
@@ -53,20 +52,20 @@ pub struct MatchedEvaluator {
 }
 
 #[derive(Clone)]
-pub struct MergeInto {
-    pub catalog: String,
-    pub database: String,
-    pub table: String,
-    pub target_alias: Option<TableAlias>,
-    pub table_id: MetaId,
+pub struct Mutation {
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+    pub table_name_alias: Option<String>,
     pub bind_context: Box<BindContext>,
-    pub columns_set: Box<HashSet<IndexType>>,
-    pub meta_data: MetadataRef,
+    pub required_columns: Box<HashSet<IndexType>>,
+    pub metadata: MetadataRef,
+    pub mutation_type: MutationType,
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_index: usize,
     pub field_index_map: HashMap<FieldIndex, String>,
-    pub merge_type: MergeIntoType,
+    pub strategy: MutationStrategy,
     pub distributed: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
@@ -78,17 +77,20 @@ pub struct MergeInto {
     // `update *`` or `update set t1.a = t2.a ...`, the right expr on the `=` must be only a column,
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
-    pub lazy_columns: HashSet<usize>,
     pub lock_guard: Option<Arc<LockGuard>>,
+
+    // MutationStrategy::Direct related variables.
+    pub predicate_column_index: Option<usize>,
+    pub truncate_table: bool,
+    pub direct_filter: Option<ScalarExpr>,
 }
 
-impl std::fmt::Debug for MergeInto {
+impl std::fmt::Debug for Mutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.debug_struct("Merge Into")
-            .field("catalog", &self.catalog)
-            .field("database", &self.database)
-            .field("table", &self.table)
-            .field("table_id", &self.table_id)
+            .field("catalog", &self.catalog_name)
+            .field("database", &self.database_name)
+            .field("table", &self.table_name)
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
@@ -104,12 +106,12 @@ pub const INSERT_NAME: &str = "number of rows inserted";
 pub const UPDATE_NAME: &str = "number of rows updated";
 pub const DELETE_NAME: &str = "number of rows deleted";
 
-impl MergeInto {
-    // the order of output should be (insert, update, delete),this is
+impl Mutation {
+    // The order of output should be (insert, update, delete), this is
     // consistent with snowflake.
-    fn merge_into_mutations(&self) -> (bool, bool, bool) {
-        let insert = matches!(self.merge_type, MergeIntoType::FullOperation)
-            || matches!(self.merge_type, MergeIntoType::InsertOnly);
+    fn mutation_operations(&self) -> (bool, bool, bool) {
+        let insert = matches!(self.strategy, MutationStrategy::MixedMatched)
+            || matches!(self.strategy, MutationStrategy::NotMatchedOnly);
         let mut update = false;
         let mut delete = false;
         for evaluator in &self.matched_evaluators {
@@ -122,26 +124,27 @@ impl MergeInto {
         (insert, update, delete)
     }
 
-    fn merge_into_table_schema(&self) -> Result<DataSchemaRef> {
-        let (insert, update, delete) = self.merge_into_mutations();
+    fn mutation_table_schema(&self) -> Result<DataSchemaRef> {
+        let (insert, update, delete) = self.mutation_operations();
 
         let fields = [
             (
-                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(INSERT_NAME, DataType::Number(NumberDataType::UInt64)),
                 insert,
             ),
             (
-                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(UPDATE_NAME, DataType::Number(NumberDataType::UInt64)),
                 update,
             ),
             (
-                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::Int32)),
+                DataField::new(DELETE_NAME, DataType::Number(NumberDataType::UInt64)),
                 delete,
             ),
         ];
 
-        // Filter and collect the fields to include in the schema.
-        // Only fields with a corresponding true value in the mutation states are included.
+        // Filter and collect the fields to include in the schema, only
+        // fields with a corresponding true value in the mutation states
+        // are included.
         let schema_fields: Vec<DataField> = fields
             .iter()
             .filter_map(
@@ -151,10 +154,11 @@ impl MergeInto {
             )
             .collect();
 
-        // Check if any fields are included. If none, return an error. Otherwise, return the schema.
+        // Check if any fields are included, if none, return an error,
+        // otherwise, return the schema.
         if schema_fields.is_empty() {
             Err(ErrorCode::BadArguments(
-                "at least one matched or unmatched clause for merge into",
+                "At least one matched or unmatched clause for merge into",
             ))
         } else {
             Ok(DataSchemaRefExt::create(schema_fields))
@@ -162,18 +166,17 @@ impl MergeInto {
     }
 
     pub fn schema(&self) -> DataSchemaRef {
-        self.merge_into_table_schema().unwrap()
+        self.mutation_table_schema().unwrap()
     }
 }
 
-impl Eq for MergeInto {}
+impl Eq for Mutation {}
 
-impl PartialEq for MergeInto {
+impl PartialEq for Mutation {
     fn eq(&self, other: &Self) -> bool {
-        self.catalog == other.catalog
-            && self.database == other.database
-            && self.table == other.table
-            && self.table_id == other.table_id
+        self.catalog_name == other.catalog_name
+            && self.database_name == other.database_name
+            && self.table_name == other.table_name
             && self.matched_evaluators == other.matched_evaluators
             && self.unmatched_evaluators == other.unmatched_evaluators
             && self.distributed == other.distributed
@@ -181,13 +184,13 @@ impl PartialEq for MergeInto {
     }
 }
 
-impl std::hash::Hash for MergeInto {
+impl std::hash::Hash for Mutation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.row_id_index.hash(state);
     }
 }
 
-impl Operator for MergeInto {
+impl Operator for Mutation {
     fn rel_op(&self) -> RelOp {
         RelOp::MergeInto
     }

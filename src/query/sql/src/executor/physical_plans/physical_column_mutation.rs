@@ -12,21 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
+use std::collections::HashMap;
 
-use crate::binder::MergeIntoType;
+use databend_common_expression::RemoteExpr;
+use databend_common_meta_app::schema::TableInfo;
+
+use crate::binder::MutationType;
 use crate::executor::physical_plan::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoOrganize {
+pub struct ColumnMutation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
-    pub merge_type: MergeIntoType,
-}
-
-impl MergeIntoOrganize {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
-    }
+    pub table_info: TableInfo,
+    pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub mutation_type: MutationType,
+    pub field_id_to_schema_index: HashMap<usize, usize>,
+    pub input_num_columns: usize,
+    pub has_filter_column: bool,
 }

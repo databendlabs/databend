@@ -14,27 +14,24 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipe;
-use databend_common_sql::executor::physical_plans::MergeIntoSplit;
-use databend_common_storages_fuse::operations::MergeIntoSplitProcessor;
+use databend_common_sql::executor::physical_plans::MutationSplit;
+use databend_common_storages_fuse::operations::MutationSplitProcessor;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_merge_into_split(
-        &mut self,
-        merge_into_split: &MergeIntoSplit,
-    ) -> Result<()> {
+    pub(crate) fn build_mutation_split(&mut self, merge_into_split: &MutationSplit) -> Result<()> {
         self.build_pipeline(&merge_into_split.input)?;
         self.main_pipeline
             .try_resize(self.ctx.get_settings().get_max_threads()? as usize)?;
 
-        // The MergeIntoType is FullOperation, use row_id_idx to split
+        // The MutationStrategy is FullOperation, use row_id_idx to split
         let mut items = Vec::with_capacity(self.main_pipeline.output_len());
         let output_len = self.main_pipeline.output_len();
         for _ in 0..output_len {
             let merge_into_split_processor =
-                MergeIntoSplitProcessor::create(merge_into_split.split_index as u32)?;
+                MutationSplitProcessor::create(merge_into_split.split_index as u32)?;
             items.push(merge_into_split_processor.into_pipe_item());
         }
         self.main_pipeline

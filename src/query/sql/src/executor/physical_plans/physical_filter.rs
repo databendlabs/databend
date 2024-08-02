@@ -58,17 +58,21 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         filter: &crate::plans::Filter,
-        required: ColumnSet,
+        mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
-        let used = filter.predicates.iter().fold(required, |acc, v| {
+        let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
             acc.union(&v.used_columns()).cloned().collect()
         });
 
         // 2. Build physical plan.
         let input = Box::new(self.build(s_expr.child(0)?, used).await?);
+        required = required
+            .union(self.metadata.read().get_retained_column())
+            .cloned()
+            .collect();
+        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         let input_schema = input.output_schema()?;
         let mut projections = ColumnSet::new();
         for column in column_projections.iter() {

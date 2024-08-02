@@ -134,8 +134,8 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -480,6 +480,22 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
+        todo!()
+    }
+
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
+        todo!()
+    }
+
+    fn set_lazy_mutation_delete(&self, _lazy: bool) {
+        todo!()
+    }
+
+    fn get_lazy_mutation_delete(&self) -> bool {
+        todo!()
+    }
+
     fn add_partitions_sha(&self, _sha: String) {
         todo!()
     }
@@ -756,11 +772,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_merge_status(&self, _merge_status: MergeStatus) {
+    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
         todo!()
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
         todo!()
     }
 

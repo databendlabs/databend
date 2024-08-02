@@ -22,7 +22,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
 
@@ -107,8 +107,8 @@ impl StatisticsSender {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
                 }
 
-                if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
-                    warn!("MergeStatus send has error, cause: {:?}.", error);
+                if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
+                    warn!("MutationStatus send has error, cause: {:?}.", error);
                 }
 
                 if let Err(error) = Self::send_progress(&ctx, &tx).await {
@@ -162,20 +162,20 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_merge_status(
+    async fn send_mutation_status(
         ctx: &Arc<QueryContext>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
-        let merge_status = {
-            let binding = ctx.get_merge_status();
+        let mutation_status = {
+            let binding = ctx.get_mutation_status();
             let status = binding.read();
-            MergeStatus {
+            MutationStatus {
                 insert_rows: status.insert_rows,
                 deleted_rows: status.deleted_rows,
                 update_rows: status.update_rows,
             }
         };
-        let data_packet = DataPacket::MergeStatus(merge_status);
+        let data_packet = DataPacket::MutationStatus(mutation_status);
         flight_sender.send(data_packet).await?;
         Ok(())
     }

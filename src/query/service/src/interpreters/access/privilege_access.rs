@@ -31,9 +31,10 @@ use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
+use databend_common_sql::binder::MutationType;
 use databend_common_sql::optimizer::get_udf_names;
 use databend_common_sql::plans::InsertInputSource;
-use databend_common_sql::plans::MergeInto;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
 use databend_common_sql::plans::Recluster;
@@ -1031,8 +1032,8 @@ impl AccessChecker for PrivilegeAccess {
                 }
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
-            Plan::MergeInto { s_expr, .. } => {
-                let plan: MergeInto = s_expr.plan().clone().try_into()?;
+            Plan::DataMutation { s_expr, .. } => {
+                let plan: Mutation = s_expr.plan().clone().try_into()?;
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {
@@ -1070,56 +1071,14 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
-                let privileges = vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete];
+                let privileges = match plan.mutation_type {
+                    MutationType::Merge => vec![UserPrivilegeType::Insert, UserPrivilegeType::Update, UserPrivilegeType::Delete],
+                    MutationType::Update => vec![UserPrivilegeType::Update],
+                    MutationType::Delete => vec![UserPrivilegeType::Delete],
+                };
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog, &plan.database, &plan.table, privilege, false, false).await?;
+                    self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;
                 }
-            }
-            Plan::Delete(plan) => {
-                if enable_experimental_rbac_check {
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    if let Some(subquery) = &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Unable to access necessary user-defined functions for executing the DELETE operation"));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, UserPrivilegeType::Delete, false, false).await?
-            }
-            Plan::Update(plan) => {
-                if enable_experimental_rbac_check {
-                    for scalar in plan.update_list.values() {
-                        let udf = get_udf_names(scalar)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    if let Some(selection) = &plan.selection {
-                        let udf = get_udf_names(selection)?;
-                        self.validate_udf_access(udf).await?;
-                    }
-                    if let Some(subquery) = &plan.subquery_desc {
-                        match subquery.input_expr.get_udfs() {
-                            Ok(udfs) => {
-                                if !udfs.is_empty() {
-                                    self.validate_udf_access(udfs).await?;
-                                }
-                            }
-                            Err(err) => {
-                                return Err(err.add_message("Failed to retrieve necessary user-defined functions for executing the UPDATE operation."));
-                            }
-                        }
-                    }
-                }
-                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Update, false, false).await?;
             }
             Plan::CreateView(plan) => {
                 let mut planner = Planner::new(self.ctx.clone());

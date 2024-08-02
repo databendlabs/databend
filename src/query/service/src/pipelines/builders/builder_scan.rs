@@ -28,7 +28,6 @@ use databend_common_sql::executor::physical_plans::CteScan;
 use databend_common_sql::executor::physical_plans::ExpressionScan;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
-use databend_common_sql::StreamContext;
 
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
@@ -36,7 +35,6 @@ use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
-use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -54,18 +52,6 @@ impl PipelineBuilder {
         if let Some(internal_columns) = &scan.internal_column {
             self.main_pipeline
                 .add_transformer(|| TransformAddInternalColumns::new(internal_columns.clone()));
-        }
-
-        // Update stream columns if needed.
-        if table.change_tracking_enabled() && scan.source.update_stream_columns {
-            let stream_ctx = StreamContext::try_create(
-                self.ctx.get_function_context()?,
-                scan.source.schema(),
-                table.get_table_info().ident.seq,
-                false,
-            )?;
-            self.main_pipeline
-                .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
         }
 
         let schema = scan.source.schema();
