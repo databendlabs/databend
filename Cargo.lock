@@ -3527,6 +3527,7 @@ dependencies = [
  "anyhow",
  "flatbuffers",
  "geo",
+ "geojson",
  "geos",
  "geozero 0.13.0",
  "ordered-float 4.2.0",
@@ -7192,6 +7193,7 @@ version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5d728c1df1fbf328d74151efe6cb0586f79ee813346ea981add69bd22c9241b"
 dependencies = [
+ "geo-types",
  "log",
  "serde",
  "serde_json",

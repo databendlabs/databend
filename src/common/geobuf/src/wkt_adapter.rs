@@ -1,19 +1,21 @@
-use core::f64;
-
-use wkt::types::Coord as wktCoord;
-use wkt::types::*;
-use wkt::Geometry;
-use wkt::Wkt;
+use std::str::FromStr;
 
 use super::geo_buf;
 use super::Coord;
 use super::Element;
+use super::Geometry;
+use super::GeometryBuilder;
 use super::Visitor;
 
-impl<V: Visitor> Element<V> for Wkt<f64> {
+pub struct Wkt<S: AsRef<str>>(pub S);
+
+impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
     fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error> {
+        use wkt::types::*;
+        use wkt::Geometry;
+
         fn visit_points(
-            points: &[wktCoord<f64>],
+            points: &[Coord<f64>],
             visitor: &mut impl Visitor,
             multi: bool,
         ) -> Result<(), anyhow::Error> {
@@ -42,7 +44,7 @@ impl<V: Visitor> Element<V> for Wkt<f64> {
                     visitor.finish(geo_buf::ObjectKind::MultiPoint)
                 }
                 Geometry::LineString(LineString(line)) => {
-                    visit_points(&line, visitor, false)?;
+                    visit_points(line, visitor, false)?;
                     visitor.finish(geo_buf::ObjectKind::LineString)
                 }
                 Geometry::MultiLineString(MultiLineString(lines)) => {
@@ -88,7 +90,7 @@ impl<V: Visitor> Element<V> for Wkt<f64> {
     }
 }
 
-fn normalize_coord(coord: &wktCoord<f64>) -> Result<Coord, anyhow::Error> {
+fn normalize_coord(coord: &wkt::types::Coord<f64>) -> Result<Coord, anyhow::Error> {
     if coord.z.is_some() || coord.m.is_some() {
         Err(anyhow::Error::msg("z m")) // todo
     } else {
@@ -99,7 +101,7 @@ fn normalize_coord(coord: &wktCoord<f64>) -> Result<Coord, anyhow::Error> {
     }
 }
 
-fn normalize_point(point: &Point<f64>) -> Result<Coord, anyhow::Error> {
+fn normalize_point(point: &wkt::types::Point<f64>) -> Result<Coord, anyhow::Error> {
     match &point.0 {
         Some(c) => normalize_coord(c),
         None => Ok(Coord {
@@ -109,8 +111,28 @@ fn normalize_point(point: &Point<f64>) -> Result<Coord, anyhow::Error> {
     }
 }
 
+impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
+    type Error = anyhow::Error;
+
+    fn try_from(wkt: Wkt<S>) -> Result<Self, Self::Error> {
+        let wkt = wkt::Wkt::<f64>::from_str(wkt.0.as_ref()).map_err(anyhow::Error::msg)?;
+        let mut builder = GeometryBuilder::new();
+        wkt.accept(&mut builder)?;
+        Ok(builder.build())
+    }
+}
+
+impl TryInto<Wkt<String>> for &Geometry {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Wkt<String>, Self::Error> {
+        use geozero::ToWkt;
+
+        Ok(Wkt(TryInto::<geo::Geometry>::try_into(self)?.to_wkt()?))
+    }
+}
+
 #[cfg(test)]
-#[allow(dead_code)]
 mod tests {
 
     use std::str::FromStr;
@@ -129,7 +151,10 @@ mod tests {
         wkt_ins.accept(&mut builder).unwrap();
         let geom = builder.build();
 
-        let got = geom.try_to_geo().unwrap().to_wkt().unwrap();
+        let got = TryInto::<geo::Geometry>::try_into(&geom)
+            .unwrap()
+            .to_wkt()
+            .unwrap();
 
         assert_eq!(want, &got);
     }

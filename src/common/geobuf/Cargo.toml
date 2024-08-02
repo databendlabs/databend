@@ -14,6 +14,7 @@ test = true
 anyhow = { workspace = true }
 flatbuffers = "24.3.25"
 geo = { workspace = true }
+geojson = { version = "0.24.1" }
 geos = { workspace = true }
 geozero = { workspace = true }
 ordered-float = { workspace = true }
