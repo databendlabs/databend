@@ -16,6 +16,7 @@ pub struct GeometryBuilder<'fbb> {
     column_y: Vec<f64>,
     point_offsets: Vec<u32>,
     ring_offsets: Vec<u32>,
+    temp_kind: Option<geo_buf::ObjectKind>,
 
     kind: Option<geo_buf::ObjectKind>,
     stack: Vec<Vec<WIPOffset<InnerObject<'fbb>>>>,
@@ -33,13 +34,7 @@ impl<'fbb> GeometryBuilder<'fbb> {
             kind: None,
             stack: Vec::new(),
             object: None,
-        }
-    }
-
-    pub fn processor() -> Processor<'fbb> {
-        Processor {
-            builder: GeometryBuilder::new(),
-            top: None,
+            temp_kind: None,
         }
     }
 
@@ -330,18 +325,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 }
 
-pub struct Processor<'fbb> {
-    builder: GeometryBuilder<'fbb>,
-    top: Option<geo_buf::ObjectKind>,
-}
-
-impl<'fbb> Processor<'fbb> {
-    pub fn build(self) -> Geometry {
-        self.builder.build()
-    }
-}
-
-impl<'fbb> geozero::GeomProcessor for Processor<'fbb> {
+impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn multi_dim(&self) -> bool {
         false
     }
@@ -351,108 +335,107 @@ impl<'fbb> geozero::GeomProcessor for Processor<'fbb> {
     }
 
     fn xy(&mut self, x: f64, y: f64, _: usize) -> GeoResult<()> {
-        let multi = !matches!(self.top, Some(geo_buf::ObjectKind::Point));
-        self.builder.visit_point(x, y, multi).map_err(map_anyhow)?;
+        let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::Point));
+        self.visit_point(x, y, multi).map_err(map_anyhow)?;
         Ok(())
     }
 
     fn point_begin(&mut self, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::Point);
+        self.temp_kind.get_or_insert(geo_buf::ObjectKind::Point);
         Ok(())
     }
 
     fn point_end(&mut self, _: usize) -> GeoResult<()> {
-        if let Some(kind @ geo_buf::ObjectKind::Point) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        if let Some(kind @ geo_buf::ObjectKind::Point) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn multipoint_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::MultiPoint);
-        self.builder.visit_points_start(size).map_err(map_anyhow)?;
+        self.temp_kind
+            .get_or_insert(geo_buf::ObjectKind::MultiPoint);
+        self.visit_points_start(size).map_err(map_anyhow)?;
         Ok(())
     }
 
     fn multipoint_end(&mut self, _: usize) -> GeoResult<()> {
-        let multi = !matches!(self.top, Some(geo_buf::ObjectKind::MultiPoint));
-        self.builder.visit_points_end(multi).map_err(map_anyhow)?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiPoint) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::MultiPoint));
+        self.visit_points_end(multi).map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiPoint) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn linestring_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::LineString);
-        self.builder.visit_points_start(size).map_err(map_anyhow)
+        self.temp_kind
+            .get_or_insert(geo_buf::ObjectKind::LineString);
+        self.visit_points_start(size).map_err(map_anyhow)
     }
 
     fn linestring_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
-        self.builder.visit_points_end(!tagged).map_err(map_anyhow)?;
-        if let Some(kind @ geo_buf::ObjectKind::LineString) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        self.visit_points_end(!tagged).map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::LineString) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn multilinestring_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::MultiLineString);
-        self.builder.visit_lines_start(size).map_err(map_anyhow)
+        self.temp_kind
+            .get_or_insert(geo_buf::ObjectKind::MultiLineString);
+        self.visit_lines_start(size).map_err(map_anyhow)
     }
 
     fn multilinestring_end(&mut self, _: usize) -> GeoResult<()> {
-        self.builder.visit_lines_end().map_err(map_anyhow)?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiLineString) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        self.visit_lines_end().map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiLineString) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn polygon_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::Polygon);
-        self.builder.visit_polygon_start(size).map_err(map_anyhow)
+        self.temp_kind.get_or_insert(geo_buf::ObjectKind::Polygon);
+        self.visit_polygon_start(size).map_err(map_anyhow)
     }
 
     fn polygon_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
-        self.builder
-            .visit_polygon_end(!tagged)
-            .map_err(map_anyhow)?;
-        if let Some(kind @ geo_buf::ObjectKind::Polygon) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        self.visit_polygon_end(!tagged).map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::Polygon) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn multipolygon_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.top.get_or_insert(geo_buf::ObjectKind::MultiPolygon);
-        self.builder.visit_polygons_start(size).map_err(map_anyhow)
+        self.temp_kind
+            .get_or_insert(geo_buf::ObjectKind::MultiPolygon);
+        self.visit_polygons_start(size).map_err(map_anyhow)
     }
 
     fn multipolygon_end(&mut self, _: usize) -> GeoResult<()> {
-        self.builder.visit_polygons_end().map_err(map_anyhow)?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiPolygon) = self.top {
-            self.builder.finish(kind).map_err(map_anyhow)?;
-            self.top = None;
+        self.visit_polygons_end().map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiPolygon) = self.temp_kind {
+            self.finish(kind).map_err(map_anyhow)?;
+            self.temp_kind = None;
         }
         Ok(())
     }
 
     fn geometrycollection_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.builder
-            .visit_collection_start(size)
-            .map_err(map_anyhow)
+        self.visit_collection_start(size).map_err(map_anyhow)
     }
 
     fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
-        self.builder.visit_collection_end().map_err(map_anyhow)?;
-        self.builder
-            .finish(geo_buf::ObjectKind::Collection)
+        self.visit_collection_end().map_err(map_anyhow)?;
+        self.finish(geo_buf::ObjectKind::Collection)
             .map_err(map_anyhow)
     }
 }
@@ -492,9 +475,9 @@ mod tests {
     }
 
     fn run_from_wkt(want: &str) {
-        let mut p = GeometryBuilder::processor();
-        geozero::wkt::Wkt(want).process_geom(&mut p).unwrap();
-        let geom = p.build();
+        let mut b = GeometryBuilder::new();
+        geozero::wkt::Wkt(want).process_geom(&mut b).unwrap();
+        let geom = b.build();
         let crate::Wkt::<String>(got) = (&geom).try_into().unwrap();
         assert_eq!(want, got);
     }

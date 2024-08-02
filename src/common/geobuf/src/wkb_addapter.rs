@@ -9,9 +9,9 @@ impl<B: AsRef<[u8]>> TryFrom<Wkb<B>> for Geometry {
     type Error = anyhow::Error;
 
     fn try_from(value: Wkb<B>) -> Result<Self, Self::Error> {
-        let mut p = GeometryBuilder::processor();
-        geozero::wkb::Wkb(value.0).process_geom(&mut p)?;
-        Ok(p.build())
+        let mut builder = GeometryBuilder::new();
+        geozero::wkb::Wkb(value.0).process_geom(&mut builder)?;
+        Ok(builder.build())
     }
 }
 
