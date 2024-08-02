@@ -198,17 +198,20 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
     let subject_files_to_gc: Vec<_> = segments_to_gc
         .into_iter()
         .chain(blocks_to_gc.into_iter())
-        .chain(indexes_to_gc.into_iter())
         .collect();
     let op = Files::create(ctx, fuse_table.get_operator());
 
-    // remove subject files first, then remove snapshots, if vacuum failed, we can retry
+    // order is important
+    // indexes should be removed before blocks, because index locations to gc are generated from block locations
+    // subject_files should be removed before snapshots, because gc of subject_files depend on gc root
+    op.remove_file_in_batch(&indexes_to_gc).await?;
     op.remove_file_in_batch(&subject_files_to_gc).await?;
     op.remove_file_in_batch(snapshots_to_gc).await?;
 
     let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()
         .chain(snapshots_to_gc.iter().cloned())
+        .chain(indexes_to_gc.into_iter())
         .collect();
     info!(
         "remove files for table {} takes {:?}, files_to_gc: {:?}",
