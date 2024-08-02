@@ -128,8 +128,11 @@ impl PrivilegeAccess {
                     .get_db_info()
                     .ident
                     .db_id;
-                let table = catalog.get_table(&tenant, db_name, table_name).await?;
-                let table_id = table.get_id();
+                let table_id = self
+                    .ctx
+                    .get_table(catalog_name, db_name, table_name)
+                    .await?
+                    .get_id();
                 OwnershipObject::Table {
                     catalog_name: catalog_name.clone(),
                     db_id,
@@ -568,8 +571,9 @@ impl PrivilegeAccess {
             .ident
             .db_id;
         if let Some(table_name) = table_name {
-            let table_id = cat
-                .get_table(tenant, database_name, table_name)
+            let table_id = self
+                .ctx
+                .get_table(cat.name().as_str(), database_name, table_name)
                 .await?
                 .get_id();
             return Ok(ObjectId::Table(db_id, table_id));
