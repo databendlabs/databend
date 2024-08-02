@@ -240,12 +240,17 @@ async fn set_lvt(fuse_table: &FuseTable, ctx: &dyn TableContext) -> Result<Optio
         );
         return Ok(None);
     }
+    let cat = ctx.get_default_catalog()?;
+    let retention = ctx.get_settings().get_data_retention_time_in_days()?;
     // safe to unwrap, as we have checked the version is v5
     let latest_ts = latest_snapshot.timestamp.unwrap();
-    let lvt_point_candidate =
-        Utc::now() - Days::new(ctx.get_settings().get_data_retention_time_in_days()?);
-    let lvt_point_candidate = std::cmp::min(lvt_point_candidate, latest_ts);
-    let cat = ctx.get_default_catalog()?;
+    let lvt_point_candidate = if retention == 0 {
+        // when retention=0, only latest snapshot is reserved
+        latest_ts
+    } else {
+        std::cmp::min(Utc::now() - Days::new(retention), latest_ts)
+    };
+
     let lvt_point = cat
         .set_table_lvt(SetLVTReq {
             table_id: fuse_table.get_table_info().ident.table_id,
@@ -319,8 +324,23 @@ async fn select_gc_root<'a>(
     if is_vacuum_all {
         // safe to unwrap, as if it is None, we should have stopped vacuuming
         let snapshot_loc = fuse_table.snapshot_loc().await?.unwrap();
-        let snapshot = read_snapshot_from_location(fuse_table, &snapshot_loc).await?;
-        let gc_root_idx = snapshots_before_lvt.binary_search(&snapshot_loc).unwrap();
+        let snapshot = match read_snapshot_from_location(fuse_table, &snapshot_loc).await {
+            Ok(snapshot) => snapshot,
+            Err(e) => {
+                info!("read snapshot {} failed: {:?}", snapshot_loc, e);
+                return Ok(None);
+            }
+        };
+        let gc_root_idx = match snapshots_before_lvt.binary_search(&snapshot_loc) {
+            Ok(idx) => idx,
+            Err(e) => {
+                info!(
+                    "snapshot {} not found in snapshots_before_lvt: {:?}",
+                    snapshot_loc, e
+                );
+                return Ok(None);
+            }
+        };
         let snapshots_to_gc = &snapshots_before_lvt[..gc_root_idx];
         return Ok(Some((snapshot, snapshots_to_gc)));
     }
