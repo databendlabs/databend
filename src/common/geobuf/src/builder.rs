@@ -1,11 +1,11 @@
 use flatbuffers::FlatBufferBuilder;
 use flatbuffers::Vector;
 use flatbuffers::WIPOffset;
+use geozero::error::Result as GeoResult;
 
 use super::geo_buf;
 use super::geo_buf::InnerObject;
 use super::geo_buf::Object;
-use super::Coord;
 use super::Geometry;
 use super::Visitor;
 
@@ -36,13 +36,20 @@ impl<'fbb> GeometryBuilder<'fbb> {
         }
     }
 
+    pub fn processor() -> Processor<'fbb> {
+        Processor {
+            builder: GeometryBuilder::new(),
+            top: None,
+        }
+    }
+
     pub fn point_len(&self) -> usize {
         self.column_x.len()
     }
 
-    pub fn push_point(&mut self, point: &Coord) {
-        self.column_x.push(point.x);
-        self.column_y.push(point.y);
+    pub fn push_point(&mut self, x: f64, y: f64) {
+        self.column_x.push(x);
+        self.column_y.push(y);
     }
 
     fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
@@ -99,19 +106,19 @@ impl<'fbb> GeometryBuilder<'fbb> {
 }
 
 impl<'fbb> Visitor for GeometryBuilder<'fbb> {
-    fn visit_point(&mut self, point: &Coord, multi: bool) -> Result<(), anyhow::Error> {
+    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> Result<(), anyhow::Error> {
         if self.stack.is_empty() {
-            self.push_point(point);
+            self.push_point(x, y);
             return Ok(());
         }
 
         if multi {
-            self.push_point(point);
+            self.push_point(x, y);
         } else {
             if self.point_offsets.is_empty() {
                 self.point_offsets.push(self.point_len() as u32)
             }
-            self.push_point(point);
+            self.push_point(x, y);
             self.point_offsets.push(self.point_len() as u32);
         }
 
@@ -320,5 +327,175 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
         self.stack.last_mut().unwrap().push(object);
 
         Ok(())
+    }
+}
+
+pub struct Processor<'fbb> {
+    builder: GeometryBuilder<'fbb>,
+    top: Option<geo_buf::ObjectKind>,
+}
+
+impl<'fbb> Processor<'fbb> {
+    pub fn build(self) -> Geometry {
+        self.builder.build()
+    }
+}
+
+impl<'fbb> geozero::GeomProcessor for Processor<'fbb> {
+    fn multi_dim(&self) -> bool {
+        false
+    }
+
+    fn srid(&mut self, _srid: Option<i32>) -> GeoResult<()> {
+        Ok(())
+    }
+
+    fn xy(&mut self, x: f64, y: f64, _: usize) -> GeoResult<()> {
+        let multi = !matches!(self.top, Some(geo_buf::ObjectKind::Point));
+        self.builder.visit_point(x, y, multi).map_err(map_anyhow)?;
+        Ok(())
+    }
+
+    fn point_begin(&mut self, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::Point);
+        Ok(())
+    }
+
+    fn point_end(&mut self, _: usize) -> GeoResult<()> {
+        if let Some(kind @ geo_buf::ObjectKind::Point) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn multipoint_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::MultiPoint);
+        self.builder.visit_points_start(size).map_err(map_anyhow)?;
+        Ok(())
+    }
+
+    fn multipoint_end(&mut self, _: usize) -> GeoResult<()> {
+        let multi = !matches!(self.top, Some(geo_buf::ObjectKind::MultiPoint));
+        self.builder.visit_points_end(multi).map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiPoint) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn linestring_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::LineString);
+        self.builder.visit_points_start(size).map_err(map_anyhow)
+    }
+
+    fn linestring_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
+        self.builder.visit_points_end(!tagged).map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::LineString) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn multilinestring_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::MultiLineString);
+        self.builder.visit_lines_start(size).map_err(map_anyhow)
+    }
+
+    fn multilinestring_end(&mut self, _: usize) -> GeoResult<()> {
+        self.builder.visit_lines_end().map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiLineString) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn polygon_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::Polygon);
+        self.builder.visit_polygon_start(size).map_err(map_anyhow)
+    }
+
+    fn polygon_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
+        self.builder
+            .visit_polygon_end(!tagged)
+            .map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::Polygon) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn multipolygon_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
+        self.top.get_or_insert(geo_buf::ObjectKind::MultiPolygon);
+        self.builder.visit_polygons_start(size).map_err(map_anyhow)
+    }
+
+    fn multipolygon_end(&mut self, _: usize) -> GeoResult<()> {
+        self.builder.visit_polygons_end().map_err(map_anyhow)?;
+        if let Some(kind @ geo_buf::ObjectKind::MultiPolygon) = self.top {
+            self.builder.finish(kind).map_err(map_anyhow)?;
+            self.top = None;
+        }
+        Ok(())
+    }
+
+    fn geometrycollection_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
+        self.builder
+            .visit_collection_start(size)
+            .map_err(map_anyhow)
+    }
+
+    fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
+        self.builder.visit_collection_end().map_err(map_anyhow)?;
+        self.builder
+            .finish(geo_buf::ObjectKind::Collection)
+            .map_err(map_anyhow)
+    }
+}
+
+fn map_anyhow(value: anyhow::Error) -> geozero::error::GeozeroError {
+    geozero::error::GeozeroError::Geometry(value.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+
+    use geozero::GeozeroGeometry;
+
+    use crate::GeometryBuilder;
+
+    #[test]
+    fn test_from_wkt() {
+        run_from_wkt(&"POINT(-122.35 37.55)");
+        run_from_wkt(&"MULTIPOINT(-122.35 37.55,0 -90)");
+        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)");
+        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)");
+        run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
+        run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
+        run_from_wkt(
+            &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
+        );
+        run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))",
+        );
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
+        );
+        run_from_wkt(
+            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
+        );
+    }
+
+    fn run_from_wkt(want: &str) {
+        let mut p = GeometryBuilder::processor();
+        geozero::wkt::Wkt(want).process_geom(&mut p).unwrap();
+        let geom = p.build();
+        let crate::Wkt::<String>(got) = (&geom).try_into().unwrap();
+        assert_eq!(want, got);
     }
 }

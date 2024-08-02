@@ -1,7 +1,4 @@
-use std::str::FromStr;
-
 use super::geo_buf;
-use super::Coord;
 use super::Element;
 use super::Geometry;
 use super::GeometryBuilder;
@@ -21,7 +18,8 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
         ) -> Result<(), anyhow::Error> {
             visitor.visit_points_start(points.len())?;
             for p in points.iter() {
-                visitor.visit_point(&normalize_coord(p)?, true)?;
+                let (x, y) = normalize_coord(p)?;
+                visitor.visit_point(x, y, true)?;
             }
             visitor.visit_points_end(multi)
         }
@@ -32,13 +30,15 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
         ) -> Result<(), anyhow::Error> {
             match geom {
                 Geometry::Point(point) => {
-                    visitor.visit_point(&normalize_point(point)?, false)?;
+                    let (x, y) = normalize_point(point)?;
+                    visitor.visit_point(x, y, false)?;
                     visitor.finish(geo_buf::ObjectKind::Point)
                 }
                 Geometry::MultiPoint(MultiPoint(points)) => {
                     visitor.visit_points_start(points.len())?;
                     for point in points {
-                        visitor.visit_point(&normalize_point(point)?, true)?;
+                        let (x, y) = normalize_point(point)?;
+                        visitor.visit_point(x, y, true)?;
                     }
                     visitor.visit_points_end(false)?;
                     visitor.finish(geo_buf::ObjectKind::MultiPoint)
@@ -90,34 +90,30 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
     }
 }
 
-fn normalize_coord(coord: &wkt::types::Coord<f64>) -> Result<Coord, anyhow::Error> {
+fn normalize_coord(coord: &wkt::types::Coord<f64>) -> Result<(f64, f64), anyhow::Error> {
     if coord.z.is_some() || coord.m.is_some() {
-        Err(anyhow::Error::msg("z m")) // todo
+        Err(anyhow::Error::msg(
+            "coordinates higher than two dimensions are not supported",
+        ))
     } else {
-        Ok(Coord {
-            x: coord.x,
-            y: coord.y,
-        })
+        Ok((coord.x, coord.y))
     }
 }
 
-fn normalize_point(point: &wkt::types::Point<f64>) -> Result<Coord, anyhow::Error> {
+fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), anyhow::Error> {
     match &point.0 {
         Some(c) => normalize_coord(c),
-        None => Ok(Coord {
-            x: f64::NAN,
-            y: f64::NAN,
-        }),
+        None => Ok((f64::NAN, f64::NAN)),
     }
 }
 
 impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
     type Error = anyhow::Error;
 
-    fn try_from(wkt: Wkt<S>) -> Result<Self, Self::Error> {
-        let wkt = wkt::Wkt::<f64>::from_str(wkt.0.as_ref()).map_err(anyhow::Error::msg)?;
+    fn try_from(str: Wkt<S>) -> Result<Self, Self::Error> {
+        let wkt_struct: wkt::Wkt<f64> = str.0.as_ref().parse().map_err(anyhow::Error::msg)?;
         let mut builder = GeometryBuilder::new();
-        wkt.accept(&mut builder)?;
+        wkt_struct.accept(&mut builder)?;
         Ok(builder.build())
     }
 }

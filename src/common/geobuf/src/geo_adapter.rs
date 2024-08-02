@@ -1,5 +1,6 @@
 use anyhow::Ok;
 use flatbuffers::Vector;
+use geo::Coord;
 use geo::GeometryCollection;
 use geo::LineString;
 use geo::MultiPoint;
@@ -9,7 +10,6 @@ use geo::Polygon;
 
 use super::geo_buf;
 use super::geo_buf::InnerObject;
-use super::Coord;
 use super::Element;
 use super::Geometry;
 use super::GeometryBuilder;
@@ -18,25 +18,25 @@ use super::Visitor;
 impl<V: Visitor> Element<V> for geo::Geometry {
     fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error> {
         fn visit_points<V: Visitor>(
-            points: &[Coord],
+            points: &[geo::Coord],
             visitor: &mut V,
             multi: bool,
         ) -> Result<(), anyhow::Error> {
             visitor.visit_points_start(points.len())?;
             for p in points.iter() {
-                visitor.visit_point(p, true)?;
+                visitor.visit_point(p.x, p.y, true)?;
             }
             visitor.visit_points_end(multi)
         }
         match self {
             geo::Geometry::Point(point) => {
-                visitor.visit_point(&point.0, false)?;
+                visitor.visit_point(point.0.x, point.0.y, false)?;
                 visitor.finish(geo_buf::ObjectKind::Point)
             }
             geo::Geometry::MultiPoint(points) => {
                 visitor.visit_points_start(points.len())?;
                 for p in points.iter() {
-                    visitor.visit_point(&p.0, true)?;
+                    visitor.visit_point(p.0.x, p.0.y, true)?;
                 }
                 visitor.visit_points_end(false)?;
                 visitor.finish(geo_buf::ObjectKind::MultiPoint)
@@ -148,7 +148,7 @@ impl TryInto<geo::Geometry<f64>> for &Geometry {
 
                 let collection = object
                     .collection()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                    .ok_or(anyhow::Error::msg("invalid data, collection missed"))?;
 
                 let geoms = collection
                     .iter()
@@ -168,7 +168,7 @@ impl Geometry {
             geo_buf::InnerObjectKind::Point => {
                 let pos = object
                     .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?
+                    .ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?
                     .get(0);
 
                 geo::Geometry::Point(Point(Coord {
@@ -179,7 +179,7 @@ impl Geometry {
             geo_buf::InnerObjectKind::MultiPoint => {
                 let point_offsets = object
                     .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                    .ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?;
 
                 let start = point_offsets.get(0);
                 let end = point_offsets.get(1);
@@ -198,7 +198,7 @@ impl Geometry {
             geo_buf::InnerObjectKind::LineString => {
                 let point_offsets = object
                     .point_offsets()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                    .ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?;
 
                 let start = point_offsets.get(0);
                 let end = point_offsets.get(1);
@@ -224,7 +224,7 @@ impl Geometry {
             geo_buf::InnerObjectKind::Collection => {
                 let collection = object
                     .collection()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                    .ok_or(anyhow::Error::msg("invalid data, collection missed"))?;
 
                 let geoms = collection
                     .iter()
@@ -243,7 +243,7 @@ impl Geometry {
         point_offsets: &Option<Vector<u32>>,
     ) -> Result<geo::Geometry, anyhow::Error> {
         let lines = point_offsets
-            .ok_or(anyhow::Error::msg("invalid data"))?
+            .ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?
             .iter()
             .map_windows(|[start, end]| {
                 LineString(
@@ -265,7 +265,7 @@ impl Geometry {
         point_offsets: &Option<Vector<u32>>,
     ) -> Result<geo::Geometry, anyhow::Error> {
         let mut rings_iter = point_offsets
-            .ok_or(anyhow::Error::msg("invalid data"))?
+            .ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?
             .iter()
             .map_windows(|[start, end]| {
                 LineString(
@@ -279,7 +279,7 @@ impl Geometry {
             });
         let exterior = rings_iter
             .next()
-            .ok_or(anyhow::Error::msg("invalid data"))?;
+            .ok_or(anyhow::Error::msg("invalid data, polygon exterior missed"))?;
         let interiors = rings_iter.collect();
         Ok(geo::Geometry::Polygon(Polygon::new(exterior, interiors)))
     }
@@ -289,10 +289,11 @@ impl Geometry {
         point_offsets: &Option<Vector<u32>>,
         ring_offsets: &Option<Vector<u32>>,
     ) -> Result<geo::Geometry, anyhow::Error> {
-        let point_offsets = point_offsets.ok_or(anyhow::Error::msg("invalid data"))?;
+        let point_offsets =
+            point_offsets.ok_or(anyhow::Error::msg("invalid data, point_offsets missed"))?;
 
         let polygons = ring_offsets
-            .ok_or(anyhow::Error::msg("invalid data"))?
+            .ok_or(anyhow::Error::msg("invalid data, ring_offsets missed"))?
             .iter()
             .map_windows(|[start, end]| {
                 let mut rings_iter = (*start..=*end)
@@ -310,7 +311,7 @@ impl Geometry {
 
                 let exterior = rings_iter
                     .next()
-                    .ok_or(anyhow::Error::msg("invalid data"))?;
+                    .ok_or(anyhow::Error::msg("invalid data, polygon exterior missed"))?;
                 let interiors = rings_iter.collect();
 
                 Ok(Polygon::new(exterior, interiors))

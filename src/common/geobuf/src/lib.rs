@@ -4,12 +4,14 @@ mod builder;
 mod geo_adapter;
 mod geo_generated;
 mod geojson_adapter;
+mod wkb_addapter;
 mod wkt_adapter;
 
 use builder::GeometryBuilder;
-use geo::Coord;
 use geo_generated::geo_buf;
+pub use geojson_adapter::GeoJson;
 use ordered_float::OrderedFloat;
+pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Wkt;
 
 // A columnar Geometry/Geography format is proposed here to provide support for the storage and computation of geospatial features.
@@ -104,6 +106,23 @@ impl Geometry {
     }
 }
 
+// TODO
+// impl geozero::GeozeroGeometry for Geometry {
+//     fn process_geom<P: geozero::GeomProcessor>(
+//         &self,
+//         processor: &mut P,
+//     ) -> geozero::error::Result<()>
+//     where
+//         Self: Sized,
+//     {
+//         todo!()
+//     }
+
+//     fn srid(&self) -> Option<i32> {
+//         None
+//     }
+// }
+
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
@@ -123,7 +142,7 @@ pub struct GeographyRef<'a> {
 }
 
 trait Visitor {
-    fn visit_point(&mut self, point: &Coord, multi: bool) -> Result<(), anyhow::Error>;
+    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> Result<(), anyhow::Error>;
 
     fn visit_points_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
 
