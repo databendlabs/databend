@@ -39,6 +39,8 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::DictionaryId;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ShareDBParams;
@@ -1196,6 +1198,37 @@ pub async fn get_index_metas_by_ids(
     }
 
     Ok(index_metas)
+}
+
+pub async fn get_dict_metas_by_ids(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    id_name_list: Vec<(u64, String)>,
+) -> Result<Vec<DictionaryMeta>, KVAppError> {
+    let mut dict_meta_keys = Vec::with_capacity(id_name_list.len());
+    for (id, _) in id_name_list.iter() {
+        let dict_id = DictionaryId { dictionary_id: *id };
+
+        dict_meta_keys.push(dict_id.to_string_key());
+    }
+
+    let seq_dict_metas = kv_api.mget_kv(&dict_meta_keys).await?;
+
+    let mut dict_metas = Vec::with_capacity(id_name_list.len());
+
+    for (i, ((id, name), seq_meta_opt)) in id_name_list
+        .into_iter()
+        .zip(seq_dict_metas.iter())
+        .enumerate()
+    {
+        if let Some(seq_meta) = seq_meta_opt {
+            let dict_meta: DictionaryMeta = deserialize_struct(&seq_meta.data)?;
+            dict_metas.push((id, name, dict_meta));
+        } else {
+            debug!(k = &dict_meta_keys[i]; "dict_meta not found");
+        }
+    }
+    let dictionary_meta_vec: Vec<DictionaryMeta> = dict_metas.iter().map(|(_, _, meta)| meta.clone()).collect();
+    Ok(dictionary_meta_vec)
 }
 
 /// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnIdent`],

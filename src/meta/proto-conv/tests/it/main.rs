@@ -106,3 +106,4 @@ mod v099_parquet_format_params;
 mod v100_tenant_quota;
 mod v101_database_meta;
 mod v102_user_must_change_password;
+mod v103_dictionary_meta;

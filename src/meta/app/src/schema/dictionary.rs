@@ -287,11 +287,17 @@ impl ListDictionaryReq {
 }
 
 mod kvapi_key_impl {
+    use std::fmt::Debug;
+
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
+    use databend_common_meta_kvapi::kvapi::KeyCodec;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::schema::DictionaryIdHistoryIdent;
+    use crate::tenant_key::resource::TenantResource;
+
+    use super::DictionaryNameIdent;
 
     impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
         fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
@@ -305,6 +311,20 @@ mod kvapi_key_impl {
                 database_id: db_id,
                 dictionary_name,
             })
+        }
+    }
+
+    impl<R, N> kvapi::Key for DictionaryNameIdent
+    where 
+        R: TenantResource,
+        N: KeyCodec,
+        N: Debug,
+    {
+        const PREFIX: &'static str = R::PREFIX;
+        type ValueType = R::ValueType;
+
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
         }
     }
 

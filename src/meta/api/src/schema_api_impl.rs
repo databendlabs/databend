@@ -273,6 +273,7 @@ use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
+use crate::util::get_dict_metas_by_ids;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
 
@@ -4468,21 +4469,38 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall]
     #[minitrace::trace]
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError> {
-        // debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
        
-        //     // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        // let ident = DictionaryNameIdent::new(&req.inner.tenant() ,"dummy_db", "dummy_dict");
-        // let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(ident.tenant_name()).push_raw("").done();
-        // let id_list = self.prefix_list_kv(&prefix_key).await?;
-        // let mut id_name_list = Vec::with_capacity(id_list.len());
-        // for (key, seq) in id_list.iter() {
-        //     let name_ident = DictionaryNameIdent::from_str_key(key).map_err(|e| {
-        //         KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
-        //     })?;
-        //     let index_id = deserialize_u64(&seq.data)?;
-        //     id_name_list.push((index_id.0, name_ident.index_name().to_string()));
-        // }
-        Ok(())
+            // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        let ident = DictionaryNameIdent::new(&req.inner.tenant() ,"dummy_db", "dummy_dict");
+        let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(ident.tenant_name()).push_raw("").done();
+        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let mut id_name_list = Vec::with_capacity(id_list.len());
+        for (key, seq) in id_list.iter() {
+            let name_ident = DictionaryNameIdent::from_str_key(key).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new("list_dictionaries", &e)))
+            })?;
+            let dict_id = deserialize_u64(&seq.data)?;
+            id_name_list.push((dict_id.0, name_ident.dictionary_name().to_string()));
+        }
+
+        debug!(ident = prefix_key; "list_dictionaries");
+
+        if id_name_list.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let dict_metas = {
+            let dict_metas = get_dict_metas_by_ids(self, id_name_list).await?;
+            dict_metas
+                .into_iter()
+                .filter(| meta | {
+                    meta.dropped_on.is_none()
+                })
+                .collect::<Vec<_>>()
+        };
+
+        Ok(dict_metas)
     }   
 }
 
