@@ -44,7 +44,7 @@ message DictionaryMeta {
   DataSchema schema = 4;
   
   //ID of the primary key column
-  repeated uint32 primary_column_ids = 5;
+  repeated uint64 primary_column_ids = 5;
 
   // Comment about this dictionary.
   string comment = 6;
@@ -53,5 +53,8 @@ message DictionaryMeta {
   string created_on = 7;
 
   // The time dictionary updated.
-  string updated_on = 8;
+  optional string updated_on = 8;
+
+  // The time dictionary dropped.
+  optional string dropped_on = 9;
 }

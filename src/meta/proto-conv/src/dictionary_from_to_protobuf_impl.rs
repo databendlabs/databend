@@ -50,7 +50,14 @@ impl FromToProto for mt::DictionaryMeta {
             primary_column_ids: BTreeSet::from_iter(p.primary_column_ids),
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
+            dropped_on: match p.dropped_on {
+                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
+                None => None,
+            },
+            updated_on: match p.updated_on {
+                Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -61,7 +68,18 @@ impl FromToProto for mt::DictionaryMeta {
             name: self.name.clone(),
             source: self.source.clone(),
             options: self.options.clone(),
-            primary_column_id: self.primary_column_id,
+            primary_column_ids: self.primary_column_ids,
+            created_on: self.created_on.to_pb(),
+            dropped_on: match  self.dropped_on {
+                Some(dropped_on) => Some(dropped_on.to_pb()?),
+                None => None,
+            },
+            updated_on: match self.updated_on {
+                Some(updated_on) => Some(updated_on.to_pb()?),
+                None => None,
+            },
+            comment: self.comment.clone(),
+            schema: self.schema.clone()
         };
         Ok(p)
     }
