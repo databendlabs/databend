@@ -29,8 +29,6 @@ use databend_common_arrow::arrow_format::flight::data::FlightData;
 use databend_common_arrow::arrow_format::flight::data::Ticket;
 use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
-use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use fastrace::full_name;
