@@ -89,16 +89,16 @@ pub struct CreateDictionaryReq {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DictionaryNameIdent<R = String, N = String> {
+pub struct DictionaryNameIdent {
     pub tenant: Tenant,
-    pub db_name: N,
-    pub dictionary_name: R,
+    pub db_name: String,
+    pub dictionary_name: String,
 }
 
 impl DictionaryNameIdent {
     pub fn new(
         tenant: impl ToTenant,
-        db_name: impl ToString,
+        db_name: impl ToString, 
         dictionary_name: impl ToString,
     ) -> DictionaryNameIdent {
         DictionaryNameIdent {
@@ -122,6 +122,14 @@ impl DictionaryNameIdent {
 
     pub fn tenant_name(&self) -> &str {
         &self.tenant.tenant_name()
+    }
+
+    pub fn new_generic(tenant: impl ToTenant, dictionary_name: impl ToString, db_name: impl ToString) -> Self {
+        Self {
+            tenant: tenant.to_tenant(),
+            dictionary_name,
+            db_name,
+        }
     }
 }
 
@@ -295,6 +303,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
     use crate::schema::DictionaryIdHistoryIdent;
+    use crate::tenant::Tenant;
     use crate::tenant_key::resource::TenantResource;
 
     use super::DictionaryNameIdent;
@@ -314,13 +323,29 @@ mod kvapi_key_impl {
         }
     }
 
-    impl<R: TenantResource, N: KeyCodec + Debug> kvapi::Key for DictionaryNameIdent<R,N>
-    {
-        const PREFIX: &'static str = R::PREFIX;
-        type ValueType = R::ValueType;
+    impl KeyCodec for DictionaryNameIdent {
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let tenant_name = parser.next_nonempty()?;
+            let name = String::decode_key(parser)?;
+            
+            Ok(DictionaryNameIdent::new_generic(
+                Tenant::new_nonempty(tenant_name),
+                name,"db_name"
+            ))
+        }
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            let b = b.push_str(self.tenant_name());
+            self.dictionary_name.encode_key(b)
+        }
+    }
 
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
+    impl DictionaryNameIdent {// Self = KeyCode + Debug
+        pub fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, "__fd_dictionary")?;
+            let k = Self::decode_key(&mut p)?;
+            p.done()?;
+            Ok(k)
         }
     }
 
