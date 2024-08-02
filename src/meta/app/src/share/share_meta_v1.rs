@@ -28,6 +28,7 @@ use crate::share::ShareGrantObjectName;
 use crate::share::ShareGrantObjectPrivilege;
 use crate::share::ShareGrantObjectSeqAndId;
 
+// a unify data struct for saving granted share object: database, table
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ShareGrantEntry {
     pub object: ShareGrantObject,
@@ -190,7 +191,7 @@ impl ShareMetaV1 {
         privileges: ShareGrantObjectPrivilege,
     ) -> Result<bool, AppError> {
         match object {
-            ShareGrantObjectSeqAndId::Database(_name, _seq, db_id, _meta) => match &self.database {
+            ShareGrantObjectSeqAndId::Database(_seq, db_id, _meta) => match &self.database {
                 Some(db) => match db.object {
                     ShareGrantObject::Database(self_db_id) => {
                         if self_db_id != *db_id {
@@ -207,7 +208,7 @@ impl ShareMetaV1 {
                 },
                 None => Ok(false),
             },
-            ShareGrantObjectSeqAndId::Table(_name, _db_id, _table_seq, table_id, _meta) => {
+            ShareGrantObjectSeqAndId::Table(_db_id, _table_seq, table_id, _meta) => {
                 let key = ShareGrantObject::Table(*table_id).to_string();
                 Ok(self
                     .entries

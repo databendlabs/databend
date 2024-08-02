@@ -26,6 +26,7 @@ use enumflags2::BitFlags;
 use super::ShareObject;
 use crate::schema::CreateOption;
 use crate::schema::DatabaseMeta;
+use crate::schema::ReplyShareObject;
 use crate::schema::TableInfo;
 use crate::schema::TableMeta;
 use crate::share::share_name_ident::ShareNameIdent;
@@ -156,10 +157,10 @@ impl From<databend_common_ast::ast::ShareGrantObjectName> for ShareGrantObjectNa
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObjectSeqAndId {
-    // db_name, db_meta_seq, db_id, DatabaseMeta
-    Database(String, u64, u64, DatabaseMeta),
-    // table_name, db_id, table_meta_seq, table_id, table_meta
-    Table(String, u64, u64, u64, TableMeta),
+    // db_meta_seq, db_id, DatabaseMeta
+    Database(u64, u64, DatabaseMeta),
+    // db_id, table_meta_seq, table_id, table_meta
+    Table(u64, u64, u64, TableMeta),
 }
 
 // share name and shared (table name, table info) map
@@ -195,7 +196,7 @@ pub struct RevokeShareObjectReq {
 pub struct RevokeShareObjectReply {
     pub share_id: u64,
     pub share_spec: Option<ShareSpec>,
-    pub revoke_object: Option<ShareObject>,
+    pub revoke_object: Option<ReplyShareObject>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -515,6 +516,7 @@ pub struct ShareInfo {
 pub struct ShareDatabaseSpec {
     pub name: String,
     pub id: u64,
+    pub created_on: DateTime<Utc>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
@@ -550,9 +552,12 @@ pub struct ShareSpec {
     pub reference_tables: Vec<ShareTableSpec>,
 }
 
+// meta key of `ObjectSharedByShareIds`
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum ShareGrantObject {
+    // db id
     Database(u64),
+    // table id
     Table(u64),
 }
 

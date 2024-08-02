@@ -37,6 +37,9 @@ echo "attach table table_to2 's3://testbucket/admin/data/$storage_prefix' connec
 comment "select attach table"
 query "select * from table_to order by a;"
 
+comment "select attach table from system.tables"
+query "select is_attach from system.tables where name = 'table_to';"
+
 comment "select attach table with self-defined connection"
 query "select * from table_to2 order by a;"
 

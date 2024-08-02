@@ -66,6 +66,7 @@ use databend_common_meta_app::share::ShareId;
 use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareMeta;
 use databend_common_meta_app::share::ShareObject;
+use databend_common_meta_app::share::ShareReferenceTable;
 use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::share::ShareTable;
 use databend_common_meta_app::share::ShareTableSpec;
@@ -906,18 +907,46 @@ pub async fn convert_share_meta_to_spec(
         let (_db_meta_seq, db_ident_raw): (_, Option<DatabaseNameIdentRaw>) =
             get_pb_value(kv_api, &id_key).await?;
         if let Some(db_ident_raw) = db_ident_raw {
-            Ok(Some(ShareDatabaseSpec {
-                name: db_ident_raw.database_name().to_string(),
-                id: db_id,
-            }))
-        } else {
-            Ok(None)
+            let dbid = DatabaseId { db_id };
+            let (_db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
+                get_pb_value(kv_api, &dbid).await?;
+
+            if let Some(db_meta) = db_meta {
+                return Ok(Some(ShareDatabaseSpec {
+                    name: db_ident_raw.database_name().to_string(),
+                    id: db_id,
+                    created_on: db_meta.created_on,
+                }));
+            }
         }
+        Ok(None)
     }
 
     async fn convert_to_share_spec_tables(
         kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
         tables: &[ShareTable],
+    ) -> Result<Vec<ShareTableSpec>, KVAppError> {
+        let mut ret_tables = Vec::with_capacity(tables.len());
+        for table in tables.iter() {
+            let table_id = table.table_id;
+            let table_id_to_name_key = TableIdToName { table_id };
+            let (_table_id_to_name_seq, table_name): (_, Option<DBIdTableName>) =
+                get_pb_value(kv_api, &table_id_to_name_key).await?;
+            if let Some(table_name) = table_name {
+                ret_tables.push(ShareTableSpec::new(
+                    &table_name.table_name,
+                    table_name.db_id,
+                    table_id,
+                ));
+            }
+        }
+
+        Ok(ret_tables)
+    }
+
+    async fn convert_reference_tables_to_share_spec_tables(
+        kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+        tables: &[ShareReferenceTable],
     ) -> Result<Vec<ShareTableSpec>, KVAppError> {
         let mut ret_tables = Vec::with_capacity(tables.len());
         for table in tables.iter() {
@@ -952,7 +981,7 @@ pub async fn convert_share_meta_to_spec(
 
     let tables = convert_to_share_spec_tables(kv_api, &share_meta.table).await?;
     let reference_tables =
-        convert_to_share_spec_tables(kv_api, &share_meta.reference_table).await?;
+        convert_reference_tables_to_share_spec_tables(kv_api, &share_meta.reference_table).await?;
 
     Ok(ShareSpec {
         name: share_name.to_owned(),
@@ -1166,13 +1195,13 @@ pub async fn get_table_info_by_share(
     let mut db_name: Option<DatabaseNameIdent> = None;
     if let Some(use_database) = &share_meta.use_database {
         if use_database.db_id == db_id {
-            db_name = Some(DatabaseNameIdent::new(tenant, &use_database.name));
+            db_name = Some(DatabaseNameIdent::new(tenant, &use_database.db_name));
         }
     }
     if db_name.is_none() {
         for db in &share_meta.reference_database {
             if db.db_id == db_id {
-                db_name = Some(DatabaseNameIdent::new(tenant, &db.name));
+                db_name = Some(DatabaseNameIdent::new(tenant, &db.db_name));
             }
         }
     }

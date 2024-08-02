@@ -145,6 +145,7 @@ use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::ReplyShareObject;
 use databend_common_meta_app::schema::SetLVTReply;
 use databend_common_meta_app::schema::SetLVTReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -183,7 +184,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::ShareGrantObjectSeqAndId;
 use databend_common_meta_app::share::ShareId;
 use databend_common_meta_app::share::ShareIdToName;
 use databend_common_meta_app::share::ShareObject;
@@ -666,13 +666,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // check if database if shared
             let share_spec = if !db_meta.shared_by.is_empty() {
-                let seq_and_id = ShareGrantObjectSeqAndId::Database(
-                    tenant_dbname.database_name().to_string(),
-                    db_meta_seq,
-                    old_db_id,
-                    db_meta.clone(),
-                );
-                let object = ShareObject::new(&seq_and_id);
+                let object =
+                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id);
                 let update_on = Utc::now();
                 let mut share_spec_vec = vec![];
                 for share_id in &db_meta.shared_by {
@@ -722,10 +717,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_meta.shared_by.clear();
                 let db_id_key = DatabaseId { db_id: old_db_id };
                 if_then.push(txn_op_put(&db_id_key, serialize_struct(&db_meta)?));
-                Some((
-                    share_spec_vec,
-                    ShareObject::Database(tenant_dbname.database_name().to_string(), old_db_id),
-                ))
+                Some((share_spec_vec, ReplyShareObject::Database(old_db_id)))
             } else {
                 None
             };
@@ -2148,11 +2140,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             condition.push(txn_cond_seq(&tbid, Eq, tb_meta_seq));
                             then_ops.push(txn_op_put(&tbid, serialize_struct(&table_meta)?));
 
-                            let share_object = ShareObject::Table(
-                                tenant_dbname_tbname.table_name.clone(),
-                                db_id,
-                                table_id,
-                            );
+                            let share_object = ReplyShareObject::Table(db_id, table_id);
                             Some((spec_vec, share_object))
                         } else {
                             None
