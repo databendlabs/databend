@@ -257,57 +257,58 @@ impl UpdateInterpreter {
         }
         Ok(None)
     }
-    #[allow(clippy::too_many_arguments)]
-    pub fn build_physical_plan(
-        filters: Option<Filters>,
-        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
-        partitions: Partitions,
-        table_info: TableInfo,
-        col_indices: Vec<usize>,
-        snapshot: Arc<TableSnapshot>,
-        query_row_id_col: bool,
-        is_distributed: bool,
-        ctx: Arc<QueryContext>,
-    ) -> Result<PhysicalPlan> {
-        let table_meta_timestamps =
-            ctx.get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
-        let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
-        let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
-            parts: partitions,
-            filters,
-            table_info: table_info.clone(),
-            col_indices,
-            query_row_id_col,
-            update_list,
-            computed_list,
-            plan_id: u32::MAX,
-            table_meta_timestamps,
-        }));
+}
 
-        if is_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
-                kind: FragmentKind::Merge,
-                keys: vec![],
-                allow_adjust_parallelism: true,
-                ignore_exchange: false,
-            });
-        }
-        let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+#[allow(clippy::too_many_arguments)]
+pub fn build_update_physical_plan(
+    filters: Option<Filters>,
+    update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+    computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+    partitions: Partitions,
+    table_info: TableInfo,
+    col_indices: Vec<usize>,
+    snapshot: Arc<TableSnapshot>,
+    query_row_id_col: bool,
+    is_distributed: bool,
+    ctx: Arc<QueryContext>,
+) -> Result<PhysicalPlan> {
+    let table_meta_timestamps =
+        ctx.get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
+    let merge_meta = partitions.partitions_type() == PartInfoType::LazyLevel;
+    let mut root = PhysicalPlan::UpdateSource(Box::new(UpdateSource {
+        parts: partitions,
+        filters,
+        table_info: table_info.clone(),
+        col_indices,
+        query_row_id_col,
+        update_list,
+        computed_list,
+        plan_id: u32::MAX,
+        table_meta_timestamps,
+    }));
+
+    if is_distributed {
+        root = PhysicalPlan::Exchange(Exchange {
+            plan_id: 0,
             input: Box::new(root),
-            snapshot: Some(snapshot),
-            table_info,
-            mutation_kind: MutationKind::Update,
-            update_stream_meta: vec![],
-            merge_meta,
-            deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
-            plan_id: u32::MAX,
-            table_meta_timestamps,
-            recluster_info: None,
-        }));
-        plan.adjust_plan_id(&mut 0);
-        Ok(plan)
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            allow_adjust_parallelism: true,
+            ignore_exchange: false,
+        });
     }
+    let mut plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+        input: Box::new(root),
+        snapshot: Some(snapshot),
+        table_info,
+        mutation_kind: MutationKind::Update,
+        update_stream_meta: vec![],
+        merge_meta,
+        deduplicated_label: unsafe { ctx.get_settings().get_deduplicate_label()? },
+        plan_id: u32::MAX,
+        table_meta_timestamps,
+        recluster_info: None,
+    }));
+    plan.adjust_plan_id(&mut 0);
+    Ok(plan)
 }

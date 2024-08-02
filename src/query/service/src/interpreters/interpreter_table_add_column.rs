@@ -120,7 +120,7 @@ impl Interpreter for AddTableColumnInterpreter {
         };
         new_table_meta.add_column(&field, &self.plan.comment, index)?;
 
-        let _ = generate_new_snapshot(tbl.as_ref(), &mut new_table_meta).await?;
+        generate_new_snapshot(tbl.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
