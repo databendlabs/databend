@@ -79,6 +79,8 @@ mod role_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod sequence_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
+mod share_meta_v1_from_to_protobuf_impl;
+mod share_meta_v2_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod tenant_quota_from_to_protobuf_impl;

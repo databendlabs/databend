@@ -68,8 +68,8 @@ impl Interpreter for ShowSharesInterpreter {
         for (from_tenant, share_spec) in share_specs {
             names.push(share_spec.name.clone());
             kinds.push("INBOUND".to_string());
-            created_owns.push(share_spec.share_on.unwrap_or_default().to_string());
-            database_names.push(share_spec.database.unwrap_or_default().name);
+            created_owns.push(share_spec.create_on.to_string());
+            database_names.push(share_spec.use_database.unwrap_or_default().name);
             from.push(from_tenant);
             to.push(tenant.tenant_name().to_string());
             comments.push(share_spec.comment.unwrap_or_default());
