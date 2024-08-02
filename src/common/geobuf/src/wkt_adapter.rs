@@ -124,7 +124,7 @@ impl TryInto<Wkt<String>> for &Geometry {
     fn try_into(self) -> Result<Wkt<String>, Self::Error> {
         use geozero::ToWkt;
 
-        Ok(Wkt(TryInto::<geo::Geometry>::try_into(self)?.to_wkt()?))
+        Ok(Wkt(self.to_wkt()?))
     }
 }
 

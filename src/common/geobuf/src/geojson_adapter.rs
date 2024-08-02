@@ -142,9 +142,7 @@ impl TryInto<GeoJson<String>> for &Geometry {
     fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
         use geozero::ToJson;
 
-        Ok(GeoJson(
-            TryInto::<geo::Geometry>::try_into(self)?.to_json()?,
-        ))
+        Ok(GeoJson(self.to_json()?))
     }
 }
 
@@ -155,40 +153,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_from_wkt() {
-        run_from_wkt(r#"{"type": "Point", "coordinates": [-122.35,37.55]}"#);
-        run_from_wkt(r#"{"type": "MultiPoint", "coordinates": [[-122.35,37.55],[0,-90]]}"#);
-        run_from_wkt(r#"{"type": "LineString", "coordinates": [[-124.2,42],[-120.01,41.99]]}"#);
-        run_from_wkt(
+    fn test_from_json() {
+        run_from_json(r#"{"type": "Point", "coordinates": [-122.35,37.55]}"#);
+        run_from_json(r#"{"type": "MultiPoint", "coordinates": [[-122.35,37.55],[0,-90]]}"#);
+        run_from_json(r#"{"type": "LineString", "coordinates": [[-124.2,42],[-120.01,41.99]]}"#);
+        run_from_json(
             r#"{"type": "LineString", "coordinates": [[-124.2,42],[-120.01,41.99],[-122.5,42.01]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "MultiLineString", "coordinates": [[[-124.2,42],[-120.01,41.99],[-122.5,42.01]],[[10,0],[20,10],[30,0]]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "MultiLineString", "coordinates": [[[-124.2,42],[-120.01,41.99]],[[-124.2,42],[-120.01,41.99],[-122.5,42.01],[-122.5,42.01]],[[-124.2,42],[-120.01,41.99],[-122.5,42.01]],[[10,0],[20,10],[30,0]]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "Polygon", "coordinates": [[[17,17],[17,30],[30,30],[30,17],[17,17]]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "Polygon", "coordinates": [[[100,0],[101,0],[101,1],[100,1],[100,0]],[[100.8,0.8],[100.8,0.2],[100.2,0.2],[100.2,0.8],[100.8,0.8]]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "MultiPolygon", "coordinates": [[[[-10,0],[0,10],[10,0],[-10,0]]],[[[-10,40],[10,40],[0,20],[-10,40]]]]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [99,11]},{"type": "LineString", "coordinates": [[40,60],[50,50],[60,40]]},{"type": "Point", "coordinates": [99,10]}]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "GeometryCollection", "geometries": [{"type": "Polygon", "coordinates": [[[-10,0],[0,10],[10,0],[-10,0]]]},{"type": "LineString", "coordinates": [[40,60],[50,50],[60,40]]},{"type": "Point", "coordinates": [99,11]}]}"#,
         );
-        run_from_wkt(
+        run_from_json(
             r#"{"type": "GeometryCollection", "geometries": [{"type": "Polygon", "coordinates": [[[-10,0],[0,10],[10,0],[-10,0]]]},{"type": "GeometryCollection", "geometries": [{"type": "LineString", "coordinates": [[40,60],[50,50],[60,40]]},{"type": "Point", "coordinates": [99,11]}]},{"type": "Point", "coordinates": [50,70]}]}"#,
         );
     }
 
-    fn run_from_wkt(want: &str) {
+    fn run_from_json(want: &str) {
         let geom: crate::Geometry = GeoJson(want).try_into().unwrap();
         let geom: geo::Geometry = (&geom).try_into().unwrap();
         let got = geom.to_json().unwrap();

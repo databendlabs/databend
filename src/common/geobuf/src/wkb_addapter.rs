@@ -22,8 +22,6 @@ impl TryInto<Wkb<Vec<u8>>> for &Geometry {
         use geozero::CoordDimensions;
         use geozero::ToWkb;
 
-        Ok(Wkb(
-            TryInto::<geo::Geometry>::try_into(self)?.to_ewkb(CoordDimensions::xy(), None)?
-        ))
+        Ok(Wkb(self.to_ewkb(CoordDimensions::xy(), None)?))
     }
 }

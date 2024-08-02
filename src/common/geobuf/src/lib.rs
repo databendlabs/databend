@@ -106,23 +106,6 @@ impl Geometry {
     }
 }
 
-// TODO
-// impl geozero::GeozeroGeometry for Geometry {
-//     fn process_geom<P: geozero::GeomProcessor>(
-//         &self,
-//         processor: &mut P,
-//     ) -> geozero::error::Result<()>
-//     where
-//         Self: Sized,
-//     {
-//         todo!()
-//     }
-
-//     fn srid(&self) -> Option<i32> {
-//         None
-//     }
-// }
-
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
@@ -172,7 +155,6 @@ trait Element<V: Visitor> {
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
 mod tests {
     use geozero::CoordDimensions;
     use geozero::ToWkb;
