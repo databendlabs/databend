@@ -498,7 +498,7 @@ impl DataExchangeManager {
                     query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
 
                 // query_coordinator.exchanges
-                let exchanges = query_coordinator.take_statistics_receiver();
+                let exchanges = query_coordinator.take_statistics_receivers();
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
@@ -630,16 +630,39 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn take_statistics_sender(&mut self) -> HashMap<String, FlightSenderWrapper> {
-        unimplemented!()
+    pub fn take_statistics_senders(&mut self) -> Vec<FlightSender> {
+        let mut statistics_senders = Vec::with_capacity(1);
+
+        for (identifier, exchange) in &mut self.exchanges {
+            if let ExchangeIdentifier::Statistics(_) = identifier {
+                statistics_senders.push(exchange.take_as_sender());
+            }
+        }
+
+        statistics_senders
     }
 
-    pub fn take_statistics_receiver(&mut self) -> HashMap<String, RetryableFlightReceiver> {
-        unimplemented!()
+    pub fn take_statistics_receivers(&mut self) -> Vec<RetryableFlightReceiver> {
+        let mut statistics_receivers = Vec::with_capacity(self.exchanges.len());
+
+        for (identifier, exchange) in &mut self.exchanges {
+            if let ExchangeIdentifier::Statistics(_) = identifier {
+                statistics_receivers.push(exchange.take_as_receiver());
+            }
+        }
+
+        statistics_receivers
     }
 
     pub fn assert_leak_fragment_exchanges(&self) {
-        unimplemented!()
+        for (identifier, exchange) in &mut self.exchanges {
+            if !matches!(identifier, ExchangeIdentifier::Statistics(_)) {
+                assert!(matches!(
+                    exchange,
+                    FlightExchange::MovedSender(_) | FlightExchange::MovedReceiver(_)
+                ));
+            }
+        }
     }
 
     pub fn add_statistics_exchange(
@@ -971,20 +994,22 @@ impl QueryCoordinator {
         let query_ctx = info_mut.query_ctx.clone();
 
         let ctx = query_ctx.clone();
-        let request_server_exchanges = self.take_statistics_sender();
-        let exchanges = request_server_exchanges.into_values().collect::<Vec<_>>();
-        let [request_server_exchange] = *exchanges else {
+        let statistics_senders = self.take_statistics_senders();
+
+        let Some(statistics_sender) = statistics_senders.pop() else {
             return Err(ErrorCode::Internal(
                 "Request server must less than 1 if is not request server.",
             ));
         };
 
-        let mut statistics_sender = StatisticsSender::spawn(
-            &query_id,
-            ctx,
-            request_server_exchange,
-            executor.get_inner(),
-        );
+        if !statistics_senders.is_empty() {
+            return Err(ErrorCode::Internal(
+                "Request server must less than 1 if is not request server.",
+            ));
+        }
+
+        let mut statistics_sender =
+            StatisticsSender::spawn(&query_id, ctx, statistics_sender, executor.get_inner());
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
             Span::root("Distributed-Executor", parent)

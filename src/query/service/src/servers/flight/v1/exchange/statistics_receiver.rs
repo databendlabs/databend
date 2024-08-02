@@ -40,13 +40,13 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, RetryableFlightReceiver>,
+        statistics_exchanges: Vec<RetryableFlightReceiver>,
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (_source, rx) in statistics_exchanges.into_iter() {
+        for rx in statistics_exchanges.into_iter() {
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
