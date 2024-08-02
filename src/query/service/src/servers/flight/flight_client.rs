@@ -386,111 +386,31 @@ impl RetryableFlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: AtomicPtr<Sender<Result<FlightData, Status>>>,
-    seq_num: AtomicUsize,
-    buffer: Mutex<VecDeque<FlightData>>,
+    tx: Sender<Result<FlightData, Status>>,
 }
 
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
-        FlightSender {
-            tx: AtomicPtr::new(Box::into_raw(Box::new(tx))),
-            seq_num: AtomicUsize::new(0),
-            buffer: Mutex::new(VecDeque::with_capacity(3)),
-        }
+        FlightSender { tx }
     }
 
     pub fn is_closed(&self) -> bool {
-        unsafe { (*self.tx.load(Ordering::Acquire)).is_closed() }
+        self.tx.is_closed()
     }
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.seq_num.fetch_add(1, Ordering::Acquire);
-        let flight_data = FlightData::try_from(data)?;
-        self.update_buffer(flight_data.clone());
-        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
-
-        if let Err(_cause) = sender.send(Ok(flight_data)).await {
+        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
         }
-        Ok(())
-    }
 
-    fn update_buffer(&self, data: FlightData) {
-        let mut buffer = self.buffer.lock();
-        if buffer.len() == buffer.capacity() {
-            buffer.pop_front();
-        }
-        buffer.push_back(data);
-    }
-
-    pub fn replace_tx(
-        &self,
-        new_tx: Sender<Result<FlightData, Status>>,
-        continue_from: usize,
-    ) -> Result<()> {
-        let old_tx = self
-            .tx
-            .swap(Box::into_raw(Box::new(new_tx.clone())), Ordering::AcqRel);
-        unsafe { drop(Box::from_raw(old_tx)) };
-        let buffer = self.buffer.lock().clone();
-        let seq_num = self.seq_num.load(Ordering::Acquire);
-        Runtime::with_worker_threads(1, Some(String::from("ReconnectSender")))?.spawn(async move {
-            if seq_num - continue_from < buffer.len() {
-                for data in buffer.iter().skip(seq_num - continue_from) {
-                    if let Err(_cause) = new_tx.send(Ok(data.clone())).await {
-                        break;
-                    }
-                }
-            } else {
-                let _res = new_tx
-                    .send(Err(ErrorCode::AbortedQuery(
-                        "Aborted query, because the remote flight channel is closed.",
-                    )
-                    .into()))
-                    .await;
-            }
-        });
         Ok(())
     }
 
     pub fn close(&self) {
-        let sender = unsafe { &*self.tx.load(Ordering::Acquire) };
-        sender.close();
-    }
-}
-
-impl Drop for FlightSender {
-    fn drop(&mut self) {
-        let _ = unsafe { Box::from_raw(self.tx.load(Ordering::Acquire)) };
-    }
-}
-
-pub struct FlightSenderWrapper {
-    inner: Arc<FlightSender>,
-}
-
-impl FlightSenderWrapper {
-    pub fn create(inner: Arc<FlightSender>) -> FlightSenderWrapper {
-        FlightSenderWrapper { inner }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn send(&self, data: DataPacket) -> Result<()> {
-        self.inner.send(data).await
-    }
-
-    pub fn close(&self) {
-        self.inner.close();
-    }
-}
-
-impl Drop for FlightSenderWrapper {
-    fn drop(&mut self) {
-        self.inner.close();
+        self.tx.close();
     }
 }
 
@@ -646,7 +566,7 @@ impl FlightDataAckState {
 }
 
 pub struct FlightDataAckStream {
-    state: Arc<Mutex<crate::servers::flight::flight_client::impls::FlightDataAckState>>,
+    state: Arc<Mutex<FlightDataAckState>>,
 }
 
 impl Drop for FlightDataAckStream {

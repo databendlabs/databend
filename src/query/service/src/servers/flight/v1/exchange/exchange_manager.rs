@@ -58,7 +58,6 @@ use crate::pipelines::PipelineBuilder;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::flight_client::FlightDataAckStream;
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -529,7 +528,7 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_flight_sender(&self, params: &ExchangeParams) -> Result<Vec<FlightSenderWrapper>> {
+    pub fn get_flight_sender(&self, params: &ExchangeParams) -> Result<Vec<FlightSender>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -750,10 +749,7 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn get_flight_senders(
-        &mut self,
-        params: &ExchangeParams,
-    ) -> Result<Vec<FlightSenderWrapper>> {
+    pub fn get_flight_senders(&mut self, params: &ExchangeParams) -> Result<Vec<FlightSender>> {
         let mut fragments_exchanges = Vec::with_capacity(self.exchanges.len());
 
         match params {
@@ -764,9 +760,7 @@ impl QueryCoordinator {
                             continue;
                         }
 
-                        fragments_exchanges.push(FlightSenderWrapper::create(Arc::new(
-                            exchange.take_as_sender(),
-                        )));
+                        fragments_exchanges.push(exchange.take_as_sender());
                     }
                 }
             }
@@ -774,7 +768,7 @@ impl QueryCoordinator {
                 for destination in &params.destination_ids {
                     if destination == &params.executor_id {
                         let dummy = FlightSender::create(async_channel::bounded(1).0);
-                        fragments_exchanges.push(FlightSenderWrapper::create(Arc::new(dummy)));
+                        fragments_exchanges.push(dummy);
                         continue;
                     }
 
@@ -782,8 +776,7 @@ impl QueryCoordinator {
                     let fragment = params.fragment_id;
                     let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
                     if let Some(v) = self.exchanges.get_mut(&identifier) {
-                        let sender = v.take_as_sender();
-                        fragments_exchanges.push(FlightSenderWrapper::create(Arc::new(sender)));
+                        fragments_exchanges.push(v.take_as_sender());
                         continue;
                     }
 

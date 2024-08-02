@@ -27,7 +27,6 @@ use futures_util::future::Either;
 use log::warn;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightSender;
