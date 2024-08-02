@@ -1077,7 +1077,7 @@ impl AccessChecker for PrivilegeAccess {
                     MutationType::Delete => vec![UserPrivilegeType::Delete],
                 };
                 for privilege in privileges {
-                    self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, ,false, false).await?;
+                    self.validate_table_access(&plan.catalog_name, &plan.database_name, &plan.table_name, privilege, false, false).await?;
                 }
             }
             Plan::CreateView(plan) => {
