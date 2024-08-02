@@ -47,8 +47,8 @@ fn test_decode_v103_dictionary_meta() -> anyhow::Result<()> {
             metadata,
             next_column_id,
         };
-        let schema = vec![table_schema];
-        let primary_column_ids = BTreeSet::from([1]);
+        let schema = Some(table_schema);
+        let primary_column_ids = vec![1];
         let comment = "comment_example".to_string();
         let create_on = Utc::now();
         DictionaryMeta {

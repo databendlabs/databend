@@ -46,8 +46,8 @@ impl FromToProto for mt::DictionaryMeta {
             name: p.name,
             source: p.source,
             options: p.options,
-            schema: Arc::new(ex::TableSchema::from_pb(schema)?),
-            primary_column_ids: BTreeSet::from_iter(p.primary_column_ids),
+            schema: ex::TableSchema::from_pb(schema),
+            primary_column_ids: p.primary_column_ids,
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             dropped_on: match p.dropped_on {
@@ -79,7 +79,7 @@ impl FromToProto for mt::DictionaryMeta {
                 None => None,
             },
             comment: self.comment.clone(),
-            schema: self.schema.clone()
+            schema: self.schema?.to_pb(),
         };
         Ok(p)
     }
