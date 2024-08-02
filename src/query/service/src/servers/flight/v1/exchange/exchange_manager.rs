@@ -294,7 +294,7 @@ impl DataExchangeManager {
                         None,
                         Some(config.query.to_rpc_client_tls_config()),
                     )
-                    .await?,
+                        .await?,
                 ))),
                 false => Ok(FlightClient::new(FlightServiceClient::new(
                     ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
@@ -373,16 +373,11 @@ impl DataExchangeManager {
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => {
-                if continue_from == 0 {
-                    v.get_mut().add_statistics_exchange(target)
-                } else {
-                    v.get_mut().replace_sender(target, None, continue_from)
-                }
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target, continue_from),
+            Entry::Vacant(v) => match continue_from == 0 {
+                true => v.insert(QueryCoordinator::create()).add_statistics_exchange(target, 0),
+                false => Err(ErrorCode::Timeout("Reconnection timeout, the state has been cleared.")),
             }
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .add_statistics_exchange(target),
         }
     }
 
@@ -398,17 +393,11 @@ impl DataExchangeManager {
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => {
-                if continue_from == 0 {
-                    v.get_mut().add_fragment_exchange(target, fragment)
-                } else {
-                    v.get_mut()
-                        .replace_sender(target, Some(fragment), continue_from)
-                }
+            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(target, fragment, continue_from),
+            Entry::Vacant(v) => match continue_from == 0 {
+                true => v.insert(QueryCoordinator::create()).add_fragment_exchange(target, fragment, 0),
+                false => Err(ErrorCode::Timeout("Reconnection timeout, the state has been cleared.")),
             }
-            Entry::Vacant(v) => v
-                .insert(QueryCoordinator::create())
-                .add_fragment_exchange(target, fragment),
         }
     }
 
@@ -664,19 +653,28 @@ impl QueryCoordinator {
         }
     }
 
-    pub fn add_statistics_exchange(
-        &mut self,
-        target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    pub fn add_statistics_exchange(&mut self, target: String, begin: usize) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
         let identifier = ExchangeIdentifier::Statistics(target);
-        let flight_exchange = FlightExchange::create_sender(tx);
-        match self.exchanges.insert(identifier, flight_exchange) {
-            None => Ok(rx),
-            Some(_) => Err(ErrorCode::Internal(
-                "statistics exchanges can only have one",
-            )),
+
+        match self.exchanges.entry(identifier) {
+            Entry::Vacant(v) => {
+                // v.insert(FlightExchange::Sender())
+                unimplemented!()
+            }
+            Entry::Occupied(mut v) => match v.get_mut() {
+                FlightExchange::MovedSender(_) => unimplemented!(),
+                _ => Err(ErrorCode::Internal("statistics exchanges can only have one")),
+            }
         }
+
+        // let flight_exchange = FlightExchange::create_sender(tx);
+        // match self.exchanges.insert(identifier, flight_exchange) {
+        //     None => Ok(rx),
+        //     Some(_) => Err(ErrorCode::Internal(
+        //         "statistics exchanges can only have one",
+        //     )),
+        // }
     }
 
     pub fn add_statistics_exchanges(
@@ -695,22 +693,29 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn add_fragment_exchange(
-        &mut self,
-        target: String,
-        fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    pub fn add_fragment_exchange(&mut self, target: String, fragment: usize, begin: usize) -> Result<FlightDataAckStream> {
         let (tx, rx) = async_channel::bounded(8);
-        let exchange = FlightExchange::create_sender(tx);
         let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
-        self.exchanges.insert(identifier, exchange);
-        Ok(rx)
+
+        match self.exchanges.entry(identifier) {
+            Entry::Vacant(v) => {
+                // v.insert(FlightExchange::Sender())
+                unimplemented!()
+            }
+            Entry::Occupied(mut v) => match v.get_mut() {
+                FlightExchange::MovedSender(_) => unimplemented!(),
+                _ => Err(ErrorCode::Internal("fragment exchange can only have one")),
+            }
+        }
+
+        // let (tx, rx) = async_channel::bounded(8);
+        // let exchange = FlightExchange::create_sender(tx);
+        // let identifier = ExchangeIdentifier::fragment_sender(target, fragment);
+        // self.exchanges.insert(identifier, exchange);
+        // Ok(rx)
     }
 
-    pub fn add_fragment_exchanges(
-        &mut self,
-        exchanges: HashMap<(String, usize), FlightExchange>,
-    ) -> Result<()> {
+    pub fn add_fragment_exchanges(&mut self, exchanges: HashMap<(String, usize), FlightExchange>) -> Result<()> {
         for ((source, fragment), exchange) in exchanges.into_iter() {
             let identifier = ExchangeIdentifier::fragment_receiver(source, fragment);
 
@@ -718,35 +723,6 @@ impl QueryCoordinator {
         }
 
         Ok(())
-    }
-
-    pub fn replace_sender(
-        &mut self,
-        target: String,
-        fragment: Option<usize>,
-        continue_from: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
-        let identifier = match fragment {
-            None => ExchangeIdentifier::Statistics(target),
-            Some(fragment) => ExchangeIdentifier::fragment_sender(target, fragment),
-        };
-
-        match self.exchanges.get_mut(&identifier) {
-            None => Err(ErrorCode::Internal(
-                "Reconnection failed: cannot replace the sender",
-            )),
-            Some(v) => {
-                if let FlightExchange::MovedSender(v) = v {
-                    // let (tx, rx) = async_channel::bounded(1);
-                    // TODO: replace
-                    return Ok(rx);
-                }
-
-                Err(ErrorCode::Internal(
-                    "Reconnection failed: cannot replace the sender",
-                ))
-            }
-        }
     }
 
     pub fn get_flight_senders(&mut self, params: &ExchangeParams) -> Result<Vec<FlightSender>> {

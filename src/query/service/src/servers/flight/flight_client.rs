@@ -538,10 +538,9 @@ struct FlightDataAckState {
     seq: AtomicUsize,
     auto_ack_window_size: usize,
 
+    may_retry: bool,
     receiver: Receiver<Result<FlightData, Status>>,
-    // TODO: ack in exchange stream
     confirmation_queue: VecDeque<(usize, Result<FlightData, Status>)>,
-    ack_pos: usize,
 }
 
 impl FlightDataAckState {
@@ -556,6 +555,8 @@ impl FlightDataAckState {
     fn end_of_stream(&mut self) -> Poll<Option<Result<FlightData, Status>>> {
         let message_seq = self.seq.fetch_add(1, Ordering::SeqCst);
         self.ack_message(message_seq);
+
+        self.may_retry = false;
         Poll::Ready(None)
     }
 
@@ -603,7 +604,11 @@ pub struct FlightDataAckStream {
 
 impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
-        // todo: wait retry connection
+        let state = self.state.lock();
+
+        if state.may_retry {
+            // todo: wait retry connection and add timer
+        }
     }
 }
 
