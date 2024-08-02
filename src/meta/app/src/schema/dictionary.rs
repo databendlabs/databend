@@ -89,10 +89,10 @@ pub struct CreateDictionaryReq {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DictionaryNameIdent {
+pub struct DictionaryNameIdent<R = String, N = String> {
     pub tenant: Tenant,
-    pub db_name: String,
-    pub dictionary_name: String,
+    pub db_name: N,
+    pub dictionary_name: R,
 }
 
 impl DictionaryNameIdent {
@@ -314,7 +314,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl<R: TenantResource, N: KeyCodec + Debug> kvapi::Key for DictionaryNameIdent
+    impl<R: TenantResource, N: KeyCodec + Debug> kvapi::Key for DictionaryNameIdent<R,N>
     {
         const PREFIX: &'static str = R::PREFIX;
         type ValueType = R::ValueType;
