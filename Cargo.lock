@@ -3363,7 +3363,6 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "http 1.1.0",
- "hyper 0.14.28",
  "opendal",
  "parquet",
  "paste",
@@ -4576,7 +4575,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-storages-common-table-meta",
- "enumflags2",
  "goldenfile",
  "log",
  "opendal",
@@ -11083,7 +11081,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.2#55f4e5a541eda9e7cefbd5138b42cdd92c697d17"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -11105,7 +11103,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.2#55f4e5a541eda9e7cefbd5138b42cdd92c697d17"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
 dependencies = [
  "chrono",
  "proc-macro2",

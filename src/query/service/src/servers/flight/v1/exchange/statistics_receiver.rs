@@ -118,8 +118,6 @@ impl StatisticsReceiver {
         match recv_data {
             Ok(None) => Ok(true),
             Err(transport_error) => Err(transport_error),
-            // RetryConnectSuccess means we need to continue call recv
-            Ok(Some(DataPacket::RetryConnectSuccess)) => Ok(false),
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::Dictionary(_))) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
