@@ -69,7 +69,7 @@ impl FromToProto for mt::DictionaryMeta {
             source: self.source.clone(),
             options: self.options.clone(),
             primary_column_ids: self.primary_column_ids,
-            created_on: self.created_on.to_pb(),
+            created_on: self.created_on.to_pb()?,
             dropped_on: match  self.dropped_on {
                 Some(dropped_on) => Some(dropped_on.to_pb()?),
                 None => None,
