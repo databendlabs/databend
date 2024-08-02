@@ -276,8 +276,8 @@ impl Catalog for ShareCatalog {
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let share_spec = self.get_share_spec().await?;
         if let Some(use_database) = &share_spec.use_database {
-            if &use_database.name == db_name {
-                let db_info = self.generate_share_database_info(&use_database);
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
                 let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
                 return Ok(db.into());
             } else {
@@ -299,7 +299,7 @@ impl Catalog for ShareCatalog {
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let share_spec = self.get_share_spec().await?;
         if let Some(use_database) = &share_spec.use_database {
-            let db_info = self.generate_share_database_info(&use_database);
+            let db_info = self.generate_share_database_info(use_database);
             let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
             Ok(vec![db.into()])
         } else {
@@ -392,8 +392,8 @@ impl Catalog for ShareCatalog {
     ) -> Result<Arc<dyn Table>> {
         let share_spec = self.get_share_spec().await?;
         if let Some(use_database) = &share_spec.use_database {
-            if &use_database.name == db_name {
-                let db_info = self.generate_share_database_info(&use_database);
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
                 let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
                 db.get_table(table_name).await
             } else {
@@ -414,8 +414,8 @@ impl Catalog for ShareCatalog {
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let share_spec = self.get_share_spec().await?;
         if let Some(use_database) = &share_spec.use_database {
-            if &use_database.name == db_name {
-                let db_info = self.generate_share_database_info(&use_database);
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
                 let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
                 db.list_tables().await
             } else {
@@ -440,8 +440,8 @@ impl Catalog for ShareCatalog {
     ) -> Result<Vec<Arc<dyn Table>>> {
         let share_spec = self.get_share_spec().await?;
         if let Some(use_database) = &share_spec.use_database {
-            if &use_database.name == db_name {
-                let db_info = self.generate_share_database_info(&use_database);
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
                 let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
                 db.list_tables_history().await
             } else {
