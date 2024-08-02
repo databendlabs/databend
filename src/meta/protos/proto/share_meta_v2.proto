@@ -16,68 +16,53 @@ syntax = "proto3";
 
 package databend_proto;
 
-message ShareDatabaseObject {
+message ShareDatabase {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // The user this db belongs to
-  string tenant = 1;
-
-  // Database name
+  uint64 privileges = 1;
   string db_name = 2;
-
   uint64 db_id = 3;
+  string grant_on = 4;
 }
 
-message ShareAccountMeta {
+message ShareTable {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  string account = 1;
-  uint64 share_id = 2;
-  string share_on = 3;
-  optional string accept_on = 4;
+  uint64 privileges = 1;
+  string table_name = 2;
+  uint64 db_id = 3;
+  uint64 table_id = 4;
+  string grant_on = 5;
+  string engine = 6;
+  repeated uint64 view_reference_table = 7;
 }
 
-message ObjectSharedByShareIds {
+message ShareReferenceTable {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  repeated uint64 share_ids = 1;
+  uint64 privileges = 1;
+  string table_name = 2;
+  uint64 db_id = 3;
+  uint64 table_id = 4;
+  string grant_on = 5;
+  string engine = 6;
+  repeated uint64 reference_by = 7;
 }
 
-message ShareCredential {
-  oneof credential {
-    ShareCredentialHMAC hmac = 1;
-  }
-}
-
-message ShareCredentialHMAC {
+message ShareMetaV2 {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  string key = 1;
-}
+  repeated string accounts = 1;
+  optional string comment = 2;
+  string create_on = 3;
+  string update_on = 4;
 
-message ShareEndpointMeta {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  string url = 1;
-  string tenant = 2;
-  map<string, string> args = 3;
-  optional string comment = 4;
-  string create_on = 5;
-  optional ShareCredential credential = 6;
-}
-
-message ShareEndpointIdent {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  // The user this share belongs to
-  string tenant = 1;
-
-  // share endpoint name
-  string endpoint = 2;
+  optional ShareDatabase use_database = 5;
+  repeated ShareDatabase reference_database = 6;
+  repeated ShareTable table = 7;
+  repeated ShareReferenceTable reference_table = 8;
 }

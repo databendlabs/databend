@@ -445,7 +445,7 @@ impl FuseTable {
     }
 
     // Check if table is attached.
-    fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
+    pub fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
         table_meta_options
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .is_some()

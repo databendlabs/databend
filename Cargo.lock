@@ -4571,7 +4571,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-storages-common-table-meta",
- "enumflags2",
  "goldenfile",
  "log",
  "opendal",
