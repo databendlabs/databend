@@ -620,11 +620,21 @@ impl Drop for FlightDataAckStream {
     fn drop(&mut self) {
         let state = self.state.lock();
 
-        if state.may_retry {
-            GlobalIORuntime::instance().spawn(async move {
-                // todo: wait retry connection and add timer
-            });
-        }
+        state.receiver.close();
+
+        // TODO:
+        // if state.may_retry {
+        //     drop(state);
+        //     let weak = Arc::downgrade(&self.state);
+        //     GlobalIORuntime::instance().spawn(async move {
+        //         // todo: wait retry connection and add timer
+        //         tokio::time::sleep(Duration::from_secs(60)).await;
+        //         if let Some(ss) = weak.upgrade() {
+        //             let ss = ss.lock();
+        //             ss.receiver.close();
+        //         }
+        //     });
+        // }
     }
 }
 
