@@ -270,11 +270,31 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
+        let mut build_res = PipelineBuildResult::create();
+
+        // Check if the filter is a constant.
+        let mut truncate_table = false;
+        if let Some(filter) = &mutation.direct_filter
+            && filter.used_columns().is_empty()
+        {
+            let filters = create_push_down_filters(filter)?;
+            let filter_result = fuse_table.try_eval_const(
+                self.ctx.clone(),
+                &fuse_table.schema(),
+                &filters.filter,
+            )?;
+            if mutation.mutation_type == MutationType::Delete && filter_result {
+                // The delete condition is always true, truncate the table.
+                truncate_table = true;
+            } else if mutation.mutation_type == MutationType::Update && !filter_result {
+                // The update condition is always false, do nothing.
+                return Ok(Some(build_res));
+            }
+        }
+
         if mutation.mutation_type == MutationType::Merge {
             return Ok(None);
         }
-
-        let mut build_res = PipelineBuildResult::create();
 
         // Check if table is empty.
         let Some(snapshot) = snapshot else {
@@ -287,7 +307,7 @@ impl MutationInterpreter {
         }
 
         if mutation.mutation_type == MutationType::Delete {
-            if mutation.truncate_table {
+            if truncate_table {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,

@@ -315,6 +315,14 @@ select count(*) from t where c >= 0 and c < 1500000;
 0
 
 statement ok
+delete from t where true;
+
+query I
+select count(*) from t;
+----
+0
+
+statement ok
 drop table t all
 
 statement ok
