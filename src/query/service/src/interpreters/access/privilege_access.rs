@@ -122,7 +122,7 @@ impl PrivilegeAccess {
                 if db_name.to_lowercase() == "system" {
                     return Ok(None);
                 }
-                let catalog = if disable_table_info_refresh {
+                let catalog = if !disable_table_info_refresh {
                     self.ctx.get_catalog(catalog_name).await?
                 } else {
                     self.ctx
