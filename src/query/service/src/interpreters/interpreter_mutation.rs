@@ -273,7 +273,7 @@ impl MutationInterpreter {
         let mut build_res = PipelineBuildResult::create();
 
         // Check if the filter is a constant.
-        let mut truncate_table = false;
+        let mut truncate_table = mutation.truncate_table;
         if let Some(filter) = &mutation.direct_filter
             && filter.used_columns().is_empty()
         {
