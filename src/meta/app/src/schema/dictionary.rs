@@ -156,12 +156,12 @@ impl DBIdDictionaryNameIdent {
         &self.tenant
     }
 
-    pub fn dictionary_name(&self) -> String {
-        self.dictionary_name.clone()
+    pub fn dict_name(&self) -> String {
+        self.dict_name.clone()
     }
 
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent::new(&self.tenant, &self.db_name)
+        DatabaseNameIdent::new(&self.tenant, &self.db_id)
     }
 
     pub fn tenant_name(&self) -> &str {
@@ -372,32 +372,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl KeyCodec for DictionaryNameIdent {
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
-            let tenant_name = parser.next_nonempty()?;
-            let name = String::decode_key(parser)?;
-            
-            Ok(DictionaryNameIdent::new_generic(
-                Tenant::new_nonempty(tenant_name),
-                name,"db_name"
-            ))
-        }
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            let b = b.push_str(self.tenant_name());
-            self.dictionary_name.encode_key(b)
-        }
-    }
-
-    impl DictionaryNameIdent {// Self = KeyCode + Debug
-        pub fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, "__fd_dictionary")?;
-            let k = Self::decode_key(&mut p)?;
-            p.done()?;
-            Ok(k)
-        }
-    }
-
     impl kvapi::KeyCodec for DictionaryId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_u64(self.dictionary_id)
@@ -472,7 +446,7 @@ mod kvapi_key_impl {
 
     impl kvapi::KeyCodec for DictionaryIdToName {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(&self.dictionary_id)
+            b.push_u64(self.dictionary_id)
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
@@ -492,7 +466,7 @@ mod kvapi_key_impl {
 
     impl kvapi::KeyCodec for DBIdDictionaryNameIdent {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            self.dict_name.encode_key(b.push_str(self.tenant.tenant_name()).push_str(self.db_id))
+            self.dict_name.encode_key(b.push_str(self.tenant.tenant_name()).push_u64(self.db_id))
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
@@ -503,7 +477,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Key for DictionaryNameIdent {
+    impl kvapi::Key for DBIdDictionaryNameIdent {
         const PREFIX: &'static str = "__fd_dictionary_by_id";
         type ValueType = String;
         fn parent(&self) -> Option<String> {
