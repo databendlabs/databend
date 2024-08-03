@@ -46,7 +46,7 @@ impl FromToProto for mt::DictionaryMeta {
             name: p.name,
             source: p.source,
             options: p.options,
-            schema: ex::TableSchema::from_pb(schema),
+            schema: ex::TableSchema::from_pb(p.schema),
             primary_column_ids: p.primary_column_ids,
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
