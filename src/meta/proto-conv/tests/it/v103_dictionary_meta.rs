@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
-use databend_common_expression::{TableField, TableSchema};
+use chrono::Utc;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_types::anyerror::func_name;
 use databend_common_expression::TableDataType;
+use databend_common_expression as ce;
+use maplit::btreemap;
 
 use crate::common;
 
@@ -26,7 +31,7 @@ fn test_decode_v103_dictionary_meta() -> anyhow::Result<()> {
     let want = || {
         let name = "my_dict".to_string();
         let source = "MySQL".to_string();
-        let options: BTreeMap<String, String> = BTreeMap::new();
+        let mut options: BTreeMap<String, String> = BTreeMap::new();
         options.insert("host".to_string(), "localhost".to_string());
         options.insert("username".to_string(), "root".to_string());
         options.insert("password".to_string(), "1234".to_string());
@@ -49,15 +54,13 @@ fn test_decode_v103_dictionary_meta() -> anyhow::Result<()> {
         };
         let schema = Arc::new(ce::TableSchema::new_from(
             vec![
-                ce::TableField::new(
-                    "bool",
-                    ce::TableDataType::Boolean
-                ),
-            ]
+                ce::TableField::new("bool", ce::TableDataType::Boolean),
+            ],
+            btreemap! { s("a") => s("b") },
         ));
         let primary_column_ids = vec![1];
         let comment = "comment_example".to_string();
-        let create_on = Utc::now();
+        let created_on = Utc::now();
         DictionaryMeta {
             name,
             source,
@@ -71,4 +74,8 @@ fn test_decode_v103_dictionary_meta() -> anyhow::Result<()> {
     };
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
+}
+
+fn s(ss: impl ToString) -> String {
+    ss.to_string()
 }
