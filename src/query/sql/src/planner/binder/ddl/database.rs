@@ -25,14 +25,11 @@ use databend_common_ast::ast::ShowCreateDatabaseStmt;
 use databend_common_ast::ast::ShowDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
-use databend_common_ast::parser::statement::ShareDatabaseParams;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::schema::DatabaseMeta;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
-use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
 use log::debug;
 
 use crate::binder::Binder;
@@ -214,7 +211,6 @@ impl Binder {
             database: DatabaseRef { catalog, database },
             engine,
             options,
-            share_params,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
@@ -224,13 +220,7 @@ impl Binder {
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = normalize_identifier(database, &self.name_resolution_ctx).name;
 
-        // change the database engine to share if create from share
-        let engine = if share_params.is_some() {
-            &Some(DatabaseEngine::Share)
-        } else {
-            engine
-        };
-        let meta = self.database_meta(engine, options, share_params)?;
+        let meta = self.database_meta(engine, options)?;
 
         Ok(Plan::CreateDatabase(Box::new(CreateDatabasePlan {
             create_option: create_option.clone().into(),
@@ -245,7 +235,6 @@ impl Binder {
         &self,
         engine: &Option<DatabaseEngine>,
         options: &[SQLProperty],
-        share_params: &Option<ShareDatabaseParams>,
     ) -> Result<DatabaseMeta> {
         let options = options
             .iter()
@@ -257,20 +246,13 @@ impl Binder {
             DatabaseEngine::Default => ("default", BTreeMap::default()),
             DatabaseEngine::Share => ("share", BTreeMap::default()),
         };
-        let (from_share, using_share_endpoint) =
-            if let Some((from_share, using_share_endpoint)) = share_params {
-                let ident: ShareNameIdent = from_share.clone().try_into()?;
-                (Some(ident), Some(using_share_endpoint.name.clone()))
-            } else {
-                (None, None)
-            };
 
         Ok(DatabaseMeta {
             engine: engine.to_string(),
             engine_options,
             options,
-            from_share: from_share.as_ref().map(ShareNameIdentRaw::from),
-            using_share_endpoint: using_share_endpoint.clone(),
+            from_share: None,
+            using_share_endpoint: None,
             ..Default::default()
         })
     }

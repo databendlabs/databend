@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::fmt::Debug;
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::StorageDescription;
@@ -26,6 +28,8 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::ShareApi;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -44,6 +48,9 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseInfo;
+use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
@@ -66,7 +73,6 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -81,6 +87,8 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::ShareCatalogOption;
+use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TruncateTableReply;
@@ -96,166 +104,249 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use databend_common_meta_app::share::GetShareEndpointReq;
+use databend_common_meta_app::share::ShareDatabaseSpec;
+use databend_common_meta_app::share::ShareSpec;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use iceberg_catalog_hms::HmsCatalog;
-use iceberg_catalog_hms::HmsCatalogConfig;
-use iceberg_catalog_hms::HmsThriftTransport;
-use iceberg_catalog_rest::RestCatalog;
-use iceberg_catalog_rest::RestCatalogConfig;
+use databend_common_sharing::ShareEndpointClient;
+use databend_common_storages_factory::StorageFactory;
+use databend_common_users::UserApiProvider;
 
-use crate::database::IcebergDatabase;
-use crate::IcebergTable;
-
-pub const ICEBERG_CATALOG: &str = "iceberg";
+use crate::catalogs::default::CatalogContext;
+use crate::databases::DatabaseContext;
+use crate::databases::DatabaseFactory;
+use crate::databases::ShareDatabase;
 
 #[derive(Debug)]
-pub struct IcebergCreator;
+pub struct ShareCatalogCreator;
 
-impl CatalogCreator for IcebergCreator {
+impl CatalogCreator for ShareCatalogCreator {
     fn try_create(
         &self,
         info: Arc<CatalogInfo>,
-        _conf: InnerConfig,
-        _meta: &MetaStore,
+        conf: InnerConfig,
+        meta: &MetaStore,
     ) -> Result<Arc<dyn Catalog>> {
-        let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
+        let opt = match &info.meta.catalog_option {
+            CatalogOption::Share(opt) => opt,
+            _ => unreachable!(
+                "trying to create hive catalog from other catalog, must be an internal bug"
+            ),
+        };
+
+        // Storage factory.
+        let storage_factory = StorageFactory::create(conf.clone());
+
+        // Database factory.
+        let database_factory = DatabaseFactory::create(conf.clone());
+
+        let ctx = CatalogContext {
+            meta: meta.to_owned(),
+            storage_factory: Arc::new(storage_factory),
+            database_factory: Arc::new(database_factory),
+        };
+
+        let catalog: Arc<dyn Catalog> =
+            Arc::new(ShareCatalog::try_create(info.clone(), opt.to_owned(), ctx)?);
 
         Ok(catalog)
     }
 }
 
-/// `Catalog` for a external iceberg storage
-///
-/// - Metadata of databases are saved in meta store
-/// - Instances of `Database` are created from reading subdirectories of
-///    Iceberg table
-/// - Table metadata are saved in external Iceberg storage
-#[derive(Clone, Debug)]
-pub struct IcebergCatalog {
-    /// info of this iceberg table.
+#[derive(Clone)]
+pub struct ShareCatalog {
+    // ctx: CatalogContext,
+    ctx: DatabaseContext,
+
     info: Arc<CatalogInfo>,
 
-    /// iceberg catalogs
-    ctl: Arc<dyn iceberg::Catalog>,
+    option: ShareCatalogOption,
 }
 
-impl IcebergCatalog {
-    /// create a new iceberg catalog from the endpoint_address
-    #[fastrace::trace]
-    pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
-        let opt = match &info.meta.catalog_option {
-            CatalogOption::Iceberg(opt) => opt,
-            _ => unreachable!(
-                "trying to create iceberg catalog from other catalog, must be an internal bug"
+impl Debug for ShareCatalog {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("HiveCatalog")
+            .field("info", &self.info)
+            .field("option", &self.option)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ShareCatalog {
+    pub fn try_create(
+        info: Arc<CatalogInfo>,
+        option: ShareCatalogOption,
+        ctx: CatalogContext,
+    ) -> Result<ShareCatalog> {
+        let ctx = DatabaseContext {
+            meta: ctx.meta.clone(),
+            storage_factory: ctx.storage_factory.clone(),
+            tenant: Tenant {
+                tenant: info.name_ident.tenant.clone(),
+            },
+            disable_table_info_refresh: false,
+        };
+
+        Ok(Self { info, option, ctx })
+    }
+
+    async fn get_share_spec(&self) -> Result<ShareSpec> {
+        let share_option = &self.option;
+        let share_name = &share_option.share_name;
+        let share_endpoint = &share_option.share_endpoint;
+        let provider = &share_option.provider;
+        let tenant = &self.info.name_ident.tenant;
+
+        // 1. get share endpoint
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let req = GetShareEndpointReq {
+            tenant: Tenant {
+                tenant: tenant.to_owned(),
+            },
+            endpoint: Some(share_endpoint.clone()),
+        };
+        let reply = meta_api.get_share_endpoint(req).await?;
+        if reply.share_endpoint_meta_vec.is_empty() {
+            return Err(ErrorCode::UnknownShareEndpoint(format!(
+                "UnknownShareEndpoint {:?}",
+                share_endpoint
+            )));
+        }
+
+        // 2. check if ShareSpec exists using share endpoint
+        let share_endpoint_meta = &reply.share_endpoint_meta_vec[0].1;
+        let client = ShareEndpointClient::new();
+        let share_spec = client
+            .get_share_spec_by_name(share_endpoint_meta, tenant, provider, share_name)
+            .await?;
+
+        Ok(share_spec)
+    }
+
+    fn generate_share_database_info(&self, database: &ShareDatabaseSpec) -> DatabaseInfo {
+        let share_option = &self.option;
+        let share_name = &share_option.share_name;
+        let share_endpoint = &share_option.share_endpoint;
+        let provider = &share_option.provider;
+
+        DatabaseInfo {
+            ident: DatabaseIdent::default(),
+            name_ident: DatabaseNameIdent::new(
+                Tenant {
+                    tenant: provider.to_owned(),
+                },
+                &database.name,
             ),
-        };
-
-        let ctl: Arc<dyn iceberg::Catalog> = match opt {
-            IcebergCatalogOption::Hms(hms) => {
-                let cfg = HmsCatalogConfig::builder()
-                    .address(hms.address.clone())
-                    .thrift_transport(HmsThriftTransport::Buffered)
-                    .warehouse(hms.warehouse.clone())
-                    .props(hms.props.clone())
-                    .build();
-                let ctl = HmsCatalog::new(cfg).map_err(|err| {
-                    ErrorCode::BadArguments(format!("Iceberg build hms catalog failed: {err:?}"))
-                })?;
-                Arc::new(ctl)
-            }
-            IcebergCatalogOption::Rest(rest) => {
-                let cfg = RestCatalogConfig::builder()
-                    .uri(rest.uri.clone())
-                    .warehouse(rest.warehouse.clone())
-                    .props(rest.props.clone())
-                    .build();
-                let ctl = RestCatalog::new(cfg);
-                Arc::new(ctl)
-            }
-        };
-
-        Ok(Self { info, ctl })
-    }
-
-    /// Get the iceberg catalog.
-    pub fn iceberg_catalog(&self) -> Arc<dyn iceberg::Catalog> {
-        self.ctl.clone()
+            meta: DatabaseMeta {
+                engine: "SHARE".to_string(),
+                engine_options: BTreeMap::new(),
+                options: BTreeMap::new(),
+                created_on: database.created_on,
+                updated_on: database.created_on,
+                comment: "".to_string(),
+                drop_on: None,
+                shared_by: BTreeSet::new(),
+                from_share: Some(ShareNameIdentRaw::new(provider, share_name)),
+                using_share_endpoint: Some(share_endpoint.to_owned()),
+                from_share_db_id: Some(ShareDbId::Usage(database.id)),
+            },
+        }
     }
 }
 
-#[async_trait]
-impl Catalog for IcebergCatalog {
+#[async_trait::async_trait]
+impl Catalog for ShareCatalog {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn name(&self) -> String {
         self.info.name_ident.catalog_name.clone()
     }
+
     fn info(&self) -> Arc<CatalogInfo> {
         self.info.clone()
     }
 
-    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
-        Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+        let share_spec = self.get_share_spec().await?;
+        if let Some(use_database) = &share_spec.use_database {
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
+                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
+                return Ok(db.into());
+            } else {
+                Err(ErrorCode::UnknownDatabase(format!(
+                    "cannot find database {} from share {}",
+                    db_name, self.option.share_name,
+                )))
+            }
+        } else {
+            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                "share {}.{} has no granted database",
+                self.option.provider, self.option.share_name,
+            )))
+        }
     }
 
+    // Get all the databases.
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
-        let db_names = self
-            .iceberg_catalog()
-            .list_namespaces(None)
-            .await
-            .map_err(|err| {
-                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
-            })?;
-
-        let mut dbs = Vec::new();
-        for db_name in db_names {
-            let db = self
-                .get_database(&Tenant::new_literal("dummy"), &db_name.to_url_string())
-                .await?;
-            dbs.push(db);
+        let share_spec = self.get_share_spec().await?;
+        if let Some(use_database) = &share_spec.use_database {
+            let db_info = self.generate_share_database_info(use_database);
+            let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
+            Ok(vec![db.into()])
+        } else {
+            Ok(vec![])
         }
-        Ok(dbs)
     }
 
+    // Operation with database.
     #[async_backtrace::framed]
     async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot create database in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot drop database in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn undrop_database(&self, _req: UndropDatabaseReq) -> Result<UndropDatabaseReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot undrop database in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn rename_database(&self, _req: RenameDatabaseReq) -> Result<RenameDatabaseReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot rename database in SHARE catalog",
+        ))
     }
 
-    fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        if table_info.meta.storage_params.is_none() {
-            return Err(ErrorCode::BadArguments(
-                "table storage params not set, this is not a valid table info for iceberg table",
-            ));
-        }
-
-        let table: Arc<dyn Table> = IcebergTable::try_create(table_info.clone())?.into();
-
-        Ok(table)
+    fn get_table_by_info(&self, _table_info: &TableInfo) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(
+            "Cannot get_table_by_info in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot get table by id in SHARE catalog",
+        ))
     }
 
     async fn mget_table_names_by_ids(
@@ -264,21 +355,20 @@ impl Catalog for IcebergCatalog {
         _table_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get tables name by ids in HIVE catalog",
+            "Cannot get tables name by ids in SHARE catalog",
         ))
     }
 
     #[async_backtrace::framed]
     async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get table name by id in ICEBERG catalog",
+            "Cannot get table name by id in SHARE catalog",
         ))
     }
 
-    #[async_backtrace::framed]
-    async fn get_db_name_by_id(&self, _table_id: MetaId) -> Result<String> {
+    async fn get_db_name_by_id(&self, _db_id: MetaId) -> Result<String> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get db name by id in ICEBERG catalog",
+            "Cannot get db name by id in SHARE catalog",
         ))
     }
 
@@ -288,71 +378,134 @@ impl Catalog for IcebergCatalog {
         _db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
-            "Cannot get dbs name by ids in ICEBERG catalog",
+            "Cannot get dbs name by ids in SHARE catalog",
         ))
     }
 
-    #[fastrace::trace]
+    // Get one table by db and table name.
     #[async_backtrace::framed]
     async fn get_table(
         &self,
-        tenant: &Tenant,
+        _tenant: &Tenant,
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.get_table(table_name).await
+        let share_spec = self.get_share_spec().await?;
+        if let Some(use_database) = &share_spec.use_database {
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
+                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
+                db.get_table(table_name).await
+            } else {
+                Err(ErrorCode::UnknownDatabase(format!(
+                    "cannot find database {} from share {}",
+                    db_name, self.option.share_name,
+                )))
+            }
+        } else {
+            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                "share {}.{} has no granted database",
+                self.option.provider, self.option.share_name,
+            )))
+        }
     }
 
     #[async_backtrace::framed]
-    async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
-        let db = self.get_database(tenant, db_name).await?;
-        db.list_tables().await
+    async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
+        let share_spec = self.get_share_spec().await?;
+        if let Some(use_database) = &share_spec.use_database {
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
+                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
+                db.list_tables().await
+            } else {
+                Err(ErrorCode::UnknownDatabase(format!(
+                    "cannot find database {} from share {}",
+                    db_name, self.option.share_name,
+                )))
+            }
+        } else {
+            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                "share {}.{} has no granted database",
+                self.option.provider, self.option.share_name,
+            )))
+        }
     }
 
     #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         _tenant: &Tenant,
-        _db_name: &str,
+        db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        unimplemented!()
+        let share_spec = self.get_share_spec().await?;
+        if let Some(use_database) = &share_spec.use_database {
+            if use_database.name == db_name {
+                let db_info = self.generate_share_database_info(use_database);
+                let db = ShareDatabase::try_create(self.ctx.clone(), db_info)?;
+                db.list_tables_history().await
+            } else {
+                Err(ErrorCode::UnknownDatabase(format!(
+                    "cannot find database {} from share {}",
+                    db_name, self.option.share_name,
+                )))
+            }
+        } else {
+            Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
+                "share {}.{} has no granted database",
+                self.option.provider, self.option.share_name,
+            )))
+        }
     }
 
     #[async_backtrace::framed]
     async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot create table in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot drop table in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot undrop table in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn commit_table_meta(&self, _req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot commit_table_meta in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
     async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot rename table in SHARE catalog",
+        ))
     }
 
+    // Check a db.table is exists or not.
     #[async_backtrace::framed]
     async fn exists_table(&self, tenant: &Tenant, db_name: &str, table_name: &str) -> Result<bool> {
-        let db = self.get_database(tenant, db_name).await?;
-        match db.get_table(table_name).await {
+        // TODO refine this
+        match self.get_table(tenant, db_name, table_name).await {
             Ok(_) => Ok(true),
-            Err(e) => match e.code() {
-                ErrorCode::UNKNOWN_TABLE => Ok(false),
-                _ => Err(e),
-            },
+            Err(err) => {
+                if err.code() == ErrorCode::UNKNOWN_TABLE {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
         }
     }
 
@@ -363,7 +516,9 @@ impl Catalog for IcebergCatalog {
         _db_name: &str,
         _req: UpsertTableOptionReq,
     ) -> Result<UpsertTableOptionReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot upsert table option in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -371,17 +526,9 @@ impl Catalog for IcebergCatalog {
         &self,
         _req: SetTableColumnMaskPolicyReq,
     ) -> Result<SetTableColumnMaskPolicyReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
-        unimplemented!()
+        Err(ErrorCode::Unimplemented(
+            "Cannot set_table_column_mask_policy in SHARE catalog",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -428,7 +575,15 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    // Table index
+    #[async_backtrace::framed]
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+        unimplemented!()
+    }
 
     #[async_backtrace::framed]
     async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
@@ -467,8 +622,6 @@ impl Catalog for IcebergCatalog {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
-
-    // Virtual column
 
     #[async_backtrace::framed]
     async fn create_virtual_column(
@@ -516,10 +669,6 @@ impl Catalog for IcebergCatalog {
     // List all table functions' names.
     fn list_table_functions(&self) -> Vec<String> {
         vec![]
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 
     // Get table engines

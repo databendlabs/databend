@@ -41,6 +41,7 @@ use crate::auth::AuthMgr;
 use crate::builtin::BuiltinUDFs;
 use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
+use crate::catalogs::ShareCatalogCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
@@ -100,6 +101,7 @@ impl GlobalServices {
             let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
                 (CatalogType::Iceberg, Arc::new(IcebergCreator)),
                 (CatalogType::Hive, Arc::new(HiveCreator)),
+                (CatalogType::Share, Arc::new(ShareCatalogCreator)),
             ];
 
             CatalogManager::init(config, Arc::new(default_catalog), catalog_creator).await?;
