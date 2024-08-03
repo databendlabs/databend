@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression as ex;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;
@@ -68,7 +63,7 @@ impl FromToProto for mt::DictionaryMeta {
             name: self.name.clone(),
             source: self.source.clone(),
             options: self.options.clone(),
-            primary_column_ids: self.primary_column_ids,
+            primary_column_ids: self.primary_column_ids.clone(),
             created_on: self.created_on.to_pb()?,
             dropped_on: match  self.dropped_on {
                 Some(dropped_on) => Some(dropped_on.to_pb()?),

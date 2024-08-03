@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use core::fmt;
-use std::collections::BTreeSet;
 use std::collections::BTreeMap;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -295,7 +294,6 @@ impl ListDictionaryReq {
 }
 
 mod kvapi_key_impl {
-    use std::fmt::Debug;
 
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
@@ -304,7 +302,6 @@ mod kvapi_key_impl {
 
     use crate::schema::DictionaryIdHistoryIdent;
     use crate::tenant::Tenant;
-    use crate::tenant_key::resource::TenantResource;
 
     use super::DictionaryNameIdent;
 
