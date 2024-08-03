@@ -120,7 +120,7 @@ impl DictionaryNameIdent {
     }
 
     pub fn tenant_name(&self) -> &str {
-        &self.tenant.tenant_name()
+        self.tenant.tenant_name()
     }
 
     pub fn new_generic(tenant: impl ToTenant, dictionary_name: impl ToString, db_name: impl ToString) -> Self {
@@ -161,11 +161,11 @@ impl DBIdDictionaryNameIdent {
     }
 
     pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent::new(&self.tenant, &self.db_id)
+        DatabaseNameIdent::new(&self.tenant, self.db_id)
     }
 
     pub fn tenant_name(&self) -> &str {
-        &self.tenant.tenant_name()
+        self.tenant.tenant_name()
     }
 
     pub fn new_generic(tenant: impl ToTenant, dict_name: impl ToString, db_id: u64) -> Self {
