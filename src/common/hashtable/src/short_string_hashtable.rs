@@ -187,7 +187,7 @@ where
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
                 self.table1
                     .insert(t)
                     .map(|x| {
@@ -207,7 +207,7 @@ where
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
                 self.table2
                     .insert(t)
                     .map(|x| {
@@ -228,7 +228,7 @@ where
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
                 self.table3
                     .insert(t)
                     .map(|x| {
@@ -834,7 +834,7 @@ where A: Allocator + Clone + Default
             1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
                 self.table1.get(&t).map(|x| {
                     ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table1(x))
                 })
@@ -843,7 +843,7 @@ where A: Allocator + Clone + Default
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
                 self.table2.get(&t).map(|x| {
                     ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table2(x))
                 })
@@ -853,7 +853,7 @@ where A: Allocator + Clone + Default
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
                 self.table3.get(&t).map(|x| {
                     ShortStringHashtableEntryRef(ShortStringHashtableEntryRefInner::Table3(x))
                 })
@@ -882,7 +882,7 @@ where A: Allocator + Clone + Default
             1..=8 => unsafe {
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
                 self.table1.get_mut(&t).map(|x| {
                     ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table1(x))
                 })
@@ -891,7 +891,7 @@ where A: Allocator + Clone + Default
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
                 self.table2.get_mut(&t).map(|x| {
                     ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table2(x))
                 })
@@ -901,7 +901,7 @@ where A: Allocator + Clone + Default
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
                 self.table3.get_mut(&t).map(|x| {
                     ShortStringHashtableEntryMutRef(ShortStringHashtableEntryMutRefInner::Table3(x))
                 })
@@ -977,7 +977,7 @@ where A: Allocator + Clone + Default
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
                 self.table1
                     .insert(t)
                     .map(|x| {
@@ -997,7 +997,7 @@ where A: Allocator + Clone + Default
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
                 self.table2
                     .insert(t)
                     .map(|x| {
@@ -1018,7 +1018,7 @@ where A: Allocator + Clone + Default
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
                 self.table3
                     .insert(t)
                     .map(|x| {
@@ -1100,7 +1100,7 @@ where A: Allocator + Clone + Default
                 self.table1.check_grow();
                 let mut t = [0u64; 1];
                 t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<_, InlineKey<0>>(t);
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
                 self.table1
                     .insert_with_hash(t, hash)
                     .map(|x| {
@@ -1120,7 +1120,7 @@ where A: Allocator + Clone + Default
                 let mut t = [0u64; 2];
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<_, InlineKey<1>>(t);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
                 self.table2
                     .insert_with_hash(t, hash)
                     .map(|x| {
@@ -1141,7 +1141,7 @@ where A: Allocator + Clone + Default
                 t[0] = (key.as_ptr() as *const u64).read_unaligned();
                 t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
                 t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<_, InlineKey<2>>(t);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
                 self.table3
                     .insert_with_hash(t, hash)
                     .map(|x| {

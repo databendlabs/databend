@@ -19,11 +19,10 @@ use databend_common_meta_app::app_error::CannotShareDatabaseCreatedFromShare;
 use databend_common_meta_app::app_error::ShareAccountsAlreadyExists;
 use databend_common_meta_app::app_error::ShareAlreadyExists;
 use databend_common_meta_app::app_error::ShareEndpointAlreadyExists;
-use databend_common_meta_app::app_error::UnknownShare;
 use databend_common_meta_app::app_error::UnknownShareAccounts;
 use databend_common_meta_app::app_error::UnknownTable;
-use databend_common_meta_app::app_error::WrongShare;
 use databend_common_meta_app::app_error::WrongShareObject;
+use databend_common_meta_app::app_error::WrongSharePrivileges;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
@@ -33,7 +32,6 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::TableId;
-use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::share::share_end_point_ident::ShareEndpointIdentRaw;
@@ -48,8 +46,8 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnRequest;
+use fastrace::func_name;
 use log::debug;
-use minitrace::func_name;
 
 use crate::assert_table_exist;
 use crate::convert_share_meta_to_spec;
@@ -82,7 +80,7 @@ use crate::ShareApi;
 #[async_trait::async_trait]
 impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn show_shares(&self, req: ShowSharesReq) -> Result<ShowSharesReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
@@ -93,7 +91,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     }
 
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn create_share(&self, req: CreateShareReq) -> Result<CreateShareReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
@@ -571,6 +569,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<GrantShareObjectReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
+        check_share_privilege(&req.object, req.privilege)?;
+
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -591,15 +591,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             };
 
-            let seq_and_id =
+            let (seq_and_id, object) =
                 get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), true)
                     .await?;
 
-            check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
+            check_share_object(&share_meta, &seq_and_id, &req.object, req.privilege)?;
 
             // Check the object privilege has been granted
             let has_granted_privileges =
-                share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
+                share_meta.has_granted_privileges(&object, req.privilege)?;
 
             if has_granted_privileges {
                 return Ok(GrantShareObjectReply {
@@ -616,28 +616,28 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             // Grant the object privilege by transaction.
             {
                 let id_key = ShareId { share_id };
-                // modify the share_meta add privilege
-                let object = ShareGrantObject::new(&seq_and_id);
 
+                // modify the share_meta add privilege
                 // modify share_ids
                 let res = get_object_shared_by_share_ids(self, &object).await?;
                 let share_ids_seq = res.0;
                 let mut share_ids: ObjectSharedByShareIds = res.1;
                 share_ids.add(share_id);
 
-                share_meta.grant_object_privileges(object.clone(), req.privilege, req.grant_on);
+                share_meta.grant_object_privileges(&object, req.privilege, req.grant_on)?;
+                let grant_object = ShareGrantObject::new(&object);
 
                 // condition
                 let mut condition: Vec<TxnCondition> = vec![
                     txn_cond_seq(share_name_key, Eq, share_id_seq),
                     txn_cond_seq(&id_key, Eq, share_meta_seq),
-                    txn_cond_seq(&object, Eq, share_ids_seq),
+                    txn_cond_seq(&grant_object, Eq, share_ids_seq),
                 ];
                 add_txn_condition(&seq_and_id, &mut condition);
                 // if_then
                 let mut if_then = vec![
                     txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                    txn_op_put(&object, serialize_struct(&share_ids)?),  // (object) -> share_ids
+                    txn_op_put(&grant_object, serialize_struct(&share_ids)?), /* (object) -> share_ids */
                 ];
                 // Some database has been created before `DatabaseIdToName`, so create it if need.
                 create_db_name_to_id_key_if_need(
@@ -715,6 +715,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
     ) -> Result<RevokeShareObjectReply, KVAppError> {
         debug!(req :? =(&req); "ShareApi: {}", func_name!());
 
+        check_share_privilege(&req.object, req.privilege)?;
         let share_name_key = &req.share_name;
 
         let mut trials = txn_backoff(None, func_name!());
@@ -735,15 +736,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                 }
             };
 
-            let seq_and_id =
+            let (seq_and_id, object) =
                 get_share_object_seq_and_id(self, &req.object, share_name_key.tenant(), false)
                     .await?;
 
-            check_share_object(&share_meta.database, &seq_and_id, &req.object)?;
+            check_share_object(&share_meta, &seq_and_id, &req.object, req.privilege)?;
 
             // Check the object privilege has not been granted.
             let has_granted_privileges =
-                share_meta.has_granted_privileges(&req.object, &seq_and_id, req.privilege)?;
+                share_meta.has_granted_privileges(&object, req.privilege)?;
 
             if !has_granted_privileges {
                 return Ok(RevokeShareObjectReply {
@@ -761,67 +762,45 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             {
                 let id_key = ShareId { share_id };
                 // modify the share_meta add privilege
-                let object = ShareGrantObject::new(&seq_and_id);
-
                 // modify share_ids
                 let res = get_object_shared_by_share_ids(self, &object).await?;
                 let share_ids_seq = res.0;
                 let mut share_ids: ObjectSharedByShareIds = res.1;
                 share_ids.remove(share_id);
 
+                let grant_object = ShareGrantObject::new(&object);
                 // condition
                 let mut condition: Vec<TxnCondition> = vec![
                     txn_cond_seq(share_name_key, Eq, share_id_seq),
                     txn_cond_seq(&id_key, Eq, share_meta_seq),
-                    txn_cond_seq(&object, Eq, share_ids_seq),
+                    txn_cond_seq(&grant_object, Eq, share_ids_seq),
                 ];
                 add_txn_condition(&seq_and_id, &mut condition);
                 // if_then
                 let mut if_then = vec![
-                    txn_op_put(&object, serialize_struct(&share_ids)?), // (object) -> share_ids
+                    txn_op_put(&grant_object, serialize_struct(&share_ids)?), /* (object) -> share_ids */
                 ];
 
                 // construct the revoke_object before modify share meta
-                let revoke_object = match seq_and_id {
+                match seq_and_id {
                     ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, mut db_meta) => {
                         db_meta.shared_by.remove(&share_id);
                         let key = DatabaseId { db_id };
                         if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
                         condition.push(txn_cond_seq(&key, Eq, db_meta_seq));
-                        Some(ShareObject::Db(db_id))
                     }
                     ShareGrantObjectSeqAndId::Table(
-                        db_id,
+                        _db_id,
                         table_meta_seq,
                         table_id,
                         mut table_meta,
                     ) => {
                         table_meta.shared_by.remove(&share_id);
                         let key = TableId { table_id };
-                        let revoke_table_id = Some(table_id);
                         if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
                         condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
-
-                        let (_, share_table_info) = get_table_info_by_share(
-                            self,
-                            revoke_table_id,
-                            share_name_key,
-                            &share_meta,
-                        )
-                        .await?;
-                        if share_table_info.is_empty() {
-                            return Err(KVAppError::AppError(AppError::WrongShareObject(
-                                WrongShareObject::new("table_id".to_string()),
-                            )));
-                        }
-
-                        Some(ShareObject::Table((
-                            db_id,
-                            table_id,
-                            share_table_info[0].name.clone(),
-                        )))
                     }
-                };
+                }
 
                 let _ = revoke_object_privileges(
                     self,
@@ -860,7 +839,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     return Ok(RevokeShareObjectReply {
                         share_id,
                         share_spec: Some(share_spec),
-                        revoke_object,
+                        revoke_object: Some(object.into()),
                     });
                 }
             }
@@ -890,53 +869,36 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
             }
         };
 
-        if share_meta.database.is_none() {
-            return Ok(GetShareGrantObjectReply {
-                share_name: req.share_name,
-                objects: vec![],
-            });
-        }
+        if let Some(use_database) = share_meta.use_database {
+            let database_name = use_database.db_name.clone();
 
-        let database_obj = share_meta.database.clone().unwrap();
-        let database = get_object_name_from_id(self, &None, database_obj.object).await?;
-        if database.is_none() {
-            return Ok(GetShareGrantObjectReply {
-                share_name: req.share_name,
-                objects: vec![],
+            let mut objects = vec![];
+            objects.push(ShareGrantReplyObject {
+                object: ShareGrantObjectName::Database(database_name.clone()),
+                privileges: use_database.privileges,
+                grant_on: use_database.grant_on,
             });
-        }
-        let database_name = match database.as_ref().unwrap() {
-            ShareGrantObjectName::Database(db_name) => Some(db_name),
-            ShareGrantObjectName::Table(_, _) => {
-                return Ok(GetShareGrantObjectReply {
-                    share_name: req.share_name,
-                    objects: vec![],
+            for table in &share_meta.table {
+                objects.push(ShareGrantReplyObject {
+                    object: ShareGrantObjectName::Table(
+                        database_name.clone(),
+                        table.table_name.clone(),
+                    ),
+                    privileges: table.privileges,
+                    grant_on: use_database.grant_on,
                 });
             }
-        };
 
-        let mut entries = Vec::new();
-        for entry in share_meta.entries {
-            entries.push(entry.1);
+            Ok(GetShareGrantObjectReply {
+                share_name: req.share_name,
+                objects,
+            })
+        } else {
+            return Ok(GetShareGrantObjectReply {
+                share_name: req.share_name,
+                objects: vec![],
+            });
         }
-        entries.push(share_meta.database.unwrap());
-
-        let mut objects = vec![];
-        for entry in entries {
-            let object = get_object_name_from_id(self, &database_name, entry.object).await?;
-            if let Some(object) = object {
-                objects.push(ShareGrantReplyObject {
-                    object,
-                    privileges: entry.privileges,
-                    grant_on: entry.grant_on,
-                })
-            }
-        }
-
-        Ok(GetShareGrantObjectReply {
-            share_name: req.share_name,
-            objects,
-        })
     }
 
     // Return all the grant tenants of the share
@@ -954,18 +916,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
         &self,
         req: GetObjectGrantPrivilegesReq,
     ) -> Result<GetObjectGrantPrivilegesReply, KVAppError> {
-        let entries = match req.object {
+        let mut privileges = vec![];
+
+        match req.object {
             ShareGrantObjectName::Database(db_name) => {
-                let db_name_key = DatabaseNameIdent::new(&req.tenant, db_name);
+                let db_name_key = DatabaseNameIdent::new(&req.tenant, db_name.clone());
                 let (db_seq, db_id) = get_u64_value(self, &db_name_key).await?;
                 db_has_to_exist(
                     db_seq,
                     &db_name_key,
                     format!("get_grant_privileges_of_object: {}", db_name_key.display()),
                 )?;
-                let object = ShareGrantObject::Database(db_id);
+                let object = ShareObject::Database(db_name.clone(), db_id);
                 let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
-                let mut entries = vec![];
                 for share_id in share_ids.share_ids.iter() {
                     let (_seq, share_name) = get_share_id_to_name_or_err(
                         self,
@@ -980,14 +943,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         format!("get_grant_privileges_of_object: {}", &share_id),
                     )
                     .await?;
-
-                    entries.push((
-                        share_meta.get_grant_entry(object.clone()),
-                        share_name.share_name().to_string(),
-                    ));
+                    if let Some(use_database) = share_meta.use_database {
+                        if use_database.db_name == db_name {
+                            privileges.push(ObjectGrantPrivilege {
+                                share_name: share_name.share_name().to_string(),
+                                privileges: use_database.privileges,
+                                grant_on: use_database.grant_on,
+                            });
+                        }
+                    }
                 }
-
-                entries
             }
             ShareGrantObjectName::Table(db_name, table_name) => {
                 let db_name_key = DatabaseNameIdent::new(&req.tenant, &db_name);
@@ -1008,16 +973,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     &TableNameIdent {
                         tenant: req.tenant.clone(),
                         db_name: db_name.clone(),
-                        table_name,
+                        table_name: table_name.clone(),
                     },
                     format!("get_grant_privileges_of_object: {}", table_name_key),
                 )?;
 
-                let object = ShareGrantObject::Table(table_id);
+                let object = ShareObject::Table(table_name, db_id, table_id);
                 let (_seq, share_ids) = get_object_shared_by_share_ids(self, &object).await?;
-                let mut entries = vec![];
                 for share_id in share_ids.share_ids.iter() {
-                    let (_seq, share_name_ident_raw) = get_share_id_to_name_or_err(
+                    let (_seq, share_name) = get_share_id_to_name_or_err(
                         self,
                         *share_id,
                         format!("get_grant_privileges_of_object: {}", &share_id),
@@ -1030,26 +994,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         format!("get_grant_privileges_of_object: {}", &share_id),
                     )
                     .await?;
-
-                    entries.push((
-                        share_meta.get_grant_entry(object.clone()),
-                        share_name_ident_raw.share_name().to_string(),
-                    ));
+                    for table in &share_meta.table {
+                        if table.db_id != db_id || table.table_id != table_id {
+                            continue;
+                        }
+                        privileges.push(ObjectGrantPrivilege {
+                            share_name: share_name.share_name().to_string(),
+                            privileges: table.privileges,
+                            grant_on: table.grant_on,
+                        });
+                    }
                 }
-
-                entries
-            }
-        };
-        let mut privileges = vec![];
-        for (entry, share_name) in entries {
-            if let Some(entry) = entry {
-                privileges.push(ObjectGrantPrivilege {
-                    share_name,
-                    privileges: entry.privileges,
-                    grant_on: entry.grant_on,
-                });
             }
         }
+
         Ok(GetObjectGrantPrivilegesReply { privileges })
     }
 
@@ -1423,28 +1381,9 @@ async fn construct_drop_share_endpoint_txn_operations(
     Ok(Some(share_endpoint_id))
 }
 
-async fn get_share_database_name(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    share_meta: &ShareMeta,
-    share_name: &ShareNameIdent,
-) -> Result<Option<String>, KVAppError> {
-    if let Some(entry) = &share_meta.database {
-        match entry.object {
-            ShareGrantObject::Database(db_id) => {
-                let id_to_name = DatabaseIdToName { db_id };
-                let (name_ident_seq, name_ident): (_, Option<DatabaseNameIdentRaw>) =
-                    get_pb_value(kv_api, &id_to_name).await?;
-                if name_ident_seq == 0 || name_ident.is_none() {
-                    return Err(KVAppError::AppError(AppError::UnknownShare(
-                        UnknownShare::new(share_name.name(), ""),
-                    )));
-                }
-                Ok(Some(name_ident.unwrap().database_name().to_string()))
-            }
-            ShareGrantObject::Table(_id) => Err(KVAppError::AppError(AppError::WrongShare(
-                WrongShare::new(share_name.name()),
-            ))),
-        }
+async fn get_share_use_database_name(share_meta: &ShareMeta) -> Result<Option<String>, KVAppError> {
+    if let Some(use_database) = &share_meta.use_database {
+        Ok(Some(use_database.db_name.clone()))
     } else {
         Ok(None)
     }
@@ -1502,12 +1441,12 @@ async fn get_outbound_share_info_by_name(
         accounts.push(account.clone());
     }
 
-    let database_name = get_share_database_name(kv_api, &share_meta, share_name).await?;
+    let database_name = get_share_use_database_name(&share_meta).await?;
 
     Ok(ShareAccountReply {
         share_name: share_name.clone(),
         database_name,
-        create_on: share_meta.share_on,
+        create_on: share_meta.create_on,
         accounts: Some(accounts),
         comment: share_meta.comment.clone(),
     })
@@ -1535,33 +1474,6 @@ async fn get_outbound_share_infos_by_tenant(
     Ok(outbound_share_accounts)
 }
 
-async fn get_object_name_from_id(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    database_name: &Option<&String>,
-    object: ShareGrantObject,
-) -> Result<Option<ShareGrantObjectName>, KVAppError> {
-    match object {
-        ShareGrantObject::Database(db_id) => {
-            let db_id_key = DatabaseIdToName { db_id };
-            let (_db_name_seq, db_name): (_, Option<DatabaseNameIdentRaw>) =
-                get_pb_value(kv_api, &db_id_key).await?;
-            Ok(db_name
-                .map(|db_name| ShareGrantObjectName::Database(db_name.database_name().to_string())))
-        }
-        ShareGrantObject::Table(table_id) => {
-            let table_id_key = TableIdToName { table_id };
-            let (_db_id_table_name_seq, table_name): (_, Option<DBIdTableName>) =
-                get_pb_value(kv_api, &table_id_key).await?;
-            Ok(table_name.map(|table_name| {
-                ShareGrantObjectName::Table(
-                    database_name.as_ref().unwrap().to_string(),
-                    table_name.table_name,
-                )
-            }))
-        }
-    }
-}
-
 async fn create_db_name_to_id_key_if_need(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     seq_and_id: &ShareGrantObjectSeqAndId,
@@ -1571,7 +1483,7 @@ async fn create_db_name_to_id_key_if_need(
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
     if let ShareGrantObjectName::Database(db) = obj_name {
-        if let ShareGrantObjectSeqAndId::Database(_, db_id, _) = seq_and_id {
+        if let ShareGrantObjectSeqAndId::Database(db_id, _, _) = seq_and_id {
             let db_id_key = DatabaseIdToName { db_id: *db_id };
             let (db_name_seq, _): (_, Option<DatabaseNameIdentRaw>) =
                 get_pb_value(kv_api, &db_id_key).await?;
@@ -1586,34 +1498,97 @@ async fn create_db_name_to_id_key_if_need(
     Ok(())
 }
 
-fn check_share_object(
-    database: &Option<ShareGrantEntry>,
-    seq_and_id: &ShareGrantObjectSeqAndId,
+fn check_share_privilege(
     obj_name: &ShareGrantObjectName,
+    privileges: ShareGrantObjectPrivilege,
 ) -> Result<(), KVAppError> {
-    if let Some(entry) = database {
-        if let ShareGrantObject::Database(db_id) = entry.object {
-            let object_db_id = match seq_and_id {
-                ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
-                ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
-            };
-            if db_id != object_db_id {
-                return Err(KVAppError::AppError(AppError::WrongShareObject(
-                    WrongShareObject::new(obj_name.to_string()),
+    match obj_name {
+        ShareGrantObjectName::Database(_db_name) => {
+            // legal grant database privileges: usage/reference
+            if privileges != ShareGrantObjectPrivilege::Usage
+                && privileges != ShareGrantObjectPrivilege::ReferenceUsage
+            {
+                return Err(KVAppError::AppError(AppError::WrongSharePrivileges(
+                    WrongSharePrivileges::new(obj_name.to_string()),
                 )));
             }
-        } else {
-            unreachable!("database MUST be Database object");
         }
-    } else {
-        // Table cannot be granted without database has been granted.
-        if let ShareGrantObjectSeqAndId::Table(_, _, _, _) = seq_and_id {
-            return Err(KVAppError::AppError(AppError::WrongShareObject(
-                WrongShareObject::new(obj_name.to_string()),
-            )));
+        ShareGrantObjectName::Table(_, _) => {
+            // legal grant table privileges: select
+            if privileges != ShareGrantObjectPrivilege::Select {
+                return Err(KVAppError::AppError(AppError::WrongSharePrivileges(
+                    WrongSharePrivileges::new(obj_name.to_string()),
+                )));
+            }
         }
     }
+    Ok(())
+}
 
+fn check_share_object(
+    share_meta: &ShareMeta,
+    seq_and_id: &ShareGrantObjectSeqAndId,
+    obj_name: &ShareGrantObjectName,
+    privileges: ShareGrantObjectPrivilege,
+) -> Result<(), KVAppError> {
+    let object_db_id = match seq_and_id {
+        ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
+        ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
+    };
+
+    match obj_name {
+        ShareGrantObjectName::Database(_db_name) => match privileges {
+            ShareGrantObjectPrivilege::Usage => {
+                if let Some(db) = &share_meta.use_database {
+                    if db.db_id != object_db_id {
+                        return Err(KVAppError::AppError(AppError::WrongShareObject(
+                            WrongShareObject::new(obj_name.to_string()),
+                        )));
+                    }
+                }
+            }
+            ShareGrantObjectPrivilege::ReferenceUsage => {}
+            _ => {
+                return Err(KVAppError::AppError(AppError::WrongSharePrivileges(
+                    WrongSharePrivileges::new(obj_name.to_string()),
+                )));
+            }
+        },
+        ShareGrantObjectName::Table(_, _) => {
+            match privileges {
+                ShareGrantObjectPrivilege::Select => {
+                    if let Some(db) = &share_meta.use_database {
+                        if db.db_id != object_db_id {
+                            return Err(KVAppError::AppError(AppError::WrongShareObject(
+                                WrongShareObject::new(obj_name.to_string()),
+                            )));
+                        }
+                    } else {
+                        // Table cannot be granted without database has been granted.
+                        return Err(KVAppError::AppError(AppError::WrongShareObject(
+                            WrongShareObject::new(obj_name.to_string()),
+                        )));
+                    }
+                }
+                ShareGrantObjectPrivilege::ReferenceUsage => {
+                    for db in &share_meta.reference_database {
+                        if db.db_id == object_db_id {
+                            return Ok(());
+                        }
+                    }
+
+                    return Err(KVAppError::AppError(AppError::WrongShareObject(
+                        WrongShareObject::new(obj_name.to_string()),
+                    )));
+                }
+                _ => {
+                    return Err(KVAppError::AppError(AppError::WrongSharePrivileges(
+                        WrongSharePrivileges::new(obj_name.to_string()),
+                    )));
+                }
+            }
+        }
+    }
     Ok(())
 }
 
@@ -1623,7 +1598,7 @@ async fn get_share_object_seq_and_id(
     obj_name: &ShareGrantObjectName,
     tenant: &Tenant,
     grant: bool,
-) -> Result<ShareGrantObjectSeqAndId, KVAppError> {
+) -> Result<(ShareGrantObjectSeqAndId, ShareObject), KVAppError> {
     match obj_name {
         ShareGrantObjectName::Database(db_name) => {
             let name_key = DatabaseNameIdent::new(tenant.clone(), db_name);
@@ -1644,10 +1619,9 @@ async fn get_share_object_seq_and_id(
                     ),
                 ));
             }
-            Ok(ShareGrantObjectSeqAndId::Database(
-                db_meta_seq,
-                db_id,
-                db_meta,
+            Ok((
+                ShareGrantObjectSeqAndId::Database(db_meta_seq, db_id, db_meta),
+                ShareObject::Database(db_name.to_owned(), db_id),
             ))
         }
 
@@ -1689,11 +1663,14 @@ async fn get_share_object_seq_and_id(
                 )));
             }
 
-            Ok(ShareGrantObjectSeqAndId::Table(
-                db_id,
-                table_meta_seq,
-                table_id,
-                table_meta.unwrap(),
+            Ok((
+                ShareGrantObjectSeqAndId::Table(
+                    db_id,
+                    table_meta_seq,
+                    table_id,
+                    table_meta.unwrap(),
+                ),
+                ShareObject::Table(table_name.to_owned(), db_id, table_id),
             ))
         }
     }
@@ -1773,18 +1750,38 @@ async fn drop_accounts_granted_from_share(
     Ok(())
 }
 
-async fn remove_share_id_from_share_object(
+async fn remove_share_id_from_share_database(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
-    entry: &ShareGrantEntry,
+    database: &ShareDatabase,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &entry.object).await {
+    let object = ShareObject::Database(database.db_name.to_owned(), database.db_id);
+    if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &object).await {
         share_ids.remove(share_id);
 
-        condition.push(txn_cond_seq(&entry.object, Eq, seq));
-        if_then.push(txn_op_put(&entry.object, serialize_struct(&share_ids)?));
+        let object = ShareGrantObject::Database(database.db_id);
+        condition.push(txn_cond_seq(&object, Eq, seq));
+        if_then.push(txn_op_put(&object, serialize_struct(&share_ids)?));
+    }
+    Ok(())
+}
+
+async fn remove_share_id_from_share_table(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_id: u64,
+    table: &ShareTable,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    let object = ShareObject::Table(table.table_name.clone(), table.db_id, table.table_id);
+    if let Ok((seq, mut share_ids)) = get_object_shared_by_share_ids(kv_api, &object).await {
+        share_ids.remove(share_id);
+
+        let object = ShareGrantObject::Table(table.table_id);
+        condition.push(txn_cond_seq(&object, Eq, seq));
+        if_then.push(txn_op_put(&object, serialize_struct(&share_ids)?));
     }
     Ok(())
 }
@@ -1796,37 +1793,37 @@ async fn remove_share_id_from_share_objects(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(), KVAppError> {
-    if let Some(database) = &share_meta.database {
-        remove_share_id_from_share_object(kv_api, share_id, database, condition, if_then).await?;
-        if let ShareGrantObject::Database(db_id) = database.object {
-            let key = DatabaseId { db_id };
+    let mut databases = share_meta.reference_database.clone();
+    if let Some(database) = &share_meta.use_database {
+        databases.push(database.to_owned());
+    }
+    for database in &databases {
+        remove_share_id_from_share_database(kv_api, share_id, database, condition, if_then).await?;
 
-            let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) =
-                get_pb_value(kv_api, &key).await?;
-            if let Some(mut db_meta) = db_meta {
-                db_meta.shared_by.remove(&share_id);
-                if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
-                condition.push(txn_cond_seq(&key, Eq, db_meta_seq));
-            }
-        } else {
-            unreachable!("share database MUST to be database object");
+        let key = DatabaseId {
+            db_id: database.db_id,
+        };
+
+        let (db_meta_seq, db_meta): (_, Option<DatabaseMeta>) = get_pb_value(kv_api, &key).await?;
+        if let Some(mut db_meta) = db_meta {
+            db_meta.shared_by.remove(&share_id);
+            if_then.push(txn_op_put(&key, serialize_struct(&db_meta)?));
+            condition.push(txn_cond_seq(&key, Eq, db_meta_seq));
         }
     }
 
-    for (_key, entry) in share_meta.entries.iter() {
-        remove_share_id_from_share_object(kv_api, share_id, entry, condition, if_then).await?;
-        if let ShareGrantObject::Table(table_id) = entry.object {
-            let key = TableId { table_id };
+    for table in &share_meta.table {
+        remove_share_id_from_share_table(kv_api, share_id, table, condition, if_then).await?;
+        let key = TableId {
+            table_id: table.table_id,
+        };
 
-            let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
-                get_pb_value(kv_api, &key).await?;
-            if let Some(mut table_meta) = table_meta {
-                table_meta.shared_by.remove(&share_id);
-                if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
-                condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
-            }
-        } else {
-            unreachable!("share entries MUST to be table object");
+        let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+            get_pb_value(kv_api, &key).await?;
+        if let Some(mut table_meta) = table_meta {
+            table_meta.shared_by.remove(&share_id);
+            if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+            condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
         }
     }
 
@@ -1837,7 +1834,7 @@ async fn remove_share_id_from_share_objects(
 pub async fn revoke_object_privileges(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_meta: &mut ShareMeta,
-    object: ShareGrantObject,
+    object: ShareObject,
     share_id: u64,
     privileges: ShareGrantObjectPrivilege,
     update_on: DateTime<Utc>,
@@ -1847,17 +1844,21 @@ pub async fn revoke_object_privileges(
     let key = object.to_string();
 
     match object {
-        ShareGrantObject::Database(_db_id) => {
-            if let Some(entry) = &mut share_meta.database {
-                if object == entry.object {
-                    if entry.revoke_privileges(privileges, update_on) {
-                        // all database privileges have been revoked, clear database and entries.
-                        share_meta.database = None;
-                        share_meta.update_on = Some(update_on);
+        ShareObject::Database(_db_name, db_id) => {
+            match privileges {
+                ShareGrantObjectPrivilege::Usage => {
+                    if let Some(use_database) = &mut share_meta.use_database {
+                        if use_database.db_id == db_id {
+                            use_database.revoke_object_privileges(privileges);
+                            share_meta.use_database = None;
+                            share_meta.update_on = update_on;
 
-                        // clean all shared table `shared_by` field
-                        for (_key, entry) in share_meta.entries.iter() {
-                            if let ShareGrantObject::Table(table_id) = entry.object {
+                            // clean all shared table `shared_by` field
+                            for table in &share_meta.table {
+                                if table.db_id != db_id {
+                                    continue;
+                                }
+                                let table_id = table.table_id;
                                 let key = TableId { table_id };
 
                                 let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -1867,30 +1868,33 @@ pub async fn revoke_object_privileges(
                                     if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
                                     condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
                                 }
-                            } else {
-                                unreachable!("share entries MUST to be table object");
                             }
+
+                            share_meta.table.clear();
+                        } else {
+                            return Err(KVAppError::AppError(AppError::WrongShareObject(
+                                WrongShareObject::new(&key),
+                            )));
                         }
-                        share_meta.entries.clear();
+                    } else {
+                        return Err(KVAppError::AppError(AppError::WrongShareObject(
+                            WrongShareObject::new(&key),
+                        )));
                     }
-                } else {
-                    return Err(KVAppError::AppError(AppError::WrongShareObject(
-                        WrongShareObject::new(&key),
-                    )));
                 }
-            } else {
-                return Err(KVAppError::AppError(AppError::WrongShareObject(
-                    WrongShareObject::new(object.to_string()),
-                )));
-            }
-        }
-        ShareGrantObject::Table(table_id) => match share_meta.entries.get_mut(&key) {
-            Some(entry) => {
-                if let ShareGrantObject::Table(self_table_id) = entry.object {
-                    if self_table_id == table_id {
-                        if entry.revoke_privileges(privileges, update_on) {
-                            share_meta.entries.remove(&key);
-                            // remove share id from table `shared_by` field
+                ShareGrantObjectPrivilege::ReferenceUsage => {
+                    for db in &mut share_meta.reference_database {
+                        if db.db_id != db_id {
+                            continue;
+                        }
+
+                        db.revoke_object_privileges(privileges);
+                        // clean all shared table `shared_by` field
+                        for table in &share_meta.reference_table {
+                            if table.db_id != db_id {
+                                continue;
+                            }
+                            let table_id = table.table_id;
                             let key = TableId { table_id };
 
                             let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
@@ -1901,17 +1905,213 @@ pub async fn revoke_object_privileges(
                                 condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
                             }
                         }
-                    } else {
-                        return Err(KVAppError::AppError(AppError::WrongShareObject(
-                            WrongShareObject::new(object.to_string()),
-                        )));
+
+                        let reference_table = share_meta
+                            .reference_table
+                            .iter()
+                            .filter(|table| table.db_id != db_id)
+                            .cloned()
+                            .collect();
+                        share_meta.reference_table = reference_table;
+                        break;
                     }
-                } else {
-                    unreachable!("ShareMeta.entries MUST be Table Object");
+                }
+                _ => {}
+            }
+        }
+        ShareObject::Table(_table_name, _db_id, table_id) => match privileges {
+            ShareGrantObjectPrivilege::Select => {
+                for table in &mut share_meta.table {
+                    if table.table_id != table_id {
+                        continue;
+                    }
+                    table.revoke_object_privileges(privileges);
+                    // remove share id from table `shared_by` field
+                    let table_id = table.table_id;
+                    let key = TableId { table_id };
+
+                    let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                        get_pb_value(kv_api, &key).await?;
+                    if let Some(mut table_meta) = table_meta {
+                        table_meta.shared_by.remove(&share_id);
+                        if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                        condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                    }
+
+                    let table = share_meta
+                        .table
+                        .iter()
+                        .filter(|table| table.table_id != table_id)
+                        .cloned()
+                        .collect();
+                    share_meta.table = table;
+                    break;
                 }
             }
-            None => return Ok(()),
+            ShareGrantObjectPrivilege::ReferenceUsage => {
+                for table in &mut share_meta.reference_table {
+                    if table.table_id != table_id {
+                        continue;
+                    }
+                    table.revoke_object_privileges(privileges);
+                    // remove share id from table `shared_by` field
+                    let table_id = table.table_id;
+                    let key = TableId { table_id };
+
+                    let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                        get_pb_value(kv_api, &key).await?;
+                    if let Some(mut table_meta) = table_meta {
+                        table_meta.shared_by.remove(&share_id);
+                        if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                        condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                    }
+
+                    let reference_table = share_meta
+                        .reference_table
+                        .iter()
+                        .filter(|table| table.table_id != table_id)
+                        .cloned()
+                        .collect();
+                    share_meta.reference_table = reference_table;
+                    break;
+                }
+            }
+            _ => {}
         },
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn rename_share_object(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    share_meta: &mut ShareMeta,
+    object: ShareObject,
+    share_id: u64,
+    update_on: DateTime<Utc>,
+    condition: &mut Vec<TxnCondition>,
+    if_then: &mut Vec<TxnOp>,
+) -> Result<(), KVAppError> {
+    let key = object.to_string();
+
+    match object {
+        ShareObject::Database(_db_name, db_id) => {
+            if let Some(use_database) = &mut share_meta.use_database {
+                if use_database.db_id == db_id {
+                    use_database.revoke_object_privileges(ShareGrantObjectPrivilege::Usage);
+                    share_meta.use_database = None;
+                    share_meta.update_on = update_on;
+
+                    // clean all shared table `shared_by` field
+                    for table in &share_meta.table {
+                        let table_id = table.table_id;
+                        let key = TableId { table_id };
+
+                        let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                            get_pb_value(kv_api, &key).await?;
+                        if let Some(mut table_meta) = table_meta {
+                            table_meta.shared_by.remove(&share_id);
+                            if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                            condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                        }
+                    }
+
+                    share_meta.table.clear();
+                    return Ok(());
+                } else {
+                    return Err(KVAppError::AppError(AppError::WrongShareObject(
+                        WrongShareObject::new(&key),
+                    )));
+                }
+            }
+
+            for db in &mut share_meta.reference_database {
+                if db.db_id != db_id {
+                    continue;
+                }
+
+                db.revoke_object_privileges(ShareGrantObjectPrivilege::ReferenceUsage);
+                // clean all shared table `shared_by` field
+                for table in &share_meta.reference_table {
+                    if table.db_id != db_id {
+                        continue;
+                    }
+                    let table_id = table.table_id;
+                    let key = TableId { table_id };
+
+                    let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                        get_pb_value(kv_api, &key).await?;
+                    if let Some(mut table_meta) = table_meta {
+                        table_meta.shared_by.remove(&share_id);
+                        if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                        condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                    }
+                }
+
+                let reference_table = share_meta
+                    .reference_table
+                    .iter()
+                    .filter(|table| table.db_id != db_id)
+                    .cloned()
+                    .collect();
+                share_meta.reference_table = reference_table;
+                break;
+            }
+        }
+        ShareObject::Table(_table_name, _db_id, table_id) => {
+            for table in &mut share_meta.table {
+                if table.table_id != table_id {
+                    continue;
+                }
+                table.revoke_object_privileges(ShareGrantObjectPrivilege::Select);
+                // remove share id from table `shared_by` field
+                let table_id = table.table_id;
+                let key = TableId { table_id };
+
+                let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                    get_pb_value(kv_api, &key).await?;
+                if let Some(mut table_meta) = table_meta {
+                    table_meta.shared_by.remove(&share_id);
+                    if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                    condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                }
+
+                let table = share_meta
+                    .table
+                    .iter()
+                    .filter(|table| table.table_id != table_id)
+                    .cloned()
+                    .collect();
+                share_meta.table = table;
+                return Ok(());
+            }
+            for table in &mut share_meta.reference_table {
+                if table.table_id != table_id {
+                    continue;
+                }
+                table.revoke_object_privileges(ShareGrantObjectPrivilege::ReferenceUsage);
+                // remove share id from table `shared_by` field
+                let table_id = table.table_id;
+                let key = TableId { table_id };
+
+                let (table_meta_seq, table_meta): (_, Option<TableMeta>) =
+                    get_pb_value(kv_api, &key).await?;
+                if let Some(mut table_meta) = table_meta {
+                    table_meta.shared_by.remove(&share_id);
+                    if_then.push(txn_op_put(&key, serialize_struct(&table_meta)?));
+                    condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
+                }
+
+                let reference_table = share_meta
+                    .reference_table
+                    .iter()
+                    .filter(|table| table.table_id != table_id)
+                    .cloned()
+                    .collect();
+                share_meta.reference_table = reference_table;
+                break;
+            }
+        }
     }
     Ok(())
 }

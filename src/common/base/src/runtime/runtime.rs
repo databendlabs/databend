@@ -468,7 +468,7 @@ pub fn try_block_on<F: Future>(future: F) -> Result<F::Output, F> {
     }
 }
 
-fn location_future<F: Future>(
+fn location_future<F>(
     future: F,
     frame_location: &'static Location,
 ) -> impl Future<Output = F::Output>

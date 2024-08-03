@@ -136,9 +136,9 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
+use fastrace::func_name;
 use log::debug;
 use log::info;
-use minitrace::func_name;
 
 use crate::deserialize_struct;
 use crate::is_all_db_data_removed;
@@ -425,7 +425,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_and_table_rename<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -589,7 +589,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_create_get_drop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -779,7 +779,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_create_from_share_and_drop<
         MT: ShareApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     >(
@@ -842,7 +842,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_create_get_drop_in_diff_tenant<MT: SchemaApi>(
         &self,
         mt: &MT,
@@ -970,7 +970,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         info!("--- prepare db1 and db2");
         let mut db_ids = vec![];
@@ -1010,7 +1010,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_list_in_diff_tenant<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         info!("--- prepare db1 and db2");
         let tenant1 = Tenant::new_or_err("tenant1", func_name!())?;
@@ -1060,7 +1060,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = Tenant::new_or_err("tenant1", func_name!())?;
         let db_name = "db1";
@@ -1160,7 +1160,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_drop_undrop_list_history<MT: SchemaApi>(
         &self,
         mt: &MT,
@@ -1382,7 +1382,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_literal(tenant_name);
@@ -1437,7 +1437,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_table_without_tableid_to_name<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -1509,7 +1509,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_least_visible_time<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -1609,7 +1609,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_create_get_drop<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -2091,7 +2091,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_drop_without_db_id_to_name<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
@@ -2116,7 +2116,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_db_without_db_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         // test drop a db without db_id_list
@@ -2188,7 +2188,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_table_without_table_id_list<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         // test drop a table without table_id_list
@@ -2227,7 +2227,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_rename<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -2478,7 +2478,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_update_meta<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -2774,7 +2774,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_update_mask_policy<
         MT: SchemaApi + DatamaskApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -3121,7 +3121,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_upsert_option<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -3290,7 +3290,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_drop_out_of_retention_time_history<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -3355,7 +3355,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn create_out_of_retention_time_db<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
@@ -3394,7 +3394,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn database_gc_out_of_retention_time<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -3480,7 +3480,7 @@ impl SchemaApiTestSuite {
     }
 
     /// Return table id and table meta
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn create_out_of_retention_time_table<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -3535,7 +3535,7 @@ impl SchemaApiTestSuite {
         Ok((table_id, drop_data))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_gc_out_of_retention_time<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         self,
         mt: &MT,
@@ -3700,7 +3700,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn db_table_gc_out_of_retention_time<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -3930,7 +3930,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_drop_out_of_retention_time_history<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
     >(
@@ -4024,7 +4024,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_history_filter<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -4380,7 +4380,7 @@ impl SchemaApiTestSuite {
     // case 3: with limit DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE]
     // case 4: with limit 2 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE - 1]
     // case 5: with limit 3 * DEFAULT_MGET_SIZE it will return db1.tb[0..DEFAULT_MGET_SIZE + 1], db2.[0..DEFAULT_MGET_SIZE], db3.{tb1}
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_history_filter_with_limit<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -4576,7 +4576,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_drop_undrop_list_history<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant_drop_undrop_list_history_db1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -4956,7 +4956,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_commit_table_meta<MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -5245,7 +5245,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn concurrent_commit_table_meta<
         B: kvapi::ApiBuilder<MT>,
         MT: ShareApi
@@ -5362,7 +5362,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_table_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -5471,7 +5471,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_table_name_by_id<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -5506,7 +5506,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_db_name_by_id<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -5561,7 +5561,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn test_sequence<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
@@ -5656,7 +5656,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_table_copied_file<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -5809,7 +5809,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn truncate_table<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
@@ -5858,7 +5858,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_list<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -5939,7 +5939,7 @@ impl SchemaApiTestSuite {
     }
 
     /// Test listing many tables that exceeds default mget chunk size.
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_list_many<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         // Create tables that exceeds the default mget chunk size
@@ -5987,7 +5987,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_index_create_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;
@@ -6194,7 +6194,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -6439,7 +6439,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn virtual_column_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -6593,7 +6593,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
@@ -7129,7 +7129,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn update_table_with_copied_files<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;

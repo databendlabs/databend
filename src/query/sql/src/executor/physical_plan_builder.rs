@@ -15,9 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -38,8 +40,8 @@ pub struct PhysicalPlanBuilder {
     pub(crate) dry_run: bool,
     // Record cte_idx and the cte's output columns
     pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
-    // MergeInto info, used to build MergeInto physical plan
-    pub(crate) merge_into_build_info: Option<MergeIntoBuildInfo>,
+    // DataMutation info, used to build MergeInto physical plan
+    pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
 
 impl PhysicalPlanBuilder {
@@ -51,7 +53,7 @@ impl PhysicalPlanBuilder {
             func_ctx,
             dry_run,
             cte_output_columns: Default::default(),
-            merge_into_build_info: None,
+            mutation_build_info: None,
         }
     }
 
@@ -128,18 +130,26 @@ impl PhysicalPlanBuilder {
                 self.build_async_func(s_expr, async_func, required, stat_info)
                     .await
             }
-            RelOperator::MergeInto(merge_into) => self.build_merge_into(s_expr, merge_into).await,
+            RelOperator::Mutation(mutation) => {
+                self.build_mutation(s_expr, mutation, required).await
+            }
+            RelOperator::MutationSource(mutation_source) => {
+                self.build_mutation_source(mutation_source).await
+            }
             RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
+            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
         }
     }
 
-    pub fn set_merge_into_build_info(&mut self, merge_into_build_info: MergeIntoBuildInfo) {
-        self.merge_into_build_info = Some(merge_into_build_info);
+    pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
+        self.mutation_build_info = Some(mutation_build_info);
     }
 }
 
 #[derive(Clone)]
-pub struct MergeIntoBuildInfo {
+pub struct MutationBuildInfo {
+    pub table_info: TableInfo,
     pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
+    pub partitions: Option<Partitions>,
 }

@@ -23,6 +23,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -96,6 +97,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use iceberg_catalog_hms::HmsCatalog;
@@ -113,7 +115,12 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
-    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
 
         Ok(catalog)
@@ -137,7 +144,7 @@ pub struct IcebergCatalog {
 
 impl IcebergCatalog {
     /// create a new iceberg catalog from the endpoint_address
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn try_create(info: Arc<CatalogInfo>) -> Result<Self> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Iceberg(opt) => opt,
@@ -188,7 +195,7 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
@@ -207,7 +214,7 @@ impl Catalog for IcebergCatalog {
         let mut dbs = Vec::new();
         for db_name in db_names {
             let db = self
-                .get_database(&Tenant::new_literal("dummy"), &db_name.encode_in_url())
+                .get_database(&Tenant::new_literal("dummy"), &db_name.to_url_string())
                 .await?;
             dbs.push(db);
         }
@@ -285,7 +292,7 @@ impl Catalog for IcebergCatalog {
         ))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,

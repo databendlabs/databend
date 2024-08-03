@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -24,7 +25,7 @@ use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_catalog_show_create::ShowCreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
-use super::interpreter_merge_into::MergeIntoInterpreter;
+use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
@@ -71,7 +72,6 @@ use crate::interpreters::DropShareInterpreter;
 use crate::interpreters::DropStreamInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetRoleInterpreter;
-use crate::interpreters::UpdateInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
@@ -227,15 +227,32 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable { s_expr, is_final } => Ok(Arc::new(
-                ReclusterTableInterpreter::try_create(ctx, *s_expr.clone(), *is_final)?,
-            )),
+            Plan::ReclusterTable { s_expr, is_final } => {
+                Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *is_final,
+                )?))
+            }
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
-            Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
-                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
+            Plan::OptimizePurge(purge) => Ok(Arc::new(OptimizePurgeInterpreter::try_create(
+                ctx,
+                *purge.clone(),
+            )?)),
+            Plan::OptimizeCompactSegment(compact_segment) => Ok(Arc::new(
+                OptimizeCompactSegmentInterpreter::try_create(ctx, *compact_segment.clone())?,
             )),
+            Plan::OptimizeCompactBlock { s_expr, need_purge } => {
+                Ok(Arc::new(OptimizeCompactBlockInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    LockTableOption::LockWithRetry,
+                    *need_purge,
+                )?))
+            }
             Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
@@ -340,19 +357,9 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::MergeInto { s_expr, schema, .. } => Ok(Arc::new(
-                MergeIntoInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
+            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
+                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
             )),
-
-            Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
-                ctx,
-                *delete.clone(),
-            )?)),
-
-            Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
-                ctx,
-                *update.clone(),
-            )?)),
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
@@ -430,11 +437,11 @@ impl InterpreterFactory {
                 *presign.clone(),
             )?)),
 
-            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+            Plan::Set(set_variable) => Ok(Arc::new(SetInterpreter::try_create(
                 ctx,
                 *set_variable.clone(),
             )?)),
-            Plan::UnSetVariable(unset_variable) => Ok(Arc::new(UnSettingInterpreter::try_create(
+            Plan::Unset(unset_variable) => Ok(Arc::new(UnSetInterpreter::try_create(
                 ctx,
                 *unset_variable.clone(),
             )?)),

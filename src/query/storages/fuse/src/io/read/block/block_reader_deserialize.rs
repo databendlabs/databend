@@ -86,7 +86,7 @@ impl BlockReader {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_by_meta(
         &self,

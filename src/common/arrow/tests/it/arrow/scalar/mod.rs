@@ -27,6 +27,7 @@ mod utf8;
 use databend_common_arrow::arrow::scalar::Scalar;
 
 // check that `PartialEq` can be derived
+#[allow(dead_code)]
 #[derive(PartialEq)]
 struct A {
     array: Box<dyn Scalar>,

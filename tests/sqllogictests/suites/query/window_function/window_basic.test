@@ -749,7 +749,7 @@ select * from vwpush where b > 1;
 query II
 select * from (select b, row_number() over (order by b) from tbpush) where b > 1;
 ----
-2 2 
+2 2
 
 # multiple blocks
 statement ok
@@ -777,7 +777,6 @@ SELECT
     to_date('2022-01-02'),
     number % 2 = 0
 FROM numbers(1000000);
-
 
 
 query II

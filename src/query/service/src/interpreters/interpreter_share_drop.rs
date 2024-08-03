@@ -23,7 +23,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::DropSharePlan;
+use crate::sql::plans::DropSharePlan;
 
 pub struct DropShareInterpreter {
     ctx: Arc<QueryContext>,

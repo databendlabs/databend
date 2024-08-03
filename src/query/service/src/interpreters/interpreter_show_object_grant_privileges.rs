@@ -26,7 +26,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::ShowObjectGrantPrivilegesPlan;
+use crate::sql::plans::ShowObjectGrantPrivilegesPlan;
 
 pub struct ShowObjectGrantPrivilegesInterpreter {
     ctx: Arc<QueryContext>,

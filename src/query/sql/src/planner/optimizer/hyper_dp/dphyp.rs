@@ -269,8 +269,10 @@ impl DPhpy {
             | RelOperator::AsyncFunction(_)
             | RelOperator::MaterializedCte(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::MergeInto(_)
-            | RelOperator::Recluster(_) => Ok((Arc::new(s_expr.clone()), true)),
+            | RelOperator::Mutation(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 

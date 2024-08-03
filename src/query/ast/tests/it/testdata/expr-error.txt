@@ -5,7 +5,7 @@ error:
   --> SQL:1:3
   |
 1 | 5 * (a and ) 1
-  | - ^ expecting more subsequent tokens
+  | - ^ expecting more oprands
   | |  
   | while parsing expression
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:5
   |
 1 | a + +
-  | -   ^ expecting more subsequent tokens
+  | -   ^ expecting more oprands
   | |    
   | while parsing expression
 
@@ -52,7 +52,7 @@ error:
   --> SQL:1:10
   |
 1 | CAST(col1)
-  | ----     ^ unexpected `)`, expecting `AS`, `,`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 31 more ...
+  | ----     ^ unexpected `)`, expecting `AS`, `,`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, or 32 more ...
   | |         
   | while parsing `CAST(... AS ...)`
   | while parsing expression

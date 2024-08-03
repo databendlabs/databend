@@ -20,19 +20,16 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
-use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::optimizer::ColumnSet;
-use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::plans::MergeInto;
-use databend_common_sql::plans::UpdatePlan;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
@@ -41,8 +38,8 @@ use databend_common_users::UserApiProvider;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
-use super::UpdateInterpreter;
-use crate::interpreters::interpreter_merge_into::MergeIntoInterpreter;
+use crate::interpreters::interpreter::on_execution_finished;
+use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -55,17 +52,7 @@ use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
-use crate::sql::plans::BoundColumnRef;
-use crate::sql::plans::DeletePlan;
-use crate::sql::plans::EvalScalar;
-use crate::sql::plans::Filter;
 use crate::sql::plans::Plan;
-use crate::sql::plans::RelOperator;
-use crate::sql::plans::ScalarItem;
-use crate::sql::plans::Scan;
-use crate::sql::ColumnBindingBuilder;
-use crate::sql::ScalarExpr;
-use crate::sql::Visibility;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
@@ -132,21 +119,20 @@ impl Interpreter for ExplainInterpreter {
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
-                Plan::MergeInto {
+                Plan::DataMutation {
                     s_expr,
                     schema,
                     metadata,
                 } => {
-                    let merge_into: MergeInto = s_expr.plan().clone().try_into()?;
-                    let interpreter = MergeIntoInterpreter::try_create(
+                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let interpreter = MutationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&merge_into).await?;
+                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
-                Plan::Delete(plan) => self.explain_delete(plan).await?,
                 _ => self.explain_plan(&self.plan)?,
             },
 
@@ -183,12 +169,12 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto { s_expr, .. } => {
-                    let plan: MergeInto = s_expr.plan().clone().try_into()?;
+                Plan::DataMutation { s_expr, .. } => {
+                    let plan: Mutation = s_expr.plan().clone().try_into()?;
                     self.explain_analyze(
                         s_expr.child(0)?,
-                        &plan.meta_data,
-                        *plan.columns_set.clone(),
+                        &plan.metadata,
+                        *plan.required_columns.clone(),
                         true,
                     )
                     .await?
@@ -202,7 +188,7 @@ impl Interpreter for ExplainInterpreter {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
                 let pipeline = match &self.plan {
-                    Plan::Query { .. } | Plan::MergeInto { .. } => {
+                    Plan::Query { .. } | Plan::DataMutation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
                         interpter.execute2().await?
@@ -227,11 +213,10 @@ impl Interpreter for ExplainInterpreter {
                     )
                     .await?
                 }
-                Plan::MergeInto { s_expr, schema, .. } => {
+                Plan::DataMutation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
                         .await?
                 }
-                Plan::Update(update) => self.explain_update_fragments(update.as_ref()).await?,
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
                 }
@@ -377,25 +362,6 @@ impl ExplainInterpreter {
     }
 
     #[async_backtrace::framed]
-    async fn explain_update_fragments(&self, update: &UpdatePlan) -> Result<Vec<DataBlock>> {
-        let interpreter = UpdateInterpreter::try_create(self.ctx.clone(), update.clone())?;
-        let display_string = if let Some(plan) = interpreter.get_physical_plan().await? {
-            let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
-
-            let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
-            root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
-
-            let ident = fragments_actions.display_indent(&update.metadata);
-            ident.to_string()
-        } else {
-            "Nothing to update".to_string()
-        };
-        let line_split_result = display_string.lines().collect::<Vec<_>>();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
-    #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
         s_expr: &SExpr,
@@ -425,7 +391,12 @@ impl ExplainInterpreter {
         let settings = self.ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-
+        let ctx = self.ctx.clone();
+        build_res
+            .main_pipeline
+            .set_on_finished(always_callback(move |info: &ExecutionInfo| {
+                on_execution_finished(info, ctx)
+            }));
         match build_res.main_pipeline.is_complete_pipeline()? {
             true => {
                 let mut pipelines = build_res.sources_pipelines;
@@ -444,7 +415,6 @@ impl ExplainInterpreter {
                     .add_query_profiles(&executor.get_inner().fetch_profiling(false));
             }
         }
-
         Ok(self
             .ctx
             .get_query_profiles()
@@ -472,128 +442,21 @@ impl ExplainInterpreter {
             .await
     }
 
-    #[async_backtrace::framed]
-    async fn explain_delete(&self, delete: &DeletePlan) -> Result<Vec<DataBlock>> {
-        let table_index = delete
-            .metadata
-            .read()
-            .get_table_index(
-                Some(delete.database_name.as_str()),
-                delete.table_name.as_str(),
-            )
-            .unwrap();
-
-        let mut result = vec![];
-        // Explain subquery.
-        if let Some(subquery_desc) = &delete.subquery_desc {
-            let row_id_column_binding = ColumnBindingBuilder::new(
-                ROW_ID_COL_NAME.to_string(),
-                subquery_desc.index,
-                Box::new(DataType::Number(NumberDataType::UInt64)),
-                Visibility::InVisible,
-            )
-            .database_name(Some(delete.database_name.clone()))
-            .table_name(Some(delete.table_name.clone()))
-            .table_index(Some(table_index))
-            .build();
-            let mut bind_context = delete.bind_context.clone();
-            bind_context.columns.clear();
-            bind_context.columns.push(row_id_column_binding.clone());
-
-            let s_expr = SExpr::create_unary(
-                Arc::new(RelOperator::EvalScalar(EvalScalar {
-                    items: vec![ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: row_id_column_binding,
-                        }),
-                        index: 0,
-                    }],
-                })),
-                Arc::new(subquery_desc.input_expr.clone()),
-            );
-
-            let formatted_plan = StringType::from_data(vec!["DeletePlan (subquery):"]);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-            let input = self
-                .explain_query(&s_expr, &delete.metadata, &bind_context, &None)
-                .await?;
-            result.extend(input);
-        }
-
-        // Explain selection.
-        if let Some(selection) = &delete.selection
-            && !matches!(selection, ScalarExpr::SubqueryExpr(_))
-        {
-            let selection = if let ScalarExpr::FunctionCall(FunctionCall {
-                func_name,
-                arguments,
-                ..
-            }) = selection
-                && func_name == "and"
-            {
-                arguments[1].clone()
-            } else {
-                selection.clone()
-            };
-
-            let scan = RelOperator::Scan(Scan {
-                table_index,
-                columns: delete.bind_context.column_set(),
-                push_down_predicates: None,
-                limit: None,
-                order_by: None,
-                prewhere: None,
-                agg_index: None,
-                change_type: None,
-                inverted_index: None,
-                statistics: Default::default(),
-                update_stream_columns: false,
-            });
-            let scan_expr = SExpr::create_leaf(Arc::new(scan));
-            let filter = RelOperator::Filter(Filter {
-                predicates: vec![selection],
-            });
-            let s_expr = SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr));
-
-            let formatted_plan = StringType::from_data(vec!["DeletePlan (selection):"]);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-            let input = self
-                .explain_query(&s_expr, &delete.metadata, &delete.bind_context, &None)
-                .await?;
-            result.extend(input);
-        }
-
-        if result.is_empty() {
-            let table_name = format!(
-                "{}.{}.{}",
-                delete.catalog_name, delete.database_name, delete.table_name
-            );
-            let children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
-            let formatted_plan = FormatTreeNode::with_children("DeletePlan:".to_string(), children)
-                .format_pretty()?;
-            let line_split_result: Vec<&str> = formatted_plan.lines().collect();
-            let formatted_plan = StringType::from_data(line_split_result);
-            result.push(DataBlock::new_from_columns(vec![formatted_plan]));
-        }
-        Ok(vec![DataBlock::concat(&result)?])
-    }
-
     async fn explain_merge_fragments(
         &self,
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let merge_into: databend_common_sql::plans::MergeInto = s_expr.plan().clone().try_into()?;
-        let interpreter = MergeIntoInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
-        let plan = interpreter.build_physical_plan(&merge_into).await?;
+        let mutation: Mutation = s_expr.plan().clone().try_into()?;
+        let interpreter = MutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let plan = interpreter.build_physical_plan(&mutation, None).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
         root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
 
         let display_string = fragments_actions
-            .display_indent(&merge_into.meta_data)
+            .display_indent(&mutation.metadata)
             .to_string();
 
         let line_split_result = display_string.lines().collect::<Vec<_>>();

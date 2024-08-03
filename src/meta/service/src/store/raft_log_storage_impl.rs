@@ -46,7 +46,7 @@ use crate::store::RaftStore;
 use crate::store::ToStorageError;
 
 impl RaftLogReader<TypeConfig> for RaftStore {
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn limited_get_log_entries(
         &mut self,
         mut start: u64,
@@ -97,7 +97,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
         Ok(res)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send>(
         &mut self,
         range: RB,
@@ -128,7 +128,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
         match self
             .raft_state
@@ -216,7 +216,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
             .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Read)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn save_vote(&mut self, hs: &Vote) -> Result<(), StorageError> {
         info!(id = self.id; "RaftStore::save_vote({}): start", hs);
 
@@ -239,7 +239,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn append<I>(
         &mut self,
         entries: I,
@@ -287,7 +287,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn truncate(&mut self, log_id: LogId) -> Result<(), StorageError> {
         info!(id = self.id; "RaftStore::truncate({}): start", log_id);
 
@@ -310,7 +310,7 @@ impl RaftLogStorage<TypeConfig> for RaftStore {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn purge(&mut self, log_id: LogId) -> Result<(), StorageError> {
         let curr_purged = self
             .log

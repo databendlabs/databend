@@ -240,8 +240,7 @@ pub fn parse_default_expr_to_string(
     ctx: Arc<dyn TableContext>,
     field: &TableField,
     ast: &AExpr,
-    is_add_column: bool,
-) -> Result<String> {
+) -> Result<(String, bool)> {
     let settings = Settings::create(Tenant::new_literal("dummy"));
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
@@ -262,23 +261,14 @@ pub fn parse_default_expr_to_string(
         scalar = wrap_cast(&scalar, &schema_data_type);
     }
     let expr = scalar.as_expr()?;
-
-    // Added columns are not allowed to use expressions,
-    // as the default values will be generated at each query.
-    if is_add_column && !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-        return Err(ErrorCode::SemanticError(format!(
-            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.",
-            expr.sql_display(),
-        )));
-    }
-    let expr = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+    let (expr, is_deterministic) = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
         let (fold_to_constant, _) =
             ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
-        fold_to_constant
+        (fold_to_constant, true)
     } else {
-        expr
+        (expr, false)
     };
-    Ok(expr.sql_display())
+    Ok((expr.sql_display(), is_deterministic))
 }
 
 pub fn parse_computed_expr_to_string(

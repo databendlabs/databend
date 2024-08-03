@@ -43,8 +43,8 @@ use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::UnlockApi;
 use databend_common_users::UserApiProvider;
+use fastrace::func_name;
 use futures_util::StreamExt;
-use minitrace::func_name;
 use parking_lot::RwLock;
 
 use crate::locks::lock_holder::LockHolder;

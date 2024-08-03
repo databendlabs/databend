@@ -439,12 +439,15 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             kill_target,
             object_id,
         } => visitor.visit_kill(kill_target, object_id),
-        Statement::SetVariable {
-            is_global,
-            variable,
-            value,
-        } => visitor.visit_set_variable(*is_global, variable, value),
-        Statement::UnSetVariable(stmt) => visitor.visit_unset_variable(stmt),
+        Statement::SetStmt {
+            set_type,
+            identifiers,
+            values,
+        } => visitor.visit_set(*set_type, identifiers, values),
+        Statement::UnSetStmt {
+            unset_type,
+            identifiers,
+        } => visitor.visit_unset(*unset_type, identifiers.as_slice()),
         Statement::SetRole {
             is_default,
             role_name,

@@ -105,14 +105,21 @@ impl PhysicalPlanBuilder {
         &mut self,
         join: &Join,
         s_expr: &SExpr,
+        mut required: ColumnSet,
+        mut others_required: ColumnSet,
         left_required: ColumnSet,
         right_required: ColumnSet,
-        mut pre_column_projections: Vec<IndexType>,
-        column_projections: Vec<IndexType>,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
         let mut build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
+
+        let retained_columns = self.metadata.read().get_retained_column().clone();
+        required = required.union(&retained_columns).cloned().collect();
+        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+
+        others_required = others_required.union(&retained_columns).cloned().collect();
+        let mut pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
 
         let mut is_broadcast = false;
         // Check if join is broadcast join
@@ -562,7 +569,10 @@ async fn adjust_bloom_runtime_filter(
         let table_entry = metadata.read().table(table_index).clone();
         let change_type = get_change_type(table_entry.alias_name());
         let table = table_entry.table();
-        if let Some(stats) = table.table_statistics(ctx.clone(), change_type).await? {
+        if let Some(stats) = table
+            .table_statistics(ctx.clone(), true, change_type)
+            .await?
+        {
             if let Some(num_rows) = stats.num_rows {
                 let join_cardinality = RelExpr::with_s_expr(s_expr)
                     .derive_cardinality()?

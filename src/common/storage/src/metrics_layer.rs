@@ -516,14 +516,15 @@ impl<R: oio::BlockingRead> oio::BlockingRead for OperatorMetricsWrapper<R> {
 }
 
 impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
-    async fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+    async fn write(&mut self, bs: Buffer) -> opendal::Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
         self.inner
             .write(bs)
             .await
-            .inspect(|&res| {
-                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+            .inspect(|_| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, size);
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
             })
@@ -549,13 +550,14 @@ impl<R: oio::Write> oio::Write for OperatorMetricsWrapper<R> {
 }
 
 impl<R: oio::BlockingWrite> oio::BlockingWrite for OperatorMetricsWrapper<R> {
-    fn write(&mut self, bs: Buffer) -> opendal::Result<usize> {
+    fn write(&mut self, bs: Buffer) -> opendal::Result<()> {
         let start = Instant::now();
+        let size = bs.len();
 
         self.inner
             .write(bs)
-            .inspect(|&res| {
-                self.metrics.observe_bytes_total(self.scheme, self.op, res);
+            .inspect(|_| {
+                self.metrics.observe_bytes_total(self.scheme, self.op, size);
                 self.metrics
                     .observe_request_duration(self.scheme, self.op, start.elapsed());
             })

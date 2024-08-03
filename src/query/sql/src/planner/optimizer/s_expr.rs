@@ -314,6 +314,13 @@ impl SExpr {
                     });
                 }
             }
+            RelOperator::MutationSource(mutation_source) => {
+                if let Some(filter) = &mutation_source.filter {
+                    get_udf_names(filter)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
             RelOperator::Limit(_)
             | RelOperator::UnionAll(_)
             | RelOperator::Sort(_)
@@ -325,8 +332,9 @@ impl SExpr {
             | RelOperator::CacheScan(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
-            | RelOperator::MergeInto(_)
-            | RelOperator::Recluster(_) => {}
+            | RelOperator::Mutation(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::CompactBlock(_) => {}
         };
         for child in &self.children {
             let udf = child.get_udfs()?;
@@ -425,8 +433,9 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::CacheScan(_)
         | RelOperator::AsyncFunction(_)
         | RelOperator::RecursiveCteScan(_)
-        | RelOperator::MergeInto(_)
-        | RelOperator::Recluster(_) => false,
+        | RelOperator::Mutation(_)
+        | RelOperator::Recluster(_)
+        | RelOperator::CompactBlock(_) => false,
         RelOperator::Join(op) => {
             op.equi_conditions.iter().any(|condition| {
                 find_subquery_in_expr(&condition.left) || find_subquery_in_expr(&condition.right)
@@ -467,6 +476,13 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
+        RelOperator::MutationSource(op) => {
+            if let Some(filter) = &op.filter {
+                find_subquery_in_expr(filter)
+            } else {
+                false
+            }
+        }
     }
 }
 

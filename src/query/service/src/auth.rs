@@ -25,7 +25,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::sessions::Session;
 
