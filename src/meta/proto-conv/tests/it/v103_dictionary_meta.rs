@@ -69,7 +69,9 @@ fn test_decode_v103_dictionary_meta() -> anyhow::Result<()> {
             primary_column_ids,
             comment,
             created_on,
-            ..Default::default()
+            field_comments: vec!["c".to_string(); 21],
+            dropped_on: None,
+            updated_on: None
         }
     };
     common::test_pb_from_to(func_name!(), want())?;

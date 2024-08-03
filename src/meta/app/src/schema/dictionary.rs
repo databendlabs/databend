@@ -40,6 +40,7 @@ pub struct DictionaryMeta {
     pub created_on: DateTime<Utc>,
     pub dropped_on: Option<DateTime<Utc>>,
     pub updated_on: Option<DateTime<Utc>>,
+    pub field_comments: Vec<String>,
 }
 
 impl Display for DictionaryMeta {
@@ -68,7 +69,7 @@ impl Default for DictionaryMeta {
             dropped_on: None,
             updated_on: None,
             comment: "".to_string(),
-            
+            field_comments: Vec::new(),
         }
     }
 }

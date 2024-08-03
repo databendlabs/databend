@@ -57,4 +57,7 @@ message DictionaryMeta {
 
   // The time dictionary dropped.
   optional string dropped_on = 9;
+
+  // Comments of each field.
+  repeated string field_comments = 25;
 }

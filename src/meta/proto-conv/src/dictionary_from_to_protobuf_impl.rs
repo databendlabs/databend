@@ -53,6 +53,7 @@ impl FromToProto for mt::DictionaryMeta {
                 Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
                 None => None,
             },
+            field_comments: p.field_comments,
         };
         Ok(v)
     }
@@ -75,6 +76,7 @@ impl FromToProto for mt::DictionaryMeta {
             },
             comment: self.comment.clone(),
             schema: Some(self.schema.to_pb()?),
+            field_comments: self.field_comments.clone(),
         };
         Ok(p)
     }
