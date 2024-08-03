@@ -415,7 +415,7 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for DictionaryNameIdent {
         const PREFIX: &'static str = "__fd_dictionary_by_id";
-        type ValueType = String;
+        type ValueType = DictionaryId;
         fn parent(&self) -> Option<String> {
             Some(self.tenant.to_string_key())
         }
@@ -479,9 +479,24 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for DBIdDictionaryNameIdent {
         const PREFIX: &'static str = "__fd_dictionary_by_id";
-        type ValueType = String;
+        type ValueType = DictionaryId;
         fn parent(&self) -> Option<String> {
             Some(self.tenant.to_string_key())
         }
     }
+
+    impl kvapi::Value for DictionaryId {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            [self.to_string_key()]
+        }
+    }
+
+    impl kvapi::Value for DBIdDictionaryName {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+    
+
+
 }
