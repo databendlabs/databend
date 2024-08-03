@@ -132,6 +132,51 @@ impl DictionaryNameIdent {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DBIdDictionaryNameIdent {
+    pub tenant: Tenant,
+    pub db_id: u64,
+    pub dict_name: String,
+}
+
+impl DBIdDictionaryNameIdent {
+    pub fn new(
+        tenant: impl ToTenant,
+        db_id: u64, 
+        dict_name: impl ToString,
+    ) -> DBIdDictionaryNameIdent {
+        DBIdDictionaryNameIdent {
+            tenant: tenant.to_tenant(),
+            db_id,
+            dict_name: dict_name.to_string(),
+        }
+    }
+
+    pub fn tenant(&self) -> &Tenant {
+        &self.tenant
+    }
+
+    pub fn dictionary_name(&self) -> String {
+        self.dictionary_name.clone()
+    }
+
+    pub fn db_name_ident(&self) -> DatabaseNameIdent {
+        DatabaseNameIdent::new(&self.tenant, &self.db_name)
+    }
+
+    pub fn tenant_name(&self) -> &str {
+        &self.tenant.tenant_name()
+    }
+
+    pub fn new_generic(tenant: impl ToTenant, dict_name: impl ToString, db_id: u64) -> Self {
+        Self {
+            tenant: tenant.to_tenant(),
+            dict_name: dict_name.to_string(),
+            db_id
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDictionaryReply {
     pub dictionary_id: u64,
@@ -296,13 +341,20 @@ impl ListDictionaryReq {
 mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;
+    use databend_common_meta_kvapi::kvapi::Key;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyCodec;
     use databend_common_meta_kvapi::kvapi::KeyParser;
 
+    use crate::schema::DatabaseId;
     use crate::schema::DictionaryIdHistoryIdent;
     use crate::tenant::Tenant;
 
+    use super::DBIdDictionaryName;
+    use super::DBIdDictionaryNameIdent;
+    use super::DictionaryId;
+    use super::DictionaryIdToName;
+    use super::DictionaryMeta;
     use super::DictionaryNameIdent;
 
     impl kvapi::KeyCodec for DictionaryIdHistoryIdent {
@@ -346,4 +398,116 @@ mod kvapi_key_impl {
         }
     }
 
+    impl kvapi::KeyCodec for DictionaryId {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.dictionary_id)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let dict_id = parser.next_u64()?;
+            Ok(Self { dictionary_id: dict_id })
+        }
+    }
+
+    impl kvapi::Key for DictionaryId {
+        const PREFIX: &'static str = "__fd_dictionary_by_id";
+
+        type ValueType = DictionaryMeta;
+
+        fn parent(&self) -> Option<String> {
+            None
+        }
+    }
+
+    impl kvapi::Value for DictionaryMeta {
+        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+            []
+        }
+    }
+
+    impl kvapi::KeyCodec for DictionaryNameIdent {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            self.dictionary_name.encode_key(b.push_str(self.tenant.tenant_name()).push_str(&self.db_name))
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let tenant_name = parser.next_nonempty()?;
+            let name = String::decode_key(parser)?;
+            Ok(DictionaryNameIdent::new_generic(Tenant::new_nonempty(tenant_name), name, "my_db".to_string()))
+        }
+    }
+
+    impl kvapi::Key for DictionaryNameIdent {
+        const PREFIX: &'static str = "__fd_dictionary_by_id";
+        type ValueType = String;
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
+        }
+    }
+
+    impl kvapi::KeyCodec for DBIdDictionaryName {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(self.db_id).push_str(&self.dictionary_name)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let db_id = parser.next_u64()?;
+            let dictionary_name = parser.next_str()?;
+            Ok(Self { db_id, dictionary_name })
+        }
+    }
+
+    impl kvapi::Key for DBIdDictionaryName {
+        const PREFIX: &'static str = "__fd_dictionary";
+
+        type ValueType = DictionaryId;
+
+        fn parent(&self) -> Option<String> {
+            Some(DatabaseId::new(self.db_id).to_string_key())
+        }
+    }
+
+    impl kvapi::KeyCodec for DictionaryIdToName {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            b.push_u64(&self.dictionary_id)
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let dictionary_id = parser.next_u64()?;
+            Ok(Self { dictionary_id })
+        }
+    }
+
+    impl kvapi::Key for DictionaryIdToName {
+        const PREFIX: &'static str = "__fd_dictionary_id_to_name";
+        type ValueType = DBIdDictionaryName;
+        fn parent(&self) -> Option<String> {
+            Some(DictionaryId::new(self.dictionary_id).to_string_key())
+        }
+    }
+
+    impl kvapi::KeyCodec for DBIdDictionaryNameIdent {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
+            self.dict_name.encode_key(b.push_str(self.tenant.tenant_name()).push_str(self.db_id))
+        }
+
+        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
+            where Self: Sized {
+            let tenant_name = parser.next_nonempty()?;
+            let name = String::decode_key(parser)?;
+            Ok(DBIdDictionaryNameIdent::new_generic(Tenant::new_nonempty(tenant_name), name, 0))
+        }
+    }
+
+    impl kvapi::Key for DictionaryNameIdent {
+        const PREFIX: &'static str = "__fd_dictionary_by_id";
+        type ValueType = String;
+        fn parent(&self) -> Option<String> {
+            Some(self.tenant.to_string_key())
+        }
+    }
 }

@@ -29,6 +29,7 @@ use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
+use databend_common_meta_app::app_error::CreateDictionaryWithDropTime;
 use databend_common_meta_app::app_error::CreateIndexWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
@@ -93,6 +94,7 @@ use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DBIdDictionaryName;
+use databend_common_meta_app::schema::DBIdDictionaryNameIdent;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -4279,9 +4281,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply, KVAppError> {
         debug!(req :? = (&req); "SchemaApi: {}", func_name!());
         let tenant_dictionary = &req.name_ident;
+        if req.dictionary_meta.dropped_on.is_some() {
+            return Err(KVAppError::AppError(AppError::CreateDictionaryWithDropTime(
+                CreateDictionaryWithDropTime::new(tenant_dictionary.dictionary_name()),
+            )));
+        }
         let mut trials = txn_backoff(None, func_name!());
+        
         loop {
             trials.next().unwrap()?.await;
+
             let mut condition = vec![];
             let mut if_then = vec![];
 
@@ -4309,7 +4318,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         return Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
                             DictionaryAlreadyExists::new(
                                 tenant_dictionary.dictionary_name(),
-                                format!("create dictionary with tenant: {}",tenant_dictionary.tenant()),
+                                format!("create dictionary with tenant: {}",tenant_dictionary.tenant_name()),
                             ),
                         )));
                     }
@@ -4330,14 +4339,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let dictionary_id = fetch_id(self, IdGenerator::dictionary_id()).await?;
             let id_key = DictionaryId { dictionary_id };
             let id_to_name_key = DictionaryIdToName { dictionary_id };
-            struct TempDictIdent {
-                tenant: Tenant,
-                db_id: u64,
-                dict_name: String,
-            };
-            let tenant_dict = TempDictIdent{
+            let tenant_dict = DBIdDictionaryNameIdent{
                 tenant: tenant_dictionary.tenant.clone(),
-                db_id: dictionary_id,
+                db_id,
                 dict_name: tenant_dictionary.dictionary_name.clone(),
             };
 
@@ -4471,8 +4475,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
        
-            // Get index id list by `prefix_list` "<prefix>/<tenant>"
-        let ident = DictionaryNameIdent::new(&req.inner.tenant() ,"dummy_db", "dummy_dict");
+        // Get dictionary id list by `prefix_list` "<prefix>/<tenant>"
+        let ident = DictionaryNameIdent::new(req.inner.tenant() ,"dummy_db", "dummy_dict");
         let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(ident.tenant_name()).push_raw("").done();
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
@@ -4766,8 +4770,8 @@ async fn construct_drop_dictionary_txn_operations(
         return if drop_if_exists {
             Ok((dictionary_id, dictionary_id_seq))
         } else {
-            return Err(KVAppError::AppError(AppError::UnKnownDictionary(
-                UnKnownDictionary::new(tenant_index.dictionary_name(), "drop_dictionary"),
+            return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(tenant_index.dictionary_name(), "drop_dictionary"),
             )));
         };
     }
@@ -4778,7 +4782,7 @@ async fn construct_drop_dictionary_txn_operations(
 
     debug!(dictionary_id = dictionary_id, name_key :? =(tenant_index); "drop_dictionary");
 
-    // drop an dictionary with drop time/////////////////////////////
+    // drop an dictionary with drop time
     if dictionary_meta.dropped_on.is_some() {
         return Err(KVAppError::AppError(AppError::DropDictionaryWithDropTime(
             DropDictionaryWithDropTime::new(tenant_index.dictionary_name()),
