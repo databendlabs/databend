@@ -41,7 +41,7 @@ select a, _origin_version is null, _origin_block_id is null, _origin_block_row_n
 4 0 0 1 0
 
 statement ok
-update t set a=3 where _origin_version is not null
+update t set a = 3 where a = 4
 
 statement ok
 optimize table t compact

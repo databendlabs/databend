@@ -24,4 +24,5 @@ pub use database::Database;
 pub use database_context::DatabaseContext;
 pub use database_factory::DatabaseFactory;
 pub use information_schema::InformationSchemaDatabase;
+pub use share::ShareDatabase;
 pub use system::SystemDatabase;

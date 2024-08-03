@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
 
-use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::Partitions;
-use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+use crate::binder::MutationStrategy;
+use crate::executor::physical_plan::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DeleteSource {
+pub struct MutationOrganize {
     pub plan_id: u32,
-    pub parts: Partitions,
-    pub filters: Filters,
-    pub table_info: TableInfo,
-    pub col_indices: Vec<usize>,
-    pub query_row_id_col: bool,
-    pub snapshot: Arc<TableSnapshot>,
-    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    pub input: Box<PhysicalPlan>,
+    pub strategy: MutationStrategy,
+}
+
+impl MutationOrganize {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        self.input.output_schema()
+    }
 }

@@ -52,8 +52,8 @@ use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -175,6 +175,10 @@ pub trait TableContext: Send + Sync {
     fn set_enable_sort_spill(&self, enable: bool);
     fn set_compaction_num_block_hint(&self, hint: u64);
     fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
+    fn set_lazy_mutation_delete(&self, lazy: bool);
+    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
@@ -291,9 +295,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
 
-    fn add_merge_status(&self, merge_status: MergeStatus);
+    fn add_mutation_status(&self, mutation_status: MutationStatus);
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>>;
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
 

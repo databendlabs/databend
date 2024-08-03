@@ -124,11 +124,10 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformExchangeDeserializ
             DataPacket::Dictionary(_) => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
-            DataPacket::MergeStatus { .. } => unreachable!(),
+            DataPacket::MutationStatus { .. } => unreachable!(),
             DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
-            DataPacket::RetryConnectSuccess => unreachable!(),
         }
     }
 }

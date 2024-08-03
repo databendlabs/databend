@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
-use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::Partitions;
-use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct UpdateSource {
-    pub plan_id: u32,
-    pub parts: Partitions,
-    pub table_info: TableInfo,
-    pub col_indices: Vec<usize>,
-    pub query_row_id_col: bool,
+use crate::binder::MutationType;
+use crate::executor::physical_plan::PhysicalPlan;
 
-    pub filters: Option<Filters>,
-    pub update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-    pub computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ColumnMutation {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+    pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub mutation_type: MutationType,
+    pub field_id_to_schema_index: HashMap<usize, usize>,
+    pub input_num_columns: usize,
+    pub has_filter_column: bool,
     pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
 }

@@ -3,7 +3,7 @@ create provider share and database\table
 1
 2
 create provider share and grant access
-create consumer db from share
+create consumer catalog from share
 1
 2
 test alter table

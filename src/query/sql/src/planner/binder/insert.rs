@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 
+use super::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
@@ -85,18 +86,18 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let fully_table = self.fully_table_identifier(catalog, database, table);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, &None);
         let (catalog_name, database_name, table_name) = (
-            fully_table.catalog_name(),
-            fully_table.database_name(),
-            fully_table.table_name(),
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
         );
 
         let table = self
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await
-            .map_err(|err| fully_table.not_found_suggest_error(err))?;
+            .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
         let schema = self.schema_project(&table.schema(), columns)?;
 

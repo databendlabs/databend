@@ -105,7 +105,7 @@ impl SubqueryRewriter {
                     scan_columns.insert(derived_col);
                 }
             }
-            let mut logical_get = SExpr::create_leaf(Arc::new(
+            let mut scan = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: scan_columns,
@@ -114,15 +114,15 @@ impl SubqueryRewriter {
                 .into(),
             ));
             if !scalar_items.is_empty() {
-                // Wrap `EvalScalar` to `logical_get`.
-                logical_get = SExpr::create_unary(
+                // Wrap `EvalScalar` to `scan`.
+                scan = SExpr::create_unary(
                     Arc::new(
                         EvalScalar {
                             items: scalar_items,
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
             if self.ctx.get_cluster().is_empty() {
@@ -144,7 +144,7 @@ impl SubqueryRewriter {
                         index: column_index,
                     });
                 }
-                logical_get = SExpr::create_unary(
+                scan = SExpr::create_unary(
                     Arc::new(
                         Aggregate {
                             mode: AggregateMode::Initial,
@@ -156,7 +156,7 @@ impl SubqueryRewriter {
                         }
                         .into(),
                     ),
-                    Arc::new(logical_get),
+                    Arc::new(scan),
                 );
             }
 
@@ -175,7 +175,7 @@ impl SubqueryRewriter {
 
             return Ok(SExpr::create_binary(
                 Arc::new(cross_join),
-                Arc::new(logical_get),
+                Arc::new(scan),
                 Arc::new(plan.clone()),
             ));
         }

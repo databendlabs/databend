@@ -33,6 +33,7 @@ message CatalogOption {
   oneof catalog_option {
     HiveCatalogOption hive = 2;
     IcebergCatalogOption iceberg = 3;
+    ShareCatalogOption share = 4;
   }
 }
 
@@ -75,4 +76,13 @@ message IcebergHmsCatalogOption {
   string address = 1;
   string warehouse = 2;
   map<string, string> props = 3;
+}
+
+message ShareCatalogOption {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  string provider = 1;
+  string share_name = 2;
+  string share_endpoint = 3;
 }
