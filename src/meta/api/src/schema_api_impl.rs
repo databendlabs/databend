@@ -4341,7 +4341,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let id_to_name_key = DictionaryIdToName { dictionary_id };
             let tenant_dict = DBIdDictionaryNameIdent{
                 tenant: tenant_dictionary.tenant.clone(),
-                db_id,
+                db_id: db_id.0,
                 dict_name: tenant_dictionary.dictionary_name.clone(),
             };
 
