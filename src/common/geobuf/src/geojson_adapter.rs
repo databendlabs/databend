@@ -1,3 +1,5 @@
+use geozero::error::GeozeroError;
+
 use super::geo_buf;
 use super::Element;
 use super::Geometry;
@@ -7,7 +9,7 @@ use super::Visitor;
 pub struct GeoJson<S: AsRef<str>>(pub S);
 
 impl<V: Visitor> Element<V> for geojson::GeoJson {
-    fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error> {
+    fn accept(&self, visitor: &mut V) -> Result<(), GeozeroError> {
         use geojson::Feature;
         use geojson::GeoJson;
         use geojson::Geometry;
@@ -17,7 +19,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
             points: &[Vec<f64>],
             visitor: &mut impl Visitor,
             multi: bool,
-        ) -> Result<(), anyhow::Error> {
+        ) -> Result<(), GeozeroError> {
             visitor.visit_points_start(points.len())?;
             for p in points.iter() {
                 let (x, y) = normalize_point(p)?;
@@ -31,7 +33,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
             geom: &Geometry,
             // TODO: Provide support for additional GeoJson attributes
             _feature: Option<&Feature>,
-        ) -> Result<(), anyhow::Error> {
+        ) -> Result<(), GeozeroError> {
             match &geom.value {
                 Value::Point(point) => {
                     let (x, y) = normalize_point(point)?;
@@ -115,10 +117,10 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
     }
 }
 
-fn normalize_point(point: &[f64]) -> Result<(f64, f64), anyhow::Error> {
+fn normalize_point(point: &[f64]) -> Result<(f64, f64), GeozeroError> {
     if point.len() != 2 {
-        Err(anyhow::Error::msg(
-            "coordinates higher than two dimensions are not supported",
+        Err(GeozeroError::Geometry(
+            "coordinates higher than two dimensions are not supported".to_string(),
         ))
     } else {
         Ok((point[0], point[1]))
@@ -126,7 +128,7 @@ fn normalize_point(point: &[f64]) -> Result<(f64, f64), anyhow::Error> {
 }
 
 impl<S: AsRef<str>> TryFrom<GeoJson<S>> for Geometry {
-    type Error = anyhow::Error;
+    type Error = GeozeroError;
 
     fn try_from(str: GeoJson<S>) -> Result<Self, Self::Error> {
         let json_struct: geojson::GeoJson = str.0.as_ref().parse()?;
@@ -137,7 +139,7 @@ impl<S: AsRef<str>> TryFrom<GeoJson<S>> for Geometry {
 }
 
 impl TryInto<GeoJson<String>> for &Geometry {
-    type Error = anyhow::Error;
+    type Error = GeozeroError;
 
     fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
         use geozero::ToJson;

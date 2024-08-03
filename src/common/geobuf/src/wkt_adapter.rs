@@ -1,3 +1,5 @@
+use geozero::error::GeozeroError;
+
 use super::geo_buf;
 use super::Element;
 use super::Geometry;
@@ -7,7 +9,7 @@ use super::Visitor;
 pub struct Wkt<S: AsRef<str>>(pub S);
 
 impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
-    fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error> {
+    fn accept(&self, visitor: &mut V) -> Result<(), GeozeroError> {
         use wkt::types::*;
         use wkt::Geometry;
 
@@ -15,7 +17,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
             points: &[Coord<f64>],
             visitor: &mut impl Visitor,
             multi: bool,
-        ) -> Result<(), anyhow::Error> {
+        ) -> Result<(), GeozeroError> {
             visitor.visit_points_start(points.len())?;
             for p in points.iter() {
                 let (x, y) = normalize_coord(p)?;
@@ -27,7 +29,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
         fn accept_geom(
             geom: &Geometry<f64>,
             visitor: &mut impl Visitor,
-        ) -> Result<(), anyhow::Error> {
+        ) -> Result<(), GeozeroError> {
             match geom {
                 Geometry::Point(point) => {
                     let (x, y) = normalize_point(point)?;
@@ -90,17 +92,17 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
     }
 }
 
-fn normalize_coord(coord: &wkt::types::Coord<f64>) -> Result<(f64, f64), anyhow::Error> {
+fn normalize_coord(coord: &wkt::types::Coord<f64>) -> Result<(f64, f64), GeozeroError> {
     if coord.z.is_some() || coord.m.is_some() {
-        Err(anyhow::Error::msg(
-            "coordinates higher than two dimensions are not supported",
+        Err(GeozeroError::Geometry(
+            "coordinates higher than two dimensions are not supported".to_string(),
         ))
     } else {
         Ok((coord.x, coord.y))
     }
 }
 
-fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), anyhow::Error> {
+fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), GeozeroError> {
     match &point.0 {
         Some(c) => normalize_coord(c),
         None => Ok((f64::NAN, f64::NAN)),
@@ -108,10 +110,14 @@ fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), anyhow:
 }
 
 impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
-    type Error = anyhow::Error;
+    type Error = GeozeroError;
 
     fn try_from(str: Wkt<S>) -> Result<Self, Self::Error> {
-        let wkt_struct: wkt::Wkt<f64> = str.0.as_ref().parse().map_err(anyhow::Error::msg)?;
+        let wkt_struct: wkt::Wkt<f64> = str
+            .0
+            .as_ref()
+            .parse()
+            .map_err(|e: &str| GeozeroError::Geometry(e.to_string()))?;
         let mut builder = GeometryBuilder::new();
         wkt_struct.accept(&mut builder)?;
         Ok(builder.build())
@@ -119,7 +125,7 @@ impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
 }
 
 impl TryInto<Wkt<String>> for &Geometry {
-    type Error = anyhow::Error;
+    type Error = GeozeroError;
 
     fn try_into(self) -> Result<Wkt<String>, Self::Error> {
         use geozero::ToWkt;

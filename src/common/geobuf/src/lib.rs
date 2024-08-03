@@ -10,6 +10,8 @@ mod wkt_adapter;
 use builder::GeometryBuilder;
 use geo_generated::geo_buf;
 pub use geojson_adapter::GeoJson;
+use geozero::error::GeozeroError;
+use geozero::error::Result as GeoResult;
 use ordered_float::OrderedFloat;
 pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Wkt;
@@ -125,33 +127,33 @@ pub struct GeographyRef<'a> {
 }
 
 trait Visitor {
-    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> Result<(), anyhow::Error>;
+    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()>;
 
-    fn visit_points_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+    fn visit_points_start(&mut self, n: usize) -> GeoResult<()>;
 
-    fn visit_points_end(&mut self, multi: bool) -> Result<(), anyhow::Error>;
+    fn visit_points_end(&mut self, multi: bool) -> GeoResult<()>;
 
-    fn visit_lines_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+    fn visit_lines_start(&mut self, n: usize) -> GeoResult<()>;
 
-    fn visit_lines_end(&mut self) -> Result<(), anyhow::Error>;
+    fn visit_lines_end(&mut self) -> GeoResult<()>;
 
-    fn visit_polygon_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+    fn visit_polygon_start(&mut self, n: usize) -> GeoResult<()>;
 
-    fn visit_polygon_end(&mut self, multi: bool) -> Result<(), anyhow::Error>;
+    fn visit_polygon_end(&mut self, multi: bool) -> GeoResult<()>;
 
-    fn visit_polygons_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+    fn visit_polygons_start(&mut self, n: usize) -> GeoResult<()>;
 
-    fn visit_polygons_end(&mut self) -> Result<(), anyhow::Error>;
+    fn visit_polygons_end(&mut self) -> GeoResult<()>;
 
-    fn visit_collection_start(&mut self, n: usize) -> Result<(), anyhow::Error>;
+    fn visit_collection_start(&mut self, n: usize) -> GeoResult<()>;
 
-    fn visit_collection_end(&mut self) -> Result<(), anyhow::Error>;
+    fn visit_collection_end(&mut self) -> GeoResult<()>;
 
-    fn finish(&mut self, kind: geo_buf::ObjectKind) -> Result<(), anyhow::Error>;
+    fn finish(&mut self, kind: geo_buf::ObjectKind) -> GeoResult<()>;
 }
 
 trait Element<V: Visitor> {
-    fn accept(&self, visitor: &mut V) -> Result<(), anyhow::Error>;
+    fn accept(&self, visitor: &mut V) -> GeoResult<()>;
 }
 
 #[cfg(test)]

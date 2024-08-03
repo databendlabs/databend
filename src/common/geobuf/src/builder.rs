@@ -101,7 +101,7 @@ impl<'fbb> GeometryBuilder<'fbb> {
 }
 
 impl<'fbb> Visitor for GeometryBuilder<'fbb> {
-    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> Result<(), anyhow::Error> {
+    fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()> {
         if self.stack.is_empty() {
             self.push_point(x, y);
             return Ok(());
@@ -120,69 +120,69 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
         Ok(())
     }
 
-    fn visit_points_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+    fn visit_points_start(&mut self, _: usize) -> GeoResult<()> {
         if !self.stack.is_empty() && self.point_offsets.is_empty() {
             self.point_offsets.push(self.point_len() as u32)
         }
         Ok(())
     }
 
-    fn visit_points_end(&mut self, multi: bool) -> Result<(), anyhow::Error> {
+    fn visit_points_end(&mut self, multi: bool) -> GeoResult<()> {
         if multi || !self.stack.is_empty() {
             self.point_offsets.push(self.point_len() as u32);
         }
         Ok(())
     }
 
-    fn visit_lines_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+    fn visit_lines_start(&mut self, _: usize) -> GeoResult<()> {
         if self.point_offsets.is_empty() {
             self.point_offsets.push(self.point_len() as u32)
         }
         Ok(())
     }
 
-    fn visit_lines_end(&mut self) -> Result<(), anyhow::Error> {
+    fn visit_lines_end(&mut self) -> GeoResult<()> {
         if !self.stack.is_empty() {
             self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
         }
         Ok(())
     }
 
-    fn visit_polygon_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+    fn visit_polygon_start(&mut self, _: usize) -> GeoResult<()> {
         if self.point_offsets.is_empty() {
             self.point_offsets.push(self.point_len() as u32)
         }
         Ok(())
     }
 
-    fn visit_polygon_end(&mut self, multi: bool) -> Result<(), anyhow::Error> {
+    fn visit_polygon_end(&mut self, multi: bool) -> GeoResult<()> {
         if multi || !self.stack.is_empty() {
             self.ring_offsets.push(self.point_offsets.len() as u32 - 1);
         }
         Ok(())
     }
 
-    fn visit_polygons_start(&mut self, _: usize) -> Result<(), anyhow::Error> {
+    fn visit_polygons_start(&mut self, _: usize) -> GeoResult<()> {
         if self.ring_offsets.is_empty() {
             self.ring_offsets.push(self.point_len() as u32)
         }
         Ok(())
     }
 
-    fn visit_polygons_end(&mut self) -> Result<(), anyhow::Error> {
+    fn visit_polygons_end(&mut self) -> GeoResult<()> {
         Ok(())
     }
 
-    fn visit_collection_start(&mut self, n: usize) -> Result<(), anyhow::Error> {
+    fn visit_collection_start(&mut self, n: usize) -> GeoResult<()> {
         self.stack.push(Vec::with_capacity(n));
         Ok(())
     }
 
-    fn visit_collection_end(&mut self) -> Result<(), anyhow::Error> {
+    fn visit_collection_end(&mut self) -> GeoResult<()> {
         Ok(())
     }
 
-    fn finish(&mut self, kind: geo_buf::ObjectKind) -> Result<(), anyhow::Error> {
+    fn finish(&mut self, kind: geo_buf::ObjectKind) -> GeoResult<()> {
         if self.stack.is_empty() {
             let object = match kind {
                 geo_buf::ObjectKind::Point => {
@@ -334,9 +334,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
         Ok(())
     }
 
+    fn empty_point(&mut self, idx: usize) -> GeoResult<()> {
+        self.xy(f64::NAN, f64::NAN, idx)
+    }
+
     fn xy(&mut self, x: f64, y: f64, _: usize) -> GeoResult<()> {
         let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::Point));
-        self.visit_point(x, y, multi).map_err(map_anyhow)?;
+        self.visit_point(x, y, multi)?;
         Ok(())
     }
 
@@ -347,7 +351,7 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
 
     fn point_end(&mut self, _: usize) -> GeoResult<()> {
         if let Some(kind @ geo_buf::ObjectKind::Point) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
@@ -356,15 +360,15 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn multipoint_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
         self.temp_kind
             .get_or_insert(geo_buf::ObjectKind::MultiPoint);
-        self.visit_points_start(size).map_err(map_anyhow)?;
+        self.visit_points_start(size)?;
         Ok(())
     }
 
     fn multipoint_end(&mut self, _: usize) -> GeoResult<()> {
         let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::MultiPoint));
-        self.visit_points_end(multi).map_err(map_anyhow)?;
+        self.visit_points_end(multi)?;
         if let Some(kind @ geo_buf::ObjectKind::MultiPoint) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
@@ -373,13 +377,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn linestring_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
         self.temp_kind
             .get_or_insert(geo_buf::ObjectKind::LineString);
-        self.visit_points_start(size).map_err(map_anyhow)
+        self.visit_points_start(size)
     }
 
     fn linestring_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
-        self.visit_points_end(!tagged).map_err(map_anyhow)?;
+        self.visit_points_end(!tagged)?;
         if let Some(kind @ geo_buf::ObjectKind::LineString) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
@@ -388,13 +392,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn multilinestring_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
         self.temp_kind
             .get_or_insert(geo_buf::ObjectKind::MultiLineString);
-        self.visit_lines_start(size).map_err(map_anyhow)
+        self.visit_lines_start(size)
     }
 
     fn multilinestring_end(&mut self, _: usize) -> GeoResult<()> {
-        self.visit_lines_end().map_err(map_anyhow)?;
+        self.visit_lines_end()?;
         if let Some(kind @ geo_buf::ObjectKind::MultiLineString) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
@@ -402,13 +406,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
 
     fn polygon_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
         self.temp_kind.get_or_insert(geo_buf::ObjectKind::Polygon);
-        self.visit_polygon_start(size).map_err(map_anyhow)
+        self.visit_polygon_start(size)
     }
 
     fn polygon_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
-        self.visit_polygon_end(!tagged).map_err(map_anyhow)?;
+        self.visit_polygon_end(!tagged)?;
         if let Some(kind @ geo_buf::ObjectKind::Polygon) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
@@ -417,31 +421,26 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn multipolygon_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
         self.temp_kind
             .get_or_insert(geo_buf::ObjectKind::MultiPolygon);
-        self.visit_polygons_start(size).map_err(map_anyhow)
+        self.visit_polygons_start(size)
     }
 
     fn multipolygon_end(&mut self, _: usize) -> GeoResult<()> {
-        self.visit_polygons_end().map_err(map_anyhow)?;
+        self.visit_polygons_end()?;
         if let Some(kind @ geo_buf::ObjectKind::MultiPolygon) = self.temp_kind {
-            self.finish(kind).map_err(map_anyhow)?;
+            self.finish(kind)?;
             self.temp_kind = None;
         }
         Ok(())
     }
 
     fn geometrycollection_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.visit_collection_start(size).map_err(map_anyhow)
+        self.visit_collection_start(size)
     }
 
     fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
-        self.visit_collection_end().map_err(map_anyhow)?;
+        self.visit_collection_end()?;
         self.finish(geo_buf::ObjectKind::Collection)
-            .map_err(map_anyhow)
     }
-}
-
-fn map_anyhow(value: anyhow::Error) -> geozero::error::GeozeroError {
-    geozero::error::GeozeroError::Geometry(value.to_string())
 }
 
 #[cfg(test)]
