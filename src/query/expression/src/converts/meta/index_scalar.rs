@@ -38,20 +38,25 @@ pub enum IndexScalar {
     Tuple(Vec<IndexScalar>),
 }
 
-impl From<IndexScalar> for Scalar {
-    fn from(value: IndexScalar) -> Self {
-        match value {
+impl TryFrom<IndexScalar> for Scalar {
+    type Error = ();
+
+    fn try_from(value: IndexScalar) -> Result<Self, ()> {
+        Ok(match value {
             IndexScalar::Null => Scalar::Null,
             IndexScalar::Number(num_scalar) => Scalar::Number(num_scalar),
             IndexScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
-            IndexScalar::String(s) => Scalar::String(unsafe { String::from_utf8_unchecked(s) }),
-            IndexScalar::Tuple(tuple) => {
-                Scalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
-            }
-        }
+            IndexScalar::String(s) => Scalar::String(String::from_utf8(s).map_err(|_| ())?),
+            IndexScalar::Tuple(tuple) => Scalar::Tuple(
+                tuple
+                    .into_iter()
+                    .map(|c| c.try_into())
+                    .collect::<Result<_, ()>>()?,
+            ),
+        })
     }
 }
 
