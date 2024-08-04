@@ -11,15 +11,21 @@ enum InnerObjectKind:ubyte {
 }
 
 table InnerObject {
-  point_offsets: [uint32];
-  ring_offsets: [uint32];
+  // https://flatbuffers.dev/flatbuffers_internals.html
+  // FlexBuffers Typed Vectors short than Flatbuffers [uint32]
+  point_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
+  ring_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
 
   collection: [InnerObject];
 
-
   wkb_type: uint32;
   srid: uint32;
-  properties: [ubyte] (flexbuffer);
+  properties: [property];
+}
+
+table property {
+  name: string;
+  value: [ubyte] (flexbuffer);
 }
 
 enum ObjectKind:ubyte { 
@@ -33,8 +39,8 @@ enum ObjectKind:ubyte {
 }
 
 table Object {
-  point_offsets: [uint32];
-  ring_offsets: [uint32];
+  point_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
+  ring_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
 
   collection: [InnerObject];
 
@@ -54,7 +60,7 @@ table Object {
   srid: uint32;
 
   // For GeoJSON compatibility
-  properties: [ubyte] (flexbuffer);
+  properties: [property];
 }
  
 root_type Object;

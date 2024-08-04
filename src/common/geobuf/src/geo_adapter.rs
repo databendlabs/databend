@@ -76,30 +76,22 @@ impl geozero::GeozeroGeometry for Geometry {
             }
             geo_buf::ObjectKind::MultiLineString => {
                 let object = self.read_object()?;
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiLineString, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.multilinestring_begin(point_offsets.len() - 1, 0)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.multilinestring_end(0)
             }
             geo_buf::ObjectKind::Polygon => {
                 let object = self.read_object()?;
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid Polygon, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.polygon_begin(true, point_offsets.len() - 1, 0)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.polygon_end(true, 0)
             }
             geo_buf::ObjectKind::MultiPolygon => {
                 let object = self.read_object()?;
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiPolygon, point_offsets missing".to_string(),
-                ))?;
-                let ring_offsets = object.ring_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiPolygon, ring_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
+                let ring_offsets = read_ring_offsets(object.ring_offsets())?;
                 processor.multipolygon_begin(ring_offsets.len() - 1, 0)?;
                 self.process_polygons(processor, &point_offsets, &ring_offsets)?;
                 processor.multipolygon_end(0)
@@ -128,14 +120,14 @@ impl Geometry {
     fn process_lines<P>(
         &self,
         processor: &mut P,
-        point_offsets: &Vector<u32>,
+        point_offsets: &flexbuffers::VectorReader<&[u8]>,
     ) -> geozero::error::Result<()>
     where
         P: geozero::GeomProcessor,
     {
         point_offsets
             .iter()
-            .map_windows(|[start, end]| *start as usize..*end as usize)
+            .map_windows(|[start, end]| start.as_u32() as usize..end.as_u32() as usize)
             .enumerate()
             .try_for_each(|(idx, range)| {
                 processor.linestring_begin(false, range.len(), idx)?;
@@ -149,20 +141,20 @@ impl Geometry {
     fn process_polygons<P>(
         &self,
         processor: &mut P,
-        point_offsets: &Vector<u32>,
-        ring_offsets: &Vector<u32>,
+        point_offsets: &flexbuffers::VectorReader<&[u8]>,
+        ring_offsets: &flexbuffers::VectorReader<&[u8]>,
     ) -> geozero::error::Result<()>
     where
         P: geozero::GeomProcessor,
     {
         ring_offsets
             .iter()
-            .map_windows(|[start, end]| *start as usize..=*end as usize)
+            .map_windows(|[start, end]| start.as_u32() as usize..=end.as_u32() as usize)
             .enumerate()
             .try_for_each(|(idx, range)| {
                 processor.polygon_begin(false, range.end() - range.start(), idx)?;
                 range
-                    .map(|i| point_offsets.get(i))
+                    .map(|i| point_offsets.index(i).unwrap().as_u32())
                     .map_windows(|[start, end]| *start as usize..*end as usize)
                     .enumerate()
                     .try_for_each(|(idx, range)| {
@@ -187,25 +179,19 @@ impl Geometry {
     {
         match geo_buf::InnerObjectKind(object.wkb_type() as u8) {
             geo_buf::InnerObjectKind::Point => {
-                let pos = object
-                    .point_offsets()
-                    .ok_or(GeozeroError::Geometry(
-                        "Invalid Point, point_offsets missing".to_string(),
-                    ))?
-                    .get(0);
+                let point_offsets = read_point_offsets(object.point_offsets())?;
+                let pos = point_offsets.index(0).unwrap().as_u32() as usize;
+
                 processor.point_begin(idx)?;
-                processor.xy(self.column_x[pos as usize], self.column_y[pos as usize], 0)?;
+                processor.xy(self.column_x[pos], self.column_y[pos], 0)?;
                 processor.point_end(idx)
             }
             geo_buf::InnerObjectKind::MultiPoint => {
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiPoint, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
+                let start = point_offsets.index(0).unwrap().as_u32() as usize;
+                let end = point_offsets.index(1).unwrap().as_u32() as usize;
+                let range = start..end;
 
-                let start = point_offsets.get(0);
-                let end = point_offsets.get(1);
-
-                let range = start as usize..end as usize;
                 processor.multipoint_begin(range.len(), idx)?;
                 for (idxc, pos) in range.enumerate() {
                     processor.xy(self.column_x[pos], self.column_y[pos], idxc)?;
@@ -213,13 +199,11 @@ impl Geometry {
                 processor.multipoint_end(idx)
             }
             geo_buf::InnerObjectKind::LineString => {
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid LineString, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
+                let start = point_offsets.index(0).unwrap().as_u32() as usize;
+                let end = point_offsets.index(1).unwrap().as_u32() as usize;
+                let range = start..end;
 
-                let start = point_offsets.get(0);
-                let end = point_offsets.get(1);
-                let range = start as usize..end as usize;
                 processor.linestring_begin(true, range.len(), idx)?;
                 for (idxc, pos) in range.enumerate() {
                     processor.xy(self.column_x[pos], self.column_y[pos], idxc)?;
@@ -227,28 +211,20 @@ impl Geometry {
                 processor.linestring_end(true, idx)
             }
             geo_buf::InnerObjectKind::MultiLineString => {
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiLineString, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.multilinestring_begin(point_offsets.len() - 1, idx)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.multilinestring_end(idx)
             }
             geo_buf::InnerObjectKind::Polygon => {
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid Polygon, point_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.polygon_begin(true, point_offsets.len() - 1, idx)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.polygon_end(true, idx)
             }
             geo_buf::InnerObjectKind::MultiPolygon => {
-                let point_offsets = object.point_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiPolygon, point_offsets missing".to_string(),
-                ))?;
-                let ring_offsets = object.ring_offsets().ok_or(GeozeroError::Geometry(
-                    "Invalid MultiPolygon, ring_offsets missing".to_string(),
-                ))?;
+                let point_offsets = read_point_offsets(object.point_offsets())?;
+                let ring_offsets = read_ring_offsets(object.ring_offsets())?;
                 processor.multipolygon_begin(ring_offsets.len() - 1, idx)?;
                 self.process_polygons(processor, &point_offsets, &ring_offsets)?;
                 processor.multipoint_end(idx)
@@ -266,6 +242,30 @@ impl Geometry {
             _ => unreachable!(),
         }
     }
+}
+
+fn read_point_offsets(
+    point_offsets: Option<flatbuffers::Vector<'_, u8>>,
+) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
+    let data = point_offsets.ok_or(GeozeroError::Geometry(
+        "Invalid MultiLineString, point_offsets missing".to_string(),
+    ))?;
+    let offsets = flexbuffers::Reader::get_root(data.bytes())
+        .map_err(|e| GeozeroError::Geometry(e.to_string()))?
+        .as_vector();
+    Ok(offsets)
+}
+
+fn read_ring_offsets(
+    ring_offsets: Option<flatbuffers::Vector<'_, u8>>,
+) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
+    let data = ring_offsets.ok_or(GeozeroError::Geometry(
+        "Invalid MultiLineString, ring_offsets missing".to_string(),
+    ))?;
+    let offsets = flexbuffers::Reader::get_root(data.bytes())
+        .map_err(|e| GeozeroError::Geometry(e.to_string()))?
+        .as_vector();
+    Ok(offsets)
 }
 
 #[cfg(test)]

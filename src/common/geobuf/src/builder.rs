@@ -47,14 +47,16 @@ impl<'fbb> GeometryBuilder<'fbb> {
         self.column_y.push(y);
     }
 
-    fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
-        let v = Some(self.fbb.create_vector(&self.point_offsets));
+    fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u8>>> {
+        let data = flexbuffers::singleton(&self.point_offsets);
+        let v = Some(self.fbb.create_vector(&data));
         self.point_offsets.clear();
         v
     }
 
-    fn create_ring_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
-        let v = Some(self.fbb.create_vector(&self.ring_offsets));
+    fn create_ring_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u8>>> {
+        let data = flexbuffers::singleton(&self.ring_offsets);
+        let v = Some(self.fbb.create_vector(&data));
         self.ring_offsets.clear();
         v
     }

@@ -307,26 +307,26 @@ pub mod geo_buf {
         }
 
         #[inline]
-        pub fn point_offsets(&self) -> Option<flatbuffers::Vector<'a, u32>> {
+        pub fn point_offsets(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u32>>>(
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
                         InnerObject::VT_POINT_OFFSETS,
                         None,
                     )
             }
         }
         #[inline]
-        pub fn ring_offsets(&self) -> Option<flatbuffers::Vector<'a, u32>> {
+        pub fn ring_offsets(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u32>>>(
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
                         InnerObject::VT_RING_OFFSETS,
                         None,
                     )
@@ -365,16 +365,16 @@ pub mod geo_buf {
             unsafe { self._tab.get::<u32>(InnerObject::VT_SRID, Some(0)).unwrap() }
         }
         #[inline]
-        pub fn properties(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+        pub fn properties(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        InnerObject::VT_PROPERTIES,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property>>,
+                >>(InnerObject::VT_PROPERTIES, None)
             }
         }
     }
@@ -387,12 +387,12 @@ pub mod geo_buf {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u32>>>(
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "point_offsets",
                     Self::VT_POINT_OFFSETS,
                     false,
                 )?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u32>>>(
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "ring_offsets",
                     Self::VT_RING_OFFSETS,
                     false,
@@ -402,18 +402,16 @@ pub mod geo_buf {
                 >>("collection", Self::VT_COLLECTION, false)?
                 .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
                 .visit_field::<u32>("srid", Self::VT_SRID, false)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
-                    "properties",
-                    Self::VT_PROPERTIES,
-                    false,
-                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<property>>,
+                >>("properties", Self::VT_PROPERTIES, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct InnerObjectArgs<'a> {
-        pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u32>>>,
-        pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u32>>>,
+        pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub collection: Option<
             flatbuffers::WIPOffset<
                 flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>,
@@ -421,7 +419,11 @@ pub mod geo_buf {
         >,
         pub wkb_type: u32,
         pub srid: u32,
-        pub properties: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub properties: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>,
+            >,
+        >,
     }
     impl<'a> Default for InnerObjectArgs<'a> {
         #[inline]
@@ -445,7 +447,7 @@ pub mod geo_buf {
         #[inline]
         pub fn add_point_offsets(
             &mut self,
-            point_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u32>>,
+            point_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                 InnerObject::VT_POINT_OFFSETS,
@@ -455,7 +457,7 @@ pub mod geo_buf {
         #[inline]
         pub fn add_ring_offsets(
             &mut self,
-            ring_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u32>>,
+            ring_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                 InnerObject::VT_RING_OFFSETS,
@@ -486,7 +488,9 @@ pub mod geo_buf {
         #[inline]
         pub fn add_properties(
             &mut self,
-            properties: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+            properties: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<property<'b>>>,
+            >,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                 InnerObject::VT_PROPERTIES,
@@ -519,6 +523,148 @@ pub mod geo_buf {
             ds.field("wkb_type", &self.wkb_type());
             ds.field("srid", &self.srid());
             ds.field("properties", &self.properties());
+            ds.finish()
+        }
+    }
+    pub enum propertyOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct property<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for property<'a> {
+        type Inner = property<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> property<'a> {
+        pub const VT_NAME: flatbuffers::VOffsetT = 4;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            property { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args propertyArgs<'args>,
+        ) -> flatbuffers::WIPOffset<property<'bldr>> {
+            let mut builder = propertyBuilder::new(_fbb);
+            if let Some(x) = args.value {
+                builder.add_value(x);
+            }
+            if let Some(x) = args.name {
+                builder.add_name(x);
+            }
+            builder.finish()
+        }
+
+        #[inline]
+        pub fn name(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(property::VT_NAME, None)
+            }
+        }
+        #[inline]
+        pub fn value(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                        property::VT_VALUE,
+                        None,
+                    )
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for property<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    "value",
+                    Self::VT_VALUE,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct propertyArgs<'a> {
+        pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub value: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for propertyArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            propertyArgs {
+                name: None,
+                value: None,
+            }
+        }
+    }
+
+    pub struct propertyBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> propertyBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(property::VT_NAME, name);
+        }
+        #[inline]
+        pub fn add_value(&mut self, value: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(property::VT_VALUE, value);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> propertyBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            propertyBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<property<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for property<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("property");
+            ds.field("name", &self.name());
+            ds.field("value", &self.value());
             ds.finish()
         }
     }
@@ -580,26 +726,26 @@ pub mod geo_buf {
         }
 
         #[inline]
-        pub fn point_offsets(&self) -> Option<flatbuffers::Vector<'a, u32>> {
+        pub fn point_offsets(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u32>>>(
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
                         Object::VT_POINT_OFFSETS,
                         None,
                     )
             }
         }
         #[inline]
-        pub fn ring_offsets(&self) -> Option<flatbuffers::Vector<'a, u32>> {
+        pub fn ring_offsets(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u32>>>(
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
                         Object::VT_RING_OFFSETS,
                         None,
                     )
@@ -634,16 +780,16 @@ pub mod geo_buf {
             unsafe { self._tab.get::<u32>(Object::VT_SRID, Some(0)).unwrap() }
         }
         #[inline]
-        pub fn properties(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+        pub fn properties(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        Object::VT_PROPERTIES,
-                        None,
-                    )
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property>>,
+                >>(Object::VT_PROPERTIES, None)
             }
         }
     }
@@ -656,12 +802,12 @@ pub mod geo_buf {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u32>>>(
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "point_offsets",
                     Self::VT_POINT_OFFSETS,
                     false,
                 )?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u32>>>(
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "ring_offsets",
                     Self::VT_RING_OFFSETS,
                     false,
@@ -671,18 +817,16 @@ pub mod geo_buf {
                 >>("collection", Self::VT_COLLECTION, false)?
                 .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
                 .visit_field::<u32>("srid", Self::VT_SRID, false)?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
-                    "properties",
-                    Self::VT_PROPERTIES,
-                    false,
-                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<property>>,
+                >>("properties", Self::VT_PROPERTIES, false)?
                 .finish();
             Ok(())
         }
     }
     pub struct ObjectArgs<'a> {
-        pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u32>>>,
-        pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u32>>>,
+        pub point_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub ring_offsets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub collection: Option<
             flatbuffers::WIPOffset<
                 flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>,
@@ -690,7 +834,11 @@ pub mod geo_buf {
         >,
         pub wkb_type: u32,
         pub srid: u32,
-        pub properties: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub properties: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>,
+            >,
+        >,
     }
     impl<'a> Default for ObjectArgs<'a> {
         #[inline]
@@ -714,7 +862,7 @@ pub mod geo_buf {
         #[inline]
         pub fn add_point_offsets(
             &mut self,
-            point_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u32>>,
+            point_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                 Object::VT_POINT_OFFSETS,
@@ -724,7 +872,7 @@ pub mod geo_buf {
         #[inline]
         pub fn add_ring_offsets(
             &mut self,
-            ring_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u32>>,
+            ring_offsets: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
                 Object::VT_RING_OFFSETS,
@@ -752,7 +900,9 @@ pub mod geo_buf {
         #[inline]
         pub fn add_properties(
             &mut self,
-            properties: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+            properties: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<property<'b>>>,
+            >,
         ) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Object::VT_PROPERTIES, properties);
