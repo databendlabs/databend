@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use databend_common_expression::types::*;
+use databend_common_expression::Column::Null;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
@@ -60,6 +61,15 @@ fn test_to_timestamp(file: &mut impl Write) {
             315360000000000,
         ]),
     )]);
+}
+
+fn test_convert_timezone(file: &mut impl Write) {
+    run_ast(file, "convert_timezone(a,b,c,d)", &[
+        ("a", DateType::from_data(vec![-100, 0, 100])),
+        ("b", TimestampType::from_data(vec![12321231])),
+        ("c", Null::from_data()),
+        ("d", Null::from_data()),
+    ]);
 }
 
 fn test_to_date(file: &mut impl Write) {
