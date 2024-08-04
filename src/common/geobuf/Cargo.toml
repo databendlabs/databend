@@ -13,6 +13,7 @@ test = true
 [dependencies]
 anyhow = { workspace = true }
 flatbuffers = "24.3.25"
+flexbuffers = "2.0.0"
 geo = { workspace = true }
 geojson = { version = "0.24.1" }
 geos = { workspace = true }
