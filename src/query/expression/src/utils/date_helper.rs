@@ -270,23 +270,24 @@ where T: AsPrimitive<i64>
     /// - `src_timestamp`: Source timestamp to be converted
     /// - `src_tz`: Timezone of the timestamp to be converted - Optional
     /// - `src_ntz_timestamp`: Source timestamp with unspecified timezone to be converted - Optional
-    fn convert_timezone(&self, target_tz: Tz, src_timestamp: DateTime<Tz>, src_tz: Option<Tz>, src_ntz_timestamp: Option<NaiveDateTime>) -> DateTime<Tz> {
-
+    fn convert_timezone(
+        target_tz: Tz,
+        src_timestamp: DateTime<Tz>,
+        src_tz: Option<Tz>,
+        src_ntz_timestamp: Option<NaiveDateTime>,
+    ) -> DateTime<Tz> {
         let timestamp_to_convert: DateTime<Tz>;
         if let (Some(ntz_timestamp), Some(tz)) = (src_ntz_timestamp, src_tz) {
             timestamp_to_convert = tz.from_local_datetime(&ntz_timestamp).unwrap();
-        }
-        else {
+        } else {
             timestamp_to_convert = src_timestamp;
         }
 
         if timestamp_to_convert.timezone() != target_tz {
             timestamp_to_convert.with_timezone(&target_tz)
-        }
-        else {
+        } else {
             timestamp_to_convert
         }
-
     }
 }
 
