@@ -273,6 +273,7 @@ where T: AsPrimitive<i64>
     /// - `src_tz`: Timezone of the timestamp to be converted - Optional
     /// - `src_ntz_timestamp`: Source timestamp with unspecified timezone to be converted - Optional
     fn convert_timezone(
+        &self,
         target_tz: Tz,
         src_timestamp: DateTime<Tz>,
         src_tz: Option<Tz>,
