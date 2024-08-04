@@ -241,7 +241,13 @@ impl TzLUT {
 pub trait DateConverter {
     fn to_date(&self, tz: Tz) -> NaiveDate;
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
-    fn convert_timezone(&self, target_tz: Tz, src_timestamp: DateTime<Tz>, src_tz: Option<Tz>, src_ntz_timestamp: Option<NaiveDateTime>) -> DateTime<Tz>;
+    fn convert_timezone(
+        &self,
+        target_tz: Tz,
+        src_timestamp: DateTime<Tz>,
+        src_tz: Option<Tz>,
+        src_ntz_timestamp: Option<NaiveDateTime>,
+    ) -> DateTime<Tz>;
 }
 
 impl<T> DateConverter for T
