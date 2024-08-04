@@ -15,7 +15,6 @@
 use std::io::Write;
 
 use databend_common_expression::types::*;
-use databend_common_expression::Column::Null;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
@@ -37,6 +36,7 @@ fn test_datetime() {
     test_to_number(file);
     test_rounder_functions(file);
     test_date_date_diff(file);
+    test_convert_timezone(file);
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
