@@ -54,7 +54,6 @@ pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
-    FromShare(ShareDatabaseParams),
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -523,16 +522,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         database,
                         engine: Some(engine),
                         options: vec![],
-                        share_params: None,
-                    })
-                }
-                Some(CreateDatabaseOption::FromShare(share_params)) => {
-                    Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option,
-                        database,
-                        engine: None,
-                        options: vec![],
-                        share_params: Some(share_params),
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
@@ -540,7 +529,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     database,
                     engine: None,
                     options: vec![],
-                    share_params: None,
                 }),
             };
 
@@ -4001,25 +3989,15 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let create_db_engine = map(
+    let mut create_db_engine = map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
-        rule! {
-            FROM ~ SHARE ~ #ident ~ "." ~ #ident ~ USING ~ #ident
-        },
-        |(_, _, tenant, _, share, _, endpoint)| {
-            CreateDatabaseOption::FromShare((ShareNameIdent { tenant, share }, endpoint))
-        },
-    );
-
     rule!(
         #create_db_engine
-        | #share_from
     )(i)
 }
 
@@ -4028,6 +4006,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Share, rule! { SHARE }),
     ))(i)
 }
 

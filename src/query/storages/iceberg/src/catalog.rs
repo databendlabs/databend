@@ -23,6 +23,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -96,6 +97,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use iceberg_catalog_hms::HmsCatalog;
@@ -113,7 +115,12 @@ pub const ICEBERG_CATALOG: &str = "iceberg";
 pub struct IcebergCreator;
 
 impl CatalogCreator for IcebergCreator {
-    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let catalog: Arc<dyn Catalog> = Arc::new(IcebergCatalog::try_create(info)?);
 
         Ok(catalog)

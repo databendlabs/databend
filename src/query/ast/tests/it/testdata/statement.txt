@@ -2992,6 +2992,24 @@ CreateCatalog(
 
 
 ---------- Input ----------
+create catalog ctl type=share connection=(name='provider.test_share' endpoint='endpoint_name');
+---------- Output ---------
+CREATE CATALOG ctl TYPE=SHARE CONNECTION = ( endpoint = 'endpoint_name', name = 'provider.test_share' )
+---------- AST ------------
+CreateCatalog(
+    CreateCatalogStmt {
+        if_not_exists: false,
+        catalog_name: "ctl",
+        catalog_type: Share,
+        catalog_options: {
+            "endpoint": "endpoint_name",
+            "name": "provider.test_share",
+        },
+    },
+)
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
@@ -3012,7 +3030,6 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        share_params: None,
     },
 )
 
@@ -3049,7 +3066,6 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        share_params: None,
     },
 )
 
@@ -3077,62 +3093,6 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        share_params: None,
-    },
-)
-
-
----------- Input ----------
-create database t FROM SHARE a.s using b;
----------- Output ---------
-CREATE DATABASE t FROM SHARE a.s USING b
----------- AST ------------
-CreateDatabase(
-    CreateDatabaseStmt {
-        create_option: Create,
-        database: DatabaseRef {
-            catalog: None,
-            database: Identifier {
-                span: Some(
-                    16..17,
-                ),
-                name: "t",
-                quote: None,
-                is_hole: false,
-            },
-        },
-        engine: None,
-        options: [],
-        share_params: Some(
-            (
-                ShareNameIdent {
-                    tenant: Identifier {
-                        span: Some(
-                            29..30,
-                        ),
-                        name: "a",
-                        quote: None,
-                        is_hole: false,
-                    },
-                    share: Identifier {
-                        span: Some(
-                            31..32,
-                        ),
-                        name: "s",
-                        quote: None,
-                        is_hole: false,
-                    },
-                },
-                Identifier {
-                    span: Some(
-                        39..40,
-                    ),
-                    name: "b",
-                    quote: None,
-                    is_hole: false,
-                },
-            ),
-        ),
     },
 )
 
@@ -3244,7 +3204,6 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        share_params: None,
     },
 )
 

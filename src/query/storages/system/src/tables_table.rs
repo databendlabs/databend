@@ -40,6 +40,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
@@ -144,6 +145,7 @@ where TablesTable<T, U>: HistoryAware
                 TableField::new("engine_full", TableDataType::String),
                 TableField::new("cluster_by", TableDataType::String),
                 TableField::new("is_transient", TableDataType::String),
+                TableField::new("is_attach", TableDataType::String),
                 TableField::new("created_on", TableDataType::Timestamp),
                 TableField::new(
                     "dropped_on",
@@ -520,6 +522,16 @@ where TablesTable<T, U>: HistoryAware
                 }
             })
             .collect();
+        let is_attach: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if FuseTable::is_table_attached(&v.get_table_info().meta.options) {
+                    "ATTACH".to_string()
+                } else {
+                    "".to_string()
+                }
+            })
+            .collect();
         let comment: Vec<String> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.comment.clone())
@@ -552,6 +564,7 @@ where TablesTable<T, U>: HistoryAware
                 StringType::from_data(engines_full),
                 StringType::from_data(cluster_bys),
                 StringType::from_data(is_transient),
+                StringType::from_data(is_attach),
                 TimestampType::from_data(created_on),
                 TimestampType::from_opt_data(dropped_on),
                 TimestampType::from_data(updated_on),

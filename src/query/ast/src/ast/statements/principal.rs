@@ -96,6 +96,7 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
+    Share,
 }
 
 impl Display for CatalogType {
@@ -104,6 +105,7 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
+            CatalogType::Share => write!(f, "SHARE"),
         }
     }
 }

@@ -92,6 +92,7 @@ impl PipelineBuilder {
                         schema,
                         table_info.ident.seq,
                         false,
+                        false,
                     )?;
                     self.main_pipeline
                         .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));

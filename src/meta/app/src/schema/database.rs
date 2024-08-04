@@ -254,8 +254,25 @@ impl Display for RenameDatabaseReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ReplyShareObject {
+    // (db id)
+    Database(u64),
+    // (db_id, table id)
+    Table(u64, u64),
+}
+
+impl From<ShareObject> for ReplyShareObject {
+    fn from(object: ShareObject) -> Self {
+        match object {
+            ShareObject::Database(_, db_id) => ReplyShareObject::Database(db_id),
+            ShareObject::Table(_, db_id, table_id) => ReplyShareObject::Table(db_id, table_id),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RenameDatabaseReply {
-    pub share_spec: Option<(Vec<ShareSpec>, ShareObject)>,
+    pub share_spec: Option<(Vec<ShareSpec>, ReplyShareObject)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

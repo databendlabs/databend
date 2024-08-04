@@ -17,14 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
-use databend_common_meta_api::ShareApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateDatabaseReq;
-use databend_common_meta_app::schema::ShareDbId;
-use databend_common_meta_app::share::GetShareEndpointReq;
-use databend_common_meta_app::share::ShareGrantObjectPrivilege;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sharing::ShareEndpointClient;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_storages_share::remove_share_db_dir;
 use databend_common_storages_share::save_share_spec;
@@ -46,63 +41,6 @@ pub struct CreateDatabaseInterpreter {
 impl CreateDatabaseInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDatabasePlan) -> Result<Self> {
         Ok(CreateDatabaseInterpreter { ctx, plan })
-    }
-
-    async fn check_create_database_from_share(&self) -> Result<Option<u64>> {
-        // safe to unwrap
-        let share_name = self.plan.meta.from_share.clone().unwrap();
-        let share_endpoint = self.plan.meta.using_share_endpoint.clone().unwrap();
-        let tenant = self.plan.tenant.clone();
-
-        // 1. get share endpoint
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let req = GetShareEndpointReq {
-            tenant: tenant.clone(),
-            endpoint: Some(share_endpoint.clone()),
-        };
-        let reply = meta_api.get_share_endpoint(req).await?;
-        if reply.share_endpoint_meta_vec.is_empty() {
-            return Err(ErrorCode::UnknownShareEndpoint(format!(
-                "UnknownShareEndpoint {:?}",
-                share_endpoint
-            )));
-        }
-
-        // 2. get ShareSpec using share endpoint
-        let share_endpoint_meta = &reply.share_endpoint_meta_vec[0].1;
-        let client = ShareEndpointClient::new();
-        let share_spec = client
-            .get_share_spec_by_name(
-                share_endpoint_meta,
-                tenant.tenant_name(),
-                share_name.tenant_name(),
-                share_name.share_name(),
-            )
-            .await?;
-
-        // 2. check ShareSpec
-        if let Some(db_privileges) = share_spec.db_privileges {
-            if !db_privileges.contains(ShareGrantObjectPrivilege::Usage) {
-                Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                    "share {} has not granted privilege to {}",
-                    share_name.display(),
-                    tenant.tenant_name()
-                )))
-            } else if let Some(database) = share_spec.database {
-                Ok(Some(database.id))
-            } else {
-                Err(ErrorCode::ShareHasNoGrantedDatabase(format!(
-                    "share {:?} has no grant database",
-                    share_name
-                )))
-            }
-        } else {
-            Err(ErrorCode::ShareHasNoGrantedPrivilege(format!(
-                "share {} has not granted privilege to {}",
-                share_name.display(),
-                tenant.tenant_name()
-            )))
-        }
     }
 }
 
@@ -134,17 +72,7 @@ impl Interpreter for CreateDatabaseInterpreter {
             )));
         };
 
-        // if create from other tenant, check from share endpoint
-        let share_db_id = if self.plan.meta.from_share.is_some() {
-            self.check_create_database_from_share().await?
-        } else {
-            None
-        };
-
-        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
-        if let Some(share_db_id) = share_db_id {
-            create_db_req.meta.from_share_db_id = Some(ShareDbId::Usage(share_db_id));
-        }
+        let create_db_req: CreateDatabaseReq = self.plan.clone().into();
         let reply = catalog.create_database(create_db_req).await?;
 
         // Grant ownership as the current role. The above create_db_req.meta.owner could be removed in

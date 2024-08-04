@@ -96,11 +96,17 @@ impl Binder {
 
         let mut bind_context = bind_context.replace();
 
-        self.check_table_name_and_condition(&left_column_bindings, &right_column_bindings, join)?;
+        self.check_table_name_and_condition(
+            &left_column_bindings,
+            &right_column_bindings,
+            &join.op,
+            &join.condition,
+        )?;
 
         let join_conditions = self.generate_join_condition(
             &mut bind_context,
-            join,
+            &join.op,
+            &join.condition,
             &left_column_bindings,
             &right_column_bindings,
         )?;
@@ -130,20 +136,27 @@ impl Binder {
         right_context: BindContext,
         left_child: SExpr,
         right_child: SExpr,
-        join: &databend_common_ast::ast::Join,
+        join_op: JoinOperator,
+        join_condition: JoinCondition,
     ) -> Result<(SExpr, BindContext)> {
-        self.check_table_name_and_condition(&left_context.columns, &right_context.columns, join)?;
+        self.check_table_name_and_condition(
+            &left_context.columns,
+            &right_context.columns,
+            &join_op,
+            &join_condition,
+        )?;
 
         let mut bind_context = bind_context.replace();
 
         let join_conditions = self.generate_join_condition(
             &mut bind_context,
-            join,
+            &join_op,
+            &join_condition,
             &left_context.columns,
             &right_context.columns,
         )?;
 
-        let join_type = join_type(&join.op);
+        let join_type = join_type(&join_op);
         let s_expr = self.bind_join_with_type(
             join_type.clone(),
             join_conditions,
@@ -159,7 +172,8 @@ impl Binder {
     fn generate_join_condition(
         &self,
         bind_context: &mut BindContext,
-        join: &databend_common_ast::ast::Join,
+        join_op: &JoinOperator,
+        join_condition: &JoinCondition,
         left_column_bindings: &[ColumnBinding],
         right_column_bindings: &[ColumnBinding],
     ) -> Result<JoinConditions> {
@@ -173,11 +187,11 @@ impl Binder {
             self.metadata.clone(),
             self.m_cte_bound_ctx.clone(),
             self.ctes_map.clone(),
-            join.op.clone(),
+            join_op.clone(),
             left_column_bindings,
             right_column_bindings,
             bind_context,
-            &join.condition,
+            join_condition,
         );
 
         join_condition_resolver.resolve(
@@ -185,7 +199,7 @@ impl Binder {
             &mut right_join_conditions,
             &mut non_equi_conditions,
             &mut other_conditions,
-            &join.op,
+            join_op,
         )?;
 
         Ok(JoinConditions {
@@ -401,19 +415,20 @@ impl Binder {
         &self,
         left_column_bindings: &[ColumnBinding],
         right_column_bindings: &[ColumnBinding],
-        join: &databend_common_ast::ast::Join,
+        join_op: &JoinOperator,
+        join_condition: &JoinCondition,
     ) -> Result<()> {
         check_duplicate_join_tables(left_column_bindings, right_column_bindings)?;
 
-        match &join.op {
+        match join_op {
             JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter
-                if join.condition == JoinCondition::None =>
+                if join_condition == &JoinCondition::None =>
             {
                 return Err(ErrorCode::SemanticError(
                     "outer join should contain join conditions".to_string(),
                 ));
             }
-            JoinOperator::CrossJoin if join.condition != JoinCondition::None => {
+            JoinOperator::CrossJoin if join_condition != &JoinCondition::None => {
                 return Err(ErrorCode::SemanticError(
                     "cross join should not contain join conditions".to_string(),
                 ));
