@@ -66,16 +66,16 @@ fn test_to_timestamp(file: &mut impl Write) {
 fn test_convert_timezone(file: &mut impl Write) {
     run_ast(file, "convert_timezone(a,b,c,d)", &[
         ("a", DateType::from_data(vec![-100, 0, 100])),
-        ("b", TimestampType::from_data(vec![315360000000])),
+        ("b", TimestampType::from_data(vec![31536000])),
         ("c", DateType::from_data(vec![])),
         ("d", TimestampType::from_data(vec![])),
     ]);
 
     run_ast(file, "convert_timezone(a,b,c,d)", &[
         ("a", DateType::from_data(vec![-100, 0, 100])),
-        ("b", TimestampType::from_data(vec![315360000000])),
+        ("b", TimestampType::from_data(vec![31536000])),
         ("c", DateType::from_data(vec![-50, 0, 50])),
-        ("d", TimestampType::from_data(vec![215360000000])),
+        ("d", TimestampType::from_data(vec![21536000])),
     ]);
 }
 
