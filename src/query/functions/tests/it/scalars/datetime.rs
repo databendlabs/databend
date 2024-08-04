@@ -63,20 +63,6 @@ fn test_to_timestamp(file: &mut impl Write) {
     )]);
 }
 
-fn test_convert_timezone(file: &mut impl Write) {
-    run_ast(file, "convert_timezone(a,b,c)", &[
-        ("a", TimestampType::from_data(vec![])),
-        ("b", DateType::from_data(vec![-100, 0, 100])),
-        ("c", TimestampType::from_data(vec![31536000])),
-    ]);
-
-    run_ast(file, "convert_timezone(a,b,c)", &[
-        ("a", DateType::from_data(vec![-100, 0, 100])),
-        ("b", DateType::from_data(vec![-50, 0, 50])),
-        ("c", TimestampType::from_data(vec![31536000])),
-    ]);
-}
-
 fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(-354286)", &[]);
     run_ast(file, "to_date(-354285)", &[]);
