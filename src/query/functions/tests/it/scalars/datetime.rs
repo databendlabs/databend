@@ -67,8 +67,8 @@ fn test_convert_timezone(file: &mut impl Write) {
     run_ast(file, "convert_timezone(a,b,c,d)", &[
         ("a", DateType::from_data(vec![-100, 0, 100])),
         ("b", TimestampType::from_data(vec![12321231])),
-        ("c", None::Datetype),
-        ("d", None::TimestampType),
+        ("c", DateType::from_data(vec![])),
+        ("d", TimestampType::from_data(vec![])),
     ]);
 }
 
