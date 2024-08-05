@@ -18,7 +18,3 @@
 pub mod meta;
 pub mod readers;
 pub mod table;
-
-mod util;
-
-pub use util::*;

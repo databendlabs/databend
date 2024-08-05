@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::trim_v5_object_prefix;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -23,8 +24,7 @@ use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::trim_v5_object_prefix;
-use databend_storages_common_table_meta::V5_OBJET_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::V5_OBJET_KEY_PREFIX;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;

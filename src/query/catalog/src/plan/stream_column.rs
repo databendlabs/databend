@@ -39,7 +39,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
 use databend_common_expression::ROW_VERSION_COLUMN_ID;
-use databend_storages_common_table_meta::try_extract_uuid_str_from_path;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 
 use crate::plan::PartInfo;
 use crate::plan::PartInfoPtr;
