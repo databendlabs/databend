@@ -92,6 +92,7 @@ pub struct GeographyRef<'a> {
     column_y: &'a [f64],
 }
 
+pub type JsonObject = serde_json::Map<String, serde_json::Value>;
 trait Visitor {
     fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()>;
 
@@ -115,6 +116,8 @@ trait Visitor {
 
     fn visit_collection_end(&mut self) -> GeoResult<()>;
 
+    fn visit_feature(&mut self, properties: &Option<JsonObject>) -> GeoResult<()>;
+
     fn finish(&mut self, kind: ObjectKind) -> GeoResult<()>;
 }
 
@@ -131,21 +134,15 @@ enum ObjectKind {
     MultiLineString = 5,
     MultiPolygon = 6,
     Collection = 7,
-    Feature = 1 << 3,
+}
+
+impl ObjectKind {
+    pub const FEATURE: u8 = 1 << 3;
 }
 
 impl From<ObjectKind> for geo_buf::InnerObjectKind {
     fn from(val: ObjectKind) -> Self {
-        match val {
-            ObjectKind::Point
-            | ObjectKind::LineString
-            | ObjectKind::Polygon
-            | ObjectKind::MultiPoint
-            | ObjectKind::MultiLineString
-            | ObjectKind::MultiPolygon
-            | ObjectKind::Collection => geo_buf::InnerObjectKind(val as u8),
-            _ => unreachable!(),
-        }
+        geo_buf::InnerObjectKind(val as u8)
     }
 }
 

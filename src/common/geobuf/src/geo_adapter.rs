@@ -1,5 +1,6 @@
-use flatbuffers::Vector;
 use geozero::error::GeozeroError;
+use geozero::ColumnValue;
+use geozero::FeatureProperties;
 use geozero::GeozeroGeometry;
 use geozero::ToGeo;
 
@@ -8,6 +9,7 @@ use super::geo_buf::InnerObject;
 use super::geo_buf::Object;
 use super::Geometry;
 use super::GeometryBuilder;
+use super::JsonObject;
 use super::ObjectKind;
 
 impl TryFrom<&geo::Geometry<f64>> for Geometry {
@@ -32,7 +34,12 @@ impl TryInto<geo::Geometry<f64>> for &Geometry {
 
 impl geozero::GeozeroGeometry for Geometry {
     fn srid(&self) -> Option<i32> {
-        None
+        if self.buf.len() > 1 {
+            self.read_object()
+                .map_or(None, |object| Some(object.srid()))
+        } else {
+            None
+        }
     }
 
     fn process_geom<P>(&self, processor: &mut P) -> geozero::error::Result<()>
@@ -108,6 +115,57 @@ impl geozero::GeozeroGeometry for Geometry {
                 processor.geometrycollection_end(0)
             }
             _ => unreachable!(),
+        }
+    }
+}
+
+impl FeatureProperties for Geometry {
+    fn process_properties<P: geozero::PropertyProcessor>(
+        &self,
+        processor: &mut P,
+    ) -> geozero::error::Result<bool> {
+        if self.buf.len() == 1 {
+            return Ok(true);
+        }
+        if let Some(data) = self.read_object()?.properties() {
+            let json: JsonObject = flexbuffers::from_slice(data.bytes())
+                .map_err(|e| GeozeroError::Geometry(e.to_string()))?;
+            for (idx, (name, value)) in json.iter().enumerate() {
+                processor.property(
+                    idx,
+                    name,
+                    &ColumnValue::Json(
+                        &serde_json::to_string(value)
+                            .map_err(|e| GeozeroError::Geometry(e.to_string()))?,
+                    ),
+                )?;
+            }
+        }
+
+        Ok(true)
+    }
+}
+
+impl geozero::FeatureAccess for Geometry {
+    fn process<P: geozero::FeatureProcessor>(
+        &self,
+        processor: &mut P,
+        idx: u64,
+    ) -> geozero::error::Result<()>
+    where
+        Self: Sized,
+    {
+        if self.buf[0] & ObjectKind::FEATURE != 0 {
+            processor.feature_begin(idx)?;
+            processor.properties_begin()?;
+            let _ = self.process_properties(processor)?;
+            processor.properties_end()?;
+            processor.geometry_begin()?;
+            self.process_geom(processor)?;
+            processor.geometry_end()?;
+            processor.feature_end(idx)
+        } else {
+            self.process_geom(processor)
         }
     }
 }
@@ -244,7 +302,7 @@ impl Geometry {
     }
 
     fn kind(&self) -> Result<ObjectKind, GeozeroError> {
-        match self.buf[0] {
+        match self.buf[0] & !ObjectKind::FEATURE {
             1 => Ok(ObjectKind::Point),
             2 => Ok(ObjectKind::LineString),
             3 => Ok(ObjectKind::Polygon),

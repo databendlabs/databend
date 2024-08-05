@@ -20,12 +20,7 @@ table InnerObject {
   collection: [InnerObject];
 
   wkb_type: InnerObjectKind;
-  properties: [Property];
-}
-
-table Property {
-  name: string;
-  value: [ubyte] (flexbuffer);
+  properties: [ubyte] (flexbuffer);
 }
 
 table Object {
@@ -34,10 +29,10 @@ table Object {
 
   collection: [InnerObject];
 
-  srid: uint32;
+  srid: int32;
 
   // For GeoJSON compatibility
-  properties: [Property];
+  properties: [ubyte] (flexbuffer);
 }
  
 root_type Object;

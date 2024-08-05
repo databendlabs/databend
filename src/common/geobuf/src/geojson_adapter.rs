@@ -1,6 +1,5 @@
 use geozero::error::GeozeroError;
 
-use super::geo_buf;
 use super::Element;
 use super::Geometry;
 use super::GeometryBuilder;
@@ -32,9 +31,11 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
         fn accept_geom(
             visitor: &mut impl Visitor,
             geom: &Geometry,
-            // TODO: Provide support for additional GeoJson attributes
-            _feature: Option<&Feature>,
+            feature: Option<&Feature>,
         ) -> Result<(), GeozeroError> {
+            if let Some(feature) = feature {
+                visitor.visit_feature(&feature.properties)?;
+            }
             match &geom.value {
                 Value::Point(point) => {
                     let (x, y) = normalize_point(point)?;
@@ -143,16 +144,21 @@ impl TryInto<GeoJson<String>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
-        use geozero::ToJson;
+        let mut out: Vec<u8> = Vec::new();
+        let mut p = geozero::geojson::GeoJsonWriter::new(&mut out);
+        geozero::FeatureAccess::process(self, &mut p, 0)?;
 
-        Ok(GeoJson(self.to_json()?))
+        match String::from_utf8(out) {
+            Ok(str) => Ok(GeoJson(str)),
+            Err(_) => Err(geozero::error::GeozeroError::Geometry(
+                "Invalid UTF-8 encoding".to_string(),
+            )),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use geozero::ToJson;
-
     use super::*;
 
     #[test]
@@ -189,10 +195,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_from_feature() {
+        run_from_json(
+            r#"{"type": "Feature", "properties": {"name": "abc"}, "geometry": {"type": "Point", "coordinates": [173,-40]}}"#,
+        );
+        run_from_json(
+            r#"{"type": "Feature", "properties": {"name": "abc"}, "geometry": {"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [99,11]},{"type": "LineString", "coordinates": [[40,60],[50,50],[60,40]]},{"type": "Point", "coordinates": [99,10]}]}}"#,
+        );
+    }
+
     fn run_from_json(want: &str) {
         let geom: crate::Geometry = GeoJson(want).try_into().unwrap();
-        let geom: geo::Geometry = (&geom).try_into().unwrap();
-        let got = geom.to_json().unwrap();
+        let GeoJson(got) = (&geom).try_into().unwrap();
 
         assert_eq!(want, got)
     }

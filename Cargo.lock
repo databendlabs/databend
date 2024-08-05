@@ -3532,6 +3532,7 @@ dependencies = [
  "geos",
  "geozero 0.13.0",
  "ordered-float 4.2.0",
+ "serde_json",
  "wkt",
 ]
 
