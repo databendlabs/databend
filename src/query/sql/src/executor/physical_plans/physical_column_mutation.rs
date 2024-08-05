@@ -12,20 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::collections::HashMap;
 
-use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::Partitions;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+
+use crate::binder::MutationType;
+use crate::executor::physical_plan::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DeleteSource {
+pub struct ColumnMutation {
     pub plan_id: u32,
-    pub parts: Partitions,
-    pub filters: Filters,
+    pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub col_indices: Vec<usize>,
-    pub query_row_id_col: bool,
-    pub snapshot: Arc<TableSnapshot>,
+    pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
+    pub mutation_type: MutationType,
+    pub field_id_to_schema_index: HashMap<usize, usize>,
+    pub input_num_columns: usize,
+    pub has_filter_column: bool,
 }

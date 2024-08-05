@@ -12,21 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
+mod share_catalog;
 
-use crate::binder::MergeIntoType;
-use crate::executor::physical_plan::PhysicalPlan;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoOrganize {
-    pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
-    pub merge_type: MergeIntoType,
-}
-
-impl MergeIntoOrganize {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
-    }
-}
+pub use share_catalog::ShareCatalog;
+pub use share_catalog::ShareCatalogCreator;

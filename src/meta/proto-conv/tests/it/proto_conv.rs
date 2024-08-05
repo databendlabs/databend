@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::LockType;
+use databend_common_meta_app::schema::ShareCatalogOption;
 use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
@@ -409,6 +410,17 @@ fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
     }
 }
 
+fn new_share_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
+    databend_common_meta_app::schema::CatalogMeta {
+        catalog_option: CatalogOption::Share(ShareCatalogOption {
+            provider: "provider".to_string(),
+            share_name: "test".to_string(),
+            share_endpoint: "share_endpoint".to_string(),
+        }),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -652,6 +664,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
+    }
+
+    // share catalog meta
+    {
+        let catalog_meta = new_share_catalog_meta();
+        let p = catalog_meta.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("share catalog catalog_meta:{:?}", buf);
     }
 
     // lvt

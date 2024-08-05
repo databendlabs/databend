@@ -251,7 +251,6 @@ geos = { version = "8.3", features = ["static", "geo", "geo-types"] }
 geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", "with-geojson"] }
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
-hyper = "0.14.20"
 itertools = "0.10.5"
 jsonb = "0.4.1"
 match-template = "0.0.1"
@@ -277,7 +276,7 @@ opendal = { version = "0.48.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.2", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.3", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.

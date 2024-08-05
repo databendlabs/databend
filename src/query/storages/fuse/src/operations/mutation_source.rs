@@ -26,20 +26,16 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
-use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
@@ -97,43 +93,42 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub fn add_deletion_source(
+    pub fn add_mutation_source(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: &RemoteExpr<String>,
+        filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
-        query_row_id_col: bool,
         pipeline: &mut Pipeline,
+        mutation_action: MutationAction,
     ) -> Result<()> {
+        let all_column_indices = self.all_column_indices();
+        let col_indices =
+            if matches!(mutation_action, MutationAction::Deletion) || !col_indices.is_empty() {
+                col_indices
+            } else {
+                all_column_indices.clone()
+            };
         let projection = Projection::Columns(col_indices.clone());
-
         let update_stream_columns = self.change_tracking_enabled();
         let block_reader =
             self.create_block_reader(ctx.clone(), projection, false, update_stream_columns, false)?;
-        let mut schema = block_reader.schema().as_ref().clone();
-        if query_row_id_col {
-            schema.add_internal_field(
-                ROW_ID_COL_NAME,
-                TableDataType::Number(NumberDataType::UInt64),
-                1,
-            );
-        }
 
-        let filter_expr = Arc::new(Some(
-            filter
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap()),
-        ));
+        let schema = block_reader.schema().as_ref().clone();
+        let filter_expr = Arc::new(filter.map(|v| {
+            v.as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap())
+        }));
 
-        let all_column_indices = self.all_column_indices();
-        let row_num_index = all_column_indices.len();
+        let num_column_indices = self.schema_with_stream().fields().len();
         let remain_column_indices: Vec<usize> = all_column_indices
             .into_iter()
             .filter(|index| !col_indices.contains(index))
             .collect();
         let mut source_col_indices = col_indices;
-        if update_stream_columns {
-            source_col_indices.push(row_num_index);
+        if matches!(mutation_action, MutationAction::Deletion) && update_stream_columns
+            || matches!(mutation_action, MutationAction::Update) && filter_expr.is_some()
+        {
+            source_col_indices.push(num_column_indices);
         }
         let remain_reader = if remain_column_indices.is_empty() {
             Arc::new(None)
@@ -144,14 +139,14 @@ impl FuseTable {
                     ctx.clone(),
                     Projection::Columns(remain_column_indices),
                     false,
-                    self.change_tracking_enabled(),
+                    update_stream_columns,
                     false,
                 )?)
                 .clone(),
             ))
         };
 
-        // resort the block.
+        // Resort the block.
         let mut projection = (0..source_col_indices.len()).collect::<Vec<_>>();
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
@@ -164,29 +159,18 @@ impl FuseTable {
             |output| {
                 MutationSource::try_create(
                     ctx.clone(),
-                    MutationAction::Deletion,
+                    mutation_action.clone(),
                     output,
                     filter_expr.clone(),
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
-                    query_row_id_col,
                 )
             },
             max_threads,
         )?;
         Ok(())
-    }
-
-    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        self.schema_with_stream()
-            .fields()
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-            .map(|(i, _)| i)
-            .collect::<Vec<FieldIndex>>()
     }
 
     pub async fn mutation_read_partitions(

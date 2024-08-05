@@ -12,21 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
+mod bind;
+mod delete;
+mod merge;
+mod mutation_expression;
+mod update;
 
-use crate::executor::physical_plan::PhysicalPlan;
-use crate::IndexType;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoSplit {
-    pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
-    pub split_index: IndexType,
-}
-
-impl MergeIntoSplit {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
-    }
-}
+pub use bind::MutationStrategy;
+pub use bind::MutationType;
+pub use mutation_expression::target_table_position;

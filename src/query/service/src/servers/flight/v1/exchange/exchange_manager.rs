@@ -57,7 +57,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::actions::init_query_fragments;
 use crate::servers::flight::v1::actions::INIT_QUERY_FRAGMENTS;
 use crate::servers::flight::v1::actions::START_PREPARED_QUERY;
@@ -155,14 +154,12 @@ impl DataExchangeManager {
                             Edge::Fragment(v) => QueryExchange::Fragment {
                                 source: source.id.clone(),
                                 fragment: v,
-                                exchange: flight_client
-                                    .do_get(&query_id, &target.id, v, &address)
-                                    .await?,
+                                exchange: flight_client.do_get(&query_id, &target.id, v).await?,
                             },
                             Edge::Statistics => QueryExchange::Statistics {
                                 source: source.id.clone(),
                                 exchange: flight_client
-                                    .request_server_exchange(&query_id, &target.id, &address)
+                                    .request_server_exchange(&query_id, &target.id)
                                     .await?,
                             },
                         })
@@ -351,19 +348,12 @@ impl DataExchangeManager {
         &self,
         id: String,
         target: String,
-        continue_from: usize,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(id) {
-            Entry::Occupied(mut v) => {
-                if continue_from == 0 {
-                    v.get_mut().add_statistics_exchange(target)
-                } else {
-                    v.get_mut().replace_sender(target, None, continue_from)
-                }
-            }
+            Entry::Occupied(mut v) => v.get_mut().add_statistics_exchange(target),
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
                 .add_statistics_exchange(target),
@@ -376,20 +366,12 @@ impl DataExchangeManager {
         query: String,
         target: String,
         fragment: usize,
-        continue_from: usize,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         match queries_coordinator.entry(query) {
-            Entry::Occupied(mut v) => {
-                if continue_from == 0 {
-                    v.get_mut().add_fragment_exchange(target, fragment)
-                } else {
-                    v.get_mut()
-                        .replace_sender(target, Some(fragment), continue_from)
-                }
-            }
+            Entry::Occupied(mut v) => v.get_mut().add_fragment_exchange(target, fragment),
             Entry::Vacant(v) => v
                 .insert(QueryCoordinator::create())
                 .add_fragment_exchange(target, fragment),
@@ -511,7 +493,7 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn get_flight_sender(&self, params: &ExchangeParams) -> Result<Vec<FlightSenderWrapper>> {
+    pub fn get_flight_sender(&self, params: &ExchangeParams) -> Result<Vec<FlightSender>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -571,22 +553,12 @@ struct QueryInfo {
 static FLIGHT_SENDER: u8 = 1;
 static FLIGHT_RECEIVER: u8 = 2;
 
-static FRAGMENT_SENDER: u8 = 1;
-static STATISTICS_SENDER: u8 = 2;
-
 struct QueryCoordinator {
     info: Option<QueryInfo>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 
-    // FlightExchange in statistics_exchanges and fragment_exchanges
-    // will be moved after pipeline build
     statistics_exchanges: HashMap<String, FlightExchange>,
-    // key of `fragment_exchanges` is (target, fragment_id, sender/receiver)
     fragment_exchanges: HashMap<(String, usize, u8), FlightExchange>,
-
-    // FlightSender in senders_map also have a reference in exchange writer
-    // key of `senders_map` is (target, fragment_id, fragment/statistics)
-    senders_map: HashMap<(String, usize, u8), Arc<FlightSender>>,
 }
 
 impl QueryCoordinator {
@@ -596,7 +568,6 @@ impl QueryCoordinator {
             fragments_coordinator: HashMap::new(),
             fragment_exchanges: HashMap::new(),
             statistics_exchanges: HashMap::new(),
-            senders_map: HashMap::new(),
         }
     }
 
@@ -656,75 +627,25 @@ impl QueryCoordinator {
         Ok(())
     }
 
-    pub fn replace_sender(
-        &mut self,
-        target: String,
-        fragment: Option<usize>,
-        continue_from: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
-        let (tx, rx) = async_channel::bounded(8);
-        let flight_sender = if let Some(fragment) = fragment {
-            self.senders_map
-                .get_mut(&(target, fragment, FRAGMENT_SENDER))
-        } else {
-            self.senders_map.get_mut(&(target, 0, STATISTICS_SENDER))
-        };
-        match flight_sender {
-            None => {
-                return Err(ErrorCode::Internal(
-                    "Reconnection failed: cannot replace the sender",
-                ));
-            }
-            Some(sender) => {
-                sender.replace_tx(tx, continue_from)?;
-            }
-        }
-
-        Ok(rx)
-    }
-
-    pub fn get_flight_senders(
-        &mut self,
-        params: &ExchangeParams,
-    ) -> Result<Vec<FlightSenderWrapper>> {
+    pub fn get_flight_senders(&mut self, params: &ExchangeParams) -> Result<Vec<FlightSender>> {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
                 .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
-                .map(|(_, v)| {
-                    let sender = Arc::new(v.convert_to_sender());
-                    self.senders_map.insert(
-                        (
-                            params.destination_id.clone(),
-                            params.fragment_id,
-                            FRAGMENT_SENDER,
-                        ),
-                        sender.clone(),
-                    );
-                    FlightSenderWrapper::create(sender)
-                })
+                .map(|(_, v)| v.convert_to_sender())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
                 let mut exchanges = Vec::with_capacity(params.destination_ids.len());
 
                 for destination in &params.destination_ids {
                     exchanges.push(match destination == &params.executor_id {
-                        true => Ok(FlightSenderWrapper::create(Arc::new(FlightSender::create(
-                            async_channel::bounded(1).0,
-                        )))),
+                        true => Ok(FlightSender::create(async_channel::bounded(1).0)),
                         false => match self.fragment_exchanges.remove(&(
                             destination.clone(),
                             params.fragment_id,
                             FLIGHT_SENDER,
                         )) {
-                            Some(exchange_channel) => {
-                                let sender = Arc::new(exchange_channel.convert_to_sender());
-                                self.senders_map.insert(
-                                    (destination.clone(), params.fragment_id, FRAGMENT_SENDER),
-                                    sender.clone(),
-                                );
-                                Ok(FlightSenderWrapper::create(sender))
-                            }
+                            Some(exchange_channel) => Ok(exchange_channel.convert_to_sender()),
                             None => Err(ErrorCode::UnknownFragmentExchange(format!(
                                 "Unknown fragment exchange channel, {}, {}",
                                 destination, params.fragment_id
@@ -755,7 +676,7 @@ impl QueryCoordinator {
                     exchanges.push((
                         destination.clone(),
                         match destination == &params.executor_id {
-                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1, None)),
+                            true => Ok(FlightReceiver::create(async_channel::bounded(1).1)),
                             false => match self.fragment_exchanges.remove(&(
                                 destination.clone(),
                                 params.fragment_id,
@@ -933,16 +854,11 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
-        let (target, request_server_exchange) =
-            request_server_exchanges.into_iter().next().unwrap();
-
-        let flight_sender = Arc::new(request_server_exchange.convert_to_sender());
-        self.senders_map
-            .insert((target, 0, STATISTICS_SENDER), flight_sender.clone());
+        let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
         let mut statistics_sender = StatisticsSender::spawn(
             &query_id,
             ctx,
-            FlightSenderWrapper::create(flight_sender),
+            request_server_exchange,
             executor.get_inner(),
         );
 

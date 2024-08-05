@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::Expr;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::get_license_manager;
 use databend_common_meta_app::schema::DatabaseType;
@@ -31,6 +27,8 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_sql::plans::Plan;
+use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_share::update_share_table_info;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -38,20 +36,14 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use log::debug;
 use log::info;
 
-use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_table_create::is_valid_column;
-use crate::interpreters::interpreter_update::build_update_physical_plan;
-use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
+use crate::interpreters::MutationInterpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::physical_plans::MutationKind;
-use crate::sql::parse_computed_expr;
 
 pub struct AddTableColumnInterpreter {
     ctx: Arc<QueryContext>,
@@ -145,100 +137,24 @@ impl Interpreter for AddTableColumnInterpreter {
             }
         }
 
-        // if the column is not deterministic, update to refresh the value with default expr
+        // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {
-            debug!("ctx.id" = self.ctx.get_id().as_str(); "table_add_column_interpreter_execute");
-
-            if check_deduplicate_label(self.ctx.clone()).await? {
+            self.ctx
+                .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+            let query = format!(
+                "update `{}`.`{}` set `{}` = {};",
+                db_name,
+                tbl_name,
+                field.name(),
+                field.default_expr().unwrap()
+            );
+            let mut planner = Planner::new(self.ctx.clone());
+            let (plan, _) = planner.plan_sql(&query).await?;
+            if let Plan::DataMutation { s_expr, schema, .. } = plan {
+                let interpreter =
+                    MutationInterpreter::try_create(self.ctx.clone(), *s_expr, schema)?;
+                let _ = interpreter.execute(self.ctx.clone()).await?;
                 return Ok(PipelineBuildResult::create());
-            }
-
-            // clear tables cache and get table again.
-            self.ctx.clear_tables_cache();
-            let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-
-            if let Some(fuse_table) = tbl.as_any().downcast_ref::<FuseTable>() {
-                let col_indices = vec![];
-                let mut filters = None;
-                let query_row_id_col = false;
-                if let Some(snapshot) = fuse_table
-                    .fast_update(
-                        self.ctx.clone(),
-                        &mut filters,
-                        col_indices.clone(),
-                        query_row_id_col,
-                    )
-                    .await?
-                {
-                    let partitions = fuse_table
-                        .mutation_read_partitions(
-                            self.ctx.clone(),
-                            snapshot.clone(),
-                            col_indices.clone(),
-                            filters.clone(),
-                            false,
-                            false,
-                        )
-                        .await?;
-
-                    let field_sql = field.default_expr().unwrap();
-                    let expr = parse_computed_expr(
-                        self.ctx.clone(),
-                        DataSchemaRefExt::create(vec![]),
-                        field_sql,
-                    )?;
-                    let expr: Expr<String> = expr.project_column_ref(|_| unreachable!());
-                    let update_list = vec![(index, expr.as_remote_expr())];
-                    // TODO
-                    let computed_list = BTreeMap::new();
-
-                    let is_distributed = !self.ctx.get_cluster().is_empty();
-                    let physical_plan = build_update_physical_plan(
-                        filters,
-                        update_list,
-                        computed_list,
-                        partitions,
-                        fuse_table.get_table_info().clone(),
-                        col_indices,
-                        snapshot,
-                        query_row_id_col,
-                        is_distributed,
-                        self.ctx.clone(),
-                    )?;
-
-                    let mut build_res =
-                        build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan)
-                            .await?;
-                    {
-                        let hook_operator = HookOperator::create(
-                            self.ctx.clone(),
-                            catalog_name.to_string(),
-                            db_name.to_string(),
-                            tbl_name.to_string(),
-                            MutationKind::Update,
-                            // table lock has been added, no need to check.
-                            LockTableOption::NoLock,
-                        );
-                        hook_operator
-                            .execute_refresh(&mut build_res.main_pipeline)
-                            .await;
-                    }
-
-                    // Add table lock.
-                    let lock_guard = self
-                        .ctx
-                        .clone()
-                        .acquire_table_lock(
-                            catalog_name,
-                            db_name,
-                            tbl_name,
-                            &LockTableOption::LockWithRetry,
-                        )
-                        .await?;
-
-                    build_res.main_pipeline.add_lock_guard(lock_guard.clone());
-                    return Ok(build_res);
-                }
             }
         }
         Ok(PipelineBuildResult::create())

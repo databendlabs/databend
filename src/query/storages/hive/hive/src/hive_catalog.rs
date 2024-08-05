@@ -25,6 +25,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -98,6 +99,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
@@ -115,7 +117,12 @@ use crate::utils::from_thrift_exception;
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(

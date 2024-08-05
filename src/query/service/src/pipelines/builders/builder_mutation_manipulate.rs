@@ -17,8 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_core::Pipe;
-use databend_common_sql::binder::MergeIntoType;
-use databend_common_sql::executor::physical_plans::MergeIntoManipulate;
+use databend_common_sql::binder::MutationStrategy;
+use databend_common_sql::executor::physical_plans::MutationManipulate;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 
@@ -33,7 +33,7 @@ impl PipelineBuilder {
     //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
     //                                    |                       |   |                |                             +-+
     // +----------------------+           |                       +---+                +-----------------------------+-+
-    // |      MergeInto       +---------->|MergeIntoSplitProcessor|
+    // |      MergeInto       +---------->|MutationSplitProcessor |
     // +----------------------+           |                       +---+                +-----------------------------+
     //                                    |                       |   | NotMatched     |                             +-+
     //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
@@ -45,16 +45,17 @@ impl PipelineBuilder {
 
     // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
     // receive matched data and not matched data parallelly.
-    pub(crate) fn build_merge_into_manipulate(
+    pub(crate) fn build_mutation_manipulate(
         &mut self,
-        merge_into_manipulate: &MergeIntoManipulate,
+        merge_into_manipulate: &MutationManipulate,
     ) -> Result<()> {
         self.build_pipeline(&merge_into_manipulate.input)?;
 
-        let (step, need_match, need_unmatch) = match merge_into_manipulate.merge_type {
-            MergeIntoType::FullOperation => (2, true, true),
-            MergeIntoType::InsertOnly => (1, false, true),
-            MergeIntoType::MatchedOnly => (1, true, false),
+        let (step, need_match, need_unmatch) = match merge_into_manipulate.strategy {
+            MutationStrategy::MatchedOnly => (1, true, false),
+            MutationStrategy::NotMatchedOnly => (1, false, true),
+            MutationStrategy::MixedMatched => (2, true, true),
+            MutationStrategy::Direct => unreachable!(),
         };
 
         let tbl = self

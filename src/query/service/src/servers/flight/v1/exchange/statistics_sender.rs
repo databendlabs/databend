@@ -22,14 +22,15 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
 
 use crate::pipelines::executor::PipelineExecutor;
-use crate::servers::flight::flight_client::FlightSenderWrapper;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
+use crate::servers::flight::FlightExchange;
+use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsSender {
@@ -42,10 +43,11 @@ impl StatisticsSender {
     pub fn spawn(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        tx: FlightSenderWrapper,
+        exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
     ) -> Self {
         let spawner = ctx.clone();
+        let tx = exchange.convert_to_sender();
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
         let handle = spawner.spawn({
@@ -105,8 +107,8 @@ impl StatisticsSender {
                     warn!("CopyStatus send has error, cause: {:?}.", error);
                 }
 
-                if let Err(error) = Self::send_merge_status(&ctx, &tx).await {
-                    warn!("MergeStatus send has error, cause: {:?}.", error);
+                if let Err(error) = Self::send_mutation_status(&ctx, &tx).await {
+                    warn!("MutationStatus send has error, cause: {:?}.", error);
                 }
 
                 if let Err(error) = Self::send_progress(&ctx, &tx).await {
@@ -143,17 +145,14 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSenderWrapper) -> Result<()> {
+    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
         let progress = Self::fetch_progress(ctx);
         let data_packet = DataPacket::SerializeProgress(progress);
         tx.send(data_packet).await
     }
 
     #[async_backtrace::framed]
-    async fn send_copy_status(
-        ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
-    ) -> Result<()> {
+    async fn send_copy_status(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
         let copy_status = ctx.get_copy_status();
         if !copy_status.files.is_empty() {
             let data_packet = DataPacket::CopyStatus(copy_status.as_ref().to_owned());
@@ -163,27 +162,27 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_merge_status(
+    async fn send_mutation_status(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
+        flight_sender: &FlightSender,
     ) -> Result<()> {
-        let merge_status = {
-            let binding = ctx.get_merge_status();
+        let mutation_status = {
+            let binding = ctx.get_mutation_status();
             let status = binding.read();
-            MergeStatus {
+            MutationStatus {
                 insert_rows: status.insert_rows,
                 deleted_rows: status.deleted_rows,
                 update_rows: status.update_rows,
             }
         };
-        let data_packet = DataPacket::MergeStatus(merge_status);
+        let data_packet = DataPacket::MutationStatus(mutation_status);
         flight_sender.send(data_packet).await?;
         Ok(())
     }
 
     async fn send_profile(
         executor: &PipelineExecutor,
-        tx: &FlightSenderWrapper,
+        tx: &FlightSender,
         collect_metrics: bool,
     ) -> Result<()> {
         let plans_profile = executor.fetch_profiling(collect_metrics);
@@ -199,7 +198,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_scan_cache_metrics(
         ctx: &Arc<QueryContext>,
-        flight_sender: &FlightSenderWrapper,
+        flight_sender: &FlightSender,
     ) -> Result<()> {
         let data_cache_metrics = ctx.get_data_cache_metrics();
         let data_packet = DataPacket::DataCacheMetrics(data_cache_metrics.as_values());
@@ -232,4 +231,8 @@ impl StatisticsSender {
 
         progress_info
     }
+
+    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
+    //     // ctx.get_exchange_manager()
+    // }
 }

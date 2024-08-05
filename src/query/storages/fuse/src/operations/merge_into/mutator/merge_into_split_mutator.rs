@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 
-pub struct MergeIntoSplitMutator {
+pub struct MutationSplitMutator {
     pub split_idx: u32,
 }
 
-impl MergeIntoSplitMutator {
+impl MutationSplitMutator {
     pub fn try_create(split_idx: u32) -> Self {
         Self { split_idx }
     }

@@ -24,6 +24,8 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ComputedExpr;
+use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -184,6 +186,7 @@ impl FuseTable {
                 self.schema_with_stream(),
                 self.get_table_info().ident.seq,
                 false,
+                false,
             )?)
         } else {
             None
@@ -270,5 +273,15 @@ impl FuseTable {
             num_segment_limit,
             num_block_limit,
         }))
+    }
+
+    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
+        self.schema_with_stream()
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|(i, _)| i)
+            .collect::<Vec<FieldIndex>>()
     }
 }

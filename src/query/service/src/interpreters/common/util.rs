@@ -14,16 +14,10 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::type_check::check_function;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_users::UserApiProvider;
-
-use crate::sql::executor::cast_expr_to_non_null_boolean;
-use crate::sql::ScalarExpr;
 
 /// Checks if a duplicate label exists in the meta store.
 ///
@@ -52,24 +46,4 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
             Ok(is_exists)
         }
     }
-}
-
-/// create push down filters
-pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
-    let filter = cast_expr_to_non_null_boolean(
-        scalar
-            .as_expr()?
-            .project_column_ref(|col| col.column_name.clone()),
-    )?;
-
-    let remote_filter = filter.as_remote_expr();
-
-    // prepare the inverse filter expression
-    let remote_inverted_filter =
-        check_function(None, "not", &[], &[filter], &BUILTIN_FUNCTIONS)?.as_remote_expr();
-
-    Ok(Filters {
-        filter: remote_filter,
-        inverted_filter: remote_inverted_filter,
-    })
 }

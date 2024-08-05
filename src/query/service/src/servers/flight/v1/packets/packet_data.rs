@@ -26,7 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_storage::CopyStatus;
-use databend_common_storage::MergeStatus;
+use databend_common_storage::MutationStatus;
 use log::error;
 
 use crate::servers::flight::v1::packets::ProgressInfo;
@@ -54,13 +54,12 @@ impl Debug for FragmentData {
 
 pub enum DataPacket {
     ErrorCode(ErrorCode),
-    RetryConnectSuccess,
     Dictionary(FlightData),
     FragmentData(FragmentData),
     QueryProfiles(HashMap<u32, PlanProfile>),
     SerializeProgress(Vec<ProgressInfo>),
     CopyStatus(CopyStatus),
-    MergeStatus(MergeStatus),
+    MutationStatus(MutationStatus),
     DataCacheMetrics(DataCacheMetricValues),
 }
 
@@ -71,10 +70,9 @@ fn calc_size(flight_data: &FlightData) -> usize {
 impl DataPacket {
     pub fn bytes_size(&self) -> usize {
         match self {
-            DataPacket::RetryConnectSuccess => 0,
             DataPacket::ErrorCode(_) => 0,
             DataPacket::CopyStatus(_) => 0,
-            DataPacket::MergeStatus(_) => 0,
+            DataPacket::MutationStatus(_) => 0,
             DataPacket::SerializeProgress(_) => 0,
             DataPacket::Dictionary(v) => calc_size(v),
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
@@ -89,9 +87,6 @@ impl TryFrom<DataPacket> for FlightData {
 
     fn try_from(packet: DataPacket) -> Result<Self> {
         Ok(match packet {
-            DataPacket::RetryConnectSuccess => {
-                unreachable!()
-            }
             DataPacket::ErrorCode(error) => {
                 error!("Got error code data packet: {:?}", error);
                 FlightData::from(error)
@@ -129,7 +124,7 @@ impl TryFrom<DataPacket> for FlightData {
                 data_header: vec![],
                 flight_descriptor: None,
             },
-            DataPacket::MergeStatus(status) => FlightData {
+            DataPacket::MutationStatus(status) => FlightData {
                 app_metadata: vec![0x07],
                 data_body: serde_json::to_vec(&status)?,
                 data_header: vec![],
@@ -193,8 +188,8 @@ impl TryFrom<FlightData> for DataPacket {
                 Ok(DataPacket::CopyStatus(status))
             }
             0x07 => {
-                let status = serde_json::from_slice::<MergeStatus>(&flight_data.data_body)?;
-                Ok(DataPacket::MergeStatus(status))
+                let status = serde_json::from_slice::<MutationStatus>(&flight_data.data_body)?;
+                Ok(DataPacket::MutationStatus(status))
             }
             0x08 => {
                 let status =
