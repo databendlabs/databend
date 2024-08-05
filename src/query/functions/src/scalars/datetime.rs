@@ -143,7 +143,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
         src_timestamp: ValueRef::Scalar(StringType),
         ctx: &mut EvalContext,
     ) -> ValueRef::Scalar(TimestampType) {
-        vectorize_with_builder_2_arg::<ValueRef<StringType>, ValueRef<StringType>, TimestampType>(
+        vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
