@@ -250,9 +250,27 @@ where TablesTable<T, U>: HistoryAware
         let mut db_name: Vec<String> = Vec::new();
 
         let mut get_stats = true;
-        let stats_fields_indexes = [12, 13, 14, 15, 16, 17];
         let mut get_ownership = true;
-        let owner_field_index = [18];
+        let mut owner_field_indexes: Vec<usize> = Vec::new();
+        let mut stats_fields_indexes: Vec<usize> = Vec::new();
+        let schema = TablesTable::<T, U>::schema();
+        for (i, name) in schema.fields.iter().enumerate() {
+            match name.name().as_str() {
+                "num_rows"
+                | "data_size"
+                | "data_compressed_size"
+                | "index_size"
+                | "number_of_segments"
+                | "number_of_blocks" => {
+                    stats_fields_indexes.push(i);
+                }
+                "owner" => {
+                    owner_field_indexes.push(i);
+                }
+                _ => {}
+            }
+        }
+
         let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
             if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
@@ -261,7 +279,7 @@ where TablesTable<T, U>: HistoryAware
                     .any(|field_index| stats_fields_indexes.contains(field_index));
                 get_ownership = v
                     .iter()
-                    .any(|field_index| owner_field_index.contains(field_index));
+                    .any(|field_index| owner_field_indexes.contains(field_index));
             }
 
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
