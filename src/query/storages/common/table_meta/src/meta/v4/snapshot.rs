@@ -295,9 +295,11 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_deserialize_legacy() {
         let bytes = include_bytes!("./test-data/legacy-snapshot.mpk");
-        crate::meta::v4::snapshot::TableSnapshot::from_slice(bytes).unwrap();
+        TableSnapshot::from_slice(bytes).unwrap();
     }
 }
