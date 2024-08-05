@@ -266,6 +266,7 @@ impl From<ShareObject> for ReplyShareObject {
         match object {
             ShareObject::Database(_, db_id) => ReplyShareObject::Database(db_id),
             ShareObject::Table(_, db_id, table_id) => ReplyShareObject::Table(db_id, table_id),
+            ShareObject::View(_, db_id, table_id) => ReplyShareObject::Table(db_id, table_id),
         }
     }
 }

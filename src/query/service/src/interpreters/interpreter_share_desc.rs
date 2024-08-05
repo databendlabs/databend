@@ -75,6 +75,10 @@ impl Interpreter for DescShareInterpreter {
                     kinds.push("TABLE".to_string());
                     names.push(format!("{}.{}", db, table_name));
                 }
+                ShareGrantObjectName::View(db, table_name) => {
+                    kinds.push("VIEW".to_string());
+                    names.push(format!("{}.{}", db, table_name));
+                }
             }
             shared_owns.push(entry.grant_on.to_string());
         }

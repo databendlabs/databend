@@ -22,6 +22,7 @@ use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -86,33 +87,43 @@ impl Binder {
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
-        let table_meta = match self.resolve_data_source(
-            tenant.tenant_name(),
-            catalog.as_str(),
-            database.as_str(),
-            table_name.as_str(),
-            navigation.as_ref(),
-            self.ctx.clone().get_abort_checker(),
-        ) {
-            Ok(table) => table,
-            Err(e) => {
-                let mut parent = bind_context.parent.as_mut();
-                loop {
-                    if parent.is_none() {
-                        break;
+        let table_meta = if let Some(share_params) = &bind_context.share_paramas {
+            self.resolve_share_reference_data_source(
+                share_params,
+                tenant.tenant_name(),
+                catalog.as_str(),
+                &database.as_str(),
+                &table_name.as_str(),
+            )?
+        } else {
+            match self.resolve_data_source(
+                tenant.tenant_name(),
+                catalog.as_str(),
+                database.as_str(),
+                table_name.as_str(),
+                navigation.as_ref(),
+                self.ctx.clone().get_abort_checker(),
+            ) {
+                Ok(table) => table,
+                Err(e) => {
+                    let mut parent = bind_context.parent.as_mut();
+                    loop {
+                        if parent.is_none() {
+                            break;
+                        }
+                        let bind_context = parent.unwrap().as_mut();
+                        let ctes_map = self.ctes_map.clone();
+                        if let Some(cte_info) = ctes_map.get(&table_name) {
+                            return if !cte_info.materialized {
+                                self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                            } else {
+                                self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                            };
+                        }
+                        parent = bind_context.parent.as_mut();
                     }
-                    let bind_context = parent.unwrap().as_mut();
-                    let ctes_map = self.ctes_map.clone();
-                    if let Some(cte_info) = ctes_map.get(&table_name) {
-                        return if !cte_info.materialized {
-                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                        } else {
-                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                        };
-                    }
-                    parent = bind_context.parent.as_mut();
+                    return Err(table_identifier.not_found_suggest_error(e));
                 }
-                return Err(table_identifier.not_found_suggest_error(e));
             }
         };
 
@@ -191,6 +202,14 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
+                // if it is a share view, save Share Params to child bind context to resolve reference tables
+                let share_paramas =
+                    if let DatabaseType::ShareDB(params) = &table_meta.get_table_info().db_type {
+                        Some(params.clone())
+                    } else {
+                        None
+                    };
+
                 // TODO(leiysky): this check is error-prone,
                 // we should find a better way to do this.
                 Self::check_view_dep(bind_context, &database, &table_name)?;
@@ -202,6 +221,7 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                new_bind_context.share_paramas = share_paramas;
                 new_bind_context.view_info = Some((database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(

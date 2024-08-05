@@ -3035,9 +3035,18 @@ pub fn grant_share_object_name(i: Input) -> IResult<ShareGrantObjectName> {
         |(_, database, _, table)| ShareGrantObjectName::Table(database, table),
     );
 
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let view = map(
+        rule! {
+            VIEW ~  #ident ~ "." ~ #ident
+        },
+        |(_, database, _, table)| ShareGrantObjectName::View(database, table),
+    );
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
+        | #view : "TABLE <database>.<view>"
     )(i)
 }
 

@@ -4152,6 +4152,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-transforms",
  "databend-common-settings",
+ "databend-common-sharing",
  "databend-common-storage",
  "databend-common-storages-result-cache",
  "databend-common-storages-view",
