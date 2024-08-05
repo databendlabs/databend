@@ -94,8 +94,9 @@ pub trait CommonArgFunction {
     ) -> databend_common_exception::Result<DataBlock>;
 }
 
+#[async_trait::async_trait]
 impl<T> SimpleTableFunc for T
-where T: CommonArgFunction + Send + Sync
+where T: CommonArgFunction + Send + Sync + 'static
 {
     fn table_args(&self) -> Option<TableArgs> {
         // Some((&self.args).into())
@@ -111,25 +112,11 @@ where T: CommonArgFunction + Send + Sync
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
     ) -> databend_common_exception::Result<Option<DataBlock>> {
-        todo!()
-        // let tenant_id = ctx.get_tenant();
-        // let tbl = ctx
-        //    .get_catalog(CATALOG_DEFAULT)
-        //    .await?
-        //    .get_table(
-        //        &tenant_id,
-        //        self.args.arg_database_name.as_str(),
-        //        self.args.arg_table_name.as_str(),
-        //    )
-        //    .await?;
-        // let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
-        // let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        // Ok(Some(self.get_blocks(ctx, tbl, limit).await?))
+        self.apply(ctx, plan).await
     }
 
     fn create(table_args: TableArgs) -> databend_common_exception::Result<Self>
     where Self: Sized {
-        todo!()
         // let (arg_database_name, arg_table_name, arg_snapshot_id) = parse_db_tb_opt_args(
         //    &table_args,
         //    crate::table_functions::fuse_columns::fuse_column::FUSE_FUNC_COLUMN,
