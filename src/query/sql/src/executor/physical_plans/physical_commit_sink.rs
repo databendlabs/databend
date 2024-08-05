@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::{BlockMeta, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -35,7 +35,7 @@ pub struct CommitSink {
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
     pub merge_meta: bool,
     pub deduplicated_label: Option<String>,
-    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    pub table_meta_timestamps: TableMetaTimestamps,
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,

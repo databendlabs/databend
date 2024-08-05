@@ -34,7 +34,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::{ClusterKey, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -96,7 +96,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<F> CommitSink<F>
@@ -113,7 +113,7 @@ where F: SnapshotGenerator + Send + 'static
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge = Self::do_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {

@@ -33,6 +33,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use opendal::Operator;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
@@ -80,7 +81,7 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Self::do_create(
             ctx,
@@ -101,7 +102,7 @@ impl TransformSerializeBlock {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Self::do_create(
             ctx,
@@ -123,7 +124,7 @@ impl TransformSerializeBlock {
         cluster_stats_gen: ClusterStatsGenerator,
         kind: MutationKind,
         with_tid: bool,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         // remove virtual computed fields.
         let mut fields = table

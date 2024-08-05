@@ -38,7 +38,7 @@ use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::{Location, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
@@ -90,7 +90,7 @@ pub struct Mutation {
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
-    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {

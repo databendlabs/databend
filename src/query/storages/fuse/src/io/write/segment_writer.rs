@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::{Location, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
@@ -26,14 +26,14 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<'a> SegmentWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         Self {
             location_generator,

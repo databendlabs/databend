@@ -50,7 +50,7 @@ use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
-use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::{SnapshotId, TableMetaTimestamps};
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -254,7 +254,7 @@ impl Table for MemoryTable {
         _ctx: Arc<dyn TableContext>,
         _pipeline: &mut Pipeline,
         _: AppendMode,
-        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Ok(())
     }
@@ -268,7 +268,7 @@ impl Table for MemoryTable {
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
-        _table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 

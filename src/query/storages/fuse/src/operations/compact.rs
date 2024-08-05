@@ -30,7 +30,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
-use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::{Statistics, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::TableMutationAggregator;
@@ -127,7 +127,7 @@ impl FuseTable {
         parts: Partitions,
         column_ids: HashSet<ColumnId>,
         pipeline: &mut Pipeline,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
         let thresholds = self.get_block_thresholds();

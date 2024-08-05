@@ -29,7 +29,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::{BlockMeta, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -82,7 +82,7 @@ pub struct TableMutationAggregator {
     start_time: Instant,
     finished_tasks: usize,
     table_id: u64,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -134,7 +134,7 @@ impl TableMutationAggregator {
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
         kind: MutationKind,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         TableMutationAggregator {
             ctx,
@@ -549,7 +549,7 @@ async fn write_segment(
     default_cluster_key: Option<u32>,
     all_perfect: bool,
     kind: MutationKind,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<(String, Statistics)> {
     let location = location_gen.gen_segment_info_location(table_meta_timestamps);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);

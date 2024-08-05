@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::{ClusterKey, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::common::SnapshotGenerator;
@@ -59,7 +59,7 @@ impl SnapshotGenerator for TruncateGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
         TableSnapshot::try_new(
             prev_table_seq,

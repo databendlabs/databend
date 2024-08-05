@@ -29,7 +29,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache_manager::CachedObject;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::{BlockMeta, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
@@ -70,7 +70,7 @@ pub struct TransformSerializeSegment {
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl TransformSerializeSegment {
@@ -79,7 +79,7 @@ impl TransformSerializeSegment {
         output: Arc<OutputPort>,
         table: &FuseTable,
         thresholds: BlockThresholds,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {

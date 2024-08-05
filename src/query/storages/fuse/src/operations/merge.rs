@@ -21,7 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::{Location, TableMetaTimestamps};
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
@@ -82,7 +82,7 @@ impl FuseTable {
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<PipeItem> {
         let new_schema: TableSchemaRef = self
             .schema_with_stream()
