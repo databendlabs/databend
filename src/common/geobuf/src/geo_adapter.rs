@@ -1,6 +1,6 @@
+use flatbuffers::Vector;
 use geozero::error::GeozeroError;
 use geozero::ColumnValue;
-use geozero::FeatureProperties;
 use geozero::GeozeroGeometry;
 use geozero::ToGeo;
 
@@ -11,6 +11,7 @@ use super::Geometry;
 use super::GeometryBuilder;
 use super::JsonObject;
 use super::ObjectKind;
+use crate::FeatureKind;
 
 impl TryFrom<&geo::Geometry<f64>> for Geometry {
     type Error = GeozeroError;
@@ -103,7 +104,7 @@ impl geozero::GeozeroGeometry for Geometry {
                 self.process_polygons(processor, &point_offsets, &ring_offsets)?;
                 processor.multipolygon_end(0)
             }
-            ObjectKind::Collection => {
+            ObjectKind::GeometryCollection => {
                 let object = self.read_object()?;
                 let collection = object.collection().ok_or(GeozeroError::Geometry(
                     "Invalid Collection, collection missing".to_string(),
@@ -114,60 +115,32 @@ impl geozero::GeozeroGeometry for Geometry {
                 }
                 processor.geometrycollection_end(0)
             }
-            _ => unreachable!(),
         }
     }
 }
 
-impl FeatureProperties for Geometry {
-    fn process_properties<P: geozero::PropertyProcessor>(
-        &self,
-        processor: &mut P,
-    ) -> geozero::error::Result<bool> {
-        if self.buf.len() == 1 {
-            return Ok(true);
-        }
-        if let Some(data) = self.read_object()?.properties() {
-            let json: JsonObject = flexbuffers::from_slice(data.bytes())
-                .map_err(|e| GeozeroError::Geometry(e.to_string()))?;
-            for (idx, (name, value)) in json.iter().enumerate() {
-                processor.property(
-                    idx,
-                    name,
-                    &ColumnValue::Json(
-                        &serde_json::to_string(value)
-                            .map_err(|e| GeozeroError::Geometry(e.to_string()))?,
-                    ),
-                )?;
-            }
-        }
-
-        Ok(true)
-    }
-}
-
-impl geozero::FeatureAccess for Geometry {
-    fn process<P: geozero::FeatureProcessor>(
-        &self,
-        processor: &mut P,
-        idx: u64,
-    ) -> geozero::error::Result<()>
-    where
-        Self: Sized,
-    {
-        if self.buf[0] & ObjectKind::FEATURE != 0 {
-            processor.feature_begin(idx)?;
-            processor.properties_begin()?;
-            let _ = self.process_properties(processor)?;
-            processor.properties_end()?;
-            processor.geometry_begin()?;
-            self.process_geom(processor)?;
-            processor.geometry_end()?;
-            processor.feature_end(idx)
-        } else {
-            self.process_geom(processor)
+fn process_properties<P>(
+    properties: &Option<Vector<u8>>,
+    processor: &mut P,
+) -> geozero::error::Result<()>
+where
+    P: geozero::FeatureProcessor,
+{
+    if let Some(data) = properties {
+        let json: JsonObject = flexbuffers::from_slice(data.bytes())
+            .map_err(|e| GeozeroError::Geometry(e.to_string()))?;
+        for (idx, (name, value)) in json.iter().enumerate() {
+            processor.property(
+                idx,
+                name,
+                &ColumnValue::Json(
+                    &serde_json::to_string(value)
+                        .map_err(|e| GeozeroError::Geometry(e.to_string()))?,
+                ),
+            )?;
         }
     }
+    Ok(())
 }
 
 impl Geometry {
@@ -302,15 +275,59 @@ impl Geometry {
     }
 
     fn kind(&self) -> Result<ObjectKind, GeozeroError> {
-        match self.buf[0] & !ObjectKind::FEATURE {
-            1 => Ok(ObjectKind::Point),
-            2 => Ok(ObjectKind::LineString),
-            3 => Ok(ObjectKind::Polygon),
-            4 => Ok(ObjectKind::MultiPoint),
-            5 => Ok(ObjectKind::MultiLineString),
-            6 => Ok(ObjectKind::MultiPolygon),
-            7 => Ok(ObjectKind::Collection),
-            _ => Err(GeozeroError::Geometry("todo".to_string())),
+        let kind: FeatureKind = self.buf[0]
+            .try_into()
+            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
+
+        match kind {
+            FeatureKind::Geometry(o) | FeatureKind::Feature(o) => Ok(o),
+            FeatureKind::FeatureCollection => Ok(ObjectKind::GeometryCollection),
+        }
+    }
+
+    pub fn process_features<P>(&self, processor: &mut P) -> geozero::error::Result<()>
+    where
+        Self: Sized,
+        P: geozero::FeatureProcessor,
+    {
+        let kind: FeatureKind = self.buf[0]
+            .try_into()
+            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
+
+        match kind {
+            FeatureKind::Geometry(_) => self.process_geom(processor),
+            FeatureKind::Feature(_) => {
+                let object = self.read_object()?;
+                processor.feature_begin(0)?;
+                processor.properties_begin()?;
+                process_properties(&object.properties(), processor)?;
+                processor.properties_end()?;
+                processor.geometry_begin()?;
+                self.process_geom(processor)?;
+                processor.geometry_end()?;
+                processor.feature_end(0)
+            }
+            FeatureKind::FeatureCollection => {
+                processor.dataset_begin(None)?;
+                for (idx, feature) in self
+                    .read_object()
+                    .unwrap()
+                    .collection()
+                    .unwrap()
+                    .iter()
+                    .enumerate()
+                {
+                    processor.feature_begin(idx as u64)?;
+                    processor.properties_begin()?;
+                    process_properties(&feature.properties(), processor)?;
+                    processor.properties_end()?;
+                    processor.geometry_begin()?;
+                    self.process_inner(processor, &feature, 0)?;
+                    processor.geometry_end()?;
+                    processor.feature_end(idx as u64)?;
+                }
+                processor.dataset_end()
+            }
         }
     }
 }

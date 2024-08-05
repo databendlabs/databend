@@ -1,6 +1,7 @@
 use geozero::error::GeozeroError;
 
 use super::Element;
+use super::FeatureKind;
 use super::Geometry;
 use super::GeometryBuilder;
 use super::ObjectKind;
@@ -33,14 +34,21 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
             geom: &Geometry,
             feature: Option<&Feature>,
         ) -> Result<(), GeozeroError> {
-            if let Some(feature) = feature {
-                visitor.visit_feature(&feature.properties)?;
-            }
+            let properties = feature.map(|f| f.properties.as_ref()).unwrap_or_default();
+            let wrap_kind = |object_kind| {
+                if feature.is_some() {
+                    FeatureKind::Feature(object_kind)
+                } else {
+                    FeatureKind::Geometry(object_kind)
+                }
+            };
+
             match &geom.value {
                 Value::Point(point) => {
                     let (x, y) = normalize_point(point)?;
                     visitor.visit_point(x, y, false)?;
-                    visitor.finish(ObjectKind::Point)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::Point))
                 }
                 Value::MultiPoint(points) => {
                     visitor.visit_points_start(points.len())?;
@@ -49,11 +57,13 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visitor.visit_point(x, y, true)?;
                     }
                     visitor.visit_points_end(false)?;
-                    visitor.finish(ObjectKind::MultiPoint)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::MultiPoint))
                 }
                 Value::LineString(line) => {
                     visit_points(line, visitor, false)?;
-                    visitor.finish(ObjectKind::LineString)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::LineString))
                 }
                 Value::MultiLineString(lines) => {
                     visitor.visit_lines_start(lines.len())?;
@@ -61,7 +71,8 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visit_points(line, visitor, true)?;
                     }
                     visitor.visit_lines_end()?;
-                    visitor.finish(ObjectKind::MultiLineString)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::MultiLineString))
                 }
                 Value::Polygon(polygon) => {
                     visitor.visit_polygon_start(polygon.len())?;
@@ -69,7 +80,8 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visit_points(ring, visitor, true)?;
                     }
                     visitor.visit_polygon_end(false)?;
-                    visitor.finish(ObjectKind::Polygon)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::Polygon))
                 }
                 Value::MultiPolygon(polygons) => {
                     visitor.visit_polygons_start(polygons.len())?;
@@ -81,7 +93,8 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visitor.visit_polygon_end(true)?;
                     }
                     visitor.visit_polygons_end()?;
-                    visitor.finish(ObjectKind::MultiPolygon)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::MultiPolygon))
                 }
                 Value::GeometryCollection(collection) => {
                     visitor.visit_collection_start(collection.len())?;
@@ -89,7 +102,8 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         accept_geom(visitor, geom, None)?;
                     }
                     visitor.visit_collection_end()?;
-                    visitor.finish(ObjectKind::Collection)
+                    visitor.visit_feature(properties)?;
+                    visitor.finish(wrap_kind(ObjectKind::GeometryCollection))
                 }
             }
         }
@@ -113,7 +127,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                     )?;
                 }
                 visitor.visit_collection_end()?;
-                visitor.finish(ObjectKind::Collection)
+                visitor.finish(FeatureKind::FeatureCollection)
             }
         }
     }
@@ -146,7 +160,7 @@ impl TryInto<GeoJson<String>> for &Geometry {
     fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
         let mut out: Vec<u8> = Vec::new();
         let mut p = geozero::geojson::GeoJsonWriter::new(&mut out);
-        geozero::FeatureAccess::process(self, &mut p, 0)?;
+        self.process_features(&mut p)?;
 
         match String::from_utf8(out) {
             Ok(str) => Ok(GeoJson(str)),
@@ -203,11 +217,18 @@ mod tests {
         run_from_json(
             r#"{"type": "Feature", "properties": {"name": "abc"}, "geometry": {"type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [99,11]},{"type": "LineString", "coordinates": [[40,60],[50,50],[60,40]]},{"type": "Point", "coordinates": [99,10]}]}}"#,
         );
+        run_from_json(
+            r#"{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[173,-40]},"properties":{"name":"abc"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[174,-41]},"properties":{"name":"def"}}]}"#,
+        );
     }
 
     fn run_from_json(want: &str) {
+        use serde_json::Value;
         let geom: crate::Geometry = GeoJson(want).try_into().unwrap();
         let GeoJson(got) = (&geom).try_into().unwrap();
+
+        let want: Value = serde_json::from_str(want).unwrap();
+        let got: Value = serde_json::from_str(&got).unwrap();
 
         assert_eq!(want, got)
     }

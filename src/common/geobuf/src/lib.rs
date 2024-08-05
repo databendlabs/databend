@@ -1,5 +1,4 @@
 #![feature(iter_map_windows)]
-
 mod builder;
 mod geo_adapter;
 mod geo_generated;
@@ -14,6 +13,8 @@ use geozero::error::Result as GeoResult;
 use ordered_float::OrderedFloat;
 pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Wkt;
+
+#[allow(dead_code)]
 
 pub struct Column {
     buf: Vec<u8>,
@@ -74,18 +75,21 @@ impl Geometry {
     }
 }
 
+#[allow(dead_code)]
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
     column_y: &'a [f64],
 }
 
+#[allow(dead_code)]
 pub struct Geography {
     buf: Vec<u8>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
 }
 
+#[allow(dead_code)]
 pub struct GeographyRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
@@ -116,9 +120,9 @@ trait Visitor {
 
     fn visit_collection_end(&mut self) -> GeoResult<()>;
 
-    fn visit_feature(&mut self, properties: &Option<JsonObject>) -> GeoResult<()>;
+    fn visit_feature(&mut self, properties: Option<&JsonObject>) -> GeoResult<()>;
 
-    fn finish(&mut self, kind: ObjectKind) -> GeoResult<()>;
+    fn finish(&mut self, kind: FeatureKind) -> GeoResult<()>;
 }
 
 trait Element<V: Visitor> {
@@ -133,7 +137,7 @@ enum ObjectKind {
     MultiPoint = 4,
     MultiLineString = 5,
     MultiPolygon = 6,
-    Collection = 7,
+    GeometryCollection = 7,
 }
 
 impl ObjectKind {
@@ -143,6 +147,51 @@ impl ObjectKind {
 impl From<ObjectKind> for geo_buf::InnerObjectKind {
     fn from(val: ObjectKind) -> Self {
         geo_buf::InnerObjectKind(val as u8)
+    }
+}
+
+enum FeatureKind {
+    Geometry(ObjectKind),
+    Feature(ObjectKind),
+    FeatureCollection,
+}
+
+impl FeatureKind {
+    const FEATURE: u8 = 1 << 3;
+    const FEATURE_COLLECTION: u8 = 1 << 4;
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            FeatureKind::FeatureCollection => Self::FEATURE_COLLECTION,
+            FeatureKind::Geometry(o) => *o as u8,
+            FeatureKind::Feature(o) => *o as u8 | Self::FEATURE,
+        }
+    }
+}
+
+impl TryFrom<u8> for FeatureKind {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, ()> {
+        match value {
+            FeatureKind::FEATURE_COLLECTION => Ok(FeatureKind::FeatureCollection),
+            _ => {
+                let object_kind = match value & !ObjectKind::FEATURE {
+                    1 => ObjectKind::Point,
+                    2 => ObjectKind::LineString,
+                    3 => ObjectKind::Polygon,
+                    4 => ObjectKind::MultiPoint,
+                    5 => ObjectKind::MultiLineString,
+                    6 => ObjectKind::MultiPolygon,
+                    7 => ObjectKind::GeometryCollection,
+                    _ => return Err(()),
+                };
+                if value & FeatureKind::FEATURE != 0 {
+                    Ok(FeatureKind::Feature(object_kind))
+                } else {
+                    Ok(FeatureKind::Geometry(object_kind))
+                }
+            }
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use geozero::error::GeozeroError;
 
-use super::geo_buf;
 use super::Element;
+use super::FeatureKind;
 use super::Geometry;
 use super::GeometryBuilder;
 use super::ObjectKind;
@@ -35,7 +35,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                 Geometry::Point(point) => {
                     let (x, y) = normalize_point(point)?;
                     visitor.visit_point(x, y, false)?;
-                    visitor.finish(ObjectKind::Point)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::Point))
                 }
                 Geometry::MultiPoint(MultiPoint(points)) => {
                     visitor.visit_points_start(points.len())?;
@@ -44,11 +44,11 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                         visitor.visit_point(x, y, true)?;
                     }
                     visitor.visit_points_end(false)?;
-                    visitor.finish(ObjectKind::MultiPoint)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::MultiPoint))
                 }
                 Geometry::LineString(LineString(line)) => {
                     visit_points(line, visitor, false)?;
-                    visitor.finish(ObjectKind::LineString)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::LineString))
                 }
                 Geometry::MultiLineString(MultiLineString(lines)) => {
                     visitor.visit_lines_start(lines.len())?;
@@ -56,7 +56,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                         visit_points(&line.0, visitor, true)?;
                     }
                     visitor.visit_lines_end()?;
-                    visitor.finish(ObjectKind::MultiLineString)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::MultiLineString))
                 }
                 Geometry::Polygon(Polygon(polygon)) => {
                     visitor.visit_polygon_start(polygon.len())?;
@@ -64,7 +64,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                         visit_points(&ring.0, visitor, true)?;
                     }
                     visitor.visit_polygon_end(false)?;
-                    visitor.finish(ObjectKind::Polygon)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::Polygon))
                 }
                 Geometry::MultiPolygon(MultiPolygon(polygons)) => {
                     visitor.visit_polygons_start(polygons.len())?;
@@ -76,7 +76,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                         visitor.visit_polygon_end(true)?;
                     }
                     visitor.visit_polygons_end()?;
-                    visitor.finish(ObjectKind::MultiPolygon)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::MultiPolygon))
                 }
                 Geometry::GeometryCollection(GeometryCollection(collection)) => {
                     visitor.visit_collection_start(collection.len())?;
@@ -84,7 +84,7 @@ impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
                         accept_geom(geom, visitor)?;
                     }
                     visitor.visit_collection_end()?;
-                    visitor.finish(ObjectKind::Collection)
+                    visitor.finish(FeatureKind::Geometry(ObjectKind::GeometryCollection))
                 }
             }
         }
