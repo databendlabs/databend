@@ -161,10 +161,9 @@ fn register_convert_timezone(registry: &mut FunctionRegistry){
                 Ok(ts) => timestamp = ts,
                 Err(e) => {
 
-                    let naivetime = NaiveDateTime::parse_from_str("2023-08-05 12:34:56", "%Y-%m-%d %H:%M:%S").expect("Failed to parse NaiveDateTime");
-                    let dummy_tz: Tz = "America/New_York".parse().expect("Failed to parse timezone");
-                    let dummy_utc: DateTime<Utc> = Utc.from_utc_datetime(&naivetime);
-                    timestamp: DateTime<Tz> = dummy_tz.from_local_datetime(&naivetime)
+                    let dummy_naivetime: NaiveDateTime = NaiveDateTime::parse_from_str("1970-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").expect("Failed to parse NaiveDateTime");
+                    let dummy_utc: DateTime<Utc> = Utc.from_utc_datetime(&dummy_naivetime);
+                    timestamp: DateTime<Tz> = ctx.func_ctx.tz.tz.from_local_datetime(&dummy_naivetime)
                         .single()
                         .expect("Failed to convert NaiveDateTime to DateTime with timezone");
 
