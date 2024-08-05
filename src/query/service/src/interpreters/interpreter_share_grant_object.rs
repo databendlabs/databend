@@ -43,7 +43,7 @@ impl GrantShareObjectInterpreter {
         Ok(GrantShareObjectInterpreter { ctx, plan })
     }
 
-    async fn parse_view_refernce_tables(
+    async fn parse_view_reference_tables(
         &self,
         db_name: &str,
         view: &str,
@@ -89,7 +89,7 @@ impl Interpreter for GrantShareObjectInterpreter {
         let tenant = self.ctx.get_tenant();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let reference_tables = if let ShareGrantObjectName::View(db, view) = &self.plan.object {
-            Some(self.parse_view_refernce_tables(db, view).await?)
+            Some(self.parse_view_reference_tables(db, view).await?)
         } else {
             None
         };
