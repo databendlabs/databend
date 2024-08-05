@@ -241,12 +241,6 @@ impl TzLUT {
 pub trait DateConverter {
     fn to_date(&self, tz: Tz) -> NaiveDate;
     fn to_timestamp(&self, tz: Tz) -> DateTime<Tz>;
-    fn convert_timezone(
-        &self,
-        src_tz: Option<Tz>,
-        target_tz: Tz,
-        src_timestamp: DateTime<Tz>,
-    ) -> DateTime<Tz>;
 }
 
 impl<T> DateConverter for T
@@ -267,30 +261,6 @@ where T: AsPrimitive<i64>
             nanos += 1_000_000_000;
         }
         tz.timestamp_opt(secs, nanos as u32).unwrap()
-    }
-    /// Convert a timestamp to the specify timezone.
-    ///
-    /// # Parameters
-    /// - `target_tz`: Timezone in which the timestamp will be converted
-    /// - `src_timestamp`: Source timestamp to be converted
-    /// - `src_tz`: Timezone of the timestamp to be converted - Optional
-    /// - `src_ntz_timestamp`: Source timestamp with unspecified timezone to be converted - Optional
-    fn convert_timezone(
-        &self,
-        src_tz: Option<Tz>,
-        target_tz: Tz,
-        src_timestamp: DateTime<Tz>,
-    ) -> DateTime<Tz> {
-        let timestamp_to_convert: DateTime<Tz>;
-
-        if let Some(tz) = src_tz {
-            let naive_dt = src_timestamp.naive_local();
-            timestamp_to_convert = tz.from_local_datetime(&naive_dt).unwrap();
-        } else {
-            timestamp_to_convert = src_timestamp;
-        }
-
-        timestamp_to_convert.with_timezone(&target_tz)
     }
 }
 

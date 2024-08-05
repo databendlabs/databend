@@ -659,4 +659,4 @@ statement error 1006
 select to_timestamp('200,2000', '%s,%Y');
 
 statement ok
-select convert_timezone('Asia/Shanghai', 'Pacific/Apia', '1947-04-15 00:00:00');
+select convert_timezone('Asia/Shanghai', '1947-04-15 00:00:00');
