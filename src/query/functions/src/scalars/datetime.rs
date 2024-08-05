@@ -134,7 +134,7 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 fn register_convert_timezone(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         eval_convert_timezone,
     );
 
@@ -165,7 +165,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                             "%Y-%m-%d %H:%M:%S",
                         )
                         .expect("Failed to parse NaiveDateTime");
-                        let dummy_utc: DateTime<Utc> = Utc.from_utc_datetime(&dummy_naivetime);
                         timestamp = ctx
                             .func_ctx
                             .tz
