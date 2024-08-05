@@ -132,17 +132,17 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 }
 
 fn register_convert_timezone(registry: &mut FunctionRegistry) {
-    registry.register_2_arg::<StringType, StringType, TimestampType, _, _>(
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _| FunctionDomain::MayThrow,
         eval_convert_timezone,
     );
 
     fn eval_convert_timezone(
-        target_tz: ValueRef::Scalar(StringType),
-        src_timestamp: ValueRef::Scalar(StringType),
+        target_tz: ValueRef<StringType>,
+        src_timestamp: ValueRef<StringType>,
         ctx: &mut EvalContext,
-    ) -> ValueRef::Scalar(TimestampType) {
+    ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
