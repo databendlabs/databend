@@ -1,12 +1,16 @@
 use flatbuffers::FlatBufferBuilder;
+use flatbuffers::ForwardsUOffset;
 use flatbuffers::Vector;
 use flatbuffers::WIPOffset;
 use geozero::error::Result as GeoResult;
+use geozero::ColumnValue;
 
 use super::geo_buf;
 use super::geo_buf::InnerObject;
 use super::geo_buf::Object;
+use super::geo_buf::Property;
 use super::Geometry;
+use super::ObjectKind;
 use super::Visitor;
 
 #[derive(Default)]
@@ -16,9 +20,11 @@ pub struct GeometryBuilder<'fbb> {
     column_y: Vec<f64>,
     point_offsets: Vec<u32>,
     ring_offsets: Vec<u32>,
-    temp_kind: Option<geo_buf::ObjectKind>,
+    properties: Vec<WIPOffset<Property<'fbb>>>,
+    temp_kind: Option<ObjectKind>,
+    is_feature: bool,
 
-    kind: Option<geo_buf::ObjectKind>,
+    kind: Option<ObjectKind>,
     stack: Vec<Vec<WIPOffset<InnerObject<'fbb>>>>,
     object: Option<WIPOffset<Object<'fbb>>>,
 }
@@ -31,10 +37,13 @@ impl<'fbb> GeometryBuilder<'fbb> {
             column_y: Vec::new(),
             point_offsets: Vec::new(),
             ring_offsets: Vec::new(),
+            properties: Vec::new(),
+            temp_kind: None,
+            is_feature: false,
+
             kind: None,
             stack: Vec::new(),
             object: None,
-            temp_kind: None,
         }
     }
 
@@ -55,10 +64,24 @@ impl<'fbb> GeometryBuilder<'fbb> {
     }
 
     fn create_ring_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u8>>> {
-        let data = flexbuffers::singleton(&self.ring_offsets);
-        let v = Some(self.fbb.create_vector(&data));
-        self.ring_offsets.clear();
-        v
+        if self.ring_offsets.is_empty() {
+            None
+        } else {
+            let data = flexbuffers::singleton(&self.ring_offsets);
+            let v = Some(self.fbb.create_vector(&data));
+            self.ring_offsets.clear();
+            v
+        }
+    }
+
+    fn create_properties(
+        &mut self,
+    ) -> Option<WIPOffset<Vector<'fbb, ForwardsUOffset<Property<'fbb>>>>> {
+        if self.properties.is_empty() {
+            None
+        } else {
+            Some(self.fbb.create_vector(&self.properties))
+        }
     }
 
     pub fn build(self) -> Geometry {
@@ -72,17 +95,17 @@ impl<'fbb> GeometryBuilder<'fbb> {
         } = self;
 
         match kind.unwrap() {
-            kind @ geo_buf::ObjectKind::Point
-            | kind @ geo_buf::ObjectKind::MultiPoint
-            | kind @ geo_buf::ObjectKind::LineString => Geometry {
-                buf: vec![kind.0],
+            kind @ ObjectKind::Point
+            | kind @ ObjectKind::MultiPoint
+            | kind @ ObjectKind::LineString => Geometry {
+                buf: vec![kind as u8],
                 column_x,
                 column_y,
             },
             kind => {
                 geo_buf::finish_object_buffer(&mut fbb, object.unwrap());
 
-                let kind = kind.0;
+                let kind = kind as u8;
                 let (mut buf, index) = fbb.collapse();
                 let buf = if index > 0 {
                     let index = index - 1;
@@ -184,54 +207,26 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
         Ok(())
     }
 
-    fn finish(&mut self, kind: geo_buf::ObjectKind) -> GeoResult<()> {
+    fn finish(&mut self, kind: ObjectKind) -> GeoResult<()> {
         if self.stack.is_empty() {
             let object = match kind {
-                geo_buf::ObjectKind::Point => {
+                ObjectKind::Point | ObjectKind::MultiPoint | ObjectKind::LineString => {
                     let point_offsets = self.create_point_offsets();
+                    let properties = self.create_properties();
                     geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
                         point_offsets,
+                        properties,
                         ..Default::default()
                     })
                 }
-                geo_buf::ObjectKind::MultiPoint => {
-                    let point_offsets = self.create_point_offsets();
-                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
-                        point_offsets,
-                        ..Default::default()
-                    })
-                }
-                geo_buf::ObjectKind::LineString => {
-                    let point_offsets = self.create_point_offsets();
-                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
-                        point_offsets,
-                        ..Default::default()
-                    })
-                }
-                geo_buf::ObjectKind::MultiLineString => {
+                ObjectKind::MultiLineString | ObjectKind::Polygon | ObjectKind::MultiPolygon => {
                     let point_offsets = self.create_point_offsets();
                     let ring_offsets = self.create_ring_offsets();
+                    let properties = self.create_properties();
                     geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
                         point_offsets,
                         ring_offsets,
-                        ..Default::default()
-                    })
-                }
-                geo_buf::ObjectKind::Polygon => {
-                    let point_offsets = self.create_point_offsets();
-                    let ring_offsets = self.create_ring_offsets();
-                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
-                        point_offsets,
-                        ring_offsets,
-                        ..Default::default()
-                    })
-                }
-                geo_buf::ObjectKind::MultiPolygon => {
-                    let point_offsets = self.create_point_offsets();
-                    let ring_offsets = self.create_ring_offsets();
-                    geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
-                        point_offsets,
-                        ring_offsets,
+                        properties,
                         ..Default::default()
                     })
                 }
@@ -242,7 +237,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
             return Ok(());
         }
 
-        if self.stack.len() == 1 && kind == geo_buf::ObjectKind::Collection {
+        if self.stack.len() == 1 && kind == ObjectKind::Collection {
             let geometrys = self.stack.pop().unwrap();
             let collection = Some(self.fbb.create_vector(&geometrys));
             let object = geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
@@ -255,65 +250,65 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
         }
 
         let object = match kind {
-            geo_buf::ObjectKind::Point => {
+            ObjectKind::Point => {
                 let point_offsets = self.create_point_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Point.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::MultiPoint => {
+            ObjectKind::MultiPoint => {
                 let point_offsets = self.create_point_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiPoint.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::LineString => {
+            ObjectKind::LineString => {
                 let point_offsets = self.create_point_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::LineString.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::MultiLineString => {
+            ObjectKind::MultiLineString => {
                 let point_offsets = self.create_point_offsets();
                 let ring_offsets = self.create_ring_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiLineString.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ring_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::Polygon => {
+            ObjectKind::Polygon => {
                 let point_offsets = self.create_point_offsets();
                 let ring_offsets = self.create_ring_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Polygon.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ring_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::MultiPolygon => {
+            ObjectKind::MultiPolygon => {
                 let point_offsets = self.create_point_offsets();
                 let ring_offsets = self.create_ring_offsets();
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::MultiPolygon.0 as u32,
+                    wkb_type: kind.into(),
                     point_offsets,
                     ring_offsets,
                     ..Default::default()
                 })
             }
-            geo_buf::ObjectKind::Collection => {
+            ObjectKind::Collection => {
                 let geometrys = self.stack.pop().unwrap();
                 let collection = Some(self.fbb.create_vector(&geometrys));
                 geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
-                    wkb_type: geo_buf::InnerObjectKind::Collection.0 as u32,
+                    wkb_type: kind.into(),
                     collection,
                     ..Default::default()
                 })
@@ -341,18 +336,18 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn xy(&mut self, x: f64, y: f64, _: usize) -> GeoResult<()> {
-        let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::Point));
+        let multi = !matches!(self.temp_kind, Some(ObjectKind::Point));
         self.visit_point(x, y, multi)?;
         Ok(())
     }
 
     fn point_begin(&mut self, _: usize) -> GeoResult<()> {
-        self.temp_kind.get_or_insert(geo_buf::ObjectKind::Point);
+        self.temp_kind.get_or_insert(ObjectKind::Point);
         Ok(())
     }
 
     fn point_end(&mut self, _: usize) -> GeoResult<()> {
-        if let Some(kind @ geo_buf::ObjectKind::Point) = self.temp_kind {
+        if let Some(kind @ ObjectKind::Point) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -360,16 +355,15 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn multipoint_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.temp_kind
-            .get_or_insert(geo_buf::ObjectKind::MultiPoint);
+        self.temp_kind.get_or_insert(ObjectKind::MultiPoint);
         self.visit_points_start(size)?;
         Ok(())
     }
 
     fn multipoint_end(&mut self, _: usize) -> GeoResult<()> {
-        let multi = !matches!(self.temp_kind, Some(geo_buf::ObjectKind::MultiPoint));
+        let multi = !matches!(self.temp_kind, Some(ObjectKind::MultiPoint));
         self.visit_points_end(multi)?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiPoint) = self.temp_kind {
+        if let Some(kind @ ObjectKind::MultiPoint) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -377,14 +371,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn linestring_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
-        self.temp_kind
-            .get_or_insert(geo_buf::ObjectKind::LineString);
+        self.temp_kind.get_or_insert(ObjectKind::LineString);
         self.visit_points_start(size)
     }
 
     fn linestring_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
         self.visit_points_end(!tagged)?;
-        if let Some(kind @ geo_buf::ObjectKind::LineString) = self.temp_kind {
+        if let Some(kind @ ObjectKind::LineString) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -392,14 +385,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn multilinestring_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.temp_kind
-            .get_or_insert(geo_buf::ObjectKind::MultiLineString);
+        self.temp_kind.get_or_insert(ObjectKind::MultiLineString);
         self.visit_lines_start(size)
     }
 
     fn multilinestring_end(&mut self, _: usize) -> GeoResult<()> {
         self.visit_lines_end()?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiLineString) = self.temp_kind {
+        if let Some(kind @ ObjectKind::MultiLineString) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -407,13 +399,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn polygon_begin(&mut self, _: bool, size: usize, _: usize) -> GeoResult<()> {
-        self.temp_kind.get_or_insert(geo_buf::ObjectKind::Polygon);
+        self.temp_kind.get_or_insert(ObjectKind::Polygon);
         self.visit_polygon_start(size)
     }
 
     fn polygon_end(&mut self, tagged: bool, _: usize) -> GeoResult<()> {
         self.visit_polygon_end(!tagged)?;
-        if let Some(kind @ geo_buf::ObjectKind::Polygon) = self.temp_kind {
+        if let Some(kind @ ObjectKind::Polygon) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -421,14 +413,13 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn multipolygon_begin(&mut self, size: usize, _: usize) -> GeoResult<()> {
-        self.temp_kind
-            .get_or_insert(geo_buf::ObjectKind::MultiPolygon);
+        self.temp_kind.get_or_insert(ObjectKind::MultiPolygon);
         self.visit_polygons_start(size)
     }
 
     fn multipolygon_end(&mut self, _: usize) -> GeoResult<()> {
         self.visit_polygons_end()?;
-        if let Some(kind @ geo_buf::ObjectKind::MultiPolygon) = self.temp_kind {
+        if let Some(kind @ ObjectKind::MultiPolygon) = self.temp_kind {
             self.finish(kind)?;
             self.temp_kind = None;
         }
@@ -441,15 +432,61 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
 
     fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
         self.visit_collection_end()?;
-        self.finish(geo_buf::ObjectKind::Collection)
+        self.finish(ObjectKind::Collection)
+    }
+}
+
+impl<'fbb> geozero::PropertyProcessor for GeometryBuilder<'fbb> {
+    fn property(&mut self, _: usize, name: &str, value: &geozero::ColumnValue) -> GeoResult<bool> {
+        let name = Some(self.fbb.create_shared_string(name));
+        let value = match value {
+            ColumnValue::Byte(v) => flexbuffers::singleton(*v),
+            ColumnValue::UByte(v) => flexbuffers::singleton(*v),
+            ColumnValue::Bool(v) => flexbuffers::singleton(*v),
+            ColumnValue::Short(v) => flexbuffers::singleton(*v),
+            ColumnValue::UShort(v) => flexbuffers::singleton(*v),
+            ColumnValue::Int(v) => flexbuffers::singleton(*v),
+            ColumnValue::UInt(v) => flexbuffers::singleton(*v),
+            ColumnValue::Long(v) => flexbuffers::singleton(*v),
+            ColumnValue::ULong(v) => flexbuffers::singleton(*v),
+            ColumnValue::Float(v) => flexbuffers::singleton(*v),
+            ColumnValue::Double(v) => flexbuffers::singleton(*v),
+            ColumnValue::String(v) => flexbuffers::singleton(*v),
+            ColumnValue::Json(v) => flexbuffers::singleton(*v),
+            ColumnValue::DateTime(v) => flexbuffers::singleton(*v),
+            ColumnValue::Binary(v) => flexbuffers::singleton(*v),
+        };
+        let value = Some(self.fbb.create_vector(&value));
+
+        let property =
+            geo_buf::Property::create(&mut self.fbb, &geo_buf::PropertyArgs { name, value });
+        self.properties.push(property);
+        Ok(true)
+    }
+}
+
+impl<'fbb> geozero::FeatureProcessor for GeometryBuilder<'fbb> {
+    fn dataset_begin(&mut self, name: Option<&str>) -> GeoResult<()> {
+        Ok(())
+    }
+
+    fn dataset_end(&mut self) -> GeoResult<()> {
+        Ok(())
+    }
+
+    fn feature_begin(&mut self, idx: u64) -> GeoResult<()> {
+        self.is_feature = true;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
 
+    use geozero::GeozeroDatasource;
     use geozero::GeozeroGeometry;
 
+    use crate::geo_generated::geo_buf;
     use crate::GeometryBuilder;
 
     #[test]
@@ -473,6 +510,38 @@ mod tests {
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
         );
+    }
+
+    #[test]
+    fn test_feature() {
+        let geojson = r#"{
+                "type": "Feature",
+                "properties": {
+                    "id": "NZL",
+                    "name": "New Zealand"
+                },
+                "geometry": {
+                    "type": "MultiPolygon",
+                    "coordinates": [[[
+                        [173.020375,-40.919052],[173.247234,-41.331999],[173.958405,-40.926701],[174.247587,-41.349155],[174.248517,-41.770008],[173.876447,-42.233184],[173.22274,-42.970038],[172.711246,-43.372288],[173.080113,-43.853344],[172.308584,-43.865694],[171.452925,-44.242519],[171.185138,-44.897104],[170.616697,-45.908929],[169.831422,-46.355775],[169.332331,-46.641235],[168.411354,-46.619945],[167.763745,-46.290197],[166.676886,-46.219917],[166.509144,-45.852705],[167.046424,-45.110941],[168.303763,-44.123973],[168.949409,-43.935819],[169.667815,-43.555326],[170.52492,-43.031688],[171.12509,-42.512754],[171.569714,-41.767424],[171.948709,-41.514417],[172.097227,-40.956104],[172.79858,-40.493962],[173.020375,-40.919052]
+                    ]],[[
+                        [174.612009,-36.156397],[175.336616,-37.209098],[175.357596,-36.526194],[175.808887,-36.798942],[175.95849,-37.555382],[176.763195,-37.881253],[177.438813,-37.961248],[178.010354,-37.579825],[178.517094,-37.695373],[178.274731,-38.582813],[177.97046,-39.166343],[177.206993,-39.145776],[176.939981,-39.449736],[177.032946,-39.879943],[176.885824,-40.065978],[176.508017,-40.604808],[176.01244,-41.289624],[175.239567,-41.688308],[175.067898,-41.425895],[174.650973,-41.281821],[175.22763,-40.459236],[174.900157,-39.908933],[173.824047,-39.508854],[173.852262,-39.146602],[174.574802,-38.797683],[174.743474,-38.027808],[174.697017,-37.381129],[174.292028,-36.711092],[174.319004,-36.534824],[173.840997,-36.121981],[173.054171,-35.237125],[172.636005,-34.529107],[173.007042,-34.450662],[173.551298,-35.006183],[174.32939,-35.265496],[174.612009,-36.156397]
+                    ]]]
+                }
+        }"#;
+
+        let mut builder = GeometryBuilder::new();
+        geozero::geojson::GeoJson(&geojson)
+            .process(&mut builder)
+            .unwrap();
+        let x = builder.build();
+        let y = geo_buf::root_as_object(&x.buf[1..]).unwrap();
+        let z = y.properties().unwrap();
+        for x in z.iter() {
+            println!("{:?}", x.name());
+            let data = flexbuffers::Reader::get_root(x.value().unwrap().bytes()).unwrap();
+            println!("{:?}", data.as_str());
+        }
     }
 
     fn run_from_wkt(want: &str) {

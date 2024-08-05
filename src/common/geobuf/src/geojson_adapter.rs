@@ -4,6 +4,7 @@ use super::geo_buf;
 use super::Element;
 use super::Geometry;
 use super::GeometryBuilder;
+use super::ObjectKind;
 use super::Visitor;
 
 pub struct GeoJson<S: AsRef<str>>(pub S);
@@ -38,7 +39,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                 Value::Point(point) => {
                     let (x, y) = normalize_point(point)?;
                     visitor.visit_point(x, y, false)?;
-                    visitor.finish(geo_buf::ObjectKind::Point)
+                    visitor.finish(ObjectKind::Point)
                 }
                 Value::MultiPoint(points) => {
                     visitor.visit_points_start(points.len())?;
@@ -47,11 +48,11 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visitor.visit_point(x, y, true)?;
                     }
                     visitor.visit_points_end(false)?;
-                    visitor.finish(geo_buf::ObjectKind::MultiPoint)
+                    visitor.finish(ObjectKind::MultiPoint)
                 }
                 Value::LineString(line) => {
                     visit_points(line, visitor, false)?;
-                    visitor.finish(geo_buf::ObjectKind::LineString)
+                    visitor.finish(ObjectKind::LineString)
                 }
                 Value::MultiLineString(lines) => {
                     visitor.visit_lines_start(lines.len())?;
@@ -59,7 +60,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visit_points(line, visitor, true)?;
                     }
                     visitor.visit_lines_end()?;
-                    visitor.finish(geo_buf::ObjectKind::MultiLineString)
+                    visitor.finish(ObjectKind::MultiLineString)
                 }
                 Value::Polygon(polygon) => {
                     visitor.visit_polygon_start(polygon.len())?;
@@ -67,7 +68,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visit_points(ring, visitor, true)?;
                     }
                     visitor.visit_polygon_end(false)?;
-                    visitor.finish(geo_buf::ObjectKind::Polygon)
+                    visitor.finish(ObjectKind::Polygon)
                 }
                 Value::MultiPolygon(polygons) => {
                     visitor.visit_polygons_start(polygons.len())?;
@@ -79,7 +80,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         visitor.visit_polygon_end(true)?;
                     }
                     visitor.visit_polygons_end()?;
-                    visitor.finish(geo_buf::ObjectKind::MultiPolygon)
+                    visitor.finish(ObjectKind::MultiPolygon)
                 }
                 Value::GeometryCollection(collection) => {
                     visitor.visit_collection_start(collection.len())?;
@@ -87,7 +88,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                         accept_geom(visitor, geom, None)?;
                     }
                     visitor.visit_collection_end()?;
-                    visitor.finish(geo_buf::ObjectKind::Collection)
+                    visitor.finish(ObjectKind::Collection)
                 }
             }
         }
@@ -111,7 +112,7 @@ impl<V: Visitor> Element<V> for geojson::GeoJson {
                     )?;
                 }
                 visitor.visit_collection_end()?;
-                visitor.finish(geo_buf::ObjectKind::Collection)
+                visitor.finish(ObjectKind::Collection)
             }
         }
     }

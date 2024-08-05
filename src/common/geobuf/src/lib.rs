@@ -10,7 +10,6 @@ mod wkt_adapter;
 use builder::GeometryBuilder;
 use geo_generated::geo_buf;
 pub use geojson_adapter::GeoJson;
-use geozero::error::GeozeroError;
 use geozero::error::Result as GeoResult;
 use ordered_float::OrderedFloat;
 pub use wkb_addapter::Wkb;
@@ -116,11 +115,38 @@ trait Visitor {
 
     fn visit_collection_end(&mut self) -> GeoResult<()>;
 
-    fn finish(&mut self, kind: geo_buf::ObjectKind) -> GeoResult<()>;
+    fn finish(&mut self, kind: ObjectKind) -> GeoResult<()>;
 }
 
 trait Element<V: Visitor> {
     fn accept(&self, visitor: &mut V) -> GeoResult<()>;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ObjectKind {
+    Point = 1,
+    LineString = 2,
+    Polygon = 3,
+    MultiPoint = 4,
+    MultiLineString = 5,
+    MultiPolygon = 6,
+    Collection = 7,
+    Feature = 1 << 3,
+}
+
+impl From<ObjectKind> for geo_buf::InnerObjectKind {
+    fn from(val: ObjectKind) -> Self {
+        match val {
+            ObjectKind::Point
+            | ObjectKind::LineString
+            | ObjectKind::Polygon
+            | ObjectKind::MultiPoint
+            | ObjectKind::MultiLineString
+            | ObjectKind::MultiPolygon
+            | ObjectKind::Collection => geo_buf::InnerObjectKind(val as u8),
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[cfg(test)]

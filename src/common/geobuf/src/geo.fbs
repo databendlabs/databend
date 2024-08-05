@@ -1,13 +1,14 @@
 namespace GeoBuf;
 
-enum InnerObjectKind:ubyte { 
-  Point,
-  MultiPoint,
-  LineString,
-  MultiLineString,
-  Polygon,
-  MultiPolygon,
-  Collection,
+enum InnerObjectKind:ubyte {
+  Unknown = 0,
+  Point = 1,
+  LineString = 2,
+  Polygon = 3,
+  MultiPoint = 4,
+  MultiLineString = 5,
+  MultiPolygon = 6,
+  Collection = 7,
 }
 
 table InnerObject {
@@ -18,24 +19,13 @@ table InnerObject {
 
   collection: [InnerObject];
 
-  wkb_type: uint32;
-  srid: uint32;
-  properties: [property];
+  wkb_type: InnerObjectKind;
+  properties: [Property];
 }
 
-table property {
+table Property {
   name: string;
   value: [ubyte] (flexbuffer);
-}
-
-enum ObjectKind:ubyte { 
-  Point,
-  LineString,
-  Polygon,
-  MultiPoint,
-  MultiLineString,
-  MultiPolygon,
-  Collection,
 }
 
 table Object {
@@ -44,23 +34,10 @@ table Object {
 
   collection: [InnerObject];
 
-  // For ewkb/ewkt compatibility
-  // wkbZ = 0x80000000
-  // wkbM = 0x40000000
-  // wkbSRID = 0x20000000
-
-  // wkbPoint = 1,
-  // wkbLineString = 2,
-  // wkbPolygon = 3,
-  // wkbMultiPoint = 4,
-  // wkbMultiLineString = 5,
-  // wkbMultiPolygon = 6,
-  // wkbGeometryCollection = 7,
-  wkb_type: uint32;
   srid: uint32;
 
   // For GeoJSON compatibility
-  properties: [property];
+  properties: [Property];
 }
  
 root_type Object;

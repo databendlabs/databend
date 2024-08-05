@@ -8,6 +8,7 @@ use super::geo_buf::InnerObject;
 use super::geo_buf::Object;
 use super::Geometry;
 use super::GeometryBuilder;
+use super::ObjectKind;
 
 impl TryFrom<&geo::Geometry<f64>> for Geometry {
     type Error = GeozeroError;
@@ -40,15 +41,14 @@ impl geozero::GeozeroGeometry for Geometry {
         Self: Sized,
     {
         debug_assert!(self.column_x.len() == self.column_y.len());
-        const OUT_OF_RANGE: u8 = geo_buf::ObjectKind::ENUM_MAX + 1;
-        match geo_buf::ObjectKind(self.buf[0]) {
-            geo_buf::ObjectKind::Point => {
+        match self.kind()? {
+            ObjectKind::Point => {
                 debug_assert!(self.column_x.len() == 1);
                 processor.point_begin(0)?;
                 processor.xy(self.column_x[0], self.column_y[0], 0)?;
                 processor.point_end(0)
             }
-            geo_buf::ObjectKind::MultiPoint => {
+            ObjectKind::MultiPoint => {
                 processor.multipoint_begin(self.column_x.len(), 0)?;
                 for (idxc, (x, y)) in self
                     .column_x
@@ -61,7 +61,7 @@ impl geozero::GeozeroGeometry for Geometry {
                 }
                 processor.multipoint_end(0)
             }
-            geo_buf::ObjectKind::LineString => {
+            ObjectKind::LineString => {
                 processor.linestring_begin(true, self.column_x.len(), 0)?;
                 for (idxc, (x, y)) in self
                     .column_x
@@ -74,21 +74,21 @@ impl geozero::GeozeroGeometry for Geometry {
                 }
                 processor.linestring_end(true, 0)
             }
-            geo_buf::ObjectKind::MultiLineString => {
+            ObjectKind::MultiLineString => {
                 let object = self.read_object()?;
                 let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.multilinestring_begin(point_offsets.len() - 1, 0)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.multilinestring_end(0)
             }
-            geo_buf::ObjectKind::Polygon => {
+            ObjectKind::Polygon => {
                 let object = self.read_object()?;
                 let point_offsets = read_point_offsets(object.point_offsets())?;
                 processor.polygon_begin(true, point_offsets.len() - 1, 0)?;
                 self.process_lines(processor, &point_offsets)?;
                 processor.polygon_end(true, 0)
             }
-            geo_buf::ObjectKind::MultiPolygon => {
+            ObjectKind::MultiPolygon => {
                 let object = self.read_object()?;
                 let point_offsets = read_point_offsets(object.point_offsets())?;
                 let ring_offsets = read_ring_offsets(object.ring_offsets())?;
@@ -96,7 +96,7 @@ impl geozero::GeozeroGeometry for Geometry {
                 self.process_polygons(processor, &point_offsets, &ring_offsets)?;
                 processor.multipolygon_end(0)
             }
-            geo_buf::ObjectKind::Collection => {
+            ObjectKind::Collection => {
                 let object = self.read_object()?;
                 let collection = object.collection().ok_or(GeozeroError::Geometry(
                     "Invalid Collection, collection missing".to_string(),
@@ -107,7 +107,7 @@ impl geozero::GeozeroGeometry for Geometry {
                 }
                 processor.geometrycollection_end(0)
             }
-            geo_buf::ObjectKind(OUT_OF_RANGE..) => unreachable!(),
+            _ => unreachable!(),
         }
     }
 }
@@ -177,7 +177,7 @@ impl Geometry {
     where
         P: geozero::GeomProcessor,
     {
-        match geo_buf::InnerObjectKind(object.wkb_type() as u8) {
+        match object.wkb_type() {
             geo_buf::InnerObjectKind::Point => {
                 let point_offsets = read_point_offsets(object.point_offsets())?;
                 let pos = point_offsets.index(0).unwrap().as_u32() as usize;
@@ -240,6 +240,19 @@ impl Geometry {
                 processor.geometrycollection_end(idx)
             }
             _ => unreachable!(),
+        }
+    }
+
+    fn kind(&self) -> Result<ObjectKind, GeozeroError> {
+        match self.buf[0] {
+            1 => Ok(ObjectKind::Point),
+            2 => Ok(ObjectKind::LineString),
+            3 => Ok(ObjectKind::Polygon),
+            4 => Ok(ObjectKind::MultiPoint),
+            5 => Ok(ObjectKind::MultiLineString),
+            6 => Ok(ObjectKind::MultiPolygon),
+            7 => Ok(ObjectKind::Collection),
+            _ => Err(GeozeroError::Geometry("todo".to_string())),
         }
     }
 }

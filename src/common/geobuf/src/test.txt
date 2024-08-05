@@ -1,0 +1,118 @@
+// snowflake discard type info
+SELECT TO_GEOMETRY('POINT EMPTY');
+json(null)
+
+SELECT TO_GEOMETRY('POINT(1820.12 890.56)');
+{
+  "coordinates": [
+    1.820120000000000e+03,
+    8.905599999999999e+02
+  ],
+  "type": "Point"
+}
+
+SELECT TO_GEOMETRY('MULTIPOINT(-122.35 37.55,0 -90)');
+{
+  "coordinates": [
+    [
+      -1.223500000000000e+02,
+      3.755000000000000e+01
+    ],
+    [
+      0.000000000000000e+00,
+      -9.000000000000000e+01
+    ]
+  ],
+  "type": "MultiPoint"
+}
+
+SELECT TO_GEOMETRY('MULTIPOINT EMPTY');
+null
+
+// discard id, foreign_members, bbox
+SELECT TO_GEOMETRY('{
+                "type": "Feature",
+                "id":2,
+                "aaa":"bbb",
+                "bbox":[-122.35,-90,0,37.55],
+                "properties": {
+                    "id": "NZL",
+                    "name": "New Zealand",
+                    "o":[1,2]
+                },
+                "geometry": {
+                    "type": "MultiPoint",
+                    "coordinates": [[-122.35,37.55],[0,-90]]
+                }
+        }');
+{
+  "geometry": {
+    "coordinates": [
+      [
+        -1.223500000000000e+02,
+        3.755000000000000e+01
+      ],
+      [
+        0.000000000000000e+00,
+        -9.000000000000000e+01
+      ]
+    ],
+    "type": "MultiPoint"
+  },
+  "properties": {
+    "id": "NZL",
+    "name": "New Zealand",
+    "o": [
+      1,
+      2
+    ]
+  },
+  "type": "Feature"
+}
+
+SELECT TO_GEOMETRY('{
+                "type": "Feature",
+                "id":2,
+                "aaa":"bbb",
+                "properties": {
+                    "id": "NZL",
+                    "name": "New Zealand",
+                    "o":[1,2]
+                },
+                "geometry": null
+        }');
+null
+
+SELECT TO_GEOMETRY('GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))');
+SRID=0;GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))
+
+https://help.aliyun.com/document_detail/442156.html
+https://geojson.org/geojson-spec.html#coordinate-reference-system-objects
+
+SELECT TO_GEOMETRY('{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [173,-40]
+      },
+      "properties": {
+        "name": "abc"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [174,-41]
+      },
+      "properties": {
+        "name": "def"
+      }
+    }
+  ]
+}');
+SRID=0;GEOMETRYCOLLECTION(POINT(173 -40),POINT(174 -41))
+

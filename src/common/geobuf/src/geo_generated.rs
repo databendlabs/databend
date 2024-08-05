@@ -28,18 +28,19 @@ pub mod geo_buf {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_INNER_OBJECT_KIND: u8 = 6;
+    pub const ENUM_MAX_INNER_OBJECT_KIND: u8 = 7;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_INNER_OBJECT_KIND: [InnerObjectKind; 7] = [
+    pub const ENUM_VALUES_INNER_OBJECT_KIND: [InnerObjectKind; 8] = [
+        InnerObjectKind::Unknown,
         InnerObjectKind::Point,
-        InnerObjectKind::MultiPoint,
         InnerObjectKind::LineString,
-        InnerObjectKind::MultiLineString,
         InnerObjectKind::Polygon,
+        InnerObjectKind::MultiPoint,
+        InnerObjectKind::MultiLineString,
         InnerObjectKind::MultiPolygon,
         InnerObjectKind::Collection,
     ];
@@ -49,33 +50,36 @@ pub mod geo_buf {
     pub struct InnerObjectKind(pub u8);
     #[allow(non_upper_case_globals)]
     impl InnerObjectKind {
-        pub const Point: Self = Self(0);
-        pub const MultiPoint: Self = Self(1);
+        pub const Unknown: Self = Self(0);
+        pub const Point: Self = Self(1);
         pub const LineString: Self = Self(2);
-        pub const MultiLineString: Self = Self(3);
-        pub const Polygon: Self = Self(4);
-        pub const MultiPolygon: Self = Self(5);
-        pub const Collection: Self = Self(6);
+        pub const Polygon: Self = Self(3);
+        pub const MultiPoint: Self = Self(4);
+        pub const MultiLineString: Self = Self(5);
+        pub const MultiPolygon: Self = Self(6);
+        pub const Collection: Self = Self(7);
 
         pub const ENUM_MIN: u8 = 0;
-        pub const ENUM_MAX: u8 = 6;
+        pub const ENUM_MAX: u8 = 7;
         pub const ENUM_VALUES: &'static [Self] = &[
+            Self::Unknown,
             Self::Point,
-            Self::MultiPoint,
             Self::LineString,
-            Self::MultiLineString,
             Self::Polygon,
+            Self::MultiPoint,
+            Self::MultiLineString,
             Self::MultiPolygon,
             Self::Collection,
         ];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
             match self {
+                Self::Unknown => Some("Unknown"),
                 Self::Point => Some("Point"),
-                Self::MultiPoint => Some("MultiPoint"),
                 Self::LineString => Some("LineString"),
-                Self::MultiLineString => Some("MultiLineString"),
                 Self::Polygon => Some("Polygon"),
+                Self::MultiPoint => Some("MultiPoint"),
+                Self::MultiLineString => Some("MultiLineString"),
                 Self::MultiPolygon => Some("MultiPolygon"),
                 Self::Collection => Some("Collection"),
                 _ => None,
@@ -134,121 +138,6 @@ pub mod geo_buf {
     }
 
     impl flatbuffers::SimpleToVerifyInSlice for InnerObjectKind {}
-    #[deprecated(
-        since = "2.0.0",
-        note = "Use associated constants instead. This will no longer be generated in 2021."
-    )]
-    pub const ENUM_MIN_OBJECT_KIND: u8 = 0;
-    #[deprecated(
-        since = "2.0.0",
-        note = "Use associated constants instead. This will no longer be generated in 2021."
-    )]
-    pub const ENUM_MAX_OBJECT_KIND: u8 = 6;
-    #[deprecated(
-        since = "2.0.0",
-        note = "Use associated constants instead. This will no longer be generated in 2021."
-    )]
-    #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_OBJECT_KIND: [ObjectKind; 7] = [
-        ObjectKind::Point,
-        ObjectKind::LineString,
-        ObjectKind::Polygon,
-        ObjectKind::MultiPoint,
-        ObjectKind::MultiLineString,
-        ObjectKind::MultiPolygon,
-        ObjectKind::Collection,
-    ];
-
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
-    #[repr(transparent)]
-    pub struct ObjectKind(pub u8);
-    #[allow(non_upper_case_globals)]
-    impl ObjectKind {
-        pub const Point: Self = Self(0);
-        pub const LineString: Self = Self(1);
-        pub const Polygon: Self = Self(2);
-        pub const MultiPoint: Self = Self(3);
-        pub const MultiLineString: Self = Self(4);
-        pub const MultiPolygon: Self = Self(5);
-        pub const Collection: Self = Self(6);
-
-        pub const ENUM_MIN: u8 = 0;
-        pub const ENUM_MAX: u8 = 6;
-        pub const ENUM_VALUES: &'static [Self] = &[
-            Self::Point,
-            Self::LineString,
-            Self::Polygon,
-            Self::MultiPoint,
-            Self::MultiLineString,
-            Self::MultiPolygon,
-            Self::Collection,
-        ];
-        /// Returns the variant's name or "" if unknown.
-        pub fn variant_name(self) -> Option<&'static str> {
-            match self {
-                Self::Point => Some("Point"),
-                Self::LineString => Some("LineString"),
-                Self::Polygon => Some("Polygon"),
-                Self::MultiPoint => Some("MultiPoint"),
-                Self::MultiLineString => Some("MultiLineString"),
-                Self::MultiPolygon => Some("MultiPolygon"),
-                Self::Collection => Some("Collection"),
-                _ => None,
-            }
-        }
-    }
-    impl core::fmt::Debug for ObjectKind {
-        fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-            if let Some(name) = self.variant_name() {
-                f.write_str(name)
-            } else {
-                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
-            }
-        }
-    }
-    impl<'a> flatbuffers::Follow<'a> for ObjectKind {
-        type Inner = Self;
-        #[inline]
-        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            let b = flatbuffers::read_scalar_at::<u8>(buf, loc);
-            Self(b)
-        }
-    }
-
-    impl flatbuffers::Push for ObjectKind {
-        type Output = ObjectKind;
-        #[inline]
-        unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
-            flatbuffers::emplace_scalar::<u8>(dst, self.0);
-        }
-    }
-
-    impl flatbuffers::EndianScalar for ObjectKind {
-        type Scalar = u8;
-        #[inline]
-        fn to_little_endian(self) -> u8 {
-            self.0.to_le()
-        }
-        #[inline]
-        #[allow(clippy::wrong_self_convention)]
-        fn from_little_endian(v: u8) -> Self {
-            let b = u8::from_le(v);
-            Self(b)
-        }
-    }
-
-    impl<'a> flatbuffers::Verifiable for ObjectKind {
-        #[inline]
-        fn run_verifier(
-            v: &mut flatbuffers::Verifier,
-            pos: usize,
-        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-            use self::flatbuffers::Verifiable;
-            u8::run_verifier(v, pos)
-        }
-    }
-
-    impl flatbuffers::SimpleToVerifyInSlice for ObjectKind {}
     pub enum InnerObjectOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -271,8 +160,7 @@ pub mod geo_buf {
         pub const VT_RING_OFFSETS: flatbuffers::VOffsetT = 6;
         pub const VT_COLLECTION: flatbuffers::VOffsetT = 8;
         pub const VT_WKB_TYPE: flatbuffers::VOffsetT = 10;
-        pub const VT_SRID: flatbuffers::VOffsetT = 12;
-        pub const VT_PROPERTIES: flatbuffers::VOffsetT = 14;
+        pub const VT_PROPERTIES: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -292,8 +180,6 @@ pub mod geo_buf {
             if let Some(x) = args.properties {
                 builder.add_properties(x);
             }
-            builder.add_srid(args.srid);
-            builder.add_wkb_type(args.wkb_type);
             if let Some(x) = args.collection {
                 builder.add_collection(x);
             }
@@ -303,6 +189,7 @@ pub mod geo_buf {
             if let Some(x) = args.point_offsets {
                 builder.add_point_offsets(x);
             }
+            builder.add_wkb_type(args.wkb_type);
             builder.finish()
         }
 
@@ -347,33 +234,29 @@ pub mod geo_buf {
             }
         }
         #[inline]
-        pub fn wkb_type(&self) -> u32 {
+        pub fn wkb_type(&self) -> InnerObjectKind {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<u32>(InnerObject::VT_WKB_TYPE, Some(0))
+                    .get::<InnerObjectKind>(
+                        InnerObject::VT_WKB_TYPE,
+                        Some(InnerObjectKind::Unknown),
+                    )
                     .unwrap()
             }
         }
         #[inline]
-        pub fn srid(&self) -> u32 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<u32>(InnerObject::VT_SRID, Some(0)).unwrap() }
-        }
-        #[inline]
         pub fn properties(
             &self,
-        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>> {
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property<'a>>>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab.get::<flatbuffers::ForwardsUOffset<
-                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property>>,
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property>>,
                 >>(InnerObject::VT_PROPERTIES, None)
             }
         }
@@ -400,10 +283,9 @@ pub mod geo_buf {
                 .visit_field::<flatbuffers::ForwardsUOffset<
                     flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<InnerObject>>,
                 >>("collection", Self::VT_COLLECTION, false)?
-                .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
-                .visit_field::<u32>("srid", Self::VT_SRID, false)?
+                .visit_field::<InnerObjectKind>("wkb_type", Self::VT_WKB_TYPE, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<
-                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<property>>,
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Property>>,
                 >>("properties", Self::VT_PROPERTIES, false)?
                 .finish();
             Ok(())
@@ -417,11 +299,10 @@ pub mod geo_buf {
                 flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>,
             >,
         >,
-        pub wkb_type: u32,
-        pub srid: u32,
+        pub wkb_type: InnerObjectKind,
         pub properties: Option<
             flatbuffers::WIPOffset<
-                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>,
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property<'a>>>,
             >,
         >,
     }
@@ -432,8 +313,7 @@ pub mod geo_buf {
                 point_offsets: None,
                 ring_offsets: None,
                 collection: None,
-                wkb_type: 0,
-                srid: 0,
+                wkb_type: InnerObjectKind::Unknown,
                 properties: None,
             }
         }
@@ -477,19 +357,18 @@ pub mod geo_buf {
             );
         }
         #[inline]
-        pub fn add_wkb_type(&mut self, wkb_type: u32) {
-            self.fbb_
-                .push_slot::<u32>(InnerObject::VT_WKB_TYPE, wkb_type, 0);
-        }
-        #[inline]
-        pub fn add_srid(&mut self, srid: u32) {
-            self.fbb_.push_slot::<u32>(InnerObject::VT_SRID, srid, 0);
+        pub fn add_wkb_type(&mut self, wkb_type: InnerObjectKind) {
+            self.fbb_.push_slot::<InnerObjectKind>(
+                InnerObject::VT_WKB_TYPE,
+                wkb_type,
+                InnerObjectKind::Unknown,
+            );
         }
         #[inline]
         pub fn add_properties(
             &mut self,
             properties: flatbuffers::WIPOffset<
-                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<property<'b>>>,
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<Property<'b>>>,
             >,
         ) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
@@ -521,20 +400,19 @@ pub mod geo_buf {
             ds.field("ring_offsets", &self.ring_offsets());
             ds.field("collection", &self.collection());
             ds.field("wkb_type", &self.wkb_type());
-            ds.field("srid", &self.srid());
             ds.field("properties", &self.properties());
             ds.finish()
         }
     }
-    pub enum propertyOffset {}
+    pub enum PropertyOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
-    pub struct property<'a> {
+    pub struct Property<'a> {
         pub _tab: flatbuffers::Table<'a>,
     }
 
-    impl<'a> flatbuffers::Follow<'a> for property<'a> {
-        type Inner = property<'a>;
+    impl<'a> flatbuffers::Follow<'a> for Property<'a> {
+        type Inner = Property<'a>;
         #[inline]
         unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
             Self {
@@ -543,13 +421,13 @@ pub mod geo_buf {
         }
     }
 
-    impl<'a> property<'a> {
+    impl<'a> Property<'a> {
         pub const VT_NAME: flatbuffers::VOffsetT = 4;
         pub const VT_VALUE: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-            property { _tab: table }
+            Property { _tab: table }
         }
         #[allow(unused_mut)]
         pub fn create<
@@ -559,9 +437,9 @@ pub mod geo_buf {
             A: flatbuffers::Allocator + 'bldr,
         >(
             _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
-            args: &'args propertyArgs<'args>,
-        ) -> flatbuffers::WIPOffset<property<'bldr>> {
-            let mut builder = propertyBuilder::new(_fbb);
+            args: &'args PropertyArgs<'args>,
+        ) -> flatbuffers::WIPOffset<Property<'bldr>> {
+            let mut builder = PropertyBuilder::new(_fbb);
             if let Some(x) = args.value {
                 builder.add_value(x);
             }
@@ -578,7 +456,7 @@ pub mod geo_buf {
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(property::VT_NAME, None)
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Property::VT_NAME, None)
             }
         }
         #[inline]
@@ -589,14 +467,14 @@ pub mod geo_buf {
             unsafe {
                 self._tab
                     .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                        property::VT_VALUE,
+                        Property::VT_VALUE,
                         None,
                     )
             }
         }
     }
 
-    impl flatbuffers::Verifiable for property<'_> {
+    impl flatbuffers::Verifiable for Property<'_> {
         #[inline]
         fn run_verifier(
             v: &mut flatbuffers::Verifier,
@@ -614,55 +492,55 @@ pub mod geo_buf {
             Ok(())
         }
     }
-    pub struct propertyArgs<'a> {
+    pub struct PropertyArgs<'a> {
         pub name: Option<flatbuffers::WIPOffset<&'a str>>,
         pub value: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     }
-    impl<'a> Default for propertyArgs<'a> {
+    impl<'a> Default for PropertyArgs<'a> {
         #[inline]
         fn default() -> Self {
-            propertyArgs {
+            PropertyArgs {
                 name: None,
                 value: None,
             }
         }
     }
 
-    pub struct propertyBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+    pub struct PropertyBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
         fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
-    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> propertyBuilder<'a, 'b, A> {
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PropertyBuilder<'a, 'b, A> {
         #[inline]
         pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(property::VT_NAME, name);
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Property::VT_NAME, name);
         }
         #[inline]
         pub fn add_value(&mut self, value: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
             self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(property::VT_VALUE, value);
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Property::VT_VALUE, value);
         }
         #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
-        ) -> propertyBuilder<'a, 'b, A> {
+        ) -> PropertyBuilder<'a, 'b, A> {
             let start = _fbb.start_table();
-            propertyBuilder {
+            PropertyBuilder {
                 fbb_: _fbb,
                 start_: start,
             }
         }
         #[inline]
-        pub fn finish(self) -> flatbuffers::WIPOffset<property<'a>> {
+        pub fn finish(self) -> flatbuffers::WIPOffset<Property<'a>> {
             let o = self.fbb_.end_table(self.start_);
             flatbuffers::WIPOffset::new(o.value())
         }
     }
 
-    impl core::fmt::Debug for property<'_> {
+    impl core::fmt::Debug for Property<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            let mut ds = f.debug_struct("property");
+            let mut ds = f.debug_struct("Property");
             ds.field("name", &self.name());
             ds.field("value", &self.value());
             ds.finish()
@@ -689,9 +567,8 @@ pub mod geo_buf {
         pub const VT_POINT_OFFSETS: flatbuffers::VOffsetT = 4;
         pub const VT_RING_OFFSETS: flatbuffers::VOffsetT = 6;
         pub const VT_COLLECTION: flatbuffers::VOffsetT = 8;
-        pub const VT_WKB_TYPE: flatbuffers::VOffsetT = 10;
-        pub const VT_SRID: flatbuffers::VOffsetT = 12;
-        pub const VT_PROPERTIES: flatbuffers::VOffsetT = 14;
+        pub const VT_SRID: flatbuffers::VOffsetT = 10;
+        pub const VT_PROPERTIES: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -712,7 +589,6 @@ pub mod geo_buf {
                 builder.add_properties(x);
             }
             builder.add_srid(args.srid);
-            builder.add_wkb_type(args.wkb_type);
             if let Some(x) = args.collection {
                 builder.add_collection(x);
             }
@@ -766,13 +642,6 @@ pub mod geo_buf {
             }
         }
         #[inline]
-        pub fn wkb_type(&self) -> u32 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<u32>(Object::VT_WKB_TYPE, Some(0)).unwrap() }
-        }
-        #[inline]
         pub fn srid(&self) -> u32 {
             // Safety:
             // Created from valid Table for this object
@@ -782,13 +651,13 @@ pub mod geo_buf {
         #[inline]
         pub fn properties(
             &self,
-        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>> {
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property<'a>>>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab.get::<flatbuffers::ForwardsUOffset<
-                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property>>,
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property>>,
                 >>(Object::VT_PROPERTIES, None)
             }
         }
@@ -815,10 +684,9 @@ pub mod geo_buf {
                 .visit_field::<flatbuffers::ForwardsUOffset<
                     flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<InnerObject>>,
                 >>("collection", Self::VT_COLLECTION, false)?
-                .visit_field::<u32>("wkb_type", Self::VT_WKB_TYPE, false)?
                 .visit_field::<u32>("srid", Self::VT_SRID, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<
-                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<property>>,
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Property>>,
                 >>("properties", Self::VT_PROPERTIES, false)?
                 .finish();
             Ok(())
@@ -832,11 +700,10 @@ pub mod geo_buf {
                 flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerObject<'a>>>,
             >,
         >,
-        pub wkb_type: u32,
         pub srid: u32,
         pub properties: Option<
             flatbuffers::WIPOffset<
-                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<property<'a>>>,
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Property<'a>>>,
             >,
         >,
     }
@@ -847,7 +714,6 @@ pub mod geo_buf {
                 point_offsets: None,
                 ring_offsets: None,
                 collection: None,
-                wkb_type: 0,
                 srid: 0,
                 properties: None,
             }
@@ -890,10 +756,6 @@ pub mod geo_buf {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Object::VT_COLLECTION, collection);
         }
         #[inline]
-        pub fn add_wkb_type(&mut self, wkb_type: u32) {
-            self.fbb_.push_slot::<u32>(Object::VT_WKB_TYPE, wkb_type, 0);
-        }
-        #[inline]
         pub fn add_srid(&mut self, srid: u32) {
             self.fbb_.push_slot::<u32>(Object::VT_SRID, srid, 0);
         }
@@ -901,7 +763,7 @@ pub mod geo_buf {
         pub fn add_properties(
             &mut self,
             properties: flatbuffers::WIPOffset<
-                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<property<'b>>>,
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<Property<'b>>>,
             >,
         ) {
             self.fbb_
@@ -930,7 +792,6 @@ pub mod geo_buf {
             ds.field("point_offsets", &self.point_offsets());
             ds.field("ring_offsets", &self.ring_offsets());
             ds.field("collection", &self.collection());
-            ds.field("wkb_type", &self.wkb_type());
             ds.field("srid", &self.srid());
             ds.field("properties", &self.properties());
             ds.finish()
