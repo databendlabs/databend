@@ -58,4 +58,5 @@ pub mod testing {
     pub use super::v3::SegmentInfo as SegmentInfoV3;
     pub use super::v3::TableSnapshot as TableSnapshotV3;
     pub use super::v4::TableSnapshot as TableSnapshotV4;
+    pub use super::v5::TableSnapshot as TableSnapshotV5;
 }

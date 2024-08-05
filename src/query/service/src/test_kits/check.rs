@@ -104,6 +104,7 @@ pub async fn check_data_dir(
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
             let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            println!("entry_path:{}", entry_path);
             // trim the leading prefix, e.g. "/db_id/table_id/"
             let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
             let path = path[0];

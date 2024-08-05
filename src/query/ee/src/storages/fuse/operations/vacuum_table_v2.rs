@@ -162,6 +162,7 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         slice_summary(&blocks_to_gc)
     );
 
+    let start = std::time::Instant::now();
     let catalog = ctx.get_default_catalog()?;
     let table_agg_index_ids = catalog
         .list_index_ids_by_table_id(ListIndexesByIdReq::new(
@@ -193,6 +194,13 @@ pub async fn do_vacuum2(fuse_table: &FuseTable, ctx: Arc<dyn TableContext>) -> R
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
+
+    info!(
+        "collect indexes to gc for table {} takes {:?}, indexes_to_gc: {:?}",
+        fuse_table.get_table_info().desc,
+        start.elapsed(),
+        slice_summary(&indexes_to_gc)
+    );
 
     let start = std::time::Instant::now();
     let subject_files_to_gc: Vec<_> = segments_to_gc
@@ -307,6 +315,7 @@ async fn read_snapshot_from_location(
 ) -> Result<Arc<TableSnapshot>> {
     let reader = MetaReaders::table_snapshot_reader(fuse_table.get_operator());
     let ver = TableMetaLocationGenerator::snapshot_version(path);
+    info!("read snapshot from location: {}, version: {}", path, ver);
     let params = LoadParams {
         location: path.to_owned(),
         len_hint: None,

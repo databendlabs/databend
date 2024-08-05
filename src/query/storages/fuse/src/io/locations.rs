@@ -54,15 +54,27 @@ static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
+    with_g: bool,
 }
 
 impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
-        Self { prefix }
+        Self {
+            prefix,
+            with_g: true,
+        }
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
+    }
+
+    /// used in unit test to generate old locations without g
+    pub fn with_g(&self, with_g: bool) -> Self {
+        Self {
+            prefix: self.prefix.clone(),
+            with_g,
+        }
     }
 
     pub fn gen_block_location(
@@ -71,9 +83,10 @@ impl TableMetaLocationGenerator {
     ) -> (Location, Uuid) {
         let part_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         let location_path = format!(
-            "{}/{}/g{}_v{}.parquet",
+            "{}/{}/{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
+            if self.with_g { "g" } else { "" },
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
@@ -100,9 +113,10 @@ impl TableMetaLocationGenerator {
     ) -> String {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         format!(
-            "{}/{}/g{}_v{}.mpk",
+            "{}/{}/{}{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
+            if self.with_g { "g" } else { "" },
             segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )
@@ -211,7 +225,7 @@ impl TableMetaLocationGenerator {
         let block_name = splits[len - 1].strip_prefix('g').unwrap_or(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         format!(
-            "{}/{}/{}_v{}.index",
+            "{}/{}/{}_v{}.parquet",
             prefix,
             FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
             id,
