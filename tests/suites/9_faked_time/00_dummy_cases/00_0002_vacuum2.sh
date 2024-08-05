@@ -12,7 +12,7 @@ IFS=$'\n' read -d '' -r -a segments <<< "$SEGMENTS"
 IFS=$'\n' read -d '' -r -a blocks <<< "$BLOCKS"
 blooms=()
 for block in "${blocks[@]}"; do
-    bloom=$(echo "$block" | sed -E 's|(1/[0-9]+)/_b/g([0-9a-f]{32})_v2\.parquet|\1/_i_b_v2/\2_v4.index|')
+    bloom=$(echo "$block" | sed -E 's|(1/[0-9]+)/_b/g([0-9a-f]{32})_v2\.parquet|\1/_i_b_v2/\2_v4.parquet|')
     blooms+=("$bloom")
 done
 
