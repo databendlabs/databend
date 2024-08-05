@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_storages_common_table_meta::meta::{Location, TableMetaTimestamps};
+use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
 

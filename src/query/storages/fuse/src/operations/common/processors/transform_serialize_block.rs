@@ -32,8 +32,8 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
-use opendal::Operator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use opendal::Operator;
 
 use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;

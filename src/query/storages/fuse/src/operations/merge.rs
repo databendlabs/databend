@@ -21,7 +21,8 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_table_meta::meta::{Location, TableMetaTimestamps};
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;

@@ -50,7 +50,8 @@ use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
-use databend_storages_common_table_meta::meta::{SnapshotId, TableMetaTimestamps};
+use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 

@@ -37,8 +37,8 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_storages_common_stage::SingleFilePartition;
-use opendal::Operator;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use opendal::Operator;
 
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
