@@ -754,7 +754,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         }
 
                         ShareGrantObjectSeqAndId::View(
-                            _db_name,
                             db_id,
                             _table_meta_seq,
                             table_id,
@@ -891,7 +890,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
                     }
                     ShareGrantObjectSeqAndId::View(
-                        _view_name,
                         _db_id,
                         table_meta_seq,
                         table_id,
@@ -1689,7 +1687,7 @@ fn check_share_object(
     let object_db_id = match seq_and_id {
         ShareGrantObjectSeqAndId::Database(_, db_id, _) => *db_id,
         ShareGrantObjectSeqAndId::Table(db_id, _seq, _id, _meta) => *db_id,
-        ShareGrantObjectSeqAndId::View(_, db_id, _seq, _id, _meta) => *db_id,
+        ShareGrantObjectSeqAndId::View(db_id, _seq, _id, _meta) => *db_id,
     };
 
     match obj_name {
@@ -1894,7 +1892,6 @@ async fn get_share_object_seq_and_id(
 
             Ok((
                 ShareGrantObjectSeqAndId::View(
-                    table_name.to_owned(),
                     db_id,
                     table_meta_seq,
                     table_id,
@@ -1918,7 +1915,7 @@ fn add_txn_condition(seq_and_id: &ShareGrantObjectSeqAndId, condition: &mut Vec<
             };
             condition.push(txn_cond_seq(&key, Eq, *table_meta_seq))
         }
-        ShareGrantObjectSeqAndId::View(_table_name, _db_id, table_meta_seq, table_id, _) => {
+        ShareGrantObjectSeqAndId::View(_db_id, table_meta_seq, table_id, _) => {
             let key = TableId {
                 table_id: *table_id,
             };
@@ -1952,7 +1949,7 @@ fn add_grant_object_txn_if_then(
                 condition.push(txn_cond_seq(&key, Eq, table_meta_seq));
             }
         }
-        ShareGrantObjectSeqAndId::View(_, _db_id, table_meta_seq, table_id, mut table_meta) => {
+        ShareGrantObjectSeqAndId::View(_db_id, table_meta_seq, table_id, mut table_meta) => {
             // modify table_meta add share_id into shared_by
             if !table_meta.shared_by.contains(&share_id) {
                 table_meta.shared_by.insert(share_id);
@@ -2228,8 +2225,8 @@ pub async fn revoke_object_privileges(
             _ => {}
         },
 
-        ShareObject::View(_table_name, _db_id, table_id) => match privileges {
-            ShareGrantObjectPrivilege::Select => {
+        ShareObject::View(_table_name, _db_id, table_id) => {
+            if privileges == ShareGrantObjectPrivilege::Select {
                 for table in &mut share_meta.table {
                     if table.table_id != table_id {
                         continue;
@@ -2257,8 +2254,7 @@ pub async fn revoke_object_privileges(
                     break;
                 }
             }
-            _ => {}
-        },
+        }
     }
     Ok(())
 }
@@ -2456,7 +2452,7 @@ pub async fn check_access_reference_tables(
                 privileges: BitFlags::from(ShareGrantObjectPrivilege::ReferenceUsage),
                 table_name: table.clone(),
                 db_id,
-                table_id: table_id,
+                table_id,
                 grant_on,
                 engine: "FUSE".to_string(),
                 reference_by,

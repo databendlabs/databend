@@ -169,8 +169,8 @@ pub enum ShareGrantObjectSeqAndId {
     Database(u64, u64, DatabaseMeta),
     // db_id, table_meta_seq, table_id, table_meta
     Table(u64, u64, u64, TableMeta),
-    // view_name, db_id, table_meta_seq, table_id, table_meta
-    View(String, u64, u64, u64, TableMeta),
+    // db_id, table_meta_seq, table_id, table_meta
+    View(u64, u64, u64, TableMeta),
 }
 
 // share name and shared (table name, table info) map

@@ -92,8 +92,8 @@ impl Binder {
                 share_params,
                 tenant.tenant_name(),
                 catalog.as_str(),
-                &database.as_str(),
-                &table_name.as_str(),
+                database.as_str(),
+                table_name.as_str(),
             )?
         } else {
             match self.resolve_data_source(
