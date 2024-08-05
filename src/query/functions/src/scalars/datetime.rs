@@ -133,17 +133,11 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 
 fn register_convert_timezone(registry: &mut FunctionRegistry){
 
-    registry.register_2_arg::<StringType, TimestampType, TimestampType, _, _>(
+    registry.register_2_arg::<StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
-        |_|{TimestampType},
+        |_, _| FunctionDomain::MayThrow,
         eval_convert_timezone,
     );
-
-    /*registry.register_3_arg::<StringType, StringType, TimestampType, TimestampType, _, _>(
-        "convert_timezone",
-        |_| None,
-        eval_convert_timezone,
-    );*/
 
     fn eval_convert_timezone(
       target_tz: ValueRef<StringType>,
@@ -152,16 +146,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry){
     ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(|target_tz, src_timestamp, output, ctx|{
             /* Parsing parameters */
-            let timestamp;
-            match string_to_timestamp(src_timestamp, ctx.func_ctx.tz.tz, false){
-                Ok(ts) => timestamp = ts,
-                Err(e) => {
-                    ctx.set_error(
-                        output.len(),
-                        format!("cannot parse to type `TIMESTAMP`. {}", e),
-                    )
-                }
-            }
             let t_tz: Tz = match target_tz.parse() {
                 Ok(tz) => tz,
                 Err(e) => {
@@ -171,6 +155,25 @@ fn register_convert_timezone(registry: &mut FunctionRegistry){
                     )
                 }
             };
+
+            let timestamp;
+            match string_to_timestamp(src_timestamp, ctx.func_ctx.tz.tz, false){
+                Ok(ts) => timestamp = ts,
+                Err(e) => {
+
+                    let naivetime = NaiveDateTime::parse_from_str("2023-08-05 12:34:56", "%Y-%m-%d %H:%M:%S").expect("Failed to parse NaiveDateTime");
+                    let dummy_tz: Tz = "America/New_York".parse().expect("Failed to parse timezone");
+                    let dummy_utc: DateTime<Utc> = Utc.from_utc_datetime(&naivetime);
+                    timestamp: DateTime<Tz> = dummy_tz.from_local_datetime(&naivetime)
+                        .single()
+                        .expect("Failed to convert NaiveDateTime to DateTime with timezone");
+
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `TIMESTAMP`. {}", e),
+                    )
+                }
+            }
 
            /* if let Some(tz) = src_tz {
                 let naive_dt = src_timestamp.naive_local();
