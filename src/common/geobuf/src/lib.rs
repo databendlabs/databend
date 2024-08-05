@@ -1,16 +1,32 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #![feature(iter_map_windows)]
 mod builder;
 mod geo_adapter;
 mod geo_generated;
 mod geojson_adapter;
+mod geometry;
 mod wkb_addapter;
 mod wkt_adapter;
 
 use builder::GeometryBuilder;
 use geo_generated::geo_buf;
 pub use geojson_adapter::GeoJson;
+use geojson_adapter::JsonObject;
+pub use geometry::BoundingBox;
 use geozero::error::Result as GeoResult;
-use ordered_float::OrderedFloat;
 pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Wkt;
 
@@ -28,51 +44,6 @@ pub struct Geometry {
     buf: Vec<u8>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
-}
-
-pub struct BoundingBox {
-    pub xmin: f64,
-    pub xmax: f64,
-    pub ymin: f64,
-    pub ymax: f64,
-}
-
-impl Geometry {
-    pub fn bounding_box(&self) -> BoundingBox {
-        fn cmp(a: &f64, b: &f64) -> std::cmp::Ordering {
-            std::cmp::Ord::cmp(&OrderedFloat(*a), &OrderedFloat(*b))
-        }
-        BoundingBox {
-            xmin: self
-                .column_x
-                .iter()
-                .copied()
-                .min_by(cmp)
-                .unwrap_or(f64::NAN),
-            xmax: self
-                .column_x
-                .iter()
-                .copied()
-                .max_by(cmp)
-                .unwrap_or(f64::NAN),
-            ymin: self
-                .column_y
-                .iter()
-                .copied()
-                .min_by(cmp)
-                .unwrap_or(f64::NAN),
-            ymax: self
-                .column_y
-                .iter()
-                .copied()
-                .max_by(cmp)
-                .unwrap_or(f64::NAN),
-        }
-    }
-
-    pub fn memory_size(&self) -> usize {
-        self.buf.len() + self.column_x.len() * 16
-    }
 }
 
 #[allow(dead_code)]
@@ -96,8 +67,7 @@ pub struct GeographyRef<'a> {
     column_y: &'a [f64],
 }
 
-pub type JsonObject = serde_json::Map<String, serde_json::Value>;
-trait Visitor {
+pub trait Visitor {
     fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()>;
 
     fn visit_points_start(&mut self, n: usize) -> GeoResult<()>;
@@ -125,12 +95,12 @@ trait Visitor {
     fn finish(&mut self, kind: FeatureKind) -> GeoResult<()>;
 }
 
-trait Element<V: Visitor> {
+pub trait Element<V: Visitor> {
     fn accept(&self, visitor: &mut V) -> GeoResult<()>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum ObjectKind {
+pub enum ObjectKind {
     Point = 1,
     LineString = 2,
     Polygon = 3,
@@ -150,7 +120,7 @@ impl From<ObjectKind> for geo_buf::InnerObjectKind {
     }
 }
 
-enum FeatureKind {
+pub enum FeatureKind {
     Geometry(ObjectKind),
     Feature(ObjectKind),
     FeatureCollection,
@@ -209,19 +179,19 @@ mod tests {
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)"); // geo_buf:33, ewkb:41, points:32
         run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)"); // geo_buf:49, ewkb:57, points:48
 
-        // geo_buf:141, ewkb:123, points:96
+        // geo_buf:129, ewkb:123, points:96
         run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
-        // geo_buf:245, ewkb:237, points:192
+        // geo_buf:229, ewkb:237, points:192
         run_from_wkt(
             &"MULTILINESTRING((-124.2 42,-120.01 41.99),(-124.2 42,-120.01 41.99,-122.5 42.01,-122.5 42.01),(-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))",
         );
-        // geo_buf:121, ewkb:93, points:80
+        // geo_buf:113, ewkb:93, points:80
         run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
-        // geo_buf:205, ewkb:177, points:160
+        // geo_buf:193, ewkb:177, points:160
         run_from_wkt(
             &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
         );
-        // geo_buf:185, ewkb:163, points:128
+        // geo_buf:177, ewkb:163, points:128
         run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
         // geo_buf:205, ewkb:108, points:80
         run_from_wkt(
@@ -231,7 +201,7 @@ mod tests {
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
         );
-        // geo_buf:353, ewkb:194, points:144
+        // geo_buf:357, ewkb:194, points:144
         run_from_wkt(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
         );

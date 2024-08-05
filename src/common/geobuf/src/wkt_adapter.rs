@@ -1,13 +1,52 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use geozero::error::GeozeroError;
 
-use super::Element;
-use super::FeatureKind;
-use super::Geometry;
-use super::GeometryBuilder;
-use super::ObjectKind;
-use super::Visitor;
+use crate::Element;
+use crate::FeatureKind;
+use crate::Geometry;
+use crate::GeometryBuilder;
+use crate::ObjectKind;
+use crate::Visitor;
 
 pub struct Wkt<S: AsRef<str>>(pub S);
+
+impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
+    type Error = GeozeroError;
+
+    fn try_from(str: Wkt<S>) -> Result<Self, Self::Error> {
+        let wkt_struct: wkt::Wkt<f64> = str
+            .0
+            .as_ref()
+            .parse()
+            .map_err(|e: &str| GeozeroError::Geometry(e.to_string()))?;
+        let mut builder = GeometryBuilder::new();
+        wkt_struct.accept(&mut builder)?;
+        Ok(builder.build())
+    }
+}
+
+impl TryInto<Wkt<String>> for &Geometry {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Wkt<String>, Self::Error> {
+        use geozero::ToWkt;
+
+        Ok(Wkt(self.to_wkt()?))
+    }
+}
 
 impl<V: Visitor> Element<V> for wkt::Wkt<f64> {
     fn accept(&self, visitor: &mut V) -> Result<(), GeozeroError> {
@@ -110,54 +149,17 @@ fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), Geozero
     }
 }
 
-impl<S: AsRef<str>> TryFrom<Wkt<S>> for Geometry {
-    type Error = GeozeroError;
-
-    fn try_from(str: Wkt<S>) -> Result<Self, Self::Error> {
-        let wkt_struct: wkt::Wkt<f64> = str
-            .0
-            .as_ref()
-            .parse()
-            .map_err(|e: &str| GeozeroError::Geometry(e.to_string()))?;
-        let mut builder = GeometryBuilder::new();
-        wkt_struct.accept(&mut builder)?;
-        Ok(builder.build())
-    }
-}
-
-impl TryInto<Wkt<String>> for &Geometry {
-    type Error = GeozeroError;
-
-    fn try_into(self) -> Result<Wkt<String>, Self::Error> {
-        use geozero::ToWkt;
-
-        Ok(Wkt(self.to_wkt()?))
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
-    use std::str::FromStr;
-
-    use geozero::ToWkt;
-
     use super::*;
-    use crate::GeometryBuilder;
 
     #[test]
     fn test_from_wkt() {
-        let mut builder = GeometryBuilder::new();
+        let want = "GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))";
 
-        let want = &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))";
-        let wkt_ins = wkt::Wkt::<f64>::from_str(want).unwrap();
-        wkt_ins.accept(&mut builder).unwrap();
-        let geom = builder.build();
-
-        let got = TryInto::<geo::Geometry>::try_into(&geom)
-            .unwrap()
-            .to_wkt()
-            .unwrap();
+        let geom = Geometry::try_from(Wkt(want)).unwrap();
+        let Wkt(got) = (&geom).try_into().unwrap();
 
         assert_eq!(want, &got);
     }

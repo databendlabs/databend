@@ -1,17 +1,25 @@
-use flatbuffers::Vector;
-use geozero::error::GeozeroError;
-use geozero::ColumnValue;
-use geozero::GeozeroGeometry;
-use geozero::ToGeo;
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use super::geo_buf;
-use super::geo_buf::InnerObject;
-use super::geo_buf::Object;
-use super::Geometry;
-use super::GeometryBuilder;
-use super::JsonObject;
-use super::ObjectKind;
-use crate::FeatureKind;
+use geozero::error::GeozeroError;
+use geozero::GeozeroGeometry;
+
+use crate::geo_buf;
+use crate::geo_buf::InnerObject;
+use crate::Geometry;
+use crate::GeometryBuilder;
+use crate::ObjectKind;
 
 impl TryFrom<&geo::Geometry<f64>> for Geometry {
     type Error = GeozeroError;
@@ -28,19 +36,13 @@ impl TryInto<geo::Geometry<f64>> for &Geometry {
 
     fn try_into(self) -> Result<geo::Geometry<f64>, Self::Error> {
         debug_assert!(self.column_x.len() == self.column_y.len());
-
-        self.to_geo()
+        geozero::ToGeo::to_geo(self)
     }
 }
 
 impl geozero::GeozeroGeometry for Geometry {
     fn srid(&self) -> Option<i32> {
-        if self.buf.len() > 1 {
-            self.read_object()
-                .map_or(None, |object| Some(object.srid()))
-        } else {
-            None
-        }
+        self.srid()
     }
 
     fn process_geom<P>(&self, processor: &mut P) -> geozero::error::Result<()>
@@ -119,35 +121,7 @@ impl geozero::GeozeroGeometry for Geometry {
     }
 }
 
-fn process_properties<P>(
-    properties: &Option<Vector<u8>>,
-    processor: &mut P,
-) -> geozero::error::Result<()>
-where
-    P: geozero::FeatureProcessor,
-{
-    if let Some(data) = properties {
-        let json: JsonObject = flexbuffers::from_slice(data.bytes())
-            .map_err(|e| GeozeroError::Geometry(e.to_string()))?;
-        for (idx, (name, value)) in json.iter().enumerate() {
-            processor.property(
-                idx,
-                name,
-                &ColumnValue::Json(
-                    &serde_json::to_string(value)
-                        .map_err(|e| GeozeroError::Geometry(e.to_string()))?,
-                ),
-            )?;
-        }
-    }
-    Ok(())
-}
-
 impl Geometry {
-    fn read_object(&self) -> Result<Object, GeozeroError> {
-        geo_buf::root_as_object(&self.buf[1..]).map_err(|e| GeozeroError::Geometry(e.to_string()))
-    }
-
     fn process_lines<P>(
         &self,
         processor: &mut P,
@@ -199,7 +173,7 @@ impl Geometry {
             })
     }
 
-    fn process_inner<P>(
+    pub(crate) fn process_inner<P>(
         &self,
         processor: &mut P,
         object: &InnerObject,
@@ -273,63 +247,6 @@ impl Geometry {
             _ => unreachable!(),
         }
     }
-
-    fn kind(&self) -> Result<ObjectKind, GeozeroError> {
-        let kind: FeatureKind = self.buf[0]
-            .try_into()
-            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
-
-        match kind {
-            FeatureKind::Geometry(o) | FeatureKind::Feature(o) => Ok(o),
-            FeatureKind::FeatureCollection => Ok(ObjectKind::GeometryCollection),
-        }
-    }
-
-    pub fn process_features<P>(&self, processor: &mut P) -> geozero::error::Result<()>
-    where
-        Self: Sized,
-        P: geozero::FeatureProcessor,
-    {
-        let kind: FeatureKind = self.buf[0]
-            .try_into()
-            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
-
-        match kind {
-            FeatureKind::Geometry(_) => self.process_geom(processor),
-            FeatureKind::Feature(_) => {
-                let object = self.read_object()?;
-                processor.feature_begin(0)?;
-                processor.properties_begin()?;
-                process_properties(&object.properties(), processor)?;
-                processor.properties_end()?;
-                processor.geometry_begin()?;
-                self.process_geom(processor)?;
-                processor.geometry_end()?;
-                processor.feature_end(0)
-            }
-            FeatureKind::FeatureCollection => {
-                processor.dataset_begin(None)?;
-                for (idx, feature) in self
-                    .read_object()
-                    .unwrap()
-                    .collection()
-                    .unwrap()
-                    .iter()
-                    .enumerate()
-                {
-                    processor.feature_begin(idx as u64)?;
-                    processor.properties_begin()?;
-                    process_properties(&feature.properties(), processor)?;
-                    processor.properties_end()?;
-                    processor.geometry_begin()?;
-                    self.process_inner(processor, &feature, 0)?;
-                    processor.geometry_end()?;
-                    processor.feature_end(idx as u64)?;
-                }
-                processor.dataset_end()
-            }
-        }
-    }
 }
 
 fn read_point_offsets(
@@ -358,48 +275,44 @@ fn read_ring_offsets(
 
 #[cfg(test)]
 mod tests {
-    use geozero::CoordDimensions;
-    use geozero::ToWkb;
+    use geozero::ToGeo;
     use geozero::ToWkt;
 
     use super::*;
-    use crate::Wkt;
 
     #[test]
-    fn test_from_wkt() {
-        run_from_wkt(&"POINT(-122.35 37.55)");
-        run_from_wkt(&"MULTIPOINT(-122.35 37.55,0 -90)");
+    fn test_cast_geom() {
+        run_geo(&"POINT(-122.35 37.55)");
+        run_geo(&"MULTIPOINT(-122.35 37.55,0 -90)");
 
-        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)");
-        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)");
+        run_geo(&"LINESTRING(-124.2 42,-120.01 41.99)");
+        run_geo(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)");
 
-        run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
-        run_from_wkt(
+        run_geo(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
+        run_geo(
             &"MULTILINESTRING((-124.2 42,-120.01 41.99),(-124.2 42,-120.01 41.99,-122.5 42.01,-122.5 42.01),(-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))",
         );
-        run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
-        run_from_wkt(
+        run_geo(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
+        run_geo(
             &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
         );
-        run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
-        run_from_wkt(
-            &"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))",
-        );
-        run_from_wkt(
+        run_geo(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
+        run_geo(&"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))");
+        run_geo(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
         );
-        run_from_wkt(
+        run_geo(
             &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
         );
     }
 
-    fn run_from_wkt(want: &str) {
-        let geom = Geometry::try_from(Wkt(want)).unwrap();
+    fn run_geo(want: &str) {
+        let geo_geom = geozero::wkt::Wkt(want).to_geo().unwrap();
 
-        let mut builder = crate::GeometryBuilder::new();
-        geozero::GeozeroGeometry::process_geom(&geom, &mut builder).unwrap();
-        let got = builder.build().to_wkt().unwrap();
+        let geom = Geometry::try_from(&geo_geom).unwrap();
+        let geo_geom: geo::Geometry<f64> = (&geom).try_into().unwrap();
 
+        let got = geo_geom.to_wkt().unwrap();
         assert_eq!(want, got)
     }
 }

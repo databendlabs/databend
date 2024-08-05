@@ -1,13 +1,58 @@
-use geozero::error::GeozeroError;
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use super::Element;
-use super::FeatureKind;
-use super::Geometry;
-use super::GeometryBuilder;
-use super::ObjectKind;
-use super::Visitor;
+use flatbuffers::Vector;
+use geozero::error::GeozeroError;
+use geozero::ColumnValue;
+use geozero::GeozeroGeometry;
+
+use crate::Element;
+use crate::FeatureKind;
+use crate::Geometry;
+use crate::GeometryBuilder;
+use crate::ObjectKind;
+use crate::Visitor;
 
 pub struct GeoJson<S: AsRef<str>>(pub S);
+
+impl<S: AsRef<str>> TryFrom<GeoJson<S>> for Geometry {
+    type Error = GeozeroError;
+
+    fn try_from(str: GeoJson<S>) -> Result<Self, Self::Error> {
+        let json_struct: geojson::GeoJson = str.0.as_ref().parse()?;
+        let mut builder = GeometryBuilder::new();
+        json_struct.accept(&mut builder)?;
+        Ok(builder.build())
+    }
+}
+
+impl TryInto<GeoJson<String>> for &Geometry {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
+        let mut out: Vec<u8> = Vec::new();
+        let mut p = geozero::geojson::GeoJsonWriter::new(&mut out);
+        self.process_features(&mut p)?;
+
+        match String::from_utf8(out) {
+            Ok(str) => Ok(GeoJson(str)),
+            Err(_) => Err(geozero::error::GeozeroError::Geometry(
+                "Invalid UTF-8 encoding".to_string(),
+            )),
+        }
+    }
+}
 
 impl<V: Visitor> Element<V> for geojson::GeoJson {
     fn accept(&self, visitor: &mut V) -> Result<(), GeozeroError> {
@@ -143,32 +188,71 @@ fn normalize_point(point: &[f64]) -> Result<(f64, f64), GeozeroError> {
     }
 }
 
-impl<S: AsRef<str>> TryFrom<GeoJson<S>> for Geometry {
-    type Error = GeozeroError;
+impl Geometry {
+    pub fn process_features<P>(&self, processor: &mut P) -> geozero::error::Result<()>
+    where
+        Self: Sized,
+        P: geozero::FeatureProcessor,
+    {
+        let kind: FeatureKind = self.buf[0]
+            .try_into()
+            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
 
-    fn try_from(str: GeoJson<S>) -> Result<Self, Self::Error> {
-        let json_struct: geojson::GeoJson = str.0.as_ref().parse()?;
-        let mut builder = GeometryBuilder::new();
-        json_struct.accept(&mut builder)?;
-        Ok(builder.build())
+        match kind {
+            FeatureKind::Geometry(_) => self.process_geom(processor),
+            FeatureKind::Feature(_) => {
+                let object = self.read_object()?;
+                processor.feature_begin(0)?;
+                processor.properties_begin()?;
+                process_properties(&object.properties(), processor)?;
+                processor.properties_end()?;
+                processor.geometry_begin()?;
+                self.process_geom(processor)?;
+                processor.geometry_end()?;
+                processor.feature_end(0)
+            }
+            FeatureKind::FeatureCollection => {
+                processor.dataset_begin(None)?;
+                for (idx, feature) in self.read_object()?.collection().unwrap().iter().enumerate() {
+                    processor.feature_begin(idx as u64)?;
+                    processor.properties_begin()?;
+                    process_properties(&feature.properties(), processor)?;
+                    processor.properties_end()?;
+                    processor.geometry_begin()?;
+                    self.process_inner(processor, &feature, 0)?;
+                    processor.geometry_end()?;
+                    processor.feature_end(idx as u64)?;
+                }
+                processor.dataset_end()
+            }
+        }
     }
 }
 
-impl TryInto<GeoJson<String>> for &Geometry {
-    type Error = GeozeroError;
+pub(crate) type JsonObject = serde_json::Map<String, serde_json::Value>;
 
-    fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
-        let mut out: Vec<u8> = Vec::new();
-        let mut p = geozero::geojson::GeoJsonWriter::new(&mut out);
-        self.process_features(&mut p)?;
-
-        match String::from_utf8(out) {
-            Ok(str) => Ok(GeoJson(str)),
-            Err(_) => Err(geozero::error::GeozeroError::Geometry(
-                "Invalid UTF-8 encoding".to_string(),
-            )),
+fn process_properties<P>(
+    properties: &Option<Vector<u8>>,
+    processor: &mut P,
+) -> geozero::error::Result<()>
+where
+    P: geozero::FeatureProcessor,
+{
+    if let Some(data) = properties {
+        let json: JsonObject = flexbuffers::from_slice(data.bytes())
+            .map_err(|e| GeozeroError::Geometry(e.to_string()))?;
+        for (idx, (name, value)) in json.iter().enumerate() {
+            processor.property(
+                idx,
+                name,
+                &ColumnValue::Json(
+                    &serde_json::to_string(value)
+                        .map_err(|e| GeozeroError::Geometry(e.to_string()))?,
+                ),
+            )?;
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -224,7 +308,8 @@ mod tests {
 
     fn run_from_json(want: &str) {
         use serde_json::Value;
-        let geom: crate::Geometry = GeoJson(want).try_into().unwrap();
+
+        let geom = Geometry::try_from(GeoJson(want)).unwrap();
         let GeoJson(got) = (&geom).try_into().unwrap();
 
         let want: Value = serde_json::from_str(want).unwrap();

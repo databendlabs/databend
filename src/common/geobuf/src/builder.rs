@@ -1,17 +1,31 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use flatbuffers::FlatBufferBuilder;
 use flatbuffers::Vector;
 use flatbuffers::WIPOffset;
 use geozero::error::GeozeroError;
 use geozero::error::Result as GeoResult;
 
-use super::geo_buf;
-use super::geo_buf::InnerObject;
-use super::geo_buf::Object;
-use super::FeatureKind;
-use super::Geometry;
-use super::JsonObject;
-use super::ObjectKind;
-use super::Visitor;
+use crate::geo_buf;
+use crate::geo_buf::InnerObject;
+use crate::geo_buf::Object;
+use crate::FeatureKind;
+use crate::Geometry;
+use crate::JsonObject;
+use crate::ObjectKind;
+use crate::Visitor;
 
 #[derive(Default)]
 pub struct GeometryBuilder<'fbb> {
@@ -443,10 +457,8 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
 #[cfg(test)]
 mod tests {
 
-    use geozero::GeozeroDatasource;
     use geozero::GeozeroGeometry;
 
-    use crate::geo_generated::geo_buf;
     use crate::GeometryBuilder;
 
     #[test]
