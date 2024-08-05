@@ -48,7 +48,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::find_eq_or_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -247,39 +247,44 @@ where TablesTable<T, U>: HistoryAware
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
 
+        let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !db_name.contains(database) {
-                                db_name.push(database.clone());
+                invalid_optimize = find_eq_or_filter(
+                    &expr,
+                    &mut |col_name, scalar| {
+                        if col_name == "database" {
+                            if let Scalar::String(database) = scalar {
+                                if !db_name.contains(database) {
+                                    db_name.push(database.clone());
+                                }
+                            }
+                        } else if col_name == "table_id" {
+                            match check_number::<_, u64>(
+                                None,
+                                &FunctionContext::default(),
+                                &Expr::<usize>::Constant {
+                                    span: None,
+                                    scalar: scalar.clone(),
+                                    data_type: scalar.as_ref().infer_data_type(),
+                                },
+                                &BUILTIN_FUNCTIONS,
+                            ) {
+                                Ok(id) => tables_ids.push(id),
+                                Err(_) => invalid_tables_ids = true,
+                            }
+                        } else if col_name == "name" {
+                            if let Scalar::String(t_name) = scalar {
+                                if !tables_names.contains(t_name) {
+                                    tables_names.push(t_name.clone());
+                                }
                             }
                         }
-                    } else if col_name == "table_id" {
-                        match check_number::<_, u64>(
-                            None,
-                            &FunctionContext::default(),
-                            &Expr::<usize>::Constant {
-                                span: None,
-                                scalar: scalar.clone(),
-                                data_type: scalar.as_ref().infer_data_type(),
-                            },
-                            &BUILTIN_FUNCTIONS,
-                        ) {
-                            Ok(id) => tables_ids.push(id),
-                            Err(_) => invalid_tables_ids = true,
-                        }
-                    } else if col_name == "name" {
-                        if let Scalar::String(t_name) = scalar {
-                            if !tables_names.contains(t_name) {
-                                tables_names.push(t_name.clone());
-                            }
-                        }
-                    }
-                    Ok(())
-                });
+                        Ok(())
+                    },
+                    invalid_optimize,
+                );
             }
         }
 
@@ -300,7 +305,9 @@ where TablesTable<T, U>: HistoryAware
                         match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
-                                    tables_names.push(table);
+                                    if !tables_names.contains(&table) {
+                                        tables_names.push(table.clone());
+                                    }
                                 }
                             }
                             Err(err) => {
@@ -312,7 +319,7 @@ where TablesTable<T, U>: HistoryAware
                 }
             }
 
-            if dbs.is_empty() {
+            if dbs.is_empty() || invalid_optimize {
                 dbs = match ctl.list_databases(&tenant).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
@@ -346,6 +353,7 @@ where TablesTable<T, U>: HistoryAware
                     || tables_names.len() > 10
                     || T
                     || invalid_tables_ids
+                    || invalid_optimize
                 {
                     match Self::list_tables(ctl, &tenant, db_name, T, U).await {
                         Ok(tables) => tables,

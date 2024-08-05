@@ -224,7 +224,13 @@ impl TransformUdfScript {
 impl Transform for TransformUdfScript {
     const NAME: &'static str = "UDFScriptTransform";
 
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
     fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            return Ok(data_block);
+        }
+
         let index = self.index_seq.fetch_add(1, Ordering::SeqCst);
         for func in &self.funcs {
             let num_rows = data_block.num_rows();
