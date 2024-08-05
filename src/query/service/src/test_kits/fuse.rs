@@ -448,7 +448,7 @@ pub async fn generate_snapshot_v5(
         fixture.new_query_ctx().await?.as_ref(),
         fuse_table.get_table_info(),
         location_gen,
-        snapshot.clone().into(),
+        snapshot.clone(),
         None,
         &None,
         &operator,
