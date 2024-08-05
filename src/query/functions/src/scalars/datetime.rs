@@ -108,6 +108,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // [date | timestamp] +/- number
     register_timestamp_add_sub(registry);
+
+    register_convert_timezone(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
