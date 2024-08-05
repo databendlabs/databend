@@ -347,18 +347,15 @@ where
     D: serde::Deserializer<'de>,
 {
     #[derive(Deserialize)]
-    struct Dummy {}
-
-    #[derive(Deserialize)]
     #[serde(untagged)]
     enum DefaultOnError<T> {
         Success(T),
-        Error(Dummy),
+        Error(serde::de::IgnoredAny),
     }
 
     let v = DefaultOnError::<T>::deserialize(deserializer);
-    match v.expect("must not fail") {
-        DefaultOnError::Success(v) => Ok(v),
-        DefaultOnError::Error(_) => Ok(T::default()),
+    match v {
+        Ok(DefaultOnError::Success(v)) => Ok(v),
+        _ => Ok(T::default()),
     }
 }
