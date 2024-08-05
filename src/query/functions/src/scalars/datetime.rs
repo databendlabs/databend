@@ -135,14 +135,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _| FunctionDomain::MayThrow,
-        eval_convert_timezone,
-    );
-
-    fn eval_convert_timezone(
-        target_tz: ValueRef<StringType>,
-        src_timestamp: ValueRef<StringType>,
-        ctx: &mut EvalContext,
-    ) -> Value<TimestampType> {
         vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
@@ -182,8 +174,8 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
                 output.push(timestamp.with_timezone(&t_tz).timestamp_micros());
             },
-        )(target_tz, src_timestamp, ctx)
-    }
+        ),
+    );
 }
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_date", &["str_to_date", "date"]);
