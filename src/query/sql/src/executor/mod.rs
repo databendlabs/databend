@@ -28,3 +28,4 @@ pub use physical_plan_builder::MutationBuildInfo;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use util::*;
+pub use format::format_partial_tree;
