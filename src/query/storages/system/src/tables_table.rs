@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -251,8 +252,8 @@ where TablesTable<T, U>: HistoryAware
 
         let mut get_stats = true;
         let mut get_ownership = true;
-        let mut owner_field_indexes: Vec<usize> = Vec::new();
-        let mut stats_fields_indexes: Vec<usize> = Vec::new();
+        let mut owner_field_indexes: HashSet<usize> = HashSet::new();
+        let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
         let schema = TablesTable::<T, U>::schema();
         for (i, name) in schema.fields.iter().enumerate() {
             match name.name().as_str() {
@@ -262,10 +263,10 @@ where TablesTable<T, U>: HistoryAware
                 | "index_size"
                 | "number_of_segments"
                 | "number_of_blocks" => {
-                    stats_fields_indexes.push(i);
+                    stats_fields_indexes.insert(i);
                 }
                 "owner" => {
-                    owner_field_indexes.push(i);
+                    owner_field_indexes.insert(i);
                 }
                 _ => {}
             }
@@ -446,7 +447,7 @@ where TablesTable<T, U>: HistoryAware
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
-                            if ownership.is_empty() || !get_ownership {
+                            if ownership.is_empty() {
                                 owner.push(None);
                             } else {
                                 owner.push(
@@ -463,7 +464,7 @@ where TablesTable<T, U>: HistoryAware
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
-                            if ownership.is_empty() || !get_ownership {
+                            if ownership.is_empty() {
                                 owner.push(None);
                             } else {
                                 owner.push(
