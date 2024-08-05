@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -247,8 +249,21 @@ where TablesTable<T, U>: HistoryAware
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
 
+        let mut get_stats = true;
+        let stats_fields_indexes = [12, 13, 14, 15, 16, 17];
+        let mut get_ownership = true;
+        let owner_field_index = [18];
         let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
+            if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
+                get_stats = v
+                    .iter()
+                    .any(|field_index| stats_fields_indexes.contains(field_index));
+                get_ownership = v
+                    .iter()
+                    .any(|field_index| owner_field_index.contains(field_index));
+            }
+
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                 invalid_optimize = find_eq_or_filter(
@@ -345,7 +360,11 @@ where TablesTable<T, U>: HistoryAware
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
+            let ownership = if get_ownership {
+                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+            } else {
+                HashMap::new()
+            };
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
@@ -409,7 +428,7 @@ where TablesTable<T, U>: HistoryAware
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
-                            if ownership.is_empty() {
+                            if ownership.is_empty() || !get_ownership {
                                 owner.push(None);
                             } else {
                                 owner.push(
@@ -426,7 +445,7 @@ where TablesTable<T, U>: HistoryAware
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
-                            if ownership.is_empty() {
+                            if ownership.is_empty() || !get_ownership {
                                 owner.push(None);
                             } else {
                                 owner.push(
@@ -456,19 +475,23 @@ where TablesTable<T, U>: HistoryAware
             for tbl in &database_tables {
                 // For performance considerations, allows using stale statistics data.
                 let require_fresh = false;
-                let stats = match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
-                    Ok(stats) => stats,
-                    Err(err) => {
-                        let msg = format!(
-                            "Unable to get table statistics on table {}: {}",
-                            tbl.name(),
-                            err
-                        );
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+                let stats = if get_stats {
+                    match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
+                        Ok(stats) => stats,
+                        Err(err) => {
+                            let msg = format!(
+                                "Unable to get table statistics on table {}: {}",
+                                tbl.name(),
+                                err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
 
-                        None
+                            None
+                        }
                     }
+                } else {
+                    None
                 };
                 num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
                 number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
