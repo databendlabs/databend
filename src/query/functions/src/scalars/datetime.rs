@@ -27,7 +27,7 @@ use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use databend_common_exception::ErrorCode;
-use databend_common_expression::error_to_null;
+use databend_common_expression::{error_to_null, Scalar};
 use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::date::string_to_date;
@@ -139,10 +139,10 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     );
 
     fn eval_convert_timezone(
-        target_tz: ValueRef<StringType>,
-        src_timestamp: ValueRef<StringType>,
+        target_tz: ValueRef::Scalar(StringType),
+        src_timestamp: ValueRef::Scalar(StringType),
         ctx: &mut EvalContext,
-    ) -> Value<TimestampType> {
+    ) -> ValueRef::Scalar(TimestampType) {
         vectorize_with_builder_2_arg::<ValueRef<StringType>, ValueRef<StringType>, TimestampType>(
             |target_tz, src_timestamp, output, ctx| {
                 // Parsing parameters
