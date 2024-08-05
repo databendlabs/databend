@@ -1,0 +1,7 @@
+drop test share and database
+create provider share and database\table
+create provider view and reference database\table
+create provider share and grant access
+create consumer catalog from share
+3
+4

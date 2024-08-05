@@ -656,27 +656,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     .map(|(_, table_id, _db_id, _table_info)| *table_id)
                     .clone()
                     .collect();
-                // grant reference table REFERENCE privileges
                 share_meta.grant_object_privileges(
                     &object,
-                    ShareGrantObjectPrivilege::ReferenceUsage,
+                    req.privilege,
                     req.grant_on,
                     view_reference_table,
                 )?;
                 let grant_object = ShareGrantObject::new(&object);
 
                 // condition
-                let mut condition: Vec<TxnCondition> = vec![
-                    txn_cond_seq(share_name_key, Eq, share_id_seq),
-                    txn_cond_seq(&id_key, Eq, share_meta_seq),
-                    txn_cond_seq(&grant_object, Eq, share_ids_seq),
-                ];
+                let mut condition: Vec<TxnCondition> = vec![];
                 add_txn_condition(&seq_and_id, &mut condition);
                 // if_then
-                let mut if_then = vec![
-                    txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
-                    txn_op_put(&grant_object, serialize_struct(&share_ids)?), /* (object) -> share_ids */
-                ];
+                let mut if_then = vec![];
                 // Some database has been created before `DatabaseIdToName`, so create it if need.
                 create_db_name_to_id_key_if_need(
                     self,
@@ -716,6 +708,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                         )?;
                     }
                 }
+
+                condition.extend(vec![
+                    txn_cond_seq(share_name_key, Eq, share_id_seq),
+                    txn_cond_seq(&id_key, Eq, share_meta_seq),
+                    txn_cond_seq(&grant_object, Eq, share_ids_seq),
+                ]);
+                if_then.extend(vec![
+                    txn_op_put(&id_key, serialize_struct(&share_meta)?), /* (share_id) -> share_meta */
+                    txn_op_put(&grant_object, serialize_struct(&share_ids)?), /* (object) -> share_ids */
+                ]);
 
                 let txn_req = TxnRequest {
                     condition,
