@@ -7513,7 +7513,7 @@ impl SchemaApiTestSuite {
                 name_ident: name_ident_dict.clone(),
             };
 
-            let res = mt.drop_index(req).await;
+            let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok())
         }
 

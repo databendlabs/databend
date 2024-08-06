@@ -4783,7 +4783,7 @@ async fn construct_drop_dictionary_txn_operations(
             Ok((dictionary_id, dictionary_id_seq))
         } else {
             return Err(KVAppError::AppError(AppError::UnknownDictionary(
-                UnknownDictionary::new(tenant_index.dictionary_name, "drop_dictionary"),
+                UnknownDictionary::new(tenant_index.dictionary_name.clone(), "drop_dictionary"),
             )));
         };
     }
@@ -4797,7 +4797,7 @@ async fn construct_drop_dictionary_txn_operations(
     // drop an dictionary with drop time
     if dictionary_meta.dropped_on.is_some() {
         return Err(KVAppError::AppError(AppError::DropDictionaryWithDropTime(
-            DropDictionaryWithDropTime::new(tenant_index.dictionary_name),
+            DropDictionaryWithDropTime::new(tenant_index.dictionary_name.clone()),
         )));
     }
     // update drop on time
