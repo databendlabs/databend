@@ -26,25 +26,25 @@ enum InnerObjectKind:ubyte {
 }
 
 table InnerObject {
-  point_offsets: [uint32];
-  ring_offsets: [uint32];
+  wkb_type: InnerObjectKind (id: 0);
+  point_offsets: [uint32] (id: 1);
+  ring_offsets: [uint32] (id: 2);
 
-  collection: [InnerObject];
+  collection: [InnerObject] (id: 3);
 
-  wkb_type: InnerObjectKind;
-  properties: [ubyte] (flexbuffer);
+  // For GeoJSON compatibility
+  properties: [ubyte] (id: 4, flexbuffer);
 }
 
 table Object {
-  point_offsets: [uint32];
-  ring_offsets: [uint32];
+  srid: int32 (id: 0);
+  point_offsets: [uint32] (id: 1);
+  ring_offsets: [uint32] (id: 2);
 
-  collection: [InnerObject];
-
-  srid: int32;
+  collection: [InnerObject] (id: 3);
 
   // For GeoJSON compatibility
-  properties: [ubyte] (flexbuffer);
+  properties: [ubyte] (id: 4, flexbuffer);
 }
  
 root_type Object;

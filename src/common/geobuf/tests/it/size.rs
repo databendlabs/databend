@@ -39,15 +39,15 @@ fn test_size() {
     run_size(
         &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
     );
-    // geo_buf_size:185, ewkb_size:163, points_size:128
+    // geo_buf_size:189, ewkb_size:163, points_size:128
     run_size(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
-    // geo_buf_size:205, ewkb_size:108, points_size:80
+    // geo_buf_size:201, ewkb_size:108, points_size:80
     run_size(&"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))");
-    // geo_buf_size:277, ewkb_size:164, points_size:128
+    // geo_buf_size:273, ewkb_size:164, points_size:128
     run_size(
         &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
     );
-    // geo_buf_size:353, ewkb_size:194, points_size:144
+    // geo_buf_size:349, ewkb_size:194, points_size:144
     run_size(
         &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
     );
