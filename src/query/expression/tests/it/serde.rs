@@ -25,6 +25,8 @@ use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_io::prelude::borsh_deserialize_from_slice;
 use databend_common_io::prelude::borsh_serialize_into_buf;
 
@@ -45,8 +47,10 @@ fn test_serde_column() -> Result<()> {
     }
 
     {
-        let vs = serde_json::to_vec(&plan).unwrap();
-        let new_plan: Plan = serde_json::from_slice(&vs).unwrap();
+        let mut vs = vec![];
+        bincode_serialize_into_buf(&mut vs, &plan).unwrap();
+        let vs = vs.as_slice();
+        let new_plan: Plan = bincode_deserialize_from_slice(vs).unwrap();
         assert_eq!(plan, new_plan);
     }
     Ok(())

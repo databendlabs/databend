@@ -14,6 +14,8 @@
 
 use bumpalo::Bump;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_io::prelude::bincode_deserialize_from_slice;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use ethnum::i256;
 
 use crate::read;
@@ -69,7 +71,7 @@ pub unsafe fn serialize_column_to_rowformat(
     rows: usize,
     address: &[*const u8],
     offset: usize,
-    mut scratch: &mut Vec<u8>,
+    scratch: &mut Vec<u8>,
 ) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
@@ -150,7 +152,7 @@ pub unsafe fn serialize_column_to_rowformat(
             for index in select_vector.iter().take(rows).copied() {
                 let s = other.index_unchecked(index).to_owned();
                 scratch.clear();
-                serde_json::to_writer(&mut scratch, &s).unwrap();
+                bincode_serialize_into_buf(scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
                 store(&(data.len() as u32), address[index].add(offset) as *mut u8);
@@ -510,7 +512,7 @@ unsafe fn row_match_generic_column(
         let data_address = read::<u64>(address as _) as usize as *const u8;
 
         let scalar = std::slice::from_raw_parts(data_address, len);
-        let scalar: Scalar = serde_json::from_slice(scalar).unwrap();
+        let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
 
         if scalar.as_ref() == value {
             temp_vector[match_count] = idx;

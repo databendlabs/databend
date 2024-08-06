@@ -89,6 +89,37 @@ pub struct TableSnapshot {
     pub table_statistics_location: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct TableSnapshotBincode {
+    format_version: FormatVersion,
+    snapshot_id: SnapshotId,
+    timestamp: Option<DateTime<Utc>>,
+    prev_table_seq: Option<u64>,
+    prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+    schema: TableSchema,
+    summary: Statistics,
+    segments: Vec<Location>,
+    cluster_key_meta: Option<ClusterKey>,
+    table_statistics_location: Option<String>,
+}
+
+impl From<TableSnapshotBincode> for TableSnapshot {
+    fn from(v: TableSnapshotBincode) -> Self {
+        Self {
+            format_version: v.format_version,
+            snapshot_id: v.snapshot_id,
+            timestamp: v.timestamp,
+            prev_table_seq: v.prev_table_seq,
+            prev_snapshot_id: v.prev_snapshot_id,
+            schema: v.schema,
+            summary: v.summary,
+            segments: v.segments,
+            cluster_key_meta: v.cluster_key_meta,
+            table_statistics_location: v.table_statistics_location,
+        }
+    }
+}
+
 impl TableSnapshot {
     pub fn new(
         snapshot_id: SnapshotId,
@@ -209,7 +240,18 @@ impl TableSnapshot {
         let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
         let snapshot_size: u64 = r.read_scalar::<u64>()?;
 
-        read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)
+        match encoding {
+            MetaEncoding::Bincode => {
+                let snapshot: TableSnapshotBincode =
+                    read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
+                Ok(snapshot.into())
+            }
+            MetaEncoding::MessagePack | MetaEncoding::Json => {
+                let snapshot: TableSnapshot =
+                    read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
+                Ok(snapshot)
+            }
+        }
     }
 
     #[inline]

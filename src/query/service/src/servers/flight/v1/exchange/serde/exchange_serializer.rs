@@ -30,6 +30,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
+use databend_common_io::prelude::bincode_serialize_into_buf;
 use databend_common_io::prelude::BinaryWrite;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -215,7 +216,7 @@ pub fn serialize_block(
 
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
-    serde_json::to_writer(&mut meta, &data_block.get_meta())
+    bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
         .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
     let (dict, values) = match data_block.is_empty() {

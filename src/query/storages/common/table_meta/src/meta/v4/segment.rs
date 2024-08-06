@@ -31,6 +31,8 @@ use crate::meta::format::MetaCompression;
 use crate::meta::format::SegmentHeader;
 use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
 use crate::meta::v2::BlockMeta;
+use crate::meta::v2::BlockMetaBincode;
+use crate::meta::v2::StatisticsBincode;
 use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
@@ -186,10 +188,28 @@ impl SegmentInfo {
             summary_size,
         } = decode_segment_header(&mut cursor)?;
 
-        let blocks: Vec<Arc<BlockMeta>> =
-            read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
-        let summary: Statistics =
-            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+        let (blocks, summary): (Vec<Arc<BlockMeta>>, Statistics) = match encoding {
+            MetaEncoding::Bincode => {
+                let blocks: Vec<Arc<BlockMetaBincode>> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: StatisticsBincode =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                (
+                    blocks
+                        .into_iter()
+                        .map(|v| Arc::new(v.as_ref().clone().into()))
+                        .collect(),
+                    summary.into(),
+                )
+            }
+            MetaEncoding::MessagePack | MetaEncoding::Json => {
+                let blocks: Vec<Arc<BlockMeta>> =
+                    read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+                let summary: Statistics =
+                    read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+                (blocks, summary)
+            }
+        };
 
         let mut segment = Self::new(blocks, summary);
 

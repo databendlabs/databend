@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt;
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
@@ -78,6 +81,37 @@ pub struct Statistics {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     pub cluster_stats: Option<ClusterStatistics>,
+}
+
+#[derive(serde::Deserialize)]
+pub struct StatisticsBincode {
+    row_count: u64,
+    block_count: u64,
+    perfect_block_count: u64,
+
+    uncompressed_byte_size: u64,
+    compressed_byte_size: u64,
+    index_size: u64,
+
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
+    col_stats: HashMap<ColumnId, ColumnStatistics>,
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
+    cluster_stats: Option<ClusterStatistics>,
+}
+
+impl From<StatisticsBincode> for Statistics {
+    fn from(v: StatisticsBincode) -> Self {
+        Self {
+            row_count: v.row_count,
+            block_count: v.block_count,
+            perfect_block_count: v.perfect_block_count,
+            uncompressed_byte_size: v.uncompressed_byte_size,
+            compressed_byte_size: v.compressed_byte_size,
+            index_size: v.index_size,
+            col_stats: v.col_stats,
+            cluster_stats: v.cluster_stats,
+        }
+    }
 }
 
 // conversions from old meta data
@@ -334,6 +368,86 @@ where D: serde::Deserializer<'de> {
                 .map_err(serde::de::Error::custom)
         })
         .transpose()
+}
+
+/// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
+///
+/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
+/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
+/// unsupported index types cannot be deserialized correctly.
+///
+/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
+/// item that fails to deserialize due to containing these unsupported index types.
+/// This allows the rest of the outer struct, including `col_stats` items that do not
+/// contain unsupported index types, to be deserialized successfully.
+///
+/// Note: This function is a workaround for a specific historical issue. If the data being
+/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
+/// the standard deserialization process can be used instead.
+pub fn deserialize_col_stats<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<ColumnId, ColumnStatistics>, D::Error>
+where D: serde::Deserializer<'de> {
+    deserializer.deserialize_map(ColStatsVisitor::new())
+}
+
+/// Deserializes the `cluster_stats` field of the `BlockMeta` and `Statistics` struct.
+///
+/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
+/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
+/// unsupported index types cannot be deserialized correctly.
+///
+/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
+/// item that fails to deserialize due to containing these unsupported index types.
+/// This allows the rest of the outer struct, including `col_stats` items that do not
+/// contain unsupported index types, to be deserialized successfully.
+///
+/// Note: This function is a workaround for a specific historical issue. If the data being
+/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
+/// the standard deserialization process can be used instead.
+pub fn deserialize_cluster_stats<'de, D>(
+    deserializer: D,
+) -> Result<Option<ClusterStatistics>, D::Error>
+where D: serde::Deserializer<'de> {
+    let v = <Option<ClusterStatistics> as serde::Deserialize>::deserialize(deserializer);
+    Ok(v.unwrap_or(None))
+}
+
+struct ColStatsVisitor<K, V> {
+    marker: PhantomData<fn() -> HashMap<K, V>>,
+}
+
+impl<K, V> ColStatsVisitor<K, V> {
+    fn new() -> Self {
+        ColStatsVisitor {
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'de, K, V> serde::de::Visitor<'de> for ColStatsVisitor<K, V>
+where
+    K: serde::Deserialize<'de> + Hash + Eq,
+    V: serde::Deserialize<'de>,
+{
+    type Value = HashMap<K, V>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map")
+    }
+
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where M: serde::de::MapAccess<'de> {
+        let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+        while let Some(key) = access.next_key()? {
+            if let Ok(value) = access.next_value() {
+                map.insert(key, value);
+            }
+        }
+
+        Ok(map)
+    }
 }
 
 /// Deserializes `T`, falling back to `Default::default()` on error.
