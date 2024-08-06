@@ -26,6 +26,7 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
+use databend_common_ast::ParseError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::check_date;
@@ -170,7 +171,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result_timestamp_naive = match src_timestamp.parse::<DateTime<Utc>>() {
+                let result_timestamp_naive :Result<NaiveDateTime, ParseError> = match src_timestamp.parse::<DateTime<Utc>>() {
                     Ok(_) => {
                         return ctx
                             .set_error(output.len(), format!("src_timestamp had a timezone"));
