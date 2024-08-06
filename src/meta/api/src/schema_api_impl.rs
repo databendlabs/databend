@@ -4353,11 +4353,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             {
                 condition.extend(vec![
-                    txn_cond_seq(tenant_dictionary, Eq, dictionary_id_seq),
+                    txn_cond_seq(&key_dbid_dict_name, Eq, dictionary_id_seq),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
                 ]);
                 if_then.extend(vec![
-                    txn_op_put(&tenant_dict, serialize_u64(dictionary_id)?), /*(tenant, db_id, dict_name) -> dict_id */
+                    txn_op_put(&key_dbid_dict_name, serialize_u64(dictionary_id)?), /*(db_id, dict_name) -> dict_id */
                     txn_op_put(&id_key,serialize_struct(&req.dictionary_meta)?),/*(dict_id) -> dict_meta*/
                 ]);
 
@@ -4754,9 +4754,9 @@ async fn construct_drop_table_txn_operations(
     }
 }
 
-async fn construct_drop_dictionary_txn_operations(
+async fn construct_drop_dictionary_txn_operations(//现在用的是 DictionaryNameIdent，改成 DBIdDictionaryName
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    tenant_index: &DictionaryNameIdent,
+    tenant_index: &DBIdDictionaryName,
     drop_if_exists: bool,
     if_delete: bool,
     condition: &mut Vec<TxnCondition>,
@@ -5502,7 +5502,7 @@ pub(crate) async fn get_index_or_err(
 /// Returns (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta)
 pub(crate) async fn get_dictionary_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &DictionaryNameIdent,
+    name_key: &DBIdDictionaryName,
 ) -> Result<(u64, u64, u64, Option<DictionaryMeta>), KVAppError> {
     let (dictionary_id_seq, dictionary_id) = get_u64_value(kv_api, name_key).await?;
     let id_key = DictionaryId { dictionary_id };

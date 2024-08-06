@@ -18,46 +18,38 @@ package databend_proto;
 
 import "metadata.proto";
 
-message DbIdDictionaryName {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  uint64 db_id = 1;
-  string dictionary_name = 2;
-}
-
-//Describes the metadata of the dictionary
+// Describes the metadata of a dictionary
 message DictionaryMeta {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
+ uint64 ver = 100;
+ uint64 min_reader_ver = 101;
 
-  //Dictionary name
-  string name = 1;
+ // Dictionary name
+ string name = 1;
 
-  //Dictionary data source
-  string source = 2;
+ // Dictionary data source, such as MySQL, PostgreSQL, ..
+ string source = 2;
 
-  //Dictionary configuration options
-  map<string, string> options = 3;
+ // Dictionary configuration options
+ map<string, string> options = 3;
 
-  //The schema of a table, such as column data types and other meta info.
-  DataSchema schema = 4;
-  
-  //ID of the primary key column
-  repeated uint64 primary_column_ids = 5;
+ // The schema of a dictionary
+ DataSchema schema = 4;
 
-  // Comment about this dictionary.
-  string comment = 6;
+ // Comments of each field
+ repeated string field_comments = 5;
 
-  // The time dictionary created.
-  string created_on = 7;
+ // ID of the primary key column
+ repeated uint32 primary_column_ids = 6;
 
-  // The time dictionary updated.
-  optional string updated_on = 8;
+ // Comment about this dictionary.
+ string comment = 7;
 
-  // The time dictionary dropped.
-  optional string dropped_on = 9;
+ // The time dictionary created.
+ string created_on = 8;
 
-  // Comments of each field.
-  repeated string field_comments = 25;
+ // The time dictionary updated.
+ optional string updated_on = 9;
+
+ // The time dictionary dropped.
+ optional string dropped_on = 10;
 }

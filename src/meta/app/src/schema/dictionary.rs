@@ -31,16 +31,16 @@ use super::CreateOption;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
-    pub name: String,
-    pub source: String,
-    pub options: BTreeMap<String, String>,
-    pub schema: Arc<TableSchema>,
-    pub primary_column_ids: Vec<u64>,
-    pub comment: String,
-    pub created_on: DateTime<Utc>,
-    pub dropped_on: Option<DateTime<Utc>>,
-    pub updated_on: Option<DateTime<Utc>>,
-    pub field_comments: Vec<String>,
+ pub name: String,
+ pub source: String,
+ pub options: BTreeMap<String, String>,
+ pub schema: Arc<TableSchema>,
+ pub field_comments: Vec<String>,
+ pub primary_column_ids: Vec<u32>,
+ pub comment: String,
+ pub created_on: DateTime<Utc>,
+ pub updated_on: Option<DateTime<Utc>>,
+ pub dropped_on: Option<DateTime<Utc>>,
 }
 
 impl Display for DictionaryMeta {
