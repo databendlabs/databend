@@ -170,25 +170,20 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result_timestamp_naive :Result<NaiveDateTime, chrono::ParseError> = match src_timestamp.parse::<DateTime<Utc>>() {
-                    Ok(_) => {
-                        return ctx
-                            .set_error(output.len(), format!("src_timestamp had a timezone"));
-                    }
-                    Err(_) => match src_timestamp.parse::<NaiveDateTime>() {
-                        Ok(naive_datetime) => Ok(naive_datetime),
-                        Err(e) => {
-                            return ctx.set_error(
-                                output.len(),
-                                format!("Unable to parse src_timestamp : {}", e),
-                            );
-                        }
-                    },
+                // Parsing src_timestamp
+                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
+                    Ok(utc_dt) => Ok(utc_dt),
+                    Err(_) => src_timestamp.parse::<NaiveDateTime>().map(|naive_dt| {
+                        Utc.from_utc_datetime(&naive_dt)
+                    }),
                 };
 
-                let timestamp = result_timestamp_naive.unwrap();
-                let timestamp_utc = Utc.from_utc_datetime(&timestamp).with_timezone(&s_tz);
-                output.push(timestamp_utc.with_timezone(&t_tz).timestamp_micros());
+                match result_timestamp {
+                    Ok(timestamp) => output.push(timestamp.with_timezone(&t_tz).timestamp_micros()),
+                    Err(e) => {
+                        return ctx.set_error(output.len(), format!("Unable to parse src_timestamp : {}", e));
+                    }
+                };
             },
         ),
     );
