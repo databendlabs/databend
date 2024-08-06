@@ -24,7 +24,7 @@ use databend_storages_common_table_meta::meta::SnapshotVersion;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::meta::V5_OBJET_KEY_PREFIX;
+use databend_storages_common_table_meta::meta::V5_OBJECT_KEY_PREFIX;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -261,7 +261,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V5(_) => {
                 // V5_OBJET_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
                 format!(
-                    "{}/{}/{V5_OBJET_KEY_PREFIX}{}{}",
+                    "{}/{}/{V5_OBJECT_KEY_PREFIX}{}{}",
                     prefix.as_ref(),
                     FUSE_TBL_SNAPSHOT_PREFIX,
                     id.simple(),

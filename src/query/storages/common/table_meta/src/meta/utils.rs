@@ -29,7 +29,7 @@ use databend_common_exception::ErrorCode;
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
-pub const V5_OBJET_KEY_PREFIX: char = 'g';
+pub const V5_OBJECT_KEY_PREFIX: char = 'g';
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
@@ -131,7 +131,7 @@ pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::
 
 #[inline]
 pub fn trim_v5_object_prefix(key: &str) -> &str {
-    key.strip_prefix(V5_OBJET_KEY_PREFIX).unwrap_or(key)
+    key.strip_prefix(V5_OBJECT_KEY_PREFIX).unwrap_or(key)
 }
 
 #[cfg(test)]
