@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
 use databend_common_base::runtime::profile::get_statistics_desc;
@@ -271,6 +272,46 @@ pub fn format_partial_tree(
 
             Ok(FormatTreeNode::with_children(
                 "HashJoin".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::RangeJoin(plan) => {
+            let left_child = format_partial_tree(&plan.left, metadata, profs)?;
+            let right_child = format_partial_tree(&plan.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                format!("RangeJoin: {}", plan.join_type),
+                children,
+            ))
+        }
+        PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
+        PhysicalPlan::UnionAll(union_all) => {
+            let left_child = format_partial_tree(&union_all.left, metadata, profs)?;
+            let right_child = format_partial_tree(&union_all.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &union_all.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, union_all.plan_id);
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                "UnionAll".to_string(),
                 children,
             ))
         }

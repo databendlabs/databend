@@ -28,10 +28,10 @@ use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
-use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
@@ -59,6 +59,7 @@ pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     config: ExplainConfig,
     kind: ExplainKind,
+    partial: bool,
     plan: Plan,
 }
 
@@ -167,7 +168,6 @@ impl Interpreter for ExplainInterpreter {
                         metadata,
                         bind_context.column_set(),
                         *ignore_result,
-                        true,
                     )
                     .await?
                 }
@@ -178,7 +178,6 @@ impl Interpreter for ExplainInterpreter {
                         &plan.metadata,
                         *plan.required_columns.clone(),
                         true,
-                        false,
                     )
                     .await?
                 }
@@ -250,12 +249,14 @@ impl ExplainInterpreter {
         plan: Plan,
         kind: ExplainKind,
         config: ExplainConfig,
+        partial: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
             ctx,
             plan,
             kind,
             config,
+            partial,
         })
     }
 
@@ -371,7 +372,6 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         required: ColumnSet,
         ignore_result: bool,
-        partial: bool,
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr, required).await?;
@@ -380,9 +380,8 @@ impl ExplainInterpreter {
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
 
-        let result = if partial {
-            format_partial_tree(&plan, metadata, &query_profiles)?
-                .format_pretty()?
+        let result = if self.partial {
+            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
             plan.format(metadata.clone(), query_profiles)?
                 .format_pretty()?
