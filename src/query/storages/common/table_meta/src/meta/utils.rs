@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::ops::Add;
+use std::path::Path;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -23,9 +24,12 @@ use chrono::Utc;
 use databend_common_base::base::uuid;
 use databend_common_base::base::uuid::NoContext;
 use databend_common_base::base::uuid::Uuid;
+use databend_common_exception::ErrorCode;
 
 use crate::meta::TableSnapshot;
 use crate::readers::snapshot_reader::TableSnapshotAccessor;
+
+pub const V5_OBJET_KEY_PREFIX: char = 'g';
 pub fn trim_timestamp_to_micro_second(ts: DateTime<Utc>) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(
         ts.year(),
@@ -101,6 +105,33 @@ pub fn uuid_from_date_time(ts: DateTime<Utc>) -> Uuid {
     let nanos = ts.timestamp_subsec_nanos();
     let uuid_ts = uuid::Timestamp::from_unix(NoContext, seconds as u64, nanos);
     Uuid::new_v7(uuid_ts)
+}
+
+// Extracts the UUID part from the object key.
+// For example, given a path like:
+//   bucket/root/115/122/_b/g0191114d30fd78b89fae8e5c88327725_v2.parquet
+//   bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet
+// The function should return: 0191114d30fd78b89fae8e5c88327725
+pub fn try_extract_uuid_str_from_path(path: &str) -> databend_common_exception::Result<&str> {
+    if let Some(file_stem) = Path::new(path).file_stem() {
+        let file_name = file_stem
+            .to_str()
+            .unwrap() // path is always valid utf8 string
+            .split('_')
+            .collect::<Vec<&str>>();
+        let uuid = trim_v5_object_prefix(file_name[0]);
+        Ok(uuid)
+    } else {
+        Err(ErrorCode::StorageOther(format!(
+            "Illegal object key, no file stem found: {}",
+            path
+        )))
+    }
+}
+
+#[inline]
+pub fn trim_v5_object_prefix(key: &str) -> &str {
+    key.strip_prefix(V5_OBJET_KEY_PREFIX).unwrap_or(key)
 }
 
 #[cfg(test)]

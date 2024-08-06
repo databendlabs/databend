@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 use parquet::format::FileMetaData;
@@ -39,14 +40,14 @@ use uuid::Uuid;
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<'a> BlockWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         Self {
             location_generator,

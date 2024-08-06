@@ -241,7 +241,7 @@ async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
     txn_mgr: TxnManagerRef,
-    table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<UpdateTableMetaReq> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;

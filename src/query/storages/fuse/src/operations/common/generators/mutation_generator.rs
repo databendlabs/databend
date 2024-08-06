@@ -21,6 +21,7 @@ use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
@@ -62,7 +63,7 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
         match &self.conflict_resolve_ctx {

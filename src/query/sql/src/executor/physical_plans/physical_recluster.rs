@@ -20,6 +20,7 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::physical_commit_sink::ReclusterInfoSideCar;
 use crate::executor::physical_plans::CommitSink;
@@ -35,7 +36,7 @@ pub struct Recluster {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
-    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {

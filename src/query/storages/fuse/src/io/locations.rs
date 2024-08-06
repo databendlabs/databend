@@ -16,12 +16,15 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_storages_common_table_meta::meta::trim_v5_object_prefix;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::meta::V5_OBJET_KEY_PREFIX;
 use uuid::Uuid;
 
 use crate::constants::FUSE_TBL_BLOCK_PREFIX;
@@ -54,6 +57,8 @@ static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
+
+    // TODO(sky) solely for test?, consider use mocked generator for testing
     with_g: bool,
 }
 
@@ -79,7 +84,7 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_block_location(
         &self,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> (Location, Uuid) {
         let part_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         let location_path = format!(
@@ -107,10 +112,7 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn gen_segment_info_location(
-        &self,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
-    ) -> String {
+    pub fn gen_segment_info_location(&self, table_meta_timestamps: TableMetaTimestamps) -> String {
         let segment_uuid = uuid_from_date_time(table_meta_timestamps.base_timestamp);
         format!(
             "{}/{}/{}{}_v{}.mpk",
@@ -192,7 +194,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = splits[len - 1].strip_prefix('g').unwrap_or(splits[len - 1]);
+        let block_name = trim_v5_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
@@ -204,7 +206,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = splits[len - 1].strip_prefix('g').unwrap_or(splits[len - 1]);
+        let block_name = trim_v5_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
@@ -222,7 +224,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = splits[len - 1].strip_prefix('g').unwrap_or(splits[len - 1]);
+        let block_name = trim_v5_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         format!(
             "{}/{}/{}_v{}.parquet",
@@ -257,9 +259,9 @@ impl SnapshotLocationCreator for SnapshotVersion {
                 )
             }
             SnapshotVersion::V5(_) => {
-                // 'g' is larger than all the simple form uuid generated previously
+                // V5_OBJET_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
                 format!(
-                    "{}/{}/g{}{}",
+                    "{}/{}/{V5_OBJET_KEY_PREFIX}{}{}",
                     prefix.as_ref(),
                     FUSE_TBL_SNAPSHOT_PREFIX,
                     id.simple(),

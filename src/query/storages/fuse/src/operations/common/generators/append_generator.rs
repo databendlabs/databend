@@ -28,6 +28,7 @@ use databend_common_sql::field_default_value;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 use log::warn;
@@ -118,7 +119,7 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
-        table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {

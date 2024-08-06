@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
@@ -35,7 +36,7 @@ pub struct CompactSource {
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
-    pub table_meta_timestamps: databend_storages_common_table_meta::meta::TableMetaTimestamps,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
