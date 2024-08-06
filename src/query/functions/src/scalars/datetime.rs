@@ -1100,78 +1100,188 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _, _>(
         "to_yyyymm",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMM, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToYYYYMM, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _, _>(
         "to_yyyymmdd",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMMDD, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToYYYYMMDD, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
         "to_yyyymmddhh",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMMDDHH, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt64Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToYYYYMMDDHH, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
         "to_yyyymmddhhmmss",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt64Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt64Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
         "to_year",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToYear, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt16Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToYear, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
         "to_quarter",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToQuarter, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt8Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToQuarter, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
         "to_month",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToMonth, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt8Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToMonth, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
         "to_day_of_year",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt16Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfYear, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt16Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToDayOfYear, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
         "to_day_of_month",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfMonth, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt8Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToDayOfMonth, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt8Type, _, _>(
         "to_day_of_week",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt8Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToDayOfWeek, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt8Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToDayOfWeek, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _, _>(
         "to_week_of_year",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
-            ToNumberImpl::eval_date::<ToWeekOfYear, _>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, UInt32Type>(|val, output, ctx| {
+            match ToNumberImpl::eval_date::<ToWeekOfYear, _>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     // timestamp
@@ -1561,8 +1671,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_monday",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToLastMonday>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToLastMonday>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -1576,8 +1696,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_start_of_week",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToLastSunday>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToLastSunday>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -1590,11 +1720,31 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "to_start_of_week",
         |_, _, _| FunctionDomain::Full,
-        vectorize_2_arg::<DateType, Int64Type, DateType>(|val, mode, ctx| {
+        vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|val, mode, output, ctx| {
             if mode == 0 {
-                DateRounder::eval_date::<ToLastSunday>(val, ctx.func_ctx.tz)
+                match DateRounder::eval_date::<ToLastSunday>(
+                    val,
+                    ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_dst_hour_fix,
+                ) {
+                    Ok(t) => output.push(t),
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                        output.push(0);
+                    }
+                }
             } else {
-                DateRounder::eval_date::<ToLastMonday>(val, ctx.func_ctx.tz)
+                match DateRounder::eval_date::<ToLastMonday>(
+                    val,
+                    ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_dst_hour_fix,
+                ) {
+                    Ok(t) => output.push(t),
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                        output.push(0);
+                    }
+                }
             }
         }),
     );
@@ -1613,8 +1763,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_start_of_month",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfMonth>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToStartOfMonth>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -1628,8 +1788,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_start_of_quarter",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfQuarter>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToStartOfQuarter>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -1643,8 +1813,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_start_of_year",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfYear>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToStartOfYear>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
@@ -1658,8 +1838,18 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, DateType, _, _>(
         "to_start_of_iso_year",
         |_, _| FunctionDomain::Full,
-        vectorize_1_arg::<DateType, DateType>(|val, ctx| {
-            DateRounder::eval_date::<ToStartOfISOYear>(val, ctx.func_ctx.tz)
+        vectorize_with_builder_1_arg::<DateType, DateType>(|val, output, ctx| {
+            match DateRounder::eval_date::<ToStartOfISOYear>(
+                val,
+                ctx.func_ctx.tz,
+                ctx.func_ctx.enable_dst_hour_fix,
+            ) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
+                    output.push(0);
+                }
+            }
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(

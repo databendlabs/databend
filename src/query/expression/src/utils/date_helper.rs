@@ -28,6 +28,7 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::cursor_ext::unwrap_local_time;
 use num_traits::AsPrimitive;
 
 use crate::types::date::check_date;
@@ -406,14 +407,14 @@ impl ToNumberImpl {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<R>, R>(date: i32, tz: TzLUT) -> R {
-        let dt = date
-            .to_date(tz.tz)
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_local_timezone(tz.tz)
-            .unwrap();
-        T::to_number(&dt)
+    pub fn eval_date<T: ToNumber<R>, R>(
+        date: i32,
+        tz: TzLUT,
+        enable_dst_hour_fix: bool,
+    ) -> Result<R> {
+        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
+        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
+        Ok(T::to_number(&dt))
     }
 }
 
@@ -534,14 +535,14 @@ impl DateRounder {
         T::to_number(&dt)
     }
 
-    pub fn eval_date<T: ToNumber<i32>>(date: i32, tz: TzLUT) -> i32 {
-        let dt = date
-            .to_date(tz.tz)
-            .and_hms_opt(0, 0, 0)
-            .unwrap()
-            .and_local_timezone(tz.tz)
-            .unwrap();
-        T::to_number(&dt)
+    pub fn eval_date<T: ToNumber<i32>>(
+        date: i32,
+        tz: TzLUT,
+        enable_dst_hour_fix: bool,
+    ) -> Result<i32> {
+        let naive_dt = date.to_date(tz.tz).and_hms_opt(0, 0, 0).unwrap();
+        let dt = unwrap_local_time(&tz.tz, enable_dst_hour_fix, &naive_dt)?;
+        Ok(T::to_number(&dt))
     }
 }
 
@@ -554,8 +555,8 @@ fn datetime_to_date_inner_number(date: &DateTime<Tz>) -> i32 {
         .signed_duration_since(
             NaiveDate::from_ymd_opt(1970, 1, 1)
                 .unwrap()
-                .and_hms_opt(0, 0, 0)
-                .unwrap(),
+                // if dt is dst, should respect dt.time
+                .and_time(date.time()),
         )
         .num_days() as i32
 }
@@ -569,13 +570,15 @@ pub struct ToStartOfISOYear;
 
 impl ToNumber<i32> for ToLastMonday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_monday() as i32
+        // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_monday() as i32
     }
 }
 
 impl ToNumber<i32> for ToLastSunday {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(dt) - dt.weekday().num_days_from_sunday() as i32
+        // datetime_to_date_inner_number just calc naive_date, so weekday also need only calc naive_date
+        datetime_to_date_inner_number(dt) - dt.date_naive().weekday().num_days_from_sunday() as i32
     }
 }
 
