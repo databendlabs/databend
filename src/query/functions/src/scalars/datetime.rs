@@ -188,7 +188,7 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 };
 
                 let timestamp = result_timestamp_naive.unwrap();
-                let timestamp_utc = Utc.from_utc_datetime(&timestamp);
+                let timestamp_utc = Utc.from_utc_datetime(&timestamp).with_timezone(&s_tz);
                 output.push(timestamp_utc.with_timezone(&t_tz).timestamp_micros());
             },
         ),
