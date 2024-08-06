@@ -203,6 +203,136 @@ impl PhysicalPlan {
     }
 }
 
+// The method will only collect scan,filter and join nodes
+// It's only used to debug cardinality estimator.
+#[recursive::recursive]
+pub fn format_partial_tree(
+    plan: &PhysicalPlan,
+    metadata: &MetadataRef,
+    profs: &HashMap<u32, PlanProfile>,
+) -> Result<FormatTreeNode<String>> {
+    match plan {
+        PhysicalPlan::TableScan(plan) => {
+            if plan.table_index == Some(DUMMY_TABLE_INDEX) {
+                return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+            }
+            let table_name = match plan.table_index {
+                None => format!(
+                    "{}.{}",
+                    plan.source.source_info.catalog_name(),
+                    plan.source.source_info.desc()
+                ),
+                Some(table_index) => {
+                    let metadata = metadata.read().clone();
+                    let table = metadata.table(table_index).clone();
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+                }
+            };
+            let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+
+            Ok(FormatTreeNode::with_children(
+                "TableScan".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::Filter(plan) => {
+            let filter = plan
+                .predicates
+                .iter()
+                .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ");
+            let mut children = vec![FormatTreeNode::new(format!("filters: [{filter}]"))];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            children.push(format_partial_tree(&plan.input, metadata, profs)?);
+            Ok(FormatTreeNode::with_children(
+                "Filter".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::HashJoin(plan) => {
+            let build_child = format_partial_tree(&plan.build, metadata, profs)?;
+            let probe_child = format_partial_tree(&plan.probe, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            children.push(build_child);
+            children.push(probe_child);
+
+            Ok(FormatTreeNode::with_children(
+                "HashJoin".to_string(),
+                children,
+            ))
+        }
+        PhysicalPlan::RangeJoin(plan) => {
+            let left_child = format_partial_tree(&plan.left, metadata, profs)?;
+            let right_child = format_partial_tree(&plan.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                format!("RangeJoin: {}", plan.join_type),
+                children,
+            ))
+        }
+        PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
+        PhysicalPlan::UnionAll(union_all) => {
+            let left_child = format_partial_tree(&union_all.left, metadata, profs)?;
+            let right_child = format_partial_tree(&union_all.right, metadata, profs)?;
+            let mut children = vec![];
+            if let Some(info) = &union_all.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, union_all.plan_id);
+            let children = vec![
+                FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
+                FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
+            ];
+
+            Ok(FormatTreeNode::with_children(
+                "UnionAll".to_string(),
+                children,
+            ))
+        }
+        other => {
+            let children = other
+                .children()
+                .map(|child| format_partial_tree(child, metadata, profs))
+                .collect::<Result<Vec<FormatTreeNode<String>>>>()?;
+
+            if children.len() == 1 {
+                Ok(children[0].clone())
+            } else {
+                Ok(FormatTreeNode::with_children(
+                    format!("{:?}", other),
+                    children,
+                ))
+            }
+        }
+    }
+}
+
 #[recursive::recursive]
 fn to_format_tree(
     plan: &PhysicalPlan,
@@ -373,6 +503,28 @@ fn append_profile_info(
                     desc.human_format(prof.statistics[desc.index])
                 )));
             }
+        }
+    }
+}
+
+fn append_output_rows_info(
+    children: &mut Vec<FormatTreeNode<String>>,
+    profs: &HashMap<u32, PlanProfile>,
+    plan_id: u32,
+) {
+    if let Some(prof) = profs.get(&plan_id) {
+        for (_, desc) in get_statistics_desc().iter() {
+            if desc.display_name != "output rows" {
+                continue;
+            }
+            if prof.statistics[desc.index] != 0 {
+                children.push(FormatTreeNode::new(format!(
+                    "{}: {}",
+                    desc.display_name.to_lowercase(),
+                    desc.human_format(prof.statistics[desc.index])
+                )));
+            }
+            break;
         }
     }
 }

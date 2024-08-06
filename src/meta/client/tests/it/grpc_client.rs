@@ -50,8 +50,9 @@ async fn test_grpc_client_timeout() -> anyhow::Result<()> {
 
     if let Err(err) = res {
         let got = err.to_string();
-        let expect = "ConnectionError:  source: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
-        assert_eq!(expect, got);
+        assert!(got.starts_with(
+            "ConnectionError: failed to connect to meta-service source: failed after 4 retries:"
+        ));
     } else {
         panic!("expect error, but got ok");
     }

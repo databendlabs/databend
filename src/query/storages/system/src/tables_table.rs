@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -247,8 +250,39 @@ where TablesTable<T, U>: HistoryAware
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
 
+        let mut get_stats = true;
+        let mut get_ownership = true;
+        let mut owner_field_indexes: HashSet<usize> = HashSet::new();
+        let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
+        let schema = TablesTable::<T, U>::schema();
+        for (i, name) in schema.fields.iter().enumerate() {
+            match name.name().as_str() {
+                "num_rows"
+                | "data_size"
+                | "data_compressed_size"
+                | "index_size"
+                | "number_of_segments"
+                | "number_of_blocks" => {
+                    stats_fields_indexes.insert(i);
+                }
+                "owner" => {
+                    owner_field_indexes.insert(i);
+                }
+                _ => {}
+            }
+        }
+
         let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
+            if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
+                get_stats = v
+                    .iter()
+                    .any(|field_index| stats_fields_indexes.contains(field_index));
+                get_ownership = v
+                    .iter()
+                    .any(|field_index| owner_field_indexes.contains(field_index));
+            }
+
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                 invalid_optimize = find_eq_or_filter(
@@ -345,7 +379,11 @@ where TablesTable<T, U>: HistoryAware
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
+            let ownership = if get_ownership {
+                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+            } else {
+                HashMap::new()
+            };
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
@@ -456,19 +494,23 @@ where TablesTable<T, U>: HistoryAware
             for tbl in &database_tables {
                 // For performance considerations, allows using stale statistics data.
                 let require_fresh = false;
-                let stats = match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
-                    Ok(stats) => stats,
-                    Err(err) => {
-                        let msg = format!(
-                            "Unable to get table statistics on table {}: {}",
-                            tbl.name(),
-                            err
-                        );
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+                let stats = if get_stats {
+                    match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
+                        Ok(stats) => stats,
+                        Err(err) => {
+                            let msg = format!(
+                                "Unable to get table statistics on table {}: {}",
+                                tbl.name(),
+                                err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
 
-                        None
+                            None
+                        }
                     }
+                } else {
+                    None
                 };
                 num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
                 number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
