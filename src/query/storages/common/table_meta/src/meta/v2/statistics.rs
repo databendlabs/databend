@@ -77,14 +77,16 @@ pub struct Statistics {
     pub compressed_byte_size: u64,
     pub index_size: u64,
 
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
 }
 
+/// An exact copy of `Statistics` with specific `deserialize_with` implementation that can
+/// correctly deserialize legacy MessagePack format.
 #[derive(serde::Deserialize)]
-pub struct StatisticsBincode {
+pub struct StatisticsMessagePack {
     row_count: u64,
     block_count: u64,
     perfect_block_count: u64,
@@ -93,14 +95,14 @@ pub struct StatisticsBincode {
     compressed_byte_size: u64,
     index_size: u64,
 
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
 }
 
-impl From<StatisticsBincode> for Statistics {
-    fn from(v: StatisticsBincode) -> Self {
+impl From<StatisticsMessagePack> for Statistics {
+    fn from(v: StatisticsMessagePack) -> Self {
         Self {
             row_count: v.row_count,
             block_count: v.block_count,

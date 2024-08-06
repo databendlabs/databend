@@ -31,6 +31,7 @@ use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::v2;
+use crate::meta::v2::StatisticsMessagePack;
 use crate::meta::v3;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
@@ -89,22 +90,24 @@ pub struct TableSnapshot {
     pub table_statistics_location: Option<String>,
 }
 
+/// An exact copy of `TableSnapshot` with specific `deserialize_with` implementation
+/// in `summary` that can correctly deserialize legacy MessagePack format.
 #[derive(Deserialize)]
-pub struct TableSnapshotBincode {
+pub struct TableSnapshotMessagePack {
     format_version: FormatVersion,
     snapshot_id: SnapshotId,
     timestamp: Option<DateTime<Utc>>,
     prev_table_seq: Option<u64>,
     prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
     schema: TableSchema,
-    summary: Statistics,
+    summary: StatisticsMessagePack,
     segments: Vec<Location>,
     cluster_key_meta: Option<ClusterKey>,
     table_statistics_location: Option<String>,
 }
 
-impl From<TableSnapshotBincode> for TableSnapshot {
-    fn from(v: TableSnapshotBincode) -> Self {
+impl From<TableSnapshotMessagePack> for TableSnapshot {
+    fn from(v: TableSnapshotMessagePack) -> Self {
         Self {
             format_version: v.format_version,
             snapshot_id: v.snapshot_id,
@@ -112,7 +115,7 @@ impl From<TableSnapshotBincode> for TableSnapshot {
             prev_table_seq: v.prev_table_seq,
             prev_snapshot_id: v.prev_snapshot_id,
             schema: v.schema,
-            summary: v.summary,
+            summary: v.summary.into(),
             segments: v.segments,
             cluster_key_meta: v.cluster_key_meta,
             table_statistics_location: v.table_statistics_location,
@@ -241,12 +244,12 @@ impl TableSnapshot {
         let snapshot_size: u64 = r.read_scalar::<u64>()?;
 
         match encoding {
-            MetaEncoding::Bincode => {
-                let snapshot: TableSnapshotBincode =
+            MetaEncoding::MessagePack => {
+                let snapshot: TableSnapshotMessagePack =
                     read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
                 Ok(snapshot.into())
             }
-            MetaEncoding::MessagePack | MetaEncoding::Json => {
+            MetaEncoding::Bincode | MetaEncoding::Json => {
                 let snapshot: TableSnapshot =
                     read_and_deserialize(&mut r, snapshot_size, &encoding, &compression)?;
                 Ok(snapshot)

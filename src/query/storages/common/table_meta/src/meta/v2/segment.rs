@@ -66,10 +66,10 @@ pub struct BlockMeta {
     pub row_count: u64,
     pub block_size: u64,
     pub file_size: u64,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     pub location: Location,
@@ -85,15 +85,17 @@ pub struct BlockMeta {
     pub create_on: Option<DateTime<Utc>>,
 }
 
+/// An exact copy of `BlockMeta` with specific `deserialize_with` implementation that
+/// can correctly deserialize legacy MessagePack format.
 #[derive(Clone, Deserialize)]
-pub struct BlockMetaBincode {
+pub struct BlockMetaMessagePack {
     row_count: u64,
     block_size: u64,
     file_size: u64,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
     col_metas: HashMap<ColumnId, ColumnMeta>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     location: Location,
@@ -109,8 +111,8 @@ pub struct BlockMetaBincode {
     create_on: Option<DateTime<Utc>>,
 }
 
-impl From<BlockMetaBincode> for BlockMeta {
-    fn from(b: BlockMetaBincode) -> Self {
+impl From<BlockMetaMessagePack> for BlockMeta {
+    fn from(b: BlockMetaMessagePack) -> Self {
         Self {
             row_count: b.row_count,
             block_size: b.block_size,
