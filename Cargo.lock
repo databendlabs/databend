@@ -11085,7 +11085,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -11107,7 +11107,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "chrono",
  "proc-macro2",

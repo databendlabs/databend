@@ -38,10 +38,12 @@ use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_sled_store::openraft::ToStorageResult;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::Endpoint;
@@ -793,6 +795,43 @@ impl RaftNetworkV2<TypeConfig> for Network {
         }
 
         self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
+    }
+
+    async fn transfer_leader(
+        &mut self,
+        req: TransferLeaderRequest,
+        _option: RPCOption,
+    ) -> Result<(), RPCError> {
+        info!(id = self.id, target = self.target, req :? = req; "{}", func_name!());
+
+        let r = pb::TransferLeaderRequest::from(req);
+
+        let req = GrpcHelper::traced_req(r);
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection transfer_leader take_client()")
+            .await?;
+
+        let grpc_res = client.transfer_leader(req).await;
+        info!(
+            "{}: resp from target={} {:?}",
+            func_name!(),
+            self.target,
+            grpc_res
+        );
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target; "{} failed: {}", func_name!(), e);
+            }
+        }
+
+        grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        Ok(())
     }
 
     /// When a `Unreachable` error is returned from the `Network`,
