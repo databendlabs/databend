@@ -39,9 +39,12 @@ fn test_datetime() {
     test_convert_timezone(file);
 }
 
-fn test_convert_timezone(file: &mut impl Write)
-{
-    run_ast(file, "convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')", &[]);
+fn test_convert_timezone(file: &mut impl Write) {
+    run_ast(
+        file,
+        "convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')",
+        &[],
+    );
 }
 
 fn test_to_timestamp(file: &mut impl Write) {
