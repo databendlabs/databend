@@ -272,8 +272,8 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
                 }
 
                 if self.stack.len() == 1 && object_kind == ObjectKind::GeometryCollection {
-                    let geometrys = self.stack.pop().unwrap();
-                    let collection = Some(self.fbb.create_vector(&geometrys));
+                    let geometries = self.stack.pop().unwrap();
+                    let collection = Some(self.fbb.create_vector(&geometries));
                     let properties = self.create_properties();
                     let srid = self.srid;
 
@@ -307,8 +307,8 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
                         })
                     }
                     ObjectKind::GeometryCollection => {
-                        let geometrys = self.stack.pop().unwrap();
-                        let collection = Some(self.fbb.create_vector(&geometrys));
+                        let geometries = self.stack.pop().unwrap();
+                        let collection = Some(self.fbb.create_vector(&geometries));
                         let properties = self.create_properties();
                         geo_buf::InnerObject::create(&mut self.fbb, &geo_buf::InnerObjectArgs {
                             wkb_type: object_kind.into(),
@@ -322,8 +322,8 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
                 Ok(())
             }
             FeatureKind::FeatureCollection => {
-                let geometrys = self.stack.pop().unwrap();
-                let collection = Some(self.fbb.create_vector(&geometrys));
+                let geometries = self.stack.pop().unwrap();
+                let collection = Some(self.fbb.create_vector(&geometries));
                 let properties = self.create_properties();
                 let srid = self.srid;
 

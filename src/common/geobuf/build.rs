@@ -140,7 +140,7 @@ pub enum Error {
         "output directory was not set. Either call .set_output_path() or set the `OUT_DIR` env var"
     )]
     OutputDirNotSet,
-    /// Returned when an issue arrises when creating the symlink. Typically this will be things
+    /// Returned when an issue arises when creating the symlink. Typically this will be things
     /// like permissions, a directory existing already at the file location, or other filesystem
     /// errors.
     #[error("failed to create symlink path requested: {0}")]
