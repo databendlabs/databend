@@ -69,6 +69,7 @@ use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DictionaryNameIdent;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
+use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -7509,7 +7510,7 @@ impl SchemaApiTestSuite {
             info!("--- drop dictionary with if_exists = true");
             let req = DropDictionaryReq {
                 if_exists: true,
-                name_ident: name_ident_dict.clone,
+                name_ident: name_ident_dict.clone(),
             };
 
             let res = mt.drop_index(req).await;
