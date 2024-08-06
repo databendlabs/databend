@@ -4290,7 +4290,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
                 SeqV::from_tuple((seq, id))
             };
-            let key_dbid = DatabaseId{ db_id: db_id.data};
             let key_dbid_dict_name = DBIdDictionaryName {
                 db_id : db_id.data,
                 dictionary_name: req.name_ident.dictionary_name.clone(),
@@ -4330,11 +4329,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let dictionary_id = fetch_id(self, IdGenerator::dictionary_id()).await?;
             let id_key = DictionaryId { dictionary_id };
             let id_to_name_key = DictionaryIdToName { dictionary_id };
-            let tenant_dict = DBIdDictionaryNameIdent{
-                tenant: tenant_dictionary.tenant.clone(),
-                db_id: db_id.data,
-                dict_name: tenant_dictionary.dictionary_name.clone(),
-            };
 
             debug!(
                 dictionary_id = dictionary_id,
@@ -4387,7 +4381,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
             SeqV::from_tuple((seq, id))
         };
-        let key_dbid = DatabaseId{ db_id: db_id.data};
         let key_dbid_dict_name = DBIdDictionaryName {
             db_id : db_id.data,
             dictionary_name: req.name_ident.dictionary_name.clone(),
@@ -4445,7 +4438,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
             SeqV::from_tuple((seq, id))
         };
-        let key_dbid = DatabaseId{ db_id: db_id.data};
         let key_dbid_dict_name = DBIdDictionaryName {
             db_id : db_id.data,
             dictionary_name: req.name_ident.dictionary_name.clone(),
@@ -4489,7 +4481,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
        
         // Get dictionary id list by `prefix_list` "<prefix>/<tenant>"
-        let ident = DictionaryNameIdent::new(req.inner.tenant() ,"dummy_db", "dummy_dict");
         let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(req.inner.database_name()).done();
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());

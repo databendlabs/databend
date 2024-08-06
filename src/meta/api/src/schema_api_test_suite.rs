@@ -135,7 +135,6 @@ use databend_common_meta_app::schema::VirtualColumnIdent;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
-use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
@@ -7146,7 +7145,6 @@ impl SchemaApiTestSuite {
 
         let db_name = "db1";
         let tbl_name = "tb2";
-        let table_id;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -7378,7 +7376,6 @@ impl SchemaApiTestSuite {
         {
             util.create_db().await?;
             let (tid, _table_meta) = util.create_table().await?;
-            table_id = tid;
         }
 
         let schema = || {
@@ -7438,8 +7435,6 @@ impl SchemaApiTestSuite {
                 name_ident: name_ident_dict.clone(),
                 dictionary_meta: dictionary_meta(created_on),
             };
-            let res = mt.create_dictionary(req).await?;
-            dict_id = res.dictionary_id;
             mt.create_dictionary(req).await?;
         }
 
