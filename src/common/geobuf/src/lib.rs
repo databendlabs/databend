@@ -31,7 +31,6 @@ pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Wkt;
 
 #[allow(dead_code)]
-
 pub struct Column {
     buf: Vec<u8>,
     buf_offsets: Vec<u64>,

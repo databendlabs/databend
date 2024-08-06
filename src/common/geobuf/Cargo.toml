@@ -12,7 +12,7 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
-flatbuffers = "24.3.25"
+flatbuffers = "=24.3.25"
 flexbuffers = "2.0.0"
 geo = { workspace = true }
 geojson = { version = "0.24.1" }
@@ -21,3 +21,9 @@ geozero = { workspace = true }
 ordered-float = { workspace = true }
 serde_json = { workspace = true }
 wkt = { version = "0.10.3" }
+
+[build-dependencies]
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
