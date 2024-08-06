@@ -463,10 +463,11 @@ impl Decimal for i128 {
         } else {
             (i256::from(self) * i256::from(rhs) - div / 2) / div
         };
-        if *res.high() == 0 {
-            Some(*res.low())
-        } else {
+
+        if !(i128::MIN..=i128::MAX).contains(&res) {
             None
+        } else {
+            Some(res.as_i128())
         }
     }
 
