@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,6 +36,7 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
 use crate::sessions::TableContext;
+
 const FUSE_VACUUM2_ENGINE_NAME: &str = "fuse_vacuum2_table";
 struct Vacuum2TableArgs {
     arg_database_name: String,
@@ -84,6 +86,8 @@ impl SimpleTableFunc for FuseVacuum2Table {
         let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
             ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
         })?;
+
+        tbl.check_mutable()?;
 
         let col: Vec<String> = self.handler.do_vacuum2(tbl, ctx.clone()).await?;
 
