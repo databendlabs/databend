@@ -178,7 +178,6 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }),
                 };
 
-
                 match result_timestamp {
                     Ok(timestamp) => output.push(timestamp.with_timezone(&t_tz).timestamp_micros()),
                     Err(e) => {
