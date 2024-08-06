@@ -914,13 +914,12 @@ impl DecimalDataType {
         let mut scale = a.scale().max(b.scale());
         let mut precision = a.max_result_precision(b);
 
-        let multiply_precision = a.precision() + b.precision();
-
+        // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
         if is_multiply {
-            scale = a.scale() + b.scale();
+            scale = (a.scale() + b.scale()).min(a.scale().max(b.scale()).max(12));
+            let multiply_precision = a.precision() + b.precision();
             precision = precision.min(multiply_precision);
         } else if is_divide {
-            // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
             let l = a.leading_digits() + b.scale();
             scale = a.scale().max((a.scale() + 6).min(12));
             // P = L + S
