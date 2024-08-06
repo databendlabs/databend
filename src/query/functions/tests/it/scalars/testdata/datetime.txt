@@ -3358,6 +3358,7 @@ output type    : Timestamp
 output domain  : {1630812366000000..=1630812366000000}
 output         : '2021-09-05 03:26:06.000000'
 
+<<<<<<< HEAD
 
 ast            : date_diff(year, to_date(0), to_date(10000))
 raw expr       : diff_years(to_date(10000), to_date(0))
@@ -3575,3 +3576,12 @@ output domain  : {-31622400..=-31622400}
 output         : -31622400
 
 
+=======
+ast            : convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')
+raw expr       : convert_timezone('2024-08-06T14:30:00+02:00','America/New_York')
+checked expr   : convert_timezone<Timestamp, String, String>('2024-08-06T14:30:00+02:00','America/New_York')
+optimized expr : '2024-08-06T08:30:00.000000'
+output type    : Timestamp
+output domain  : {'2024-08-06T08:30:00.000000'..='2024-08-06T08:30:00.000000'}
+output         : '2024-08-06 08:30:00.000000'
+>>>>>>> d5555c7234 (Correction unit test 8)
