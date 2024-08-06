@@ -135,14 +135,14 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 }
 
 fn register_convert_timezone(registry: &mut FunctionRegistry) {
-    /* 2 arguments function [target_timezone, src_timestamp] */
+    // 2 arguments function [target_timezone, src_timestamp]
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _| FunctionDomain::MayThrow,
         eval_convert_timezone,
     );
 
-    /* 3 arguments function [target_timezone, src_timestamp, src_timezone] */
+    // 3 arguments function [target_timezone, src_timestamp, src_timezone]
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _, _| FunctionDomain::MayThrow,
@@ -167,13 +167,12 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>()
-                {
+                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
                     Ok(_) => src_timestamp.parse::<DateTime<Utc>>(),
                     Err(e) => {
                         return ctx.set_error(
-                        output.len(),
-                        format!("Unable to parse src_timestamp : {}", e),
+                            output.len(),
+                            format!("Unable to parse src_timestamp : {}", e),
                         );
                     }
                 };
@@ -212,27 +211,20 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result_timestamp_naive = match src_timestamp.parse::<DateTime<Utc>>()
-                {
+                let result_timestamp_naive = match src_timestamp.parse::<DateTime<Utc>>() {
                     Ok(_) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("src_timestamp had a timezone"),
-                        );
-                    },
-                    Err(_) => {
-                        match src_timestamp.parse::<NaiveDateTime>(){
-                            Ok(naive_datetime) => {
-                                Ok(naive_datetime)
-                            },
-                            Err(e) =>{
-                                return ctx.set_error(
-                                    output.len(),
-                                    format!("Unable to parse src_timestamp : {}", e),
-                                );
-                            }
-                        }
+                        return ctx
+                            .set_error(output.len(), format!("src_timestamp had a timezone"));
                     }
+                    Err(_) => match src_timestamp.parse::<NaiveDateTime>() {
+                        Ok(naive_datetime) => Ok(naive_datetime),
+                        Err(e) => {
+                            return ctx.set_error(
+                                output.len(),
+                                format!("Unable to parse src_timestamp : {}", e),
+                            );
+                        }
+                    },
                 };
 
                 let timestamp = result_timestamp_naive.unwrap();
