@@ -362,7 +362,7 @@ impl Default for MetaConfig {
             endpoints: vec![],
             username: "root".to_string(),
             password: "".to_string(),
-            client_timeout_in_second: 10,
+            client_timeout_in_second: 4,
             auto_sync_interval: 0,
             unhealth_endpoint_evict_time: 120,
             rpc_tls_meta_server_root_ca_cert: "".to_string(),

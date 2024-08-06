@@ -364,7 +364,7 @@ impl QueryEntry {
                 }
             }
 
-            Plan::ExplainAnalyze { plan }
+            Plan::ExplainAnalyze { plan, .. }
             | Plan::Explain {
                 kind: ExplainKind::AnalyzePlan,
                 plan,
