@@ -28,7 +28,6 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_io::prelude::bincode_deserialize_from_slice;
 use databend_common_io::prelude::BinaryRead;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -75,7 +74,7 @@ impl TransformExchangeDeserializer {
     fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
-        let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
+        let meta = serde_json::from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
             .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;

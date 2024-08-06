@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_io::prelude::bincode_deserialize_from_slice;
 use ethnum::i256;
 
 use super::partitioned_payload::PartitionedPayload;
@@ -344,7 +343,7 @@ impl Payload {
                     as usize as *const u8;
 
                 let scalar = std::slice::from_raw_parts(data_address, str_len);
-                let scalar: Scalar = bincode_deserialize_from_slice(scalar).unwrap();
+                let scalar: Scalar = serde_json::from_slice(scalar).unwrap();
 
                 builder.push(scalar.as_ref());
             }
