@@ -60,6 +60,7 @@ use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionProperty;
@@ -146,50 +147,8 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, TimestampType, _, _>(
         "convert_timezone",
         |_, _, _, _| FunctionDomain::MayThrow,
-        eval_convert_timezone_with_src_timezone,
-    );
-
-    fn eval_convert_timezone(
-        target_tz: ValueRef<StringType>,
-        src_timestamp: ValueRef<StringType>,
-        ctx: &mut EvalContext,
-    ) -> Value<TimestampType> {
-        vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
-            |target_tz, src_timestamp, output, ctx| {
-                // Parsing parameters
-                let t_tz: Tz = match target_tz.parse() {
-                    Ok(tz) => tz,
-                    Err(e) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("cannot parse target `timezone`. {}", e),
-                        );
-                    }
-                };
-
-                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
-                    Ok(_) => src_timestamp.parse::<DateTime<Utc>>(),
-                    Err(e) => {
-                        return ctx.set_error(
-                            output.len(),
-                            format!("Unable to parse src_timestamp : {}", e),
-                        );
-                    }
-                };
-                let timestamp = result_timestamp.unwrap();
-                output.push(timestamp.with_timezone(&t_tz).timestamp_micros());
-            },
-        )(target_tz, src_timestamp, ctx)
-    }
-
-    fn eval_convert_timezone_with_src_timezone(
-        target_tz: ValueRef<StringType>,
-        src_timestamp: ValueRef<StringType>,
-        src_tz: ValueRef<StringType>,
-        ctx: &mut EvalContext,
-    ) -> Value<TimestampType> {
-        vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
-            |target_tz, src_timestamp, output, ctx| {
+        vectorize_with_builder_3_arg::<StringType, StringType, StringType, TimestampType>(
+            |target_tz, src_timestamp, src_tz, output, ctx| {
                 // Parsing parameters
                 let t_tz: Tz = match target_tz.parse() {
                     Ok(tz) => tz,
@@ -230,6 +189,39 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
                 let timestamp = result_timestamp_naive.unwrap();
                 let timestamp_utc = Utc.from_utc_datetime(&timestamp);
                 output.push(timestamp_utc.with_timezone(&t_tz).timestamp_micros());
+            },
+        ),
+    );
+
+    fn eval_convert_timezone(
+        target_tz: ValueRef<StringType>,
+        src_timestamp: ValueRef<StringType>,
+        ctx: &mut EvalContext,
+    ) -> Value<TimestampType> {
+        vectorize_with_builder_2_arg::<StringType, StringType, TimestampType>(
+            |target_tz, src_timestamp, output, ctx| {
+                // Parsing parameters
+                let t_tz: Tz = match target_tz.parse() {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("cannot parse target `timezone`. {}", e),
+                        );
+                    }
+                };
+
+                let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
+                    Ok(_) => src_timestamp.parse::<DateTime<Utc>>(),
+                    Err(e) => {
+                        return ctx.set_error(
+                            output.len(),
+                            format!("Unable to parse src_timestamp : {}", e),
+                        );
+                    }
+                };
+                let timestamp = result_timestamp.unwrap();
+                output.push(timestamp.with_timezone(&t_tz).timestamp_micros());
             },
         )(target_tz, src_timestamp, ctx)
     }
