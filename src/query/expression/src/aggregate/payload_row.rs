@@ -150,6 +150,7 @@ pub unsafe fn serialize_column_to_rowformat(
             for index in select_vector.iter().take(rows).copied() {
                 let s = other.index_unchecked(index).to_owned();
                 scratch.clear();
+                #[allow(clippy::needless_borrows_for_generic_args)]
                 serde_json::to_writer(&mut scratch, &s).unwrap();
 
                 let data = arena.alloc_slice_copy(scratch);
