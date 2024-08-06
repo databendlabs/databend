@@ -23,8 +23,5 @@ ordered-float = { workspace = true }
 serde_json = { workspace = true }
 wkt = { version = "0.10.3" }
 
-[build-dependencies]
-thiserror = { workspace = true }
-
 [lints]
 workspace = true
