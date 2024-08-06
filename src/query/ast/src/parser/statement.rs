@@ -95,9 +95,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ #statement
+            EXPLAIN ~ ANALYZE ~ PARTIAL? ~ #statement
         },
-        |(_, _, statement)| Statement::ExplainAnalyze {
+        |(_, _, partial, statement)| Statement::ExplainAnalyze {
+            partial: partial.is_some(),
             query: Box::new(statement.stmt),
         },
     );
