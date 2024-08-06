@@ -49,7 +49,7 @@ use crate::ir::SetRef;
 use crate::ir::StatementTemplate;
 use crate::ir::VarRef;
 
-#[minitrace::trace]
+#[fastrace::trace]
 pub fn compile(code: &[ScriptStatement]) -> Result<Vec<ScriptIR>> {
     if code.is_empty() {
         return Err(ErrorCode::ScriptSemanticError("empty script".to_string()));

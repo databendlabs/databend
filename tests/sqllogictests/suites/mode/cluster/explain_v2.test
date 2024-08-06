@@ -397,7 +397,7 @@ Exchange
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1)]
     ├── join type: INNER
-    ├── build keys: [CAST(subquery_2 (#2) AS Int32 NULL)]
+    ├── build keys: [CAST(CAST(subquery_2 (#2) AS UInt8 NULL) AS Int32 NULL)]
     ├── probe keys: [t1.a (#0)]
     ├── filters: []
     ├── estimated rows: 2.00

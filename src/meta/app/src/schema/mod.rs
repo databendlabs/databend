@@ -55,6 +55,7 @@ pub use database::GetDatabaseReq;
 pub use database::ListDatabaseReq;
 pub use database::RenameDatabaseReply;
 pub use database::RenameDatabaseReq;
+pub use database::ReplyShareObject;
 pub use database::ShareDBParams;
 pub use database::ShareDbId;
 pub use database::UndropDatabaseReply;

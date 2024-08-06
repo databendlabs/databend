@@ -39,14 +39,21 @@ use crate::sessions::TableContext;
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
+    lock_opt: LockTableOption,
     is_final: bool,
 }
 
 impl ReclusterTableInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, s_expr: SExpr, is_final: bool) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        s_expr: SExpr,
+        lock_opt: LockTableOption,
+        is_final: bool,
+    ) -> Result<Self> {
         Ok(Self {
             ctx,
             s_expr,
+            lock_opt,
             is_final,
         })
     }
@@ -140,12 +147,7 @@ impl ReclusterTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(
-                &plan.catalog,
-                &plan.database,
-                &plan.table,
-                &LockTableOption::LockWithRetry,
-            )
+            .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
             .await?;
 
         let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);

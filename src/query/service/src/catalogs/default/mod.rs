@@ -19,6 +19,7 @@ mod mutable_catalog;
 pub mod table_id_ranges;
 pub mod table_memory_meta;
 
+pub use catalog_context::CatalogContext;
 pub use database_catalog::DatabaseCatalog;
 pub use immutable_catalog::ImmutableCatalog;
 pub use mutable_catalog::MutableCatalog;

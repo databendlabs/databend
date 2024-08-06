@@ -34,7 +34,7 @@ use crate::metrics::raft_metrics;
 use crate::store::RaftStore;
 
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
     }
@@ -56,7 +56,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         Ok((last_applied, last_membership))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn apply<I>(&mut self, entries: I) -> Result<Vec<AppliedState>, StorageError>
     where
         I: IntoIterator<Item = Entry> + OptionalSend,
@@ -73,7 +73,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     }
 
     // This method is not used
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<DB>, StorageError> {
         let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
         let db = ss_store
@@ -82,7 +82,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         Ok(Box::new(db))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
@@ -122,7 +122,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
 

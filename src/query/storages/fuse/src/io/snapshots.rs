@@ -30,12 +30,12 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotLite;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
@@ -122,7 +122,7 @@ impl SnapshotsIO {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn read_snapshot_lites(
         &self,
         snapshot_files: &[String],
@@ -290,7 +290,7 @@ impl SnapshotsIO {
 
     // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn read_snapshot_lite_extends(
         &self,
         snapshot_files: &[String],

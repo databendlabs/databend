@@ -63,7 +63,6 @@ fn maybe_bytes(uncompressed: usize, compressed: usize) -> Result<(i32, i32)> {
 /// Contains page write metrics.
 pub struct PageWriteSpec {
     pub header: ParquetPageHeader,
-    pub num_values: usize,
     pub num_rows: Option<usize>,
     pub header_size: u64,
     pub offset: u64,
@@ -77,7 +76,6 @@ pub fn write_page<W: Write>(
     offset: u64,
     compressed_page: &CompressedPage,
 ) -> Result<PageWriteSpec> {
-    let num_values = compressed_page.num_values();
     let selected_rows = compressed_page.selected_rows();
 
     let header = match &compressed_page {
@@ -112,7 +110,6 @@ pub fn write_page<W: Write>(
         compression: compressed_page.compression(),
         statistics,
         num_rows: selected_rows.map(|x| x.last().unwrap().length),
-        num_values,
     })
 }
 
@@ -123,7 +120,6 @@ pub async fn write_page_async<W: AsyncWrite + Unpin + Send>(
     offset: u64,
     compressed_page: &CompressedPage,
 ) -> Result<PageWriteSpec> {
-    let num_values = compressed_page.num_values();
     let selected_rows = compressed_page.selected_rows();
 
     let header = match &compressed_page {
@@ -158,7 +154,6 @@ pub async fn write_page_async<W: AsyncWrite + Unpin + Send>(
         compression: compressed_page.compression(),
         statistics,
         num_rows: selected_rows.map(|x| x.last().unwrap().length),
-        num_values,
     })
 }
 

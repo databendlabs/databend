@@ -31,6 +31,5 @@ pub use task::get_task_client_config;
 pub use task::make_schedule_options;
 pub use task::make_warehouse_options;
 pub use util::check_deduplicate_label;
-pub use util::create_push_down_filters;
 
 pub use self::metrics::*;

@@ -382,13 +382,15 @@ build_exceptions! {
 
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
-
+  
+    WrongSharePrivileges(3112),
+  
     // dictionary
-    DictionaryAlreadyExists(3112),
-    UnknownDictionary(3113),
-    DropDictionaryWithDropTime(3114),
-    GetDictionaryWithDropTime(3115),
-    CreateDictionaryWithDropTime(3116),
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
+    DropDictionaryWithDropTime(3115),
+    GetDictionaryWithDropTime(3116),
+    CreateDictionaryWithDropTime(3117),
 }
 
 // Storage errors [3001, 4000].
@@ -410,6 +412,9 @@ build_exceptions! {
 
     // recluster error codes
     NoNeedToRecluster(4011),
+    NoNeedToCompact(4012),
+
+    RefreshTableInfoFailure(4012),
 }
 
 // Service errors [5001,6000].

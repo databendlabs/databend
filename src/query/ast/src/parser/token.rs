@@ -149,6 +149,9 @@ pub enum TokenKind {
     #[regex(r#"\$[0-9]+"#)]
     ColumnPosition,
 
+    #[regex(r#"\$[_a-zA-Z][_$a-zA-Z0-9]*"#)]
+    VariableAccess,
+
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -1171,6 +1174,8 @@ pub enum TokenKind {
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("VARIABLE", ignore(ascii_case))]
+    VARIABLE,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
     #[token("VIEW", ignore(ascii_case))]

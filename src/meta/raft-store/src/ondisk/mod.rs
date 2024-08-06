@@ -74,7 +74,7 @@ impl OnDisk {
     pub(crate) const KEY_HEADER: &'static str = "header";
 
     /// Initialize data version for local store, returns the loaded version.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open(db: &sled::Db, config: &RaftConfig) -> Result<OnDisk, MetaStorageError> {
         info!(config :? =(config); "open and initialize data-version");
 
@@ -139,7 +139,7 @@ impl OnDisk {
     }
 
     /// Upgrade the on-disk data to latest version `DATA_VERSION`.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn upgrade(&mut self) -> Result<(), MetaStorageError> {
         self.progress(format_args!(
             "Upgrade ondisk data if out of date: {}",

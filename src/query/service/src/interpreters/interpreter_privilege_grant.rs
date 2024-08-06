@@ -107,7 +107,7 @@ impl GrantPrivilegeInterpreter {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn grant_ownership(
         &self,
@@ -172,7 +172,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "grant_privilege_execute");

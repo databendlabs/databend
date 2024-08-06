@@ -461,7 +461,7 @@ pub fn convert_to_decimal_domain(
     })
 }
 
-fn string_to_decimal<T: Decimal>(
+fn string_to_decimal<T>(
     from: ValueRef<StringType>,
     ctx: &mut EvalContext,
     size: DecimalSize,
@@ -486,13 +486,14 @@ where
     vectorize_with_builder_1_arg::<StringType, DecimalType<T>>(f)(from, ctx)
 }
 
-fn integer_to_decimal<T: Decimal, S: ArgType>(
+fn integer_to_decimal<T, S>(
     from: ValueRef<S>,
     ctx: &mut EvalContext,
     size: DecimalSize,
 ) -> Value<DecimalType<T>>
 where
     T: Decimal + Mul<Output = T>,
+    S: ArgType,
     for<'a> S::ScalarRef<'a>: Number + AsPrimitive<i128>,
 {
     let multiplier = T::e(size.scale as u32);

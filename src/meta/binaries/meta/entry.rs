@@ -267,7 +267,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
 /// The meta service GRPC API address can be changed by administrator in the config file.
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
-#[minitrace::trace]
+#[fastrace::trace]
 async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"

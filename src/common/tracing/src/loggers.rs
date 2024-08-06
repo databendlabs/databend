@@ -60,9 +60,9 @@ pub(crate) fn new_file_log_writer(
     (buffered_non_blocking, flush_guard)
 }
 
-pub(crate) struct MinitraceLogger;
+pub(crate) struct FastraceLogger;
 
-impl log::Log for MinitraceLogger {
+impl log::Log for FastraceLogger {
     fn enabled(&self, _metadata: &log::Metadata<'_>) -> bool {
         true
     }
@@ -79,7 +79,7 @@ impl log::Log for MinitraceLogger {
             // Align multi-line log messages with the first line after `level``.
             message = message.replace('\n', "\n                                  ");
         }
-        minitrace::Event::add_to_local_parent(message, || []);
+        fastrace::Event::add_to_local_parent(message, || []);
     }
 
     fn flush(&self) {}

@@ -25,10 +25,10 @@ use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use log::warn;
 use log::LevelFilter;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use parking_lot::Mutex;
 
 use crate::pipelines::executor::ExecutorWorkerContext;
@@ -64,7 +64,7 @@ impl QueriesPipelineExecutor {
         }))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 

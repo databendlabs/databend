@@ -662,6 +662,20 @@ impl WrongShareObject {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("WrongSharePrivileges: wrong share privileges of {obj_name}")]
+pub struct WrongSharePrivileges {
+    obj_name: String,
+}
+
+impl WrongSharePrivileges {
+    pub fn new(obj_name: impl ToString) -> Self {
+        Self {
+            obj_name: obj_name.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("ShareHasNoGrantedDatabase: {tenant}.{share_name} has no granted database")]
 pub struct ShareHasNoGrantedDatabase {
     pub tenant: String,
@@ -1233,6 +1247,9 @@ pub enum AppError {
     WrongShareObject(#[from] WrongShareObject),
 
     #[error(transparent)]
+    WrongSharePrivileges(#[from] WrongSharePrivileges),
+
+    #[error(transparent)]
     ShareHasNoGrantedDatabase(#[from] ShareHasNoGrantedDatabase),
 
     #[error(transparent)]
@@ -1527,6 +1544,12 @@ impl AppErrorMessage for WrongShareObject {
             " {} does not belong to the database that is being shared",
             self.obj_name
         )
+    }
+}
+
+impl AppErrorMessage for WrongSharePrivileges {
+    fn message(&self) -> String {
+        format!("wrong share privileges of {}", self.obj_name)
     }
 }
 
@@ -1860,6 +1883,7 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownShareAccounts(err) => ErrorCode::UnknownShareAccounts(err.message()),
             AppError::WrongShareObject(err) => ErrorCode::WrongShareObject(err.message()),
+            AppError::WrongSharePrivileges(err) => ErrorCode::WrongSharePrivileges(err.message()),
             AppError::ShareHasNoGrantedDatabase(err) => {
                 ErrorCode::ShareHasNoGrantedDatabase(err.message())
             }

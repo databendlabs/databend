@@ -67,7 +67,7 @@ build-in-docker:
 	bash ./scripts/setup/run_build_tool.sh cargo build --target $(TARGET)
 
 unit-test:
-	ulimit -n 10000;ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
+	ulimit -n 10000; ulimit -s 16384; RUST_LOG="ERROR" bash ./scripts/ci/ci-run-unit-tests.sh
 
 miri:
 	cargo miri setup
@@ -76,11 +76,11 @@ miri:
 stateless-test: build
 	rm -rf ./_meta*/
 	rm -rf .databend
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
 
 sqllogic-test: build
 	rm -rf ./_meta*/
-	ulimit -n 10000;ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
+	ulimit -n 10000; ulimit -s 16384; bash ./scripts/ci/ci-run-sqllogic-tests.sh
 
 stateless-cluster-test: build
 	rm -rf ./_meta*/

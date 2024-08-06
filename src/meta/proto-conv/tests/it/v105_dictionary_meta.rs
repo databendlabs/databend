@@ -86,5 +86,5 @@ fn test_decode_v105_dictionary_meta() -> anyhow::Result<()> {
 }
 
 fn s(ss: impl ToString) -> String {
- ss.to_string()
+    ss.to_string()
 }

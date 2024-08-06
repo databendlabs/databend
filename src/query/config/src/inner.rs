@@ -611,6 +611,15 @@ impl Default for CacheStorageTypeConfig {
     }
 }
 
+impl Display for CacheStorageTypeConfig {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            CacheStorageTypeConfig::None => write!(f, "none"),
+            CacheStorageTypeConfig::Disk => write!(f, "disk"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiskCacheKeyReloadPolicy {
     // remove all the disk cache during restart
@@ -626,20 +635,11 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-impl ToString for CacheStorageTypeConfig {
-    fn to_string(&self) -> String {
+impl Display for DiskCacheKeyReloadPolicy {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            CacheStorageTypeConfig::None => "none".to_string(),
-            CacheStorageTypeConfig::Disk => "disk".to_string(),
-        }
-    }
-}
-
-impl ToString for DiskCacheKeyReloadPolicy {
-    fn to_string(&self) -> String {
-        match self {
-            DiskCacheKeyReloadPolicy::Reset => "reset".to_string(),
-            DiskCacheKeyReloadPolicy::Fuzzy => "fuzzy".to_string(),
+            DiskCacheKeyReloadPolicy::Reset => write!(f, "reset"),
+            DiskCacheKeyReloadPolicy::Fuzzy => write!(f, "fuzzy"),
         }
     }
 }

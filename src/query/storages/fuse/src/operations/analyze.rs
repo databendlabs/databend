@@ -99,7 +99,7 @@ struct SinkAnalyzeState {
     snapshot_id: SnapshotId,
     histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
-    commited: bool,
+    committed: bool,
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Histogram>,
     step: AnalyzeStep,
@@ -127,7 +127,7 @@ impl SinkAnalyzeState {
             snapshot_id,
             histogram_info_receivers,
             input_data: None,
-            commited: false,
+            committed: false,
             ndv_states: Default::default(),
             histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
@@ -306,7 +306,7 @@ impl Processor for SinkAnalyzeState {
                     return Ok(Event::Async);
                 }
                 AnalyzeStep::CommitStatistics => {
-                    if self.commited {
+                    if self.committed {
                         return Ok(Event::Finished);
                     } else {
                         return Ok(Event::Async);
@@ -359,7 +359,7 @@ impl Processor for SinkAnalyzeState {
                     }
                     break;
                 }
-                self.commited = true;
+                self.committed = true;
             }
         }
         return Ok(());

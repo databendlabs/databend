@@ -29,8 +29,8 @@ use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SnapshotMismatch;
 use databend_common_meta_types::StorageError;
+use fastrace::func_name;
 use log::info;
-use minitrace::func_name;
 
 pub struct ReceiverV1 {
     /// The offset of the last byte written to the snapshot.

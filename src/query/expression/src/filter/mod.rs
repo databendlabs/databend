@@ -22,7 +22,7 @@ mod select_value;
 mod selector;
 
 pub use filter_executor::FilterExecutor;
-pub use like::gerenate_like_pattern;
+pub use like::generate_like_pattern;
 pub use like::is_like_pattern_escape;
 pub use like::LikePattern;
 pub use select_expr::SelectExpr;

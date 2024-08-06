@@ -114,7 +114,7 @@ impl EventDispatcher {
         event_tx
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn main(mut self) {
         loop {
             if let Some(event) = self.event_rx.recv().await {
@@ -186,7 +186,7 @@ impl EventDispatcher {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn add_watcher(
         &mut self,
         create: WatchRequest,
@@ -214,7 +214,7 @@ impl EventDispatcher {
         Ok(watcher)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn remove_watcher(&mut self, key: &RangeMapKey<String, WatcherId>) {
         info!("remove_watcher: {:?}", key);
 

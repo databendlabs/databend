@@ -24,8 +24,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use super::Exchange;
-use super::RelOperator;
 use crate::binder::ExplainConfig;
 use crate::optimizer::SExpr;
 use crate::plans::copy_into_location::CopyIntoLocationPlan;
@@ -66,7 +64,6 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
-use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -100,6 +97,7 @@ use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::Exchange;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
@@ -111,11 +109,13 @@ use crate::plans::InsertMultiTable;
 use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
-use crate::plans::OptimizeTablePlan;
+use crate::plans::OptimizeCompactSegmentPlan;
+use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
+use crate::plans::RelOperator;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
@@ -126,10 +126,10 @@ use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
 use crate::plans::RevokeShareObjectPlan;
 use crate::plans::SetOptionsPlan;
+use crate::plans::SetPlan;
 use crate::plans::SetPriorityPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SetSecondaryRolesPlan;
-use crate::plans::SettingPlan;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
@@ -144,10 +144,9 @@ use crate::plans::ShowSharesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
-use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
-use crate::plans::UpdatePlan;
+use crate::plans::UnsetPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
@@ -219,7 +218,6 @@ pub enum Plan {
     },
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
-    OptimizeTable(Box<OptimizeTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),
     VacuumDropTable(Box<VacuumDropTablePlan>),
     VacuumTemporaryFiles(Box<VacuumTemporaryFilesPlan>),
@@ -227,13 +225,19 @@ pub enum Plan {
     ExistsTable(Box<ExistsTablePlan>),
     SetOptions(Box<SetOptionsPlan>),
 
+    // Optimize
+    OptimizePurge(Box<OptimizePurgePlan>),
+    OptimizeCompactSegment(Box<OptimizeCompactSegmentPlan>),
+    OptimizeCompactBlock {
+        s_expr: Box<SExpr>,
+        need_purge: bool,
+    },
+
     // Insert
     Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
-    Delete(Box<DeletePlan>),
-    Update(Box<UpdatePlan>),
-    MergeInto {
+    DataMutation {
         s_expr: Box<SExpr>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
@@ -307,8 +311,8 @@ pub enum Plan {
     Presign(Box<PresignPlan>),
 
     // Set
-    SetVariable(Box<SettingPlan>),
-    UnSetVariable(Box<UnSettingPlan>),
+    Set(Box<SetPlan>),
+    Unset(Box<UnsetPlan>),
     Kill(Box<KillPlan>),
     SetPriority(Box<SetPriorityPlan>),
     System(Box<SystemPlan>),
@@ -422,10 +426,10 @@ impl Plan {
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::MergeInto { .. }
-            | Plan::OptimizeTable(_)
-            | Plan::Update(_) => QueryKind::Update,
+            | Plan::DataMutation { .. }
+            | Plan::OptimizePurge(_)
+            | Plan::OptimizeCompactSegment(_)
+            | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }
@@ -452,7 +456,7 @@ impl Plan {
             | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
-            Plan::MergeInto { schema, .. } => schema.clone(),
+            Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),

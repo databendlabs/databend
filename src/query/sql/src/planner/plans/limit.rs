@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
@@ -37,14 +36,6 @@ pub struct Limit {
 impl Operator for Limit {
     fn rel_op(&self) -> RelOp {
         RelOp::Limit
-    }
-
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
     }
 
     fn compute_required_prop_child(

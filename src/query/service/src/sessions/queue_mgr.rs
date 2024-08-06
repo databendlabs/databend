@@ -379,16 +379,16 @@ impl QueryEntry {
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
             | Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::Update(_)
-            | Plan::MergeInto { .. }
+            | Plan::DataMutation { .. }
             | Plan::CopyIntoTable(_)
             | Plan::CopyIntoLocation(_) => {
                 return true;
             }
 
             // DDL: Heavy actions.
-            Plan::OptimizeTable(_)
+            Plan::OptimizePurge(_)
+            | Plan::OptimizeCompactSegment(_)
+            | Plan::OptimizeCompactBlock { .. }
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
