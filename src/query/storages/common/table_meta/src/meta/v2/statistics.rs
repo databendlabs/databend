@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt;
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 use databend_common_expression::converts::datavalues::from_scalar;
 use databend_common_expression::converts::meta::IndexScalar;
@@ -22,7 +25,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use serde::de::Error;
-use serde::Deserialize;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -74,9 +76,9 @@ pub struct Statistics {
     pub compressed_byte_size: u64,
     pub index_size: u64,
 
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
 }
 
@@ -336,26 +338,82 @@ where D: serde::Deserializer<'de> {
         .transpose()
 }
 
-/// Deserializes `T`, falling back to `Default::default()` on error.
+/// Deserializes the `col_stats` field of the `BlockMeta` and `Statistics` struct.
 ///
 /// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
 /// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
 /// unsupported index types cannot be deserialized correctly.
-pub fn default_on_error<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+///
+/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
+/// item that fails to deserialize due to containing these unsupported index types.
+/// This allows the rest of the outer struct, including `col_stats` items that do not
+/// contain unsupported index types, to be deserialized successfully.
+///
+/// Note: This function is a workaround for a specific historical issue. If the data being
+/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
+/// the standard deserialization process can be used instead.
+pub fn deserialize_col_stats<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<ColumnId, ColumnStatistics>, D::Error>
+where D: serde::Deserializer<'de> {
+    deserializer.deserialize_map(ColStatsVisitor::new())
+}
+
+/// Deserializes the `cluster_stats` field of the `BlockMeta` and `Statistics` struct.
+///
+/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
+/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
+/// unsupported index types cannot be deserialized correctly.
+///
+/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
+/// item that fails to deserialize due to containing these unsupported index types.
+/// This allows the rest of the outer struct, including `col_stats` items that do not
+/// contain unsupported index types, to be deserialized successfully.
+///
+/// Note: This function is a workaround for a specific historical issue. If the data being
+/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
+/// the standard deserialization process can be used instead.
+pub fn deserialize_cluster_stats<'de, D>(
+    deserializer: D,
+) -> Result<Option<ClusterStatistics>, D::Error>
+where D: serde::Deserializer<'de> {
+    let v = <Option<ClusterStatistics> as serde::Deserialize>::deserialize(deserializer);
+    Ok(v.unwrap_or(None))
+}
+
+struct ColStatsVisitor<K, V> {
+    marker: PhantomData<fn() -> HashMap<K, V>>,
+}
+
+impl<K, V> ColStatsVisitor<K, V> {
+    fn new() -> Self {
+        ColStatsVisitor {
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<'de, K, V> serde::de::Visitor<'de> for ColStatsVisitor<K, V>
 where
-    T: Default + serde::Deserialize<'de>,
-    D: serde::Deserializer<'de>,
+    K: serde::Deserialize<'de> + Hash + Eq,
+    V: serde::Deserialize<'de>,
 {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum DefaultOnError<T> {
-        Success(T),
-        Error(serde::de::IgnoredAny),
+    type Value = HashMap<K, V>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("a map")
     }
 
-    let v = DefaultOnError::<T>::deserialize(deserializer);
-    match v {
-        Ok(DefaultOnError::Success(v)) => Ok(v),
-        _ => Ok(T::default()),
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where M: serde::de::MapAccess<'de> {
+        let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+        while let Some(key) = access.next_key()? {
+            if let Ok(value) = access.next_value() {
+                map.insert(key, value);
+            }
+        }
+
+        Ok(map)
     }
 }
