@@ -2,6 +2,10 @@ drop test share and database
 create provider share and database\table
 create provider view and reference database\table
 create provider share and grant access
+create user and role
 create consumer catalog from share
+3
+4
+Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'share_catalog'.'provider_db'.'v' for user 'owner'@'%' with roles [public,r_0002]
 3
 4
