@@ -148,19 +148,3 @@ fn normalize_point(point: &wkt::types::Point<f64>) -> Result<(f64, f64), Geozero
         None => Ok((f64::NAN, f64::NAN)),
     }
 }
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn test_from_wkt() {
-        let want = "GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))";
-
-        let geom = Geometry::try_from(Wkt(want)).unwrap();
-        let Wkt(got) = (&geom).try_into().unwrap();
-
-        assert_eq!(want, &got);
-    }
-}

@@ -15,6 +15,7 @@ See geo.fbs for details on other compatibility designs.
 References WKT WKB EWKT EWKB GeoJSON Spec.
 https://libgeos.org/specifications/wkb/#standard-wkb
 https://datatracker.ietf.org/doc/html/rfc7946
+https://geojson.org/geojson-spec.html#coordinate-reference-system-objects
 
 **Why the columnar Geometry/Geography format?**
 
@@ -31,3 +32,6 @@ flatbuffer provides delayed deserialization , and partial deserialization capabi
 In addition, code generation is easy to adapt to the design.
 However, flatbuffer has its drawbacks. Similar to protobuffer, flatbuffer is an extensible, compatible format, and in order to provide extensibility and compatibility, a vtable is deposited in the data, resulting in an inflated size.
 Once the design is stabilized, consider implementing it in other ways.
+
+**Other implementations**
+https://help.aliyun.com/document_detail/442156.html

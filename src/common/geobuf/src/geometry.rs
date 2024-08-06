@@ -88,4 +88,8 @@ impl Geometry {
             FeatureKind::FeatureCollection => Ok(ObjectKind::GeometryCollection),
         }
     }
+
+    pub fn points_len(&self) -> usize {
+        self.column_x.len()
+    }
 }
