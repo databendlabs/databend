@@ -85,6 +85,51 @@ pub struct BlockMeta {
     pub create_on: Option<DateTime<Utc>>,
 }
 
+/// An exact copy of `BlockMeta` with specific `deserialize_with` implementation that
+/// can correctly deserialize legacy MessagePack format.
+#[derive(Clone, Deserialize)]
+pub struct BlockMetaMessagePack {
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    col_stats: HashMap<ColumnId, ColumnStatistics>,
+    col_metas: HashMap<ColumnId, ColumnMeta>,
+    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
+    cluster_stats: Option<ClusterStatistics>,
+    /// location of data block
+    location: Location,
+    /// location of bloom filter index
+    bloom_filter_index_location: Option<Location>,
+
+    #[serde(default)]
+    bloom_filter_index_size: u64,
+    inverted_index_size: Option<u64>,
+    compression: Compression,
+
+    // block create_on
+    create_on: Option<DateTime<Utc>>,
+}
+
+impl From<BlockMetaMessagePack> for BlockMeta {
+    fn from(b: BlockMetaMessagePack) -> Self {
+        Self {
+            row_count: b.row_count,
+            block_size: b.block_size,
+            file_size: b.file_size,
+            col_stats: b.col_stats,
+            col_metas: b.col_metas,
+            cluster_stats: b.cluster_stats,
+            location: b.location,
+            bloom_filter_index_location: b.bloom_filter_index_location,
+            bloom_filter_index_size: b.bloom_filter_index_size,
+            inverted_index_size: b.inverted_index_size,
+            compression: b.compression,
+            create_on: b.create_on,
+        }
+    }
+}
+
 impl BlockMeta {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
