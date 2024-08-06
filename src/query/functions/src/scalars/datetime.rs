@@ -172,11 +172,12 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
 
                 // Parsing src_timestamp
                 let result_timestamp = match src_timestamp.parse::<DateTime<Utc>>() {
-                    Ok(utc_dt) => Ok(utc_dt),
+                    Ok(utc_dt) => Ok(utc_dt.with_timezone(&s_tz)),
                     Err(_) => src_timestamp.parse::<NaiveDateTime>().map(|naive_dt| {
-                        Utc.from_utc_datetime(&naive_dt)
+                        s_tz.from_local_datetime(&naive_dt).single().unwrap()
                     }),
                 };
+
 
                 match result_timestamp {
                     Ok(timestamp) => output.push(timestamp.with_timezone(&t_tz).timestamp_micros()),
