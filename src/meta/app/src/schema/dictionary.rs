@@ -345,6 +345,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi::Key;
     use databend_common_meta_kvapi::kvapi::KeyBuilder;
     use databend_common_meta_kvapi::kvapi::KeyParser;
+    use databend_common_meta_kvapi::kvapi::KeyError;
 
     use crate::schema::DatabaseId;
     use crate::tenant::Tenant;
@@ -354,6 +355,7 @@ mod kvapi_key_impl {
     use super::DictionaryId;
     use super::DictionaryIdToName;
     use super::DictionaryMeta;
+    use super::DictionaryNameIdent;
 
     impl kvapi::KeyCodec for DictionaryId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
