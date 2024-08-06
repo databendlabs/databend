@@ -245,7 +245,7 @@ impl SnapshotLocationCreator for SnapshotVersion {
                 )
             }
             SnapshotVersion::V5(_) => {
-                // V5_OBJET_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
+                // V5_OBJECT_KEY_PREFIX 'g' is larger than all the simple form uuid generated previously
                 format!(
                     "{}/{}/{V5_OBJECT_KEY_PREFIX}{}{}",
                     prefix.as_ref(),
