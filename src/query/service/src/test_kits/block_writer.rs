@@ -37,10 +37,12 @@ use opendal::Operator;
 use parquet::format::FileMetaData;
 use uuid::Uuid;
 
+use super::old_version_generator;
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
     table_meta_timestamps: TableMetaTimestamps,
+    is_greater_than_v5: bool,
 }
 
 impl<'a> BlockWriter<'a> {
@@ -48,11 +50,13 @@ impl<'a> BlockWriter<'a> {
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
         table_meta_timestamps: TableMetaTimestamps,
+        is_greater_than_v5: bool,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
             table_meta_timestamps,
+            is_greater_than_v5,
         }
     }
 
@@ -64,9 +68,15 @@ impl<'a> BlockWriter<'a> {
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<(BlockMeta, Option<FileMetaData>)> {
-        let (location, block_id) = self
-            .location_generator
-            .gen_block_location(self.table_meta_timestamps);
+        let (location, block_id) = if !self.is_greater_than_v5 {
+            let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
+                self.location_generator.prefix().to_string(),
+            );
+            location_generator.gen_block_location(self.table_meta_timestamps)
+        } else {
+            self.location_generator
+                .gen_block_location(self.table_meta_timestamps)
+        };
 
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;

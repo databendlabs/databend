@@ -57,29 +57,15 @@ static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
-
-    // TODO(sky) solely for test?, consider use mocked generator for testing
-    with_g: bool,
 }
 
 impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
-        Self {
-            prefix,
-            with_g: true,
-        }
+        Self { prefix }
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
-    }
-
-    /// used in unit test to generate old locations without g
-    pub fn with_g(&self, with_g: bool) -> Self {
-        Self {
-            prefix: self.prefix.clone(),
-            with_g,
-        }
     }
 
     pub fn gen_block_location(
@@ -91,7 +77,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
-            if self.with_g { "g" } else { "" },
+            V5_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
@@ -118,7 +104,7 @@ impl TableMetaLocationGenerator {
             "{}/{}/{}{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
-            if self.with_g { "g" } else { "" },
+            V5_OBJECT_KEY_PREFIX,
             segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )

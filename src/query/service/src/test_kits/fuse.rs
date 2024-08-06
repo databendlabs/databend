@@ -29,7 +29,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::merge_statistics;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -53,6 +52,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use super::block_writer::BlockWriter;
+use super::old_version_generator;
 use super::TestFixture;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
@@ -108,7 +108,8 @@ pub async fn generate_segments_v2(
     let mut segs = vec![];
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment, false).await?;
+        let block_metas =
+            generate_blocks(fuse_table, blocks_per_segment, false, Default::default()).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfoV2::new(block_metas, summary);
         let uuid = Uuid::new_v4();
@@ -129,17 +130,32 @@ pub async fn generate_segments(
     fuse_table: &FuseTable,
     number_of_segments: usize,
     blocks_per_segment: usize,
-    with_g: bool,
+    is_greater_than_v5: bool,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<Vec<(Location, SegmentInfo)>> {
     let mut segs = vec![];
-    let location_generator = fuse_table.meta_location_generator().with_g(with_g);
+    let location_generator = fuse_table.meta_location_generator();
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas = generate_blocks(fuse_table, blocks_per_segment, with_g).await?;
+        let block_metas = generate_blocks(
+            fuse_table,
+            blocks_per_segment,
+            is_greater_than_v5,
+            table_meta_timestamps,
+        )
+        .await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, &location_generator, Default::default());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
+        let location = if is_greater_than_v5 {
+            location_generator.gen_segment_info_location(table_meta_timestamps)
+        } else {
+            let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
+                location_generator.prefix().to_string(),
+            );
+            location_generator.gen_segment_info_location(table_meta_timestamps)
+        };
+        segment_info.write_meta(dal, location.as_str()).await?;
+        let segment_location = (location, SegmentInfo::VERSION);
         segs.push((segment_location, segment_info))
     }
     Ok(segs)
@@ -148,12 +164,18 @@ pub async fn generate_segments(
 async fn generate_blocks(
     fuse_table: &FuseTable,
     num_blocks: usize,
-    with_g: bool,
+    is_greater_than_v5: bool,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
-    let location_generator = fuse_table.meta_location_generator().with_g(with_g);
-    let block_writer = BlockWriter::new(dal, &location_generator, Default::default());
+    let location_generator = fuse_table.meta_location_generator();
+    let block_writer = BlockWriter::new(
+        dal,
+        location_generator,
+        table_meta_timestamps,
+        is_greater_than_v5,
+    );
     let mut block_metas = vec![];
 
     // does not matter in this suite
@@ -208,8 +230,14 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     // generate 2 segments, 4 blocks.
     let num_of_segments = 2;
     let blocks_per_segment = 2;
-    let segments_v3 =
-        generate_segments(fuse_table, num_of_segments, blocks_per_segment, false).await?;
+    let segments_v3 = generate_segments(
+        fuse_table,
+        num_of_segments,
+        blocks_per_segment,
+        false,
+        Default::default(),
+    )
+    .await?;
 
     // create snapshot 1, the format version is 3.
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
@@ -393,8 +421,14 @@ pub async fn generate_snapshot_v4(
     let location_gen = fuse_table.meta_location_generator();
     let operator = fuse_table.get_operator();
 
-    let segments =
-        generate_segments(fuse_table, number_of_segments, blocks_per_segment, false).await?;
+    let segments = generate_segments(
+        fuse_table,
+        number_of_segments,
+        blocks_per_segment,
+        false,
+        Default::default(),
+    )
+    .await?;
 
     let id = Uuid::new_v4();
     let snapshot = TableSnapshotV4::new(
@@ -430,8 +464,18 @@ pub async fn generate_snapshot_v5(
     let location_gen = fuse_table.meta_location_generator();
     let operator = fuse_table.get_operator();
 
-    let segments =
-        generate_segments(fuse_table, number_of_segments, blocks_per_segment, true).await?;
+    let table_meta_timestamps = TableMetaTimestamps::new(
+        prev.map(|p| Arc::new(p.clone())),
+        data_retention_time_in_days,
+    );
+    let segments = generate_segments(
+        fuse_table,
+        number_of_segments,
+        blocks_per_segment,
+        true,
+        table_meta_timestamps,
+    )
+    .await?;
 
     let prev = prev.map(|p| Arc::new(p.clone()));
     let snapshot = TableSnapshotV5::try_new(

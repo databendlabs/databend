@@ -197,8 +197,14 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     // 2. prepare `seg_2`
     let num_of_segments = 1;
     let blocks_per_segment = 1;
-    let segments =
-        generate_segments(fuse_table, num_of_segments, blocks_per_segment, false).await?;
+    let segments = generate_segments(
+        fuse_table,
+        num_of_segments,
+        blocks_per_segment,
+        false,
+        Default::default(),
+    )
+    .await?;
     let (segment_locations, _segment_info): (Vec<_>, Vec<_>) = segments.into_iter().unzip();
 
     // 2. prepare S_2
@@ -211,8 +217,14 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     {
         let num_of_segments = 1;
         let blocks_per_segment = 1;
-        let segments =
-            generate_segments(fuse_table, num_of_segments, blocks_per_segment, false).await?;
+        let segments = generate_segments(
+            fuse_table,
+            num_of_segments,
+            blocks_per_segment,
+            false,
+            Default::default(),
+        )
+        .await?;
         let segment_locations: Vec<Location> = segments.into_iter().map(|(l, _)| l).collect();
         let new_timestamp = base_timestamp - Duration::days(1);
         let _snapshot_location = generate_snapshot_with_segments(

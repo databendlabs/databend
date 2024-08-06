@@ -392,7 +392,7 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
-    let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default());
+    let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
     let (_block_meta, thrift_file_meta) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;
