@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(test)]
+
+mod bench;
 mod from_into_geo;
 mod from_into_json;
 mod from_into_wkt;

@@ -135,6 +135,13 @@ impl FeatureKind {
             FeatureKind::Feature(o) => *o as u8 | Self::FEATURE,
         }
     }
+
+    pub fn object_kind(&self) -> ObjectKind {
+        match self {
+            FeatureKind::Geometry(o) | FeatureKind::Feature(o) => *o,
+            FeatureKind::FeatureCollection => ObjectKind::GeometryCollection,
+        }
+    }
 }
 
 impl TryFrom<u8> for FeatureKind {

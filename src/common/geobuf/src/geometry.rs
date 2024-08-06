@@ -19,7 +19,9 @@ use crate::geo_buf;
 use crate::geo_buf::Object;
 use crate::FeatureKind;
 use crate::Geometry;
+use crate::GeometryBuilder;
 use crate::ObjectKind;
+use crate::Visitor;
 
 pub struct BoundingBox {
     pub xmin: f64,
@@ -66,11 +68,13 @@ impl Geometry {
     }
 
     pub fn srid(&self) -> Option<i32> {
-        if self.buf.len() > 1 {
-            self.read_object()
-                .map_or(None, |object| Some(object.srid()))
-        } else {
+        if self.is_light_buf() {
             None
+        } else {
+            self.read_object().map_or(None, |object| {
+                let srid = object.srid();
+                if srid == 0 { None } else { Some(srid) }
+            })
         }
     }
 
@@ -78,18 +82,31 @@ impl Geometry {
         geo_buf::root_as_object(&self.buf[1..]).map_err(|e| GeozeroError::Geometry(e.to_string()))
     }
 
-    pub fn kind(&self) -> Result<ObjectKind, GeozeroError> {
-        let kind: FeatureKind = self.buf[0]
-            .try_into()
-            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))?;
+    pub fn is_light_buf(&self) -> bool {
+        self.buf.len() == 1
+    }
 
-        match kind {
-            FeatureKind::Geometry(o) | FeatureKind::Feature(o) => Ok(o),
-            FeatureKind::FeatureCollection => Ok(ObjectKind::GeometryCollection),
-        }
+    pub fn kind(&self) -> Result<FeatureKind, GeozeroError> {
+        self.buf[0]
+            .try_into()
+            .map_err(|_| GeozeroError::Geometry("Invalid data".to_string()))
     }
 
     pub fn points_len(&self) -> usize {
         self.column_x.len()
+    }
+
+    // Returns the first Point in a LineString.
+    pub fn start_point(&self) -> Result<Geometry, GeozeroError> {
+        let kind = self.kind()?;
+        if !matches!(kind.object_kind(), ObjectKind::LineString) {
+            return Err(GeozeroError::Geometry("Not a LineString".to_string()));
+        }
+
+        let mut builder = GeometryBuilder::new();
+        builder.set_srid(self.srid());
+        builder.visit_point(self.column_x[0], self.column_x[1], false)?;
+        builder.finish(FeatureKind::Geometry(ObjectKind::Point))?;
+        Ok(builder.build())
     }
 }

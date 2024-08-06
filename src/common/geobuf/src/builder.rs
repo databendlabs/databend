@@ -67,7 +67,7 @@ impl<'fbb> GeometryBuilder<'fbb> {
         self.column_x.len()
     }
 
-    pub fn push_point(&mut self, x: f64, y: f64) {
+    fn push_point(&mut self, x: f64, y: f64) {
         self.column_x.push(x);
         self.column_y.push(y);
     }
@@ -131,6 +131,14 @@ impl<'fbb> GeometryBuilder<'fbb> {
             buf,
             column_x,
             column_y,
+        }
+    }
+
+    pub fn set_srid(&mut self, srid: Option<i32>) {
+        if let Some(srid) = srid {
+            if srid != 0 {
+                self.srid = srid;
+            }
         }
     }
 }
@@ -341,11 +349,7 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     }
 
     fn srid(&mut self, srid: Option<i32>) -> GeoResult<()> {
-        if let Some(srid) = srid {
-            if srid != 0 {
-                self.srid = srid;
-            }
-        }
+        self.set_srid(srid);
         Ok(())
     }
 

@@ -51,7 +51,7 @@ impl geozero::GeozeroGeometry for Geometry {
         Self: Sized,
     {
         debug_assert!(self.column_x.len() == self.column_y.len());
-        match self.kind()? {
+        match self.kind()?.object_kind() {
             ObjectKind::Point => {
                 debug_assert!(self.column_x.len() == 1);
                 processor.point_begin(0)?;
@@ -253,7 +253,7 @@ fn read_point_offsets(
     point_offsets: Option<flatbuffers::Vector<'_, u8>>,
 ) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
     let data = point_offsets.ok_or(GeozeroError::Geometry(
-        "Invalid MultiLineString, point_offsets missing".to_string(),
+        "Invalid Object, point_offsets missing".to_string(),
     ))?;
     let offsets = flexbuffers::Reader::get_root(data.bytes())
         .map_err(|e| GeozeroError::Geometry(e.to_string()))?
@@ -265,7 +265,7 @@ fn read_ring_offsets(
     ring_offsets: Option<flatbuffers::Vector<'_, u8>>,
 ) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
     let data = ring_offsets.ok_or(GeozeroError::Geometry(
-        "Invalid MultiLineString, ring_offsets missing".to_string(),
+        "Invalid Object, ring_offsets missing".to_string(),
     ))?;
     let offsets = flexbuffers::Reader::get_root(data.bytes())
         .map_err(|e| GeozeroError::Geometry(e.to_string()))?

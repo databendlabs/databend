@@ -3528,6 +3528,7 @@ dependencies = [
  "flatbuffers",
  "flexbuffers",
  "geo",
+ "geo-types",
  "geojson",
  "geos",
  "geozero 0.13.0",
