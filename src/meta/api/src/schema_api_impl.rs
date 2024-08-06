@@ -4268,7 +4268,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     // dictionary
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply, KVAppError> {
         debug!(req :? = (&req); "SchemaApi: {}", func_name!());
         let tenant_dictionary = &req.name_ident;
@@ -4375,7 +4375,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
         
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_dictionary(&self, req: DropDictionaryReq) -> Result<DropDictionaryReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         
@@ -4425,7 +4425,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<GetDictionaryReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
         
@@ -4462,13 +4462,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 
     #[logcall::logcall]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
        
         // Get dictionary id list by `prefix_list` "<prefix>/<tenant>"
         let ident = DictionaryNameIdent::new(req.inner.tenant() ,"dummy_db", "dummy_dict");
-        let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(ident.tenant_name()).push_raw("").done();
+        let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_u64(db_id);
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
