@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use flatbuffers::Vector;
 use geozero::error::GeozeroError;
 use geozero::GeozeroGeometry;
 
@@ -125,14 +126,14 @@ impl Geometry {
     fn process_lines<P>(
         &self,
         processor: &mut P,
-        point_offsets: &flexbuffers::VectorReader<&[u8]>,
+        point_offsets: &Vector<u32>,
     ) -> geozero::error::Result<()>
     where
         P: geozero::GeomProcessor,
     {
         point_offsets
             .iter()
-            .map_windows(|[start, end]| start.as_u32() as usize..end.as_u32() as usize)
+            .map_windows(|[start, end]| *start as usize..*end as usize)
             .enumerate()
             .try_for_each(|(idx, range)| {
                 processor.linestring_begin(false, range.len(), idx)?;
@@ -146,20 +147,20 @@ impl Geometry {
     fn process_polygons<P>(
         &self,
         processor: &mut P,
-        point_offsets: &flexbuffers::VectorReader<&[u8]>,
-        ring_offsets: &flexbuffers::VectorReader<&[u8]>,
+        point_offsets: &Vector<u32>,
+        ring_offsets: &Vector<u32>,
     ) -> geozero::error::Result<()>
     where
         P: geozero::GeomProcessor,
     {
         ring_offsets
             .iter()
-            .map_windows(|[start, end]| start.as_u32() as usize..=end.as_u32() as usize)
+            .map_windows(|[start, end]| *start as usize..=*end as usize)
             .enumerate()
             .try_for_each(|(idx, range)| {
                 processor.polygon_begin(false, range.end() - range.start(), idx)?;
                 range
-                    .map(|i| point_offsets.index(i).unwrap().as_u32())
+                    .map(|i| point_offsets.get(i))
                     .map_windows(|[start, end]| *start as usize..*end as usize)
                     .enumerate()
                     .try_for_each(|(idx, range)| {
@@ -185,18 +186,17 @@ impl Geometry {
         match object.wkb_type() {
             geo_buf::InnerObjectKind::Point => {
                 let point_offsets = read_point_offsets(object.point_offsets())?;
-                let pos = point_offsets.index(0).unwrap().as_u32() as usize;
-
+                let pos = point_offsets.get(0);
                 processor.point_begin(idx)?;
-                processor.xy(self.column_x[pos], self.column_y[pos], 0)?;
+                processor.xy(self.column_x[pos as usize], self.column_y[pos as usize], 0)?;
                 processor.point_end(idx)
             }
             geo_buf::InnerObjectKind::MultiPoint => {
                 let point_offsets = read_point_offsets(object.point_offsets())?;
-                let start = point_offsets.index(0).unwrap().as_u32() as usize;
-                let end = point_offsets.index(1).unwrap().as_u32() as usize;
-                let range = start..end;
+                let start = point_offsets.get(0);
+                let end = point_offsets.get(1);
 
+                let range = start as usize..end as usize;
                 processor.multipoint_begin(range.len(), idx)?;
                 for (idxc, pos) in range.enumerate() {
                     processor.xy(self.column_x[pos], self.column_y[pos], idxc)?;
@@ -205,10 +205,9 @@ impl Geometry {
             }
             geo_buf::InnerObjectKind::LineString => {
                 let point_offsets = read_point_offsets(object.point_offsets())?;
-                let start = point_offsets.index(0).unwrap().as_u32() as usize;
-                let end = point_offsets.index(1).unwrap().as_u32() as usize;
-                let range = start..end;
-
+                let start = point_offsets.get(0);
+                let end = point_offsets.get(1);
+                let range = start as usize..end as usize;
                 processor.linestring_begin(true, range.len(), idx)?;
                 for (idxc, pos) in range.enumerate() {
                     processor.xy(self.column_x[pos], self.column_y[pos], idxc)?;
@@ -250,25 +249,19 @@ impl Geometry {
 }
 
 fn read_point_offsets(
-    point_offsets: Option<flatbuffers::Vector<'_, u8>>,
-) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
-    let data = point_offsets.ok_or(GeozeroError::Geometry(
+    point_offsets: Option<flatbuffers::Vector<'_, u32>>,
+) -> Result<flatbuffers::Vector<'_, u32>, GeozeroError> {
+    let v = point_offsets.ok_or(GeozeroError::Geometry(
         "Invalid Object, point_offsets missing".to_string(),
     ))?;
-    let offsets = flexbuffers::Reader::get_root(data.bytes())
-        .map_err(|e| GeozeroError::Geometry(e.to_string()))?
-        .as_vector();
-    Ok(offsets)
+    Ok(v)
 }
 
 fn read_ring_offsets(
-    ring_offsets: Option<flatbuffers::Vector<'_, u8>>,
-) -> Result<flexbuffers::VectorReader<&[u8]>, GeozeroError> {
-    let data = ring_offsets.ok_or(GeozeroError::Geometry(
+    ring_offsets: Option<flatbuffers::Vector<'_, u32>>,
+) -> Result<flatbuffers::Vector<'_, u32>, GeozeroError> {
+    let v = ring_offsets.ok_or(GeozeroError::Geometry(
         "Invalid Object, ring_offsets missing".to_string(),
     ))?;
-    let offsets = flexbuffers::Reader::get_root(data.bytes())
-        .map_err(|e| GeozeroError::Geometry(e.to_string()))?
-        .as_vector();
-    Ok(offsets)
+    Ok(v)
 }

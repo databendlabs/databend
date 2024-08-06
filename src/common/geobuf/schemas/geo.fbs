@@ -26,10 +26,8 @@ enum InnerObjectKind:ubyte {
 }
 
 table InnerObject {
-  // https://flatbuffers.dev/flatbuffers_internals.html
-  // FlexBuffers Typed Vectors short than Flatbuffers [uint32]
-  point_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
-  ring_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
+  point_offsets: [uint32];
+  ring_offsets: [uint32];
 
   collection: [InnerObject];
 
@@ -38,8 +36,8 @@ table InnerObject {
 }
 
 table Object {
-  point_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
-  ring_offsets: [ubyte] (flexbuffer); // TYPE_VECTOR_UINT
+  point_offsets: [uint32];
+  ring_offsets: [uint32];
 
   collection: [InnerObject];
 
