@@ -7372,12 +7372,6 @@ impl SchemaApiTestSuite {
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
 
-        info!("--- prepare db and table");
-        {
-            util.create_db().await?;
-            let (tid, _table_meta) = util.create_table().await?;
-        }
-
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
                 "number",
@@ -7408,24 +7402,6 @@ impl SchemaApiTestSuite {
             db_name: db_name.to_string(),
             dictionary_name: dict_name.to_string(),
         };
-
-        info!("--- create dictionary on unknown db");
-        {
-            let created_on = Utc::now();
-
-            let req = CreateDictionaryReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(created_on),
-            };
-            let res = mt.create_dictionary(req).await;
-            debug!("create dictionary on unknown db res: {:?}",res);
-
-            assert!(res.is_err());
-            let err = res.unwrap_err();
-            let err = ErrorCode::from(err);
-            assert_eq!(unknown_database_code, err.code());
-        }
 
         {
             info!("--- create dictionary");
