@@ -7145,6 +7145,7 @@ impl SchemaApiTestSuite {
 
         let db_name = "db1";
         let tbl_name = "tb2";
+        let table_id;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -7369,7 +7370,6 @@ impl SchemaApiTestSuite {
         let dict_name = "dict3";
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
-        let table_id;
         let dict_id;
 
         info!("--- prepare db and table");
@@ -7435,7 +7435,8 @@ impl SchemaApiTestSuite {
                 name_ident: name_ident_dict.clone(),
                 dictionary_meta: dictionary_meta(created_on),
             };
-            mt.create_dictionary(req).await?;
+            let res = mt.create_dictionary(req).await?;
+            dict_id = res.dictionary_id;
         }
 
         {
