@@ -358,6 +358,9 @@ pub trait Decimal:
 
     fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self>;
 
+    // mul two decimals and return a decimal with rounding option
+    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self>;
+
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
@@ -451,6 +454,20 @@ impl Decimal for i128 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+        let div = i256::e(shift_scale);
+        let res = if self.is_negative() == rhs.is_negative() {
+            (i256::from(self) * i256::from(rhs) + div / 2) / div
+        } else {
+            (i256::from(self) * i256::from(rhs) - div / 2) / div
+        };
+        if *res.high() == 0 {
+            Some(*res.low())
+        } else {
+            None
+        }
     }
 
     fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
@@ -665,6 +682,15 @@ impl Decimal for i256 {
 
     fn checked_rem(self, rhs: Self) -> Option<Self> {
         self.checked_rem(rhs)
+    }
+
+    fn do_round_mul(self, rhs: Self, shift_scale: u32) -> Option<Self> {
+        let div = i256::e(shift_scale);
+        if self.is_negative() == rhs.is_negative() {
+            self.checked_mul(rhs).map(|x| (x + div / 2) / div)
+        } else {
+            self.checked_mul(rhs).map(|x| (x - div / 2) / div)
+        }
     }
 
     fn do_round_div(self, rhs: Self, mul: Self) -> Option<Self> {
@@ -917,8 +943,8 @@ impl DecimalDataType {
         // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
         if is_multiply {
             scale = (a.scale() + b.scale()).min(a.scale().max(b.scale()).max(12));
-            let multiply_precision = a.precision() + b.precision();
-            precision = precision.min(multiply_precision);
+            let l = a.leading_digits() + b.leading_digits();
+            precision = l + scale;
         } else if is_divide {
             let l = a.leading_digits() + b.scale();
             scale = a.scale().max((a.scale() + 6).min(12));
