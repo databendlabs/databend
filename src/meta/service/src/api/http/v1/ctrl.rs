@@ -19,12 +19,11 @@ use http::StatusCode;
 use poem::web::Data;
 use poem::web::IntoResponse;
 use poem::web::Json;
+use poem::web::Query;
 
 use crate::meta_service::MetaNode;
 
 /// Let raft leader send snapshot to followers/learners.
-///
-/// If this node is not a leader this request will be just ignored.
 #[poem::handler]
 pub async fn trigger_snapshot(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<impl IntoResponse> {
     meta_node
@@ -33,6 +32,43 @@ pub async fn trigger_snapshot(meta_node: Data<&Arc<MetaNode>>) -> poem::Result<i
         .snapshot()
         .await
         .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(Json(()))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct TransferLeaderQuery {
+    pub(crate) to: Option<u64>,
+}
+
+/// Transfer this Leader to another specified node.
+///
+/// If this node is not a Leader this request will be just ignored.
+#[poem::handler]
+pub async fn trigger_transfer_leader(
+    meta_node: Data<&Arc<MetaNode>>,
+    query: Option<Query<TransferLeaderQuery>>,
+) -> poem::Result<impl IntoResponse> {
+    let Some(query) = query else {
+        return Err(poem::Error::from_string(
+            "missing query to=<node_id_to_transfer_leader_to>",
+            StatusCode::BAD_REQUEST,
+        ));
+    };
+
+    let Some(to) = query.to else {
+        return Err(poem::Error::from_string(
+            "missing query to=<node_id_to_transfer_leader_to>",
+            StatusCode::BAD_REQUEST,
+        ));
+    };
+
+    meta_node
+        .raft
+        .trigger()
+        .transfer_leader(to)
+        .await
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+
     Ok(Json(()))
 }
 

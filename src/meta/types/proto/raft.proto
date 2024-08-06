@@ -12,7 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod cluster_state_test;
-pub mod config;
-pub mod metrics;
-pub mod transfer_leader;
+syntax = "proto3";
+
+package meta;
+
+// A quorum granted or not granted Leader.
+message LeaderId {
+  uint64 term = 1;
+  uint64 node_id = 2;
+}
+
+// The vote for RequestVote etc.
+message Vote {
+  uint64 term = 1;
+  uint64 node_id = 2;
+  bool committed = 3;
+}
+
+// The log id
+message LogId {
+  uint64 term = 1;
+  uint64 node_id = 2;
+  uint64 index = 3;
+}
