@@ -21,7 +21,8 @@ CREATE TABLE fuse_compat_table (
         c_varchar VARCHAR,
         c_array VARIANT,
         c_object VARIANT,
-        c_variant VARIANT
+        c_variant VARIANT,
+        c_array_str ARRAY(String)
 ) Engine = Fuse;
 
 statement ok
@@ -38,5 +39,6 @@ INSERT INTO fuse_compat_table VALUES(
         'varchar',
         parse_json('[1,2,3,["a","b","c"]]'),
         parse_json('{"a":1,"b":{"c":2}}'),
-        parse_json('[1,{"a":1,"b":{"c":2}}]')
+        parse_json('[1,{"a":1,"b":{"c":2}}]'),
+        ['item1', 'item2_looooooooooooooooooong_val', 'item3', 'item4']
 );
