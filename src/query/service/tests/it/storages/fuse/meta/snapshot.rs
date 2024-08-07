@@ -112,7 +112,6 @@ fn test_snapshot_v1_to_v4() {
 
 #[test]
 fn test_snapshot_reader() {
-    for meta in [include_bytes!("legacy_tpch_v4.mpk")] {
-        TableSnapshot::from_slice(meta).unwrap();
-    }
+    let meta = include_bytes!("legacy_tpch_v4.mpk");
+    TableSnapshot::from_slice(meta).unwrap();
 }
