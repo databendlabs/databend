@@ -297,7 +297,7 @@ regex = "1.8.1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
     "http2",
-    "native-tls",
+    "native-tls-vendored",
     "native-tls-alpn",
 ] }
 reqwest-hickory-resolver = "0.1"
