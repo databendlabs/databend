@@ -1599,8 +1599,12 @@ fn st_transform_impl(
             if from_srid == 4326 {
                 geom.to_radians_in_place();
             }
-            transform(&from_proj, &to_proj, &mut geom)
-                .map_err(|_| ErrorCode::GeometryError("transfrom failed"))?;
+            transform(&from_proj, &to_proj, &mut geom).map_err(|_| {
+                ErrorCode::GeometryError(format!(
+                    "transform from {} to {} failed",
+                    from_srid, to_srid
+                ))
+            })?;
             if to_srid == 4326 {
                 geom.to_degrees_in_place();
             }
