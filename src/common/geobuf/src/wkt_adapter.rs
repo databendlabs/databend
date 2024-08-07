@@ -50,7 +50,7 @@ impl TryInto<Wkt<String>> for &Geometry {
 pub struct Ewkt<S: AsRef<str>>(pub S);
 
 impl<S: AsRef<str>> Ewkt<S> {
-    fn cut_srid(&self) -> Result<(Option<i32>, &str), GeozeroError> {
+    pub fn cut_srid(&self) -> Result<(Option<i32>, &str), GeozeroError> {
         let str = self.0.as_ref();
         match str.find(';') {
             None => Ok((None, str)),

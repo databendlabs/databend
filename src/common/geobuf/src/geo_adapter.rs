@@ -75,58 +75,57 @@ impl geozero::GeozeroGeometry for Geometry {
                 processor.linestring_end(true, 0)
             }
             ObjectKind::MultiLineString => {
-                let object = self.read_object()?;
-                match object.point_offsets() {
-                    Some(point_offsets) => {
-                        processor.multilinestring_begin(point_offsets.len() - 1, 0)?;
-                        self.process_lines(processor, &point_offsets)?;
-                        processor.multilinestring_end(0)
-                    }
-                    None => {
-                        processor.multilinestring_begin(0, 0)?;
-                        processor.multilinestring_end(0)
-                    }
+                if self.is_light_buf() {
+                    processor.multilinestring_begin(0, 0)?;
+                    processor.multilinestring_end(0)
+                } else {
+                    let object = self.read_object()?;
+                    let point_offsets = read_point_offsets(object.point_offsets())?;
+                    processor.multilinestring_begin(point_offsets.len() - 1, 0)?;
+                    self.process_lines(processor, &point_offsets)?;
+                    processor.multilinestring_end(0)
                 }
             }
             ObjectKind::Polygon => {
-                let object = self.read_object()?;
-                match object.point_offsets() {
-                    Some(point_offsets) => {
-                        processor.polygon_begin(true, point_offsets.len() - 1, 0)?;
-                        self.process_lines(processor, &point_offsets)?;
-                        processor.polygon_end(true, 0)
-                    }
-                    None => {
-                        processor.polygon_begin(true, 0, 0)?;
-                        processor.polygon_end(true, 0)
-                    }
+                if self.is_light_buf() {
+                    processor.polygon_begin(true, 0, 0)?;
+                    processor.polygon_end(true, 0)
+                } else {
+                    let object = self.read_object()?;
+                    let point_offsets = read_point_offsets(object.point_offsets())?;
+                    processor.polygon_begin(true, point_offsets.len() - 1, 0)?;
+                    self.process_lines(processor, &point_offsets)?;
+                    processor.polygon_end(true, 0)
                 }
             }
             ObjectKind::MultiPolygon => {
-                let object = self.read_object()?;
-                match object.ring_offsets() {
-                    Some(ring_offsets) => {
-                        let point_offsets = read_point_offsets(object.point_offsets())?;
-                        processor.multipolygon_begin(ring_offsets.len() - 1, 0)?;
-                        self.process_polygons(processor, &point_offsets, &ring_offsets)?;
-                        processor.multipolygon_end(0)
-                    }
-                    None => {
-                        processor.multipolygon_begin(0, 0)?;
-                        processor.multipolygon_end(0)
-                    }
+                if self.is_light_buf() {
+                    processor.multipolygon_begin(0, 0)?;
+                    processor.multipolygon_end(0)
+                } else {
+                    let object = self.read_object()?;
+                    let ring_offsets = read_ring_offsets(object.ring_offsets())?;
+                    let point_offsets = read_point_offsets(object.point_offsets())?;
+                    processor.multipolygon_begin(ring_offsets.len() - 1, 0)?;
+                    self.process_polygons(processor, &point_offsets, &ring_offsets)?;
+                    processor.multipolygon_end(0)
                 }
             }
             ObjectKind::GeometryCollection => {
-                let object = self.read_object()?;
-                let collection = object.collection().ok_or(GeozeroError::Geometry(
-                    "Invalid Collection, collection missing".to_string(),
-                ))?;
-                processor.geometrycollection_begin(collection.len(), 0)?;
-                for (idx2, geometry) in collection.iter().enumerate() {
-                    self.process_inner(processor, &geometry, idx2)?;
+                if self.is_light_buf() {
+                    processor.geometrycollection_begin(0, 0)?;
+                    processor.geometrycollection_end(0)
+                } else {
+                    let object = self.read_object()?;
+                    let collection = object.collection().ok_or(GeozeroError::Geometry(
+                        "Invalid Collection, collection missing".to_string(),
+                    ))?;
+                    processor.geometrycollection_begin(collection.len(), 0)?;
+                    for (idx2, geometry) in collection.iter().enumerate() {
+                        self.process_inner(processor, &geometry, idx2)?;
+                    }
+                    processor.geometrycollection_end(0)
                 }
-                processor.geometrycollection_end(0)
             }
         }
     }

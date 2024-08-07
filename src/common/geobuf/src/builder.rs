@@ -37,7 +37,6 @@ pub struct GeometryBuilder<'fbb> {
     properties: Option<Vec<u8>>,
     temp_kind: Option<ObjectKind>,
     srid: i32,
-    is_feature: bool,
 
     kind: Option<FeatureKind>,
     stack: Vec<Vec<WIPOffset<InnerObject<'fbb>>>>,
@@ -55,7 +54,6 @@ impl<'fbb> GeometryBuilder<'fbb> {
             properties: None,
             temp_kind: None,
             srid: 0,
-            is_feature: false,
 
             kind: None,
             stack: Vec::new(),
@@ -224,7 +222,6 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
     }
 
     fn visit_feature(&mut self, properties: Option<&JsonObject>) -> GeoResult<()> {
-        self.is_feature = true;
         if let Some(properties) = properties {
             if !properties.is_empty() {
                 let data = flexbuffers::to_vec(properties)
@@ -244,17 +241,14 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
                     let properties = self.create_properties();
                     let srid = self.srid;
 
-                    let object = match object_kind {
-                        ObjectKind::GeometryCollection => unreachable!(),
-                        ObjectKind::Point | ObjectKind::MultiPoint | ObjectKind::LineString
-                            if point_offsets.is_none()
-                                && ring_offsets.is_none()
-                                && properties.is_none()
-                                && srid == 0 =>
-                        {
-                            None
-                        }
-                        _ => Some(geo_buf::Object::create(
+                    if point_offsets.is_none()
+                        && ring_offsets.is_none()
+                        && properties.is_none()
+                        && srid == 0
+                    {
+                        self.object = None
+                    } else {
+                        self.object = Some(geo_buf::Object::create(
                             &mut self.fbb,
                             &geo_buf::ObjectArgs {
                                 point_offsets,
@@ -263,28 +257,38 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
                                 properties,
                                 ..Default::default()
                             },
-                        )),
-                    };
+                        ))
+                    }
 
                     self.kind = Some(kind);
-                    self.object = object;
                     return Ok(());
                 }
 
                 if self.stack.len() == 1 && object_kind == ObjectKind::GeometryCollection {
                     let geometries = self.stack.pop().unwrap();
-                    let collection = Some(self.fbb.create_vector(&geometries));
+                    let collection = if geometries.len() > 0 {
+                        Some(self.fbb.create_vector(&geometries))
+                    } else {
+                        None
+                    };
                     let properties = self.create_properties();
                     let srid = self.srid;
 
-                    let object = geo_buf::Object::create(&mut self.fbb, &geo_buf::ObjectArgs {
-                        collection,
-                        srid,
-                        properties,
-                        ..Default::default()
-                    });
+                    if collection.is_none() && properties.is_none() && srid == 0 {
+                        self.object = None;
+                    } else {
+                        self.object = Some(geo_buf::Object::create(
+                            &mut self.fbb,
+                            &geo_buf::ObjectArgs {
+                                collection,
+                                srid,
+                                properties,
+                                ..Default::default()
+                            },
+                        ));
+                    }
+
                     self.kind = Some(kind);
-                    self.object = Some(object);
                     return Ok(());
                 }
 

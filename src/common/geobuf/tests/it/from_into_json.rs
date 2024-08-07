@@ -76,6 +76,7 @@ fn test_from_feature() {
     run_from_json(
         r#"{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[173,-40]},"properties":{"name":"abc"}},{"type":"Feature","geometry":{"type":"Point","coordinates":[174,-41]},"properties":{"name":"def"}}]}"#,
     );
+    run_from_json(r#"{"type":"FeatureCollection","features":[]}"#);
 
     // GeoJson not support Feature without geometry
     // run_from_json(

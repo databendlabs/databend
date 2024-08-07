@@ -17,5 +17,6 @@
 mod bench;
 mod from_into_geo;
 mod from_into_json;
+mod from_into_wkb;
 mod from_into_wkt;
 mod size;

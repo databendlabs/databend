@@ -27,6 +27,7 @@ pub use geojson_adapter::GeoJson;
 use geojson_adapter::JsonObject;
 pub use geometry::BoundingBox;
 use geozero::error::Result as GeoResult;
+pub use wkb_addapter::Ewkb;
 pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Ewkt;
 pub use wkt_adapter::Wkt;
