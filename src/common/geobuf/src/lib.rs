@@ -22,6 +22,7 @@ mod wkb_addapter;
 mod wkt_adapter;
 
 use builder::GeometryBuilder;
+use databend_common_arrow::arrow::buffer::Buffer;
 use geo_generated::geo_buf;
 pub use geojson_adapter::GeoJson;
 use geojson_adapter::JsonObject;
@@ -35,8 +36,8 @@ pub use wkt_adapter::Wkt;
 #[derive(Clone)]
 pub struct Geometry {
     buf: Vec<u8>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
+    column_x: Buffer<f64>,
+    column_y: Buffer<f64>,
 }
 
 pub trait Visitor {

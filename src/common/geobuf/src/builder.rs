@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::buffer::Buffer;
 use flatbuffers::FlatBufferBuilder;
 use flatbuffers::Vector;
 use flatbuffers::WIPOffset;
@@ -125,8 +126,8 @@ impl<'fbb> GeometryBuilder<'fbb> {
 
         Geometry {
             buf,
-            column_x,
-            column_y,
+            column_x: Buffer::from(column_x),
+            column_y: Buffer::from(column_y),
         }
     }
 
