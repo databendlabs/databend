@@ -288,8 +288,9 @@ fn serialize_index_scalar<S>(scalar: &Scalar, serializer: S) -> Result<S::Ok, S:
 where S: serde::Serializer {
     match IndexScalar::try_from(scalar.clone()) {
         Ok(index_scalar) => serde::Serialize::serialize(&index_scalar, serializer),
-        Err(_) => Err(serde::ser::Error::custom(format!(
-            "Failed to convert {scalar} to IndexScalar"
+        Err(e) => Err(serde::ser::Error::custom(format!(
+            "Failed to convert scalar to IndexScalar: {:?}",
+            e
         ))),
     }
 }
@@ -301,8 +302,8 @@ where S: serde::Serializer {
 fn deserialize_index_scalar<'de, D>(deserializer: D) -> Result<Scalar, D::Error>
 where D: serde::Deserializer<'de> {
     let index_scalar = <IndexScalar as serde::Deserialize>::deserialize(deserializer)?;
-    Scalar::try_from(index_scalar.clone())
-        .map_err(|_| D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar")))
+    Scalar::try_from(index_scalar)
+        .map_err(|e| D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e)))
 }
 
 /// Serializes a vector of `Scalar` values by first converting each to `IndexScalar`.
@@ -315,17 +316,17 @@ where D: serde::Deserializer<'de> {
 /// `IndexScalar`.
 fn serialize_index_scalar_vec<S>(scalars: &[Scalar], serializer: S) -> Result<S::Ok, S::Error>
 where S: serde::Serializer {
-    let mut index_scalars = Vec::with_capacity(scalars.len());
-    for scalar in scalars {
-        match IndexScalar::try_from(scalar.clone()) {
-            Ok(index_scalar) => index_scalars.push(index_scalar),
-            Err(_) => {
-                return Err(serde::ser::Error::custom(format!(
-                    "Failed to convert {scalar} to IndexScalar"
-                )));
-            }
-        }
-    }
+    let index_scalars = scalars
+        .iter()
+        .map(|scalar| {
+            IndexScalar::try_from(scalar.clone()).map_err(|e| {
+                serde::ser::Error::custom(format!(
+                    "Failed to convert Scalar to IndexScalar: {:?}",
+                    e
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     serde::Serialize::serialize(&index_scalars, serializer)
 }
 
@@ -340,12 +341,11 @@ where D: serde::Deserializer<'de> {
     index_scalars
         .into_iter()
         .map(|index_scalar| {
-            Scalar::try_from(index_scalar.clone()).map_err(|_| {
-                D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar"))
+            Scalar::try_from(index_scalar).map_err(|e| {
+                D::Error::custom(format!("Failed to convert IndexScalar to Scalar: {:?}", e))
             })
         })
         .collect::<Result<Vec<_>, _>>()
-        .map_err(serde::de::Error::custom)
 }
 
 fn serialize_index_scalar_option_vec<S>(
@@ -370,12 +370,14 @@ where D: serde::Deserializer<'de> {
             index_scalars
                 .into_iter()
                 .map(|index_scalar| {
-                    Scalar::try_from(index_scalar.clone()).map_err(|_| {
-                        D::Error::custom(format!("Failed to convert {index_scalar:?} to Scalar"))
+                    Scalar::try_from(index_scalar).map_err(|e| {
+                        D::Error::custom(format!(
+                            "Failed to convert IndexScalar to Scalar: {:?}",
+                            e
+                        ))
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(serde::de::Error::custom)
         })
         .transpose()
 }
