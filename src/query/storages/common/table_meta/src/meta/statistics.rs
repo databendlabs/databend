@@ -93,11 +93,15 @@ impl<T: Ord + Clone> MinMax<T> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::Path;
+
     use databend_common_exception::Result;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::Scalar;
 
     use crate::meta::MinMax;
+    use crate::meta::TableSnapshot;
 
     #[test]
     fn test_minmax() -> Result<()> {
@@ -118,6 +122,27 @@ mod tests {
         assert_eq!(&Scalar::Number(NumberScalar::Int16(1)), t2.min());
         assert_eq!(&Scalar::Null, t2.max());
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_snapshot_reader() -> Result<()> {
+        let pwd =
+            std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR env variable unset");
+
+        let meta_paths = Path::new(&pwd)
+            .join("../".repeat(5))
+            .join("tests/data/metas");
+
+        let meta_files = fs::read_dir(&meta_paths)
+            .unwrap()
+            .map(|v| meta_paths.join(v.expect("read dir must success").path()))
+            .collect::<Vec<_>>();
+
+        for meta in meta_files.iter() {
+            let data = fs::read(meta).unwrap();
+            TableSnapshot::from_slice(&data).unwrap();
+        }
         Ok(())
     }
 }

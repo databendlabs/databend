@@ -94,7 +94,6 @@ pub struct BlockMetaMessagePack {
     #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
     col_metas: HashMap<ColumnId, ColumnMeta>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     location: Location,

@@ -141,7 +141,7 @@ select * FROM fuse_compat_table ignore_result;
 
 
 query T
-select * FROM fuse_compat_table_2 where brand_new = 100;
+select count() FROM fuse_compat_table_2 where brand_new = 100;
 ----
 0
 

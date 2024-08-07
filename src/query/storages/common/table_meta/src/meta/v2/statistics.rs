@@ -98,7 +98,6 @@ pub struct StatisticsMessagePack {
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
 }
 
