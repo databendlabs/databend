@@ -74,13 +74,6 @@ impl Default for DictionaryMeta {
     }
 }
 
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct DictionaryIdent {
-    pub dict_id: u64,
-    pub seq: u64,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
     pub create_option: CreateOption,
@@ -133,50 +126,7 @@ impl DictionaryNameIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DBIdDictionaryNameIdent {
-    pub tenant: Tenant,
-    pub db_id: u64,
-    pub dict_name: String,
-}
 
-impl DBIdDictionaryNameIdent {
-    pub fn new(
-        tenant: impl ToTenant,
-        db_id: u64, 
-        dict_name: impl ToString,
-    ) -> DBIdDictionaryNameIdent {
-        DBIdDictionaryNameIdent {
-            tenant: tenant.to_tenant(),
-            db_id,
-            dict_name: dict_name.to_string(),
-        }
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-
-    pub fn dict_name(&self) -> String {
-        self.dict_name.clone()
-    }
-
-    pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent::new(&self.tenant, self.db_id)
-    }
-
-    pub fn tenant_name(&self) -> &str {
-        self.tenant.tenant_name()
-    }
-
-    pub fn new_generic(tenant: impl ToTenant, dict_name: impl ToString, db_id: u64) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            dict_name: dict_name.to_string(),
-            db_id
-        }
-    }
-}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDictionaryReply {
@@ -252,72 +202,6 @@ impl Display for DictionaryId {
     }
 }
 
-/// The meta-service key for storing dictionary id history ever used by a dictionary name
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct DictionaryIdHistoryIdent {
-    pub database_id: u64,
-    pub dictionary_name: String,
-}
-
-impl Display for DictionaryIdHistoryIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.'{}'", self.database_id, self.dictionary_name)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct DictionaryIdToName {
-    pub dictionary_id: u64,
-}
-
-impl Display for DictionaryIdToName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DictionaryIdToName{{{}}}", self.dictionary_id)
-    }
-}
-
-// Save dictionary name id list history.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct DictionaryIdList {
-    pub id_list: Vec<u64>,
-}
-
-impl DictionaryIdList {
-    pub fn new() -> DictionaryIdList {
-        DictionaryIdList::default()
-    }
-
-    pub fn len(&self) -> usize {
-        self.id_list.len()
-    }
-
-    pub fn id_list(&self) -> &Vec<u64> {
-        &self.id_list
-    }
-
-    pub fn append(&mut self, dictionary_id: u64) {
-        self.id_list.push(dictionary_id);
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.id_list.is_empty()
-    }
-
-    pub fn pop(&mut self) -> Option<u64> {
-        self.id_list.pop()
-    }
-
-    pub fn last(&mut self) -> Option<&u64> {
-        self.id_list.last()
-    }
-}
-
-impl Display for DictionaryIdList {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DB.Dictionary id list: {:?}", self.id_list)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDictionaryReq {
     pub inner: DatabaseNameIdent,
@@ -349,13 +233,10 @@ mod kvapi_key_impl {
 
     use crate::schema::DatabaseId;
     use crate::tenant::Tenant;
-
     use super::DBIdDictionaryName;
-    use super::DBIdDictionaryNameIdent;
     use super::DictionaryId;
-    use super::DictionaryIdToName;
     use super::DictionaryMeta;
-    use super::DictionaryNameIdent;
+
 
     impl kvapi::KeyCodec for DictionaryId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -408,27 +289,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for DBIdDictionaryNameIdent {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            self.dict_name.encode_key(b.push_str(self.tenant.tenant_name()).push_u64(self.db_id))
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
-            let tenant_name = parser.next_nonempty()?;
-            let name = String::decode_key(parser)?;
-            Ok(DBIdDictionaryNameIdent::new_generic(Tenant::new_nonempty(tenant_name), name, 0))
-        }
-    }
-
-    impl kvapi::Key for DBIdDictionaryNameIdent {
-        const PREFIX: &'static str = "__fd_dictionary_by_id";
-        type ValueType = DictionaryId;
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
-    }
-
     impl kvapi::Value for DictionaryId {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             [self.to_string_key()]
@@ -438,48 +298,6 @@ mod kvapi_key_impl {
     impl kvapi::Value for DBIdDictionaryName {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
-        }
-    }
-
-    impl kvapi::KeyCodec for DictionaryIdToName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.dictionary_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let dictionary_id = p.next_u64()?;
-            Ok(Self { dictionary_id })
-        }
-    }
-
-    impl kvapi::Key for DictionaryIdToName {
-        const PREFIX: &'static str = "__fd_dictionary_id_to_name";
-
-        type ValueType = DBIdDictionaryName;
-
-        fn parent(&self) -> Option<String> {
-            Some(DictionaryId::new(self.dictionary_id).to_string_key())
-        }
-    }
-
-    impl kvapi::KeyCodec for DictionaryNameIdent {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            self.dictionary_name.encode_key(b.push_str(self.tenant.tenant_name()).push_str(&self.db_name))
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
-            let tenant_name = parser.next_nonempty()?;
-            let name = String::decode_key(parser)?;
-            Ok(DictionaryNameIdent::new_generic(Tenant::new_nonempty(tenant_name), name, "my_db".to_string()))
-        }
-    }
-
-    impl kvapi::Key for DictionaryNameIdent {
-        const PREFIX: &'static str = "__fd_dictionary_by_id";
-        type ValueType = DictionaryId;
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
         }
     }
 

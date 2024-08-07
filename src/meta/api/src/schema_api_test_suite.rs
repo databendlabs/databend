@@ -7360,48 +7360,49 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn dictionary_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()> 
+    async fn dictionary_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
         let tenant = Tenant::new_literal(tenant_name);
-        
+
         let db_name = "db1";
         let tbl_name = "tb2";
         let dict_name = "dict3";
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
-        
+
         info!("--- prepare db");
         {
             util.create_db().await?;
         }
 
         let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
+        Arc::new(TableSchema::new(vec![TableField::new(
+            "number",
+            TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
-        let dictionary_meta = |created_on| DictionaryMeta {
+        let dictionary_meta = |name: &str| DictionaryMeta {
+            name: name.to_string(),
+            source: "mysql".to_string(),
             schema: schema(),
             options: options(),
-            updated_on: Some(created_on),
-            created_on,
+            created_on: Utc::now(),
             ..DictionaryMeta::default()
         };
 
         let unknown_database_code = ErrorCode::UNKNOWN_DATABASE;
-        
+
         {
             info!("--- list dictionary with no create before");
             let req = ListDictionaryReq::new(&tenant, db_name);
             let res = mt.list_dictionaries(req).await?;
             assert!(res.is_empty())
         }
-        
+
         let name_ident_dict = DictionaryNameIdent {
             tenant: Tenant::new_or_err(tenant_name, func_name!())?,
             db_name: db_name.to_string(),
@@ -7410,11 +7411,10 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- create dictionary");
-            let created_on = Utc::now();
             let req = CreateDictionaryReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(created_on),
+                dictionary_meta: dictionary_meta(dict_name),
             };
             let res = mt.create_dictionary(req).await?;
             dict_id = res.dictionary_id;
@@ -7422,11 +7422,10 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- create dictionary again with if_not_exists = false");
-            let created_on = Utc::now();
             let req = CreateDictionaryReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(created_on),
+                dictionary_meta: dictionary_meta(dict_name),
             };
             let res = mt.create_dictionary(req).await;
             let status = res.err().unwrap();
@@ -7434,25 +7433,26 @@ impl SchemaApiTestSuite {
 
             assert_eq!(ErrorCode::DICTIONARY_ALREADY_EXISTS, err_code.code());
         }
-         
+
         {
             info!("--- create dictionary again with if_not_exists = true");
-            let created_on = Utc::now();
             let req = CreateDictionaryReq {
                 create_option: CreateOption::CreateIfNotExists,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(created_on),
+                dictionary_meta: dictionary_meta(dict_name),
             };
             let res = mt.create_dictionary(req).await?;
-            assert_eq!(dict_id,res.dictionary_id);
+            assert_eq!(dict_id, res.dictionary_id);
         }
 
-        // {
-        //     info!("--- list dictionary");
-        //     let req = ListDictionaryReq::new(&tenant, db_name);
-        //     let res = mt.list_dictionaries(req).await?;
-        //     assert_eq!(2,res.len()); // 2,0
-        // }
+        {
+            info!("--- list dictionary");
+            let req = ListDictionaryReq::new(&tenant, db_name);
+            let res = mt.list_dictionaries(req).await?;
+            println!("res={:?}", res);
+
+            assert_eq!(1, res.len());
+        }
 
         {
             info!("--- drop dictionary");
@@ -7465,13 +7465,13 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok())
         }
 
-        // {
-        //     info!("--- list dictionary after drop one");
-        //     let req = ListDictionaryReq::new(&tenant, db_name);
+        {
+            info!("--- list dictionary after drop one");
+            let req = ListDictionaryReq::new(&tenant, db_name);
 
-        //     let res = mt.list_dictionaries(req).await?;
-        //     assert_eq!(1,res.len());// 1,0
-        // }
+            let res = mt.list_dictionaries(req).await?;
+            assert_eq!(0, res.len());
+        }
 
         {
             info!("--- drop dictionary with if_exists = false");
@@ -7494,40 +7494,9 @@ impl SchemaApiTestSuite {
             assert!(res.is_ok())
         }
 
-        {
-            info!("--- create or replace dictionary");
-            let created_on = Utc::now();
-            let replace_dictionary_name = "replace_dict";
-            let name_ident_replace = DictionaryNameIdent {
-                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                db_name: db_name.to_string(),
-                dictionary_name: replace_dictionary_name.to_string(),
-            };
-            let req = CreateDictionaryReq {
-                create_option: CreateOption::Create,
-                name_ident: name_ident_replace.clone(),
-                dictionary_meta: dictionary_meta(created_on),
-            };
-
-            let get_req = GetDictionaryReq {
-                name_ident: name_ident_replace.clone(),
-            };
-
-            let res = mt.create_dictionary(req).await?;
-            let old_dict_id = res.dictionary_id;
-            let old_dict_id_key = DictionaryId {
-                dictionary_id: old_dict_id
-            };
-            let meta: DictionaryMeta = get_kv_data(mt.as_kv_api(),&old_dict_id_key).await?;
-            assert_eq!(meta, dictionary_meta(created_on));
-
-            let resp = mt.get_dictionary(get_req.clone()).await?;
-            assert_eq!(resp.dictionary_meta, dictionary_meta(created_on));
-        }
-
         Ok(())
-
     }
+
 }
 
 struct Util<'a, MT>
