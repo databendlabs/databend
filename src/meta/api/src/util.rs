@@ -38,8 +38,6 @@ use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdToName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::DictionaryId;
-use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::IndexId;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ShareDBParams;

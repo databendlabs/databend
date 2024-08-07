@@ -64,7 +64,6 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
-use databend_common_meta_app::schema::DictionaryId;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DictionaryNameIdent;
 use databend_common_meta_app::schema::DropCatalogReq;
@@ -80,7 +79,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -7394,7 +7392,7 @@ impl SchemaApiTestSuite {
             ..DictionaryMeta::default()
         };
 
-        let unknown_database_code = ErrorCode::UNKNOWN_DATABASE;
+        let _unknown_database_code = ErrorCode::UNKNOWN_DATABASE;
 
         {
             info!("--- list dictionary with no create before");
