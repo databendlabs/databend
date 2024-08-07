@@ -230,6 +230,10 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
+    fn is_local(&self) -> bool {
+        false
+    }
+    
     fn as_any(&self) -> &dyn Any {
         self
     }
