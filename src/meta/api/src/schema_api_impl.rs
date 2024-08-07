@@ -106,7 +106,6 @@ use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryId;
-use databend_common_meta_app::schema::DictionaryIdToName;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DictionaryNameIdent;
 use databend_common_meta_app::schema::DropCatalogReply;

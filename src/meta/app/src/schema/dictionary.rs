@@ -227,12 +227,8 @@ mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
-    use databend_common_meta_kvapi::kvapi::KeyBuilder;
-    use databend_common_meta_kvapi::kvapi::KeyParser;
-    use databend_common_meta_kvapi::kvapi::KeyError;
 
     use crate::schema::DatabaseId;
-    use crate::tenant::Tenant;
     use super::DBIdDictionaryName;
     use super::DictionaryId;
     use super::DictionaryMeta;
