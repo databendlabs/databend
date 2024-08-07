@@ -7371,6 +7371,11 @@ impl SchemaApiTestSuite {
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
+        
+        info!("--- prepare db");
+        {
+            util.create_db().await?;
+        }
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
