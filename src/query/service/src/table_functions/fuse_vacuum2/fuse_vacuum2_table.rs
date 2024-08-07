@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_args::TableArgs;
@@ -38,17 +39,27 @@ use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use crate::sessions::TableContext;
 
 const FUSE_VACUUM2_ENGINE_NAME: &str = "fuse_vacuum2_table";
-struct Vacuum2TableArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+
+enum Vacuum2TableArgs {
+    SingleTable {
+        arg_database_name: String,
+        arg_table_name: String,
+    },
+    All,
 }
 
 impl From<&Vacuum2TableArgs> for TableArgs {
     fn from(value: &Vacuum2TableArgs) -> Self {
-        TableArgs::new_positioned(vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
-        ])
+        match value {
+            Vacuum2TableArgs::SingleTable {
+                arg_database_name,
+                arg_table_name,
+            } => TableArgs::new_positioned(vec![
+                string_literal(arg_database_name.as_str()),
+                string_literal(arg_table_name.as_str()),
+            ]),
+            Vacuum2TableArgs::All => TableArgs::new_positioned(vec![]),
+        }
     }
 }
 
@@ -72,15 +83,58 @@ impl SimpleTableFunc for FuseVacuum2Table {
         license_manager
             .manager
             .check_enterprise_enabled(ctx.get_license_key(), Feature::Vacuum)?;
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
-            )
+
+        let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
+        let res = match &self.args {
+            Vacuum2TableArgs::SingleTable {
+                arg_database_name,
+                arg_table_name,
+            } => {
+                self.apply_single_table(ctx, catalog.as_ref(), arg_database_name, arg_table_name)
+                    .await?
+            }
+            Vacuum2TableArgs::All => self.apply_all_tables(ctx, catalog.as_ref()).await?,
+        };
+        Ok(Some(DataBlock::new_from_columns(vec![
+            StringType::from_data(res),
+        ])))
+    }
+
+    fn create(table_args: TableArgs) -> Result<Self>
+    where Self: Sized {
+        let args = match table_args.positioned.len() {
+            0 => Vacuum2TableArgs::All,
+            2 => {
+                let (arg_database_name, arg_table_name) =
+                    parse_db_tb_args(&table_args, FUSE_VACUUM2_ENGINE_NAME)?;
+                Vacuum2TableArgs::SingleTable {
+                    arg_database_name,
+                    arg_table_name,
+                }
+            }
+            _ => {
+                return Err(ErrorCode::NumberArgumentsNotMatch(
+                    "Expected 0 or 2 arguments".to_string(),
+                ));
+            }
+        };
+        Ok(Self {
+            args,
+            handler: get_vacuum_handler(),
+        })
+    }
+}
+
+impl FuseVacuum2Table {
+    async fn apply_single_table(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        catalog: &dyn Catalog,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<Vec<String>> {
+        let tbl = catalog
+            .get_table(&ctx.get_tenant(), database_name, table_name)
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
@@ -89,23 +143,34 @@ impl SimpleTableFunc for FuseVacuum2Table {
 
         tbl.check_mutable()?;
 
-        let col: Vec<String> = self.handler.do_vacuum2(tbl, ctx.clone()).await?;
-
-        Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(col),
-        ])))
+        self.handler.do_vacuum2(tbl, ctx.clone()).await
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
-    where Self: Sized {
-        let (arg_database_name, arg_table_name) =
-            parse_db_tb_args(&table_args, FUSE_VACUUM2_ENGINE_NAME)?;
-        Ok(Self {
-            args: Vacuum2TableArgs {
-                arg_database_name,
-                arg_table_name,
-            },
-            handler: get_vacuum_handler(),
-        })
+    async fn apply_all_tables(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        catalog: &dyn Catalog,
+    ) -> Result<Vec<String>> {
+        let tenant_id = ctx.get_tenant();
+        let dbs = catalog.list_databases(&tenant_id).await?;
+        for db in dbs {
+            if db.engine() != "DEFAULT" {
+                continue;
+            }
+            let tables = catalog.list_tables(&tenant_id, db.name()).await?;
+            for table in tables {
+                let tbl = FuseTable::try_from_table(table.as_ref()).map_err(|_| {
+                    ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
+                })?;
+
+                if table.is_read_only() {
+                    continue;
+                }
+
+                let _ = self.handler.do_vacuum2(tbl, ctx.clone()).await?;
+            }
+        }
+
+        Ok(vec![])
     }
 }
