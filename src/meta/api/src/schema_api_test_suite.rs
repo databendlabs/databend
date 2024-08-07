@@ -7432,7 +7432,7 @@ impl SchemaApiTestSuite {
             let status = res.err().unwrap();
             let err_code = ErrorCode::from(status);
 
-            assert_eq!(ErrorCode::INDEX_ALREADY_EXISTS, err_code.code());
+            assert_eq!(ErrorCode::DICTIONARY_ALREADY_EXISTS, err_code.code());
         }
          
         {
