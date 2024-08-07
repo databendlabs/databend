@@ -15,6 +15,8 @@
 use databend_common_arrow::arrow::buffer::Buffer;
 use geozero::error::GeozeroError;
 use ordered_float::OrderedFloat;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::geo_buf;
 use crate::geo_buf::Object;

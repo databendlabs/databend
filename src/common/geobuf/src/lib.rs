@@ -40,6 +40,64 @@ pub struct Geometry {
     column_y: Buffer<f64>,
 }
 
+impl Geometry {
+    pub fn as_ref<'a>(&'a self) -> GeometryRef<'a> {
+        GeometryRef {
+            buf: &self.buf,
+            column_x: self.column_x.as_slice(),
+            column_y: self.column_y.as_slice(),
+        }
+    }
+}
+
+impl Default for Geometry {
+    fn default() -> Self {
+        Self {
+            buf: vec![FeatureKind::Geometry(ObjectKind::GeometryCollection).as_u8()],
+            column_x: Buffer::default(),
+            column_y: Buffer::default(),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct GeometryRef<'a> {
+    buf: &'a [u8],
+    column_x: &'a [f64],
+    column_y: &'a [f64],
+}
+
+impl<'a> GeometryRef<'a> {
+    pub fn new(buf: &'a [u8], x: &'a [f64], y: &'a [f64]) -> Self {
+        debug_assert_eq!(x.len(), y.len());
+        GeometryRef {
+            buf,
+            column_x: x,
+            column_y: y,
+        }
+    }
+
+    pub fn buf(&self) -> &[u8] {
+        self.buf
+    }
+
+    pub fn x(&self) -> &[f64] {
+        self.column_x
+    }
+
+    pub fn y(&self) -> &[f64] {
+        self.column_y
+    }
+
+    pub fn to_owned(&self) -> Geometry {
+        Geometry {
+            buf: self.buf.to_vec(),
+            column_x: Buffer::from(self.column_x.to_vec()),
+            column_y: Buffer::from(self.column_y.to_vec()),
+        }
+    }
+}
+
 pub trait Visitor {
     fn visit_point(&mut self, x: f64, y: f64, multi: bool) -> GeoResult<()>;
 
