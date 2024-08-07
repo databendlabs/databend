@@ -3241,7 +3241,6 @@ dependencies = [
  "bytes",
  "hashbrown 0.14.3",
  "hashlink 0.8.4",
- "heapsize",
 ]
 
 [[package]]
@@ -8767,15 +8766,6 @@ dependencies = [
  "rustc_version",
  "spin 0.9.8",
  "stable_deref_trait",
-]
-
-[[package]]
-name = "heapsize"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
-dependencies = [
- "winapi",
 ]
 
 [[package]]
