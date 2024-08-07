@@ -1149,7 +1149,6 @@ impl CreateDictionaryWithDropTime {
     }
 }
 
-
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1825,7 +1824,10 @@ impl AppErrorMessage for GetDictionaryWithDropTime {
 
 impl AppErrorMessage for CreateDictionaryWithDropTime {
     fn message(&self) -> String {
-        format!("Create Dictionary '{}' with drop time", self.dictionary_name)
+        format!(
+            "Create Dictionary '{}' with drop time",
+            self.dictionary_name
+        )
     }
 }
 
@@ -1940,10 +1942,18 @@ impl From<AppError> for ErrorCode {
             AppError::SequenceError(err) => ErrorCode::SequenceError(err.message()),
             AppError::UpdateStreamMetasFailed(e) => ErrorCode::UnresolvableConflict(e.message()),
             // dictionary
-            AppError::DictionaryAlreadyExists(err) => ErrorCode::DictionaryAlreadyExists(err.message()),
-            AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
-            AppError::DropDictionaryWithDropTime(err) => ErrorCode::DropDictionaryWithDropTime(err.message()),
-            AppError::GetDictionaryWithDropTime(err) => ErrorCode::GetDictionaryWithDropTime(err.message()),
+            AppError::DictionaryAlreadyExists(err) => {
+                ErrorCode::DictionaryAlreadyExists(err.message())
+            }
+            AppError::UnknownDictionary(err) => {
+                ErrorCode::UnknownDictionary(err.message())
+            }
+            AppError::DropDictionaryWithDropTime(err) => {
+                ErrorCode::DropDictionaryWithDropTime(err.message())
+            }
+            AppError::GetDictionaryWithDropTime(err) => {
+                ErrorCode::GetDictionaryWithDropTime(err.message())
+            }
             AppError::CreateDictionaryWithDropTime(err) => {
                 ErrorCode::CreateDictionaryWithDropTime(err.message())
             }

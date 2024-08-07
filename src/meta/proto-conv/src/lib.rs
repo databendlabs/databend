@@ -68,6 +68,7 @@ mod connection_from_to_protobuf_impl;
 mod data_mask_from_to_protobuf_impl;
 mod database_from_to_protobuf_impl;
 mod datetime_from_to_protobuf_impl;
+mod dictionary_from_to_protobuf_impl;
 mod file_format_from_to_protobuf_impl;
 mod from_to_protobuf;
 mod index_from_to_protobuf_impl;
@@ -89,7 +90,6 @@ mod udf_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
 mod virtual_column_from_to_protobuf_impl;
-mod dictionary_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::FromToProtoEnum;

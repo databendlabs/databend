@@ -40,8 +40,8 @@ use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropDictionaryReply;
+use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -314,11 +314,21 @@ pub trait SchemaApi: Send + Sync {
     fn name(&self) -> String;
 
     // dictionary
-    async fn create_dictionary(&self, req: CreateDictionaryReq) -> Result<CreateDictionaryReply, KVAppError>;
+    async fn create_dictionary(
+        &self,
+        req: CreateDictionaryReq,
+    ) -> Result<CreateDictionaryReply, KVAppError>;
     
-    async fn drop_dictionary(&self, req: DropDictionaryReq) -> Result<DropDictionaryReply, KVAppError>;
+    async fn drop_dictionary(
+        &self,
+        req: DropDictionaryReq,
+    ) -> Result<DropDictionaryReply, KVAppError>;
 
-    async fn get_dictionary(&self, req: GetDictionaryReq) -> Result<GetDictionaryReply, KVAppError>;
+    async fn get_dictionary(&self, req: GetDictionaryReq)
+    -> Result<GetDictionaryReply, KVAppError>;
 
-    async fn list_dictionaries(&self, req: ListDictionaryReq) -> Result<Vec<DictionaryMeta>, KVAppError>;
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<DictionaryMeta>, KVAppError>;
 }

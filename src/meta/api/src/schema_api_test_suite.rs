@@ -7376,9 +7376,9 @@ impl SchemaApiTestSuite {
         }
 
         let schema = || {
-        Arc::new(TableSchema::new(vec![TableField::new(
-            "number",
-            TableDataType::Number(NumberDataType::UInt64),
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
             )]))
         };
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
@@ -7494,7 +7494,6 @@ impl SchemaApiTestSuite {
 
         Ok(())
     }
-
 }
 
 struct Util<'a, MT>

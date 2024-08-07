@@ -14,20 +14,19 @@
 
 use core::fmt;
 use std::collections::BTreeMap;
-use std::fmt::Formatter;
-use std::sync::Arc;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
 
-use crate::tenant::Tenant;
-use crate:: tenant::ToTenant;
-
 use super::database_name_ident::DatabaseNameIdent;
 use super::CreateOption;
+use crate::tenant::Tenant;
+use crate:: tenant::ToTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
@@ -48,11 +47,7 @@ impl Display for DictionaryMeta {
         write!(
             f,
             "Source: {}={:?}, Schema: {:?}, Primary_Column_Id: {:?}, CreatedOn: {:?}",
-            self.source,
-            self.options,
-            self.schema,
-            self.primary_column_ids,
-            self.created_on
+            self.source, self.options, self.schema, self.primary_column_ids, self.created_on
         )
     }
 }
@@ -91,7 +86,7 @@ pub struct DictionaryNameIdent {
 impl DictionaryNameIdent {
     pub fn new(
         tenant: impl ToTenant,
-        db_name: impl ToString, 
+        db_name: impl ToString,
         dictionary_name: impl ToString,
     ) -> DictionaryNameIdent {
         DictionaryNameIdent {
@@ -117,7 +112,11 @@ impl DictionaryNameIdent {
         self.tenant.tenant_name()
     }
 
-    pub fn new_generic(tenant: impl ToTenant, dictionary_name: impl ToString, db_name: impl ToString) -> Self {
+    pub fn new_generic(
+        tenant: impl ToTenant,
+        dictionary_name: impl ToString,
+        db_name: impl ToString
+    ) -> Self {
         Self {
             tenant: tenant.to_tenant(),
             dictionary_name: dictionary_name.to_string(),
@@ -125,8 +124,6 @@ impl DictionaryNameIdent {
         }
     }
 }
-
-
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct CreateDictionaryReply {
@@ -159,8 +156,7 @@ impl Display for DropDictionaryReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropDictionaryReply {
-}
+pub struct DropDictionaryReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReq {
@@ -228,11 +224,10 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use crate::schema::DatabaseId;
     use super::DBIdDictionaryName;
     use super::DictionaryId;
     use super::DictionaryMeta;
-
+    use crate::schema::DatabaseId;
 
     impl kvapi::KeyCodec for DictionaryId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -240,9 +235,11 @@ mod kvapi_key_impl {
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
+        where Self: Sized {
             let dict_id = parser.next_u64()?;
-            Ok(Self { dictionary_id: dict_id })
+            Ok(Self {
+                dictionary_id: dict_id
+            })
         }
     }
 
@@ -268,10 +265,13 @@ mod kvapi_key_impl {
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
+        where Self: Sized {
             let db_id = parser.next_u64()?;
             let dictionary_name = parser.next_str()?;
-            Ok(Self { db_id, dictionary_name })
+            Ok(Self {
+                db_id,
+                dictionary_name,
+            })
         }
     }
 
@@ -296,5 +296,4 @@ mod kvapi_key_impl {
             []
         }
     }
-
 }

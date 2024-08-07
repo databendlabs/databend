@@ -32,7 +32,7 @@ impl FromToProto for mt::DictionaryMeta {
         p.ver
     }
     fn from_pb(p: pb::DictionaryMeta) -> Result<Self, Incompatible>
-        where Self: Sized {
+    where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let schema = p.schema.ok_or_else(|| Incompatible {
             reason: "DictionaryMeta.schema can not be None".to_string(),
@@ -66,7 +66,7 @@ impl FromToProto for mt::DictionaryMeta {
             options: self.options.clone(),
             primary_column_ids: self.primary_column_ids.clone(),
             created_on: self.created_on.to_pb()?,
-            dropped_on: match  self.dropped_on {
+            dropped_on: match self.dropped_on {
                 Some(dropped_on) => Some(dropped_on.to_pb()?),
                 None => None,
             },

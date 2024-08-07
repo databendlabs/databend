@@ -26,6 +26,7 @@ pub mod virtual_column_ident;
 
 mod create_option;
 mod database;
+mod dictionary;
 mod index;
 mod least_visible_time;
 mod lock;
@@ -33,7 +34,6 @@ mod ownership;
 mod sequence;
 mod table;
 mod virtual_column;
-mod dictionary;
 
 pub use catalog::*;
 pub use catalog_id_ident::CatalogIdIdent;
@@ -61,6 +61,7 @@ pub use database::ShareDbId;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
 pub use database_id_history_ident::DatabaseIdHistoryIdent;
+pub use dictionary::*;
 pub use index::*;
 pub use index_name_ident::IndexNameIdent;
 pub use index_name_ident::IndexNameIdentRaw;
@@ -146,4 +147,3 @@ pub use virtual_column::UpdateVirtualColumnReply;
 pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
 pub use virtual_column_ident::VirtualColumnIdent;
-pub use dictionary::*;
