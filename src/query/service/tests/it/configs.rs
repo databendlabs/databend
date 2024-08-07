@@ -753,7 +753,7 @@ on = false
 endpoints = ["0.0.0.0:9191"]
 username = "username_from_file"
 password = "password_from_file"
-client_timeout_in_second = 10
+client_timeout_in_second = 4
 rpc_tls_meta_server_root_ca_cert = ""
 rpc_tls_meta_service_domain_name = "localhost"
 

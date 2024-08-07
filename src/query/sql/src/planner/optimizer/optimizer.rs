@@ -208,7 +208,8 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
                 }
             }
         },
-        Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
+        Plan::ExplainAnalyze { plan, partial } => Ok(Plan::ExplainAnalyze {
+            partial,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
         Plan::CopyIntoLocation(CopyIntoLocationPlan { stage, path, from }) => {

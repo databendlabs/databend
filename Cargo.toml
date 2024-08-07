@@ -275,7 +275,7 @@ opendal = { version = "0.48.0", features = [
     "services-webhdfs",
     "services-huggingface",
 ] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.3", features = [
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.

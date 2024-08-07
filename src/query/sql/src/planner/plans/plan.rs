@@ -179,6 +179,7 @@ pub enum Plan {
         formatted_sql: String,
     },
     ExplainAnalyze {
+        partial: bool,
         plan: Box<Plan>,
     },
 

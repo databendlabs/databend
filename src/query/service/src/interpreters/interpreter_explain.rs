@@ -28,6 +28,7 @@ use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -58,6 +59,7 @@ pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     config: ExplainConfig,
     kind: ExplainKind,
+    partial: bool,
     plan: Plan,
 }
 
@@ -247,12 +249,14 @@ impl ExplainInterpreter {
         plan: Plan,
         kind: ExplainKind,
         config: ExplainConfig,
+        partial: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
             ctx,
             plan,
             kind,
             config,
+            partial,
         })
     }
 
@@ -376,9 +380,12 @@ impl ExplainInterpreter {
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
 
-        let result = plan
-            .format(metadata.clone(), query_profiles)?
-            .format_pretty()?;
+        let result = if self.partial {
+            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
+        } else {
+            plan.format(metadata.clone(), query_profiles)?
+                .format_pretty()?
+        };
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])

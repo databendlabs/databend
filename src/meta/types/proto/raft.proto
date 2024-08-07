@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_display;
-mod physical_plan_visitor;
-pub mod physical_plans;
-mod util;
+syntax = "proto3";
 
-pub mod table_read_plan;
+package meta;
 
-pub use format::format_partial_tree;
-pub use physical_plan::PhysicalPlan;
-pub use physical_plan_builder::MutationBuildInfo;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use util::*;
+// A quorum granted or not granted Leader.
+message LeaderId {
+  uint64 term = 1;
+  uint64 node_id = 2;
+}
+
+// The vote for RequestVote etc.
+message Vote {
+  uint64 term = 1;
+  uint64 node_id = 2;
+  bool committed = 3;
+}
+
+// The log id
+message LogId {
+  uint64 term = 1;
+  uint64 node_id = 2;
+  uint64 index = 3;
+}
