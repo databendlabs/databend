@@ -233,7 +233,7 @@ impl Table for StreamTable {
     fn is_local(&self) -> bool {
         false
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
