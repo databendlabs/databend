@@ -4480,7 +4480,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
        
         // Get dictionary id list by `prefix_list` "<prefix>/<tenant>"
-        let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(req.inner.tenant()).done();
+        let prefix_key = kvapi::KeyBuilder::new_prefixed("__fd_dictionary").push_str(req.inner.tenant().tenant_name()).done();
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
