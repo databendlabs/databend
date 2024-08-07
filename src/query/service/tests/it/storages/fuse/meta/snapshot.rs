@@ -112,9 +112,8 @@ fn test_snapshot_v1_to_v4() {
 
 #[test]
 fn test_snapshot_reader() -> Result<()> {
-    for meta in ["legacy_tpch_v4.mpk"] {
-        let data = std::fs::read(meta).unwrap();
-        TableSnapshot::from_slice(&data).unwrap();
+    for meta in vec![include_bytes!("legacy_tpch_v4.mpk")] {
+        TableSnapshot::from_slice(meta).unwrap();
     }
     Ok(())
 }
