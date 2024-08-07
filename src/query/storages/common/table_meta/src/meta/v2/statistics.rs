@@ -27,6 +27,8 @@ use databend_common_expression::TableField;
 use serde::de::Error;
 use serde::Deserialize;
 
+use crate::meta::v0;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
     #[serde(
@@ -245,16 +247,22 @@ impl ClusterStatistics {
 }
 
 impl Statistics {
-    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
-        let col_stats = v0
-            .col_stats
-            .into_iter()
-            .filter_map(|(k, v)| {
-                let t = fields[k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(&v, t);
-                stats.map(|s| (k, s))
+    pub(crate) fn convert_column_stats(
+        v0: &HashMap<ColumnId, v0::statistics::ColumnStatistics>,
+        fields: &[TableField],
+    ) -> HashMap<ColumnId, ColumnStatistics> {
+        fields
+            .iter()
+            .filter_map(|f| {
+                v0.get(&f.column_id).and_then(|v| {
+                    ColumnStatistics::from_v0(v, f.data_type()).map(|v2| (f.column_id, v2))
+                })
             })
-            .collect();
+            .collect()
+    }
+
+    pub fn from_v0(v0: crate::meta::v0::statistics::Statistics, fields: &[TableField]) -> Self {
+        let col_stats = Self::convert_column_stats(&v0.col_stats, fields);
         Self {
             row_count: v0.row_count,
             block_count: v0.block_count,
