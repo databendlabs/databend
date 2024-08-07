@@ -81,7 +81,6 @@ pub struct Statistics {
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
 }
 
@@ -99,7 +98,6 @@ pub struct StatisticsMessagePack {
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
 }
 
@@ -401,28 +399,6 @@ pub fn deserialize_col_stats<'de, D>(
 ) -> Result<HashMap<ColumnId, ColumnStatistics>, D::Error>
 where D: serde::Deserializer<'de> {
     deserializer.deserialize_map(ColStatsVisitor::new())
-}
-
-/// Deserializes the `cluster_stats` field of the `BlockMeta` and `Statistics` struct.
-///
-/// This function is designed to handle legacy `ColumnStatistics` items that incorrectly
-/// include unsupported `min` and `max` index types. In the new `IndexScalar` type, these
-/// unsupported index types cannot be deserialized correctly.
-///
-/// To maintain forward compatibility and robustness, this function will skip any `col_stats`
-/// item that fails to deserialize due to containing these unsupported index types.
-/// This allows the rest of the outer struct, including `col_stats` items that do not
-/// contain unsupported index types, to be deserialized successfully.
-///
-/// Note: This function is a workaround for a specific historical issue. If the data being
-/// deserialized is known not to contain any unsupported index types in `ColumnStatistics`,
-/// the standard deserialization process can be used instead.
-pub fn deserialize_cluster_stats<'de, D>(
-    deserializer: D,
-) -> Result<Option<ClusterStatistics>, D::Error>
-where D: serde::Deserializer<'de> {
-    let v = <Option<ClusterStatistics> as serde::Deserialize>::deserialize(deserializer);
-    Ok(v.unwrap_or(None))
 }
 
 struct ColStatsVisitor<K, V> {
