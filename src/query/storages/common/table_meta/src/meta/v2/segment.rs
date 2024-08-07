@@ -69,7 +69,6 @@ pub struct BlockMeta {
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub col_metas: HashMap<ColumnId, ColumnMeta>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_cluster_stats")]
     pub cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     pub location: Location,
@@ -95,7 +94,6 @@ pub struct BlockMetaMessagePack {
     #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     col_stats: HashMap<ColumnId, ColumnStatistics>,
     col_metas: HashMap<ColumnId, ColumnMeta>,
-    #[serde(deserialize_with = "crate::meta::v2::statistics::default_on_error")]
     cluster_stats: Option<ClusterStatistics>,
     /// location of data block
     location: Location,
@@ -279,15 +277,7 @@ impl ColumnMeta {
 
 impl BlockMeta {
     pub fn from_v0(s: &v0::BlockMeta, fields: &[TableField]) -> Self {
-        let col_stats = s
-            .col_stats
-            .iter()
-            .filter_map(|(k, v)| {
-                let data_type = fields[*k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(v, data_type);
-                stats.map(|s| (*k, s))
-            })
-            .collect();
+        let col_stats = Statistics::convert_column_stats(&s.col_stats, fields);
 
         let col_metas = s
             .col_metas
@@ -312,16 +302,7 @@ impl BlockMeta {
     }
 
     pub fn from_v1(s: &v1::BlockMeta, fields: &[TableField]) -> Self {
-        let col_stats = s
-            .col_stats
-            .iter()
-            .filter_map(|(k, v)| {
-                let t = fields[*k as usize].data_type();
-                let stats = ColumnStatistics::from_v0(v, t);
-                stats.map(|s| (*k, s))
-            })
-            .collect();
-
+        let col_stats = Statistics::convert_column_stats(&s.col_stats, fields);
         let col_metas = s
             .col_metas
             .iter()

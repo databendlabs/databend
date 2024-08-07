@@ -31,7 +31,7 @@ mod non_empty;
 mod operation;
 mod raft_snapshot_data;
 mod raft_txid;
-mod raft_types;
+pub mod raft_types;
 mod seq_errors;
 mod seq_num;
 mod seq_value;

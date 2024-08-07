@@ -201,11 +201,12 @@ pub async fn do_gc_orphan_files(
     // 2.2 Delete all the orphan segment files to be purged
     let purged_file_num = segment_locations_to_be_purged.len();
     fuse_table
-        .try_purge_location_files_and_cache::<CompactSegmentInfo, _, _>(
+        .try_purge_location_files_and_cache::<CompactSegmentInfo, _>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
         )
         .await?;
+
     let status = format!(
         "gc orphan: purged segment files:{}, cost:{:?}",
         purged_file_num,

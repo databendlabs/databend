@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_cache::CountableMeter;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -319,7 +318,7 @@ impl CacheManager {
         meter: M,
         name: &str,
         unit: Unit,
-    ) -> CacheSlot<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>
+    ) -> CacheSlot<NamedCache<InMemoryItemCacheHolder<V, M>>>
     where
         M: CountableMeter<String, Arc<V>>,
     {
@@ -333,7 +332,7 @@ impl CacheManager {
         meter: M,
         name: impl Into<String>,
         unit: Unit,
-    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>
+    ) -> Option<NamedCache<InMemoryItemCacheHolder<V, M>>>
     where
         M: CountableMeter<String, Arc<V>>,
     {
@@ -382,7 +381,7 @@ impl CacheManager {
     }
 
     fn set_named_cache_with_meter_capacity<V, M>(
-        cache: &CacheSlot<NamedCache<InMemoryItemCacheHolder<V, DefaultHashBuilder, M>>>,
+        cache: &CacheSlot<NamedCache<InMemoryItemCacheHolder<V, M>>>,
         new_capacity: u64,
         name: impl Into<String>,
         meter: M,

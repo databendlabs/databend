@@ -14,9 +14,6 @@
 
 #![feature(write_all_vectored)]
 #![allow(clippy::uninlined_format_args)]
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-extern crate heapsize_;
 
 mod cache;
 mod meter;
@@ -29,7 +26,4 @@ pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;
 pub use meter::count_meter::CountableMeterWithMeasure;
 pub use meter::file_meter::FileSize;
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-pub use meter::heap_meter::HeapSize;
 pub use meter::Meter;
