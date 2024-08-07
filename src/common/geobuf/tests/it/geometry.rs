@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,12 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(test)]
+use databend_common_geobuf::Geometry;
+use databend_common_geobuf::Wkt;
 
-mod bench;
-mod from_into_geo;
-mod from_into_json;
-mod from_into_wkb;
-mod from_into_wkt;
-mod geometry;
-mod size;
+#[test]
+fn test_serialize() {
+    use serde::Deserialize;
+    use serde::Serialize;
+
+    let want = "POINT(-122.35 37.55)";
+    let geo = Geometry::try_from(Wkt(want)).unwrap();
+
+    let data = geo
+        .as_ref()
+        .serialize(serde_json::value::Serializer)
+        .unwrap();
+
+    let geo = Geometry::deserialize(data).unwrap();
+    let Wkt(got) = (&geo).try_into().unwrap();
+
+    assert_eq!(want, got)
+}

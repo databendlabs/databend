@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_arrow::arrow::buffer::Buffer;
 use geozero::error::GeozeroError;
 use ordered_float::OrderedFloat;
 
@@ -20,6 +21,7 @@ use crate::geo_buf::Object;
 use crate::FeatureKind;
 use crate::Geometry;
 use crate::GeometryBuilder;
+use crate::GeometryRef;
 use crate::ObjectKind;
 use crate::Visitor;
 
@@ -114,5 +116,31 @@ impl Geometry {
         Ok(self.kind()?.object_kind() == ObjectKind::Point
             && self.column_x[0].is_nan()
             && self.column_y[0].is_nan())
+    }
+}
+
+impl Serialize for GeometryRef<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: serde::Serializer {
+        #[derive(Serialize)]
+        struct View<'a>(&'a [u8], &'a [f64], &'a [f64]);
+
+        View(self.buf, self.column_x, self.column_y).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Geometry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: serde::Deserializer<'de> {
+        #[derive(Deserialize)]
+        struct View(Vec<u8>, Vec<f64>, Vec<f64>);
+
+        let View(buf, x, y) = View::deserialize(deserializer)?;
+
+        Ok(Geometry {
+            buf,
+            column_x: Buffer::from(x),
+            column_y: Buffer::from(y),
+        })
     }
 }
