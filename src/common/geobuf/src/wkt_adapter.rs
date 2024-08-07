@@ -42,9 +42,62 @@ impl TryInto<Wkt<String>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<Wkt<String>, Self::Error> {
-        use geozero::ToWkt;
+        let str = geozero::ToWkt::to_wkt(self)?;
+        Ok(Wkt(str))
+    }
+}
 
-        Ok(Wkt(self.to_wkt()?))
+pub struct Ewkt<S: AsRef<str>>(pub S);
+
+impl<S: AsRef<str>> Ewkt<S> {
+    fn cut_srid(&self) -> Result<(Option<i32>, &str), GeozeroError> {
+        let str = self.0.as_ref();
+        match str.find(';') {
+            None => Ok((None, str)),
+            Some(idx) => {
+                let prefix = str[..idx].trim();
+                match prefix
+                    .strip_prefix("SRID=")
+                    .or_else(|| prefix.strip_prefix("srid="))
+                    .map_or(None, |srid| srid.trim().parse::<i32>().ok())
+                {
+                    Some(srid) => Ok((Some(srid), &str[idx + 1..])),
+                    None => Err(GeozeroError::Geometry(format!(
+                        "invalid EWKT with prefix {prefix}"
+                    ))),
+                }
+            }
+        }
+    }
+}
+
+impl<S: AsRef<str>> TryFrom<Ewkt<S>> for Geometry {
+    type Error = GeozeroError;
+
+    fn try_from(str: Ewkt<S>) -> Result<Self, Self::Error> {
+        let (srid, str) = str.cut_srid()?;
+
+        let wkt_struct: wkt::Wkt<f64> = str
+            .parse()
+            .map_err(|e: &str| GeozeroError::Geometry(e.to_string()))?;
+        let mut builder = GeometryBuilder::new();
+        builder.set_srid(srid);
+        wkt_struct.accept(&mut builder)?;
+        Ok(builder.build())
+    }
+}
+
+impl TryInto<Ewkt<String>> for &Geometry {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Ewkt<String>, Self::Error> {
+        let str = geozero::ToWkt::to_wkt_with_opts(
+            self,
+            geozero::wkt::WktDialect::Ewkt,
+            geozero::CoordDimensions::xy(),
+            self.srid(),
+        )?;
+        Ok(Ewkt(str))
     }
 }
 

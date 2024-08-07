@@ -28,42 +28,14 @@ use geojson_adapter::JsonObject;
 pub use geometry::BoundingBox;
 use geozero::error::Result as GeoResult;
 pub use wkb_addapter::Wkb;
+pub use wkt_adapter::Ewkt;
 pub use wkt_adapter::Wkt;
 
-#[allow(dead_code)]
-pub struct Column {
-    buf: Vec<u8>,
-    buf_offsets: Vec<u64>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
-    point_offsets: Vec<u64>,
-}
-
+#[derive(Clone)]
 pub struct Geometry {
     buf: Vec<u8>,
     column_x: Vec<f64>,
     column_y: Vec<f64>,
-}
-
-#[allow(dead_code)]
-pub struct GeometryRef<'a> {
-    buf: &'a [u8],
-    column_x: &'a [f64],
-    column_y: &'a [f64],
-}
-
-#[allow(dead_code)]
-pub struct Geography {
-    buf: Vec<u8>,
-    column_x: Vec<f64>,
-    column_y: Vec<f64>,
-}
-
-#[allow(dead_code)]
-pub struct GeographyRef<'a> {
-    buf: &'a [u8],
-    column_x: &'a [f64],
-    column_y: &'a [f64],
 }
 
 pub trait Visitor {
@@ -99,26 +71,6 @@ pub trait Element<V: Visitor> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ObjectKind {
-    Point = 1,
-    LineString = 2,
-    Polygon = 3,
-    MultiPoint = 4,
-    MultiLineString = 5,
-    MultiPolygon = 6,
-    GeometryCollection = 7,
-}
-
-impl ObjectKind {
-    pub const FEATURE: u8 = 1 << 3;
-}
-
-impl From<ObjectKind> for geo_buf::InnerObjectKind {
-    fn from(val: ObjectKind) -> Self {
-        geo_buf::InnerObjectKind(val as u8)
-    }
-}
-
 pub enum FeatureKind {
     Geometry(ObjectKind),
     Feature(ObjectKind),
@@ -168,5 +120,26 @@ impl TryFrom<u8> for FeatureKind {
                 }
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ObjectKind {
+    Point = 1,
+    LineString = 2,
+    Polygon = 3,
+    MultiPoint = 4,
+    MultiLineString = 5,
+    MultiPolygon = 6,
+    GeometryCollection = 7,
+}
+
+impl ObjectKind {
+    pub const FEATURE: u8 = 1 << 3;
+}
+
+impl From<ObjectKind> for geo_buf::InnerObjectKind {
+    fn from(val: ObjectKind) -> Self {
+        geo_buf::InnerObjectKind(val as u8)
     }
 }

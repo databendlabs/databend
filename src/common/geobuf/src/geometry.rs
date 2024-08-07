@@ -109,4 +109,10 @@ impl Geometry {
         builder.finish(FeatureKind::Geometry(ObjectKind::Point))?;
         Ok(builder.build())
     }
+
+    pub fn is_empty_point(&self) -> Result<bool, GeozeroError> {
+        Ok(self.kind()?.object_kind() == ObjectKind::Point
+            && self.column_x[0].is_nan()
+            && self.column_y[0].is_nan())
+    }
 }

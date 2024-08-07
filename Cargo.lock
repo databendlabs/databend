@@ -3524,7 +3524,6 @@ dependencies = [
 name = "databend-common-geobuf"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "flatbuffers",
  "flexbuffers",
  "geo",

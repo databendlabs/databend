@@ -73,22 +73,22 @@ impl<'fbb> GeometryBuilder<'fbb> {
     }
 
     fn create_point_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
-        if self.point_offsets.is_empty() {
-            None
-        } else {
+        if self.point_offsets.len() > 1 {
             let v = Some(self.fbb.create_vector(&self.point_offsets));
             self.point_offsets.clear();
             v
+        } else {
+            None
         }
     }
 
     fn create_ring_offsets(&mut self) -> Option<WIPOffset<Vector<'fbb, u32>>> {
-        if self.ring_offsets.is_empty() {
-            None
-        } else {
+        if self.ring_offsets.len() > 1 {
             let v = Some(self.fbb.create_vector(&self.ring_offsets));
             self.ring_offsets.clear();
             v
+        } else {
+            None
         }
     }
 
