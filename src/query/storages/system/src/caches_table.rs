@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
@@ -190,14 +189,13 @@ impl CachesTable {
         SyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    fn append_row<K, V, S, M, C>(
+    fn append_row<K, V, M, C>(
         cache: &NamedCache<C>,
         local_node: &str,
         columns: &mut CachesTableColumns,
     ) where
-        C: CacheAccessor<K, V, S, M>,
+        C: CacheAccessor<K, V, M>,
         K: Eq + Hash,
-        S: BuildHasher,
         M: CountableMeter<K, Arc<V>>,
     {
         columns.nodes.push(local_node.to_string());

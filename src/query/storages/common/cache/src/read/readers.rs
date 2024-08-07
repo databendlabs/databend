@@ -13,15 +13,13 @@
 // limitations under the License.
 
 use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
 
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryBytesCacheHolder;
 use crate::InMemoryItemCacheHolder;
 use crate::NamedCache;
 
-pub type InMemoryItemCacheReader<T, L, S = DefaultHashBuilder, M = Count> =
-    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
-pub type InMemoryCacheReader<T, L, M, S = DefaultHashBuilder> =
-    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
+pub type InMemoryItemCacheReader<T, L, M = Count> =
+    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, M>>>;
+pub type InMemoryCacheReader<T, L, M> = CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, M>>>;
 pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;
