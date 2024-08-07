@@ -21,7 +21,6 @@ use crossbeam_channel::TrySendError;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -99,7 +98,7 @@ impl TableDataCacheBuilder {
     }
 }
 
-impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
+impl CacheAccessorExt<String, Bytes, Count> for TableDataCache {
     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
         let r = self.get(k);
         if r.is_none() {
@@ -109,13 +108,13 @@ impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for TableDataCac
     }
 }
 
-impl CacheAccessorExt<String, Bytes, DefaultHashBuilder, Count> for Option<TableDataCache> {
+impl CacheAccessorExt<String, Bytes, Count> for Option<TableDataCache> {
     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
         self.as_ref().and_then(|cache| cache.get_with_len(k, len))
     }
 }
 
-impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
+impl CacheAccessor<String, Bytes, Count> for TableDataCache {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         metrics_inc_cache_access_count(1, DISK_TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
@@ -180,7 +179,7 @@ struct CachePopulationWorker<T> {
 }
 
 impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static
+where T: CacheAccessor<String, Bytes, Count> + Send + Sync + 'static
 {
     fn populate(&self) {
         loop {
@@ -221,7 +220,7 @@ impl DiskCachePopulator {
         _num_worker_thread: usize,
     ) -> Result<Self>
     where
-        T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static,
+        T: CacheAccessor<String, Bytes, Count> + Send + Sync + 'static,
     {
         let worker = Arc::new(CachePopulationWorker {
             cache,
