@@ -42,16 +42,11 @@
 //! ```
 //!
 //! The cache can also be limited by an arbitrary metric calculated from its key-value pairs, see
-//! [`LruCache::with_meter`][with_meter] for more information. If the `heapsize` feature is enabled,
-//! this crate provides one such alternate metric&mdash;`HeapSize`. Custom metrics can be written by
+//! [`LruCache::with_meter`][with_meter] for more information. Custom metrics can be written by
 //! implementing the [`Meter`][meter] trait.
 //!
 //! [with_meter]: struct.LruCache.html#method.with_meter
 //! [meter]: trait.Meter.html
-
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-extern crate heapsize_;
 
 use std::borrow::Borrow;
 use std::fmt;
