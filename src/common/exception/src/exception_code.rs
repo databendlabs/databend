@@ -383,7 +383,7 @@ build_exceptions! {
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
     WrongSharePrivileges(3112),
-  
+
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),

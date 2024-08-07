@@ -1945,9 +1945,7 @@ impl From<AppError> for ErrorCode {
             AppError::DictionaryAlreadyExists(err) => {
                 ErrorCode::DictionaryAlreadyExists(err.message())
             }
-            AppError::UnknownDictionary(err) => {
-                ErrorCode::UnknownDictionary(err.message())
-            }
+            AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
             AppError::DropDictionaryWithDropTime(err) => {
                 ErrorCode::DropDictionaryWithDropTime(err.message())
             }

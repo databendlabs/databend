@@ -318,7 +318,7 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: CreateDictionaryReq,
     ) -> Result<CreateDictionaryReply, KVAppError>;
-    
+
     async fn drop_dictionary(
         &self,
         req: DropDictionaryReq,

@@ -26,7 +26,7 @@ use databend_common_expression::TableSchema;
 use super::database_name_ident::DatabaseNameIdent;
 use super::CreateOption;
 use crate::tenant::Tenant;
-use crate:: tenant::ToTenant;
+use crate::tenant::ToTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
@@ -115,7 +115,7 @@ impl DictionaryNameIdent {
     pub fn new_generic(
         tenant: impl ToTenant,
         dictionary_name: impl ToString,
-        db_name: impl ToString
+        db_name: impl ToString,
     ) -> Self {
         Self {
             tenant: tenant.to_tenant(),
@@ -238,7 +238,7 @@ mod kvapi_key_impl {
         where Self: Sized {
             let dict_id = parser.next_u64()?;
             Ok(Self {
-                dictionary_id: dict_id
+                dictionary_id: dict_id,
             })
         }
     }
