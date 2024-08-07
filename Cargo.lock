@@ -10628,6 +10628,7 @@ dependencies = [
  "socket2 0.5.6",
  "thiserror",
  "tokio",
+ "tokio-native-tls",
  "tokio-util",
  "twox-hash",
  "url",
