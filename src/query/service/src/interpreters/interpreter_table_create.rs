@@ -80,8 +80,8 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::insert::Insert;
-use crate::sql::plans::insert::InsertInputSource;
+use crate::sql::plans::Insert;
+use crate::sql::plans::InsertInputSource;
 use crate::sql::plans::Plan;
 use crate::storages::StorageDescription;
 
@@ -178,7 +178,7 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         assert!(
-            self.plan.options.get(OPT_KEY_STORAGE_PREFIX).is_none(),
+            !self.plan.options.contains_key(OPT_KEY_STORAGE_PREFIX),
             "There should be no ATTACH TABLE AS SELECT plan"
         );
 

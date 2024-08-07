@@ -47,7 +47,7 @@ mod expire;
 mod schema_api_impl;
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -119,7 +119,7 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -296,7 +296,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
@@ -395,7 +395,7 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     struct T {
         // input:

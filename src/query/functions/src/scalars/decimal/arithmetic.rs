@@ -107,7 +107,7 @@ macro_rules! binary_decimal {
                         None => {
                             ctx.set_error(
                                 result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
+                                concat!("Decimal div overflow at line : ", line!()),
                             );
                             result.push(one);
                         }
@@ -118,7 +118,28 @@ macro_rules! binary_decimal {
             vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
                 a, b, $ctx,
             )
-        } else {
+        } else if matches!($arithmetic_op, ArithmeticOp::Multiply) {
+            let scale_a = $left.scale();
+            let scale_b = $right.scale();
+
+            let scale_mul = scale_a + scale_b - $size.scale;
+            let func = |a: T, b: T, result: &mut Vec<T>, ctx: &mut EvalContext| {
+                match a.do_round_mul(b, scale_mul as u32) {
+                    Some(t) => result.push(t),
+                    None => {
+                        ctx.set_error(
+                            result.len(),
+                            concat!("Decimal multiply overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    }
+                }
+            };
+
+            vectorize_with_builder_2_arg::<DecimalType<T>, DecimalType<T>, DecimalType<T>>(func)(
+                a, b, $ctx,
+            )
+        }  else {
             if overflow {
                 let min_for_precision = T::min_for_precision($size.precision);
                 let max_for_precision = T::max_for_precision($size.precision);

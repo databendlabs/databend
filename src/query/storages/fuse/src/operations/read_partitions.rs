@@ -52,7 +52,7 @@ use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
@@ -122,7 +122,7 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,

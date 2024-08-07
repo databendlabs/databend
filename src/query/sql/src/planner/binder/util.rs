@@ -14,6 +14,7 @@
 
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::TableAlias;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::span::merge_span;
 use databend_common_exception::ErrorCode;
@@ -83,7 +84,10 @@ impl Binder {
             | RelOperator::Limit(_)
             | RelOperator::Aggregate(_)
             | RelOperator::Window(_)
-            | RelOperator::MergeInto(_) => {
+            | RelOperator::Mutation(_)
+            | RelOperator::Recluster(_)
+            | RelOperator::MutationSource(_)
+            | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan().rel_op()
@@ -92,19 +96,31 @@ impl Binder {
         }
         Ok(())
     }
+}
 
-    pub fn fully_table_identifier(
-        &self,
+pub struct TableIdentifier {
+    catalog: Identifier,
+    database: Identifier,
+    table: Identifier,
+    table_alias: Option<TableAlias>,
+    dialect: Dialect,
+    name_resolution_ctx: NameResolutionContext,
+}
+
+impl TableIdentifier {
+    pub fn new(
+        binder: &Binder,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
-    ) -> FullyTableIdentifier<'_> {
+        table_alias: &Option<TableAlias>,
+    ) -> TableIdentifier {
         let Binder {
             ctx,
             name_resolution_ctx,
             dialect,
             ..
-        } = self;
+        } = binder;
         let catalog = catalog.to_owned().unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_catalog(),
@@ -126,51 +142,32 @@ impl Binder {
             name: table.name.clone(),
             ..*table
         };
-        FullyTableIdentifier {
-            name_resolution_ctx,
+        TableIdentifier {
+            catalog,
+            database,
+            table,
+            table_alias: table_alias.clone(),
             dialect: *dialect,
-            catalog,
-            database,
-            table,
-        }
-    }
-}
-
-pub struct FullyTableIdentifier<'a> {
-    name_resolution_ctx: &'a NameResolutionContext,
-    dialect: Dialect,
-    pub catalog: Identifier,
-    pub database: Identifier,
-    pub table: Identifier,
-}
-
-impl FullyTableIdentifier<'_> {
-    pub fn new(
-        name_resolution_ctx: &NameResolutionContext,
-        dialect: Dialect,
-        catalog: Identifier,
-        database: Identifier,
-        table: Identifier,
-    ) -> FullyTableIdentifier<'_> {
-        FullyTableIdentifier {
-            name_resolution_ctx,
-            dialect,
-            catalog,
-            database,
-            table,
+            name_resolution_ctx: name_resolution_ctx.clone(),
         }
     }
 
     pub fn catalog_name(&self) -> String {
-        normalize_identifier(&self.catalog, self.name_resolution_ctx).name
+        normalize_identifier(&self.catalog, &self.name_resolution_ctx).name
     }
 
     pub fn database_name(&self) -> String {
-        normalize_identifier(&self.database, self.name_resolution_ctx).name
+        normalize_identifier(&self.database, &self.name_resolution_ctx).name
     }
 
     pub fn table_name(&self) -> String {
-        normalize_identifier(&self.table, self.name_resolution_ctx).name
+        normalize_identifier(&self.table, &self.name_resolution_ctx).name
+    }
+
+    pub fn table_name_alias(&self) -> Option<String> {
+        self.table_alias.as_ref().map(|table_alias| {
+            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name
+        })
     }
 
     pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {

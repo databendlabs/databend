@@ -574,18 +574,36 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
 (abs(a)) 4 1 2.0 2.75 {"00002":1,"00003":3}
 
+# recluster the unclustered block.
+statement ok
+alter table t10 recluster
+
+query F
+select average_depth from clustering_information('db_09_0008','t10')
+----
+2.75
+
+# compact
 statement ok
 optimize table t10 compact
 
-query I
-select count() from fuse_snapshot('db_09_0008', 't10')
+query TIIFFT
+select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
-7
+(abs(a)) 3 0 2.0 3.0 {"00003":3}
+
+statement ok
+alter table t10 recluster
 
 query F
 select average_depth from clustering_information('db_09_0008','t10')
 ----
 1.0
+
+query I
+select count() from fuse_snapshot('db_09_0008', 't10')
+----
+8
 
 statement ok
 optimize table t10 purge limit 2
@@ -593,7 +611,7 @@ optimize table t10 purge limit 2
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-5
+6
 
 
 

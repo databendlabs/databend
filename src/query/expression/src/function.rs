@@ -94,7 +94,7 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct FunctionContext {
     pub tz: TzLUT,
     pub now: DateTime<Utc>,
@@ -115,6 +115,31 @@ pub struct FunctionContext {
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
     pub enable_dst_hour_fix: bool,
+    pub enable_strict_datetime_parser: bool,
+}
+
+impl Default for FunctionContext {
+    fn default() -> Self {
+        FunctionContext {
+            tz: Default::default(),
+            now: Default::default(),
+            rounding_mode: false,
+            disable_variant_check: false,
+            openai_api_chat_base_url: "".to_string(),
+            openai_api_embedding_base_url: "".to_string(),
+            openai_api_key: "".to_string(),
+            openai_api_version: "".to_string(),
+            openai_api_embedding_model: "".to_string(),
+            openai_api_completion_model: "".to_string(),
+            external_server_connect_timeout_secs: 0,
+            external_server_request_timeout_secs: 0,
+            external_server_request_batch_rows: 0,
+            geometry_output_format: Default::default(),
+            parse_datetime_ignore_remainder: false,
+            enable_dst_hour_fix: false,
+            enable_strict_datetime_parser: true,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -435,8 +460,7 @@ impl FunctionRegistry {
         &mut self,
         default_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
     ) {
-        self.default_cast_rules
-            .extend(default_cast_rules.into_iter());
+        self.default_cast_rules.extend(default_cast_rules);
     }
 
     pub fn register_additional_cast_rules(
@@ -447,7 +471,7 @@ impl FunctionRegistry {
         self.additional_cast_rules
             .entry(fn_name.to_string())
             .or_default()
-            .extend(additional_cast_rules.into_iter());
+            .extend(additional_cast_rules);
     }
 
     pub fn register_auto_try_cast_rules(

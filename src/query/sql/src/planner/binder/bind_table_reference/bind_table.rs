@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
+use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::BindContext;
@@ -44,15 +45,14 @@ impl Binder {
         temporal: &Option<TemporalClause>,
         consume: bool,
     ) -> Result<(SExpr, BindContext)> {
-        let fully_table = self.fully_table_identifier(catalog, database, table);
-        let (catalog, database, table_name) = (
-            fully_table.catalog_name(),
-            fully_table.database_name(),
-            fully_table.table_name(),
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
+        let (catalog, database, table_name, table_name_alias) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.table_name_alias(),
         );
-        let table_alias_name = alias
-            .as_ref()
-            .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
+
         // Check and bind common table expression
         let ctes_map = self.ctes_map.clone();
         if let Some(cte_info) = ctes_map.get(&table_name) {
@@ -112,7 +112,7 @@ impl Binder {
                     }
                     parent = bind_context.parent.as_mut();
                 }
-                return Err(fully_table.not_found_suggest_error(e));
+                return Err(table_identifier.not_found_suggest_error(e));
             }
         };
 
@@ -125,13 +125,13 @@ impl Binder {
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
             || table_meta.engine() == "STREAM"
         {
-            let change_type = get_change_type(&table_alias_name);
+            let change_type = get_change_type(&table_name_alias);
             if change_type.is_some() {
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
                     table_meta,
-                    table_alias_name,
+                    table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
@@ -151,7 +151,7 @@ impl Binder {
             }
 
             let query =
-                databend_common_base::runtime::block_on(table_meta.generage_changes_query(
+                databend_common_base::runtime::block_on(table_meta.generate_changes_query(
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
@@ -208,7 +208,7 @@ impl Binder {
                         catalog,
                         database.clone(),
                         table_meta,
-                        table_alias_name,
+                        table_name_alias,
                         false,
                         false,
                         false,
@@ -240,7 +240,7 @@ impl Binder {
                     catalog,
                     database.clone(),
                     table_meta,
-                    table_alias_name,
+                    table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,

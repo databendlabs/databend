@@ -50,7 +50,7 @@ use crate::tests::meta_node::timeout;
 use crate::tests::service::MetaSrvTestContext;
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
     // - Bring up a cluster of 3.
     // - Write just enough logs to trigger a snapshot.
@@ -159,7 +159,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_service_snapshot_id_mismatch() -> anyhow::Result<()> {
     // Test SnapshotIdMismatch error should be responded.
 
@@ -203,7 +203,7 @@ async fn test_raft_service_snapshot_id_mismatch() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_service_install_snapshot_v1() -> anyhow::Result<()> {
     // Transmit snapshot via install_snapshot_v1.
     // Assert the server is compatible with the old API.
@@ -270,7 +270,7 @@ async fn test_raft_service_install_snapshot_v1() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.
 

@@ -15,6 +15,8 @@
 use core::cmp::Ordering;
 use core::ops::Range;
 use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
 
 /// `RangeMapKey` is a wrapper of `range` and `user defined key`
 #[derive(Eq, Debug, Clone, PartialEq)]
@@ -35,13 +37,17 @@ where
     }
 }
 
-impl<RV, ID> ToString for RangeMapKey<RV, ID>
+impl<RV, ID> Display for RangeMapKey<RV, ID>
 where
     RV: Debug,
     ID: Debug,
 {
-    fn to_string(&self) -> String {
-        format!("{:?}-{:?}-{:?}", self.range.start, self.range.end, self.key)
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?}-{:?}-{:?}",
+            self.range.start, self.range.end, self.key
+        )
     }
 }
 
@@ -130,7 +136,7 @@ mod tests {
         // prove transitive property: if a<b and b<c, then a<c
         for (k, v) in less_map.iter() {
             for g in v.iter() {
-                assert!(greater_map.get(g).is_some());
+                assert!(greater_map.contains_key(g));
                 if let Some(set) = greater_map.get_mut(g) {
                     assert!(set.get(k).is_some());
                 }

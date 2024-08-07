@@ -14,7 +14,7 @@
 
 use databend_common_expression::DataSchemaRef;
 
-use crate::plans::insert::InsertValue;
+use crate::plans::InsertValue;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {

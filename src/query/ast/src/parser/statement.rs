@@ -54,7 +54,6 @@ pub type ShareDatabaseParams = (ShareNameIdent, Identifier);
 #[derive(Clone)]
 pub enum CreateDatabaseOption {
     DatabaseEngine(DatabaseEngine),
-    FromShare(ShareDatabaseParams),
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
@@ -96,9 +95,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ #statement
+            EXPLAIN ~ ANALYZE ~ PARTIAL? ~ #statement
         },
-        |(_, _, statement)| Statement::ExplainAnalyze {
+        |(_, _, partial, statement)| Statement::ExplainAnalyze {
+            partial: partial.is_some(),
             query: Box::new(statement.stmt),
         },
     );
@@ -353,26 +353,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let set_variable = map(
+    let unset_stmt = map(
         rule! {
-            SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
+            UNSET ~ #unset_type ~ #unset_source
         },
-        |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
-            is_global: opt_is_global.is_some(),
-            variable,
-            value: Box::new(value),
-        },
-    );
-
-    let unset_variable = map(
-        rule! {
-            UNSET ~ SESSION? ~ #unset_source
-        },
-        |(_, opt_session_level, unset_source)| {
-            Statement::UnSetVariable(UnSetStmt {
-                session_level: opt_session_level.is_some(),
-                source: unset_source,
-            })
+        |(_, unset_type, identifiers)| Statement::UnSetStmt {
+            unset_type,
+            identifiers,
         },
     );
 
@@ -399,6 +386,58 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Statement::SetSecondaryRoles { option }
         },
     );
+
+    let set_stmt = alt((
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #subexpr(0)
+            },
+            |(_, set_type, var, _, value)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Expr(vec![Box::new(value)]),
+            },
+        ),
+        map_res(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "="
+                ~ "(" ~ #comma_separated_list0(subexpr(0)) ~ ")"
+            },
+            |(_, set_type, _, ids, _, _, _, values, _)| {
+                if ids.len() == values.len() {
+                    Ok(Statement::SetStmt {
+                        set_type,
+                        identifiers: ids,
+                        values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+                    })
+                } else {
+                    Err(nom::Err::Failure(ErrorKind::Other(
+                        "inconsistent number of variables and values",
+                    )))
+                }
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ #ident ~ "=" ~ #query
+            },
+            |(_, set_type, var, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vec![var],
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+        map(
+            rule! {
+                SET ~ #set_type ~ "(" ~ #comma_separated_list0(ident) ~ ")" ~ "=" ~ #query
+            },
+            |(_, set_type, _, vars, _, _, query)| Statement::SetStmt {
+                set_type,
+                identifiers: vars,
+                values: SetValues::Query(Box::new(query)),
+            },
+        ),
+    ));
 
     // catalogs
     let show_catalogs = map(
@@ -484,16 +523,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         database,
                         engine: Some(engine),
                         options: vec![],
-                        share_params: None,
-                    })
-                }
-                Some(CreateDatabaseOption::FromShare(share_params)) => {
-                    Statement::CreateDatabase(CreateDatabaseStmt {
-                        create_option,
-                        database,
-                        engine: None,
-                        options: vec![],
-                        share_params: Some(share_params),
                     })
                 }
                 None => Statement::CreateDatabase(CreateDatabaseStmt {
@@ -501,7 +530,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     database,
                     engine: None,
                     options: vec![],
-                    share_params: None,
                 }),
             };
 
@@ -859,6 +887,86 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 table,
+            })
+        },
+    );
+
+    // DICTIONARY
+    let create_dictionary = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ DICTIONARY ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #dot_separated_idents_1_to_3
+            ~ "(" ~ ^#comma_separated_list1(column_def) ~ ^")"
+            ~ PRIMARY ~ ^KEY  ~ ^#comma_separated_list1(ident)
+            ~ ^SOURCE ~ ^"(" ~ ^#ident ~ ^"("
+            ~ ( #table_option )?
+            ~ ^")" ~ ^")"
+            ~ ( COMMENT ~ ^#literal_string )?
+        },
+        |(
+            _,
+            opt_or_replace,
+            _,
+            opt_if_not_exists,
+            (catalog, database, dictionary_name),
+            _,
+            columns,
+            _,
+            _,
+            _,
+            primary_keys,
+            _,
+            _,
+            source_name,
+            _,
+            opt_source_options,
+            _,
+            _,
+            opt_comment,
+        )| {
+            let create_option =
+                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
+            Ok(Statement::CreateDictionary(CreateDictionaryStmt {
+                create_option,
+                catalog,
+                database,
+                dictionary_name,
+                columns,
+                primary_keys,
+                source_name,
+                source_options: opt_source_options.unwrap_or_default(),
+                comment: opt_comment.map(|(_, comment)| comment),
+            }))
+        },
+    );
+    let drop_dictionary = map(
+        rule! {
+            DROP ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, opt_if_exists, (catalog, database, dictionary_name))| {
+            Statement::DropDictionary(DropDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                dictionary_name,
+            })
+        },
+    );
+    let show_dictionaries = map(
+        rule! {
+            SHOW ~ DICTIONARIES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowDictionaries { show_options },
+    );
+    let show_create_dictionary = map(
+        rule! {
+            SHOW ~ CREATE ~ DICTIONARY ~ #dot_separated_idents_1_to_3
+        },
+        |(_, _, _, (catalog, database, dictionary_name))| {
+            Statement::ShowCreateDictionary(ShowCreateDictionaryStmt {
+                catalog,
+                database,
+                dictionary_name,
             })
         },
     );
@@ -2120,10 +2228,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
             | #update : "`UPDATE <table> SET <column> = <expr> [, <column> = <expr> , ... ] [WHERE ...]`"
-        ),
-        rule!(
-            #set_variable : "`SET <variable> = <value>`"
-            | #unset_variable : "`UNSET <variable>`"
             | #begin
             | #commit
             | #abort
@@ -2150,6 +2254,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
+        ),
+        // dictionary
+        rule!(
+            #create_dictionary : "`CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `"
+            | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
+            | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
+            | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
         ),
         // view,index
         rule!(
@@ -2225,6 +2336,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_share_tenants: "`ALTER SHARE [IF EXISTS] <share_name> { ADD | REMOVE } TENANTS = tenant [, tenant, ...]`"
             | #desc_share: "`{DESC | DESCRIBE} SHARE <share_name>`"
             | #show_shares: "`SHOW SHARES`"
+        ),
+        rule!(
+            #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
+            | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
         ),
         // catalog
         rule!(
@@ -2571,24 +2686,33 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     )(i)
 }
 
-pub fn unset_source(i: Input) -> IResult<UnSetSource> {
+pub fn unset_source(i: Input) -> IResult<Vec<Identifier>> {
     //#ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?
     let var = map(
         rule! {
             #ident
         },
-        |variable| UnSetSource::Var { variable },
+        |variable| vec![variable],
     );
     let vars = map(
         rule! {
             "(" ~ ^#comma_separated_list1(ident) ~ ")"
         },
-        |(_, variables, _)| UnSetSource::Vars { variables },
+        |(_, variables, _)| variables,
     );
 
     rule!(
         #var
         | #vars
+    )(i)
+}
+
+pub fn set_stmt_args(i: Input) -> IResult<(Identifier, Box<Expr>)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, expr)| (id, Box::new(expr)),
     )(i)
 }
 
@@ -3866,25 +3990,15 @@ pub fn database_engine(i: Input) -> IResult<DatabaseEngine> {
 }
 
 pub fn create_database_option(i: Input) -> IResult<CreateDatabaseOption> {
-    let create_db_engine = map(
+    let mut create_db_engine = map(
         rule! {
             ENGINE ~  ^"=" ~ ^#database_engine
         },
         |(_, _, option)| CreateDatabaseOption::DatabaseEngine(option),
     );
 
-    let share_from = map(
-        rule! {
-            FROM ~ SHARE ~ #ident ~ "." ~ #ident ~ USING ~ #ident
-        },
-        |(_, _, tenant, _, share, _, endpoint)| {
-            CreateDatabaseOption::FromShare((ShareNameIdent { tenant, share }, endpoint))
-        },
-    );
-
     rule!(
         #create_db_engine
-        | #share_from
     )(i)
 }
 
@@ -3893,6 +4007,7 @@ pub fn catalog_type(i: Input) -> IResult<CatalogType> {
         value(CatalogType::Default, rule! { DEFAULT }),
         value(CatalogType::Hive, rule! { HIVE }),
         value(CatalogType::Iceberg, rule! { ICEBERG }),
+        value(CatalogType::Share, rule! { SHARE }),
     ))(i)
 }
 

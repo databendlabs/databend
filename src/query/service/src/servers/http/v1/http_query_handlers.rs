@@ -20,13 +20,13 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use highway::HighwayHash;
 use http::StatusCode;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -126,7 +126,7 @@ pub struct QueryResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub has_result_set: Option<bool>,
     pub schema: Vec<QueryResponseField>,
-    pub data: Vec<Vec<String>>,
+    pub data: Vec<Vec<Option<String>>>,
     pub affect: Option<QueryAffect>,
 
     pub stats: QueryStats,
@@ -481,7 +481,7 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
         match SpanContext::decode_w3c_traceparent(trace) {
             Some(span_context) => {
                 return Span::root(name, span_context)
-                    .with_properties(|| ctx.to_minitrace_properties());
+                    .with_properties(|| ctx.to_fastrace_properties());
             }
             None => {
                 warn!("failed to decode trace parent: {}", trace);
@@ -491,5 +491,5 @@ fn get_http_tracing_span(name: &'static str, ctx: &HttpQueryContext, query_id: &
 
     let trace_id = query_id_to_trace_id(query_id);
     Span::root(name, SpanContext::new(trace_id, SpanId(rand::random())))
-        .with_properties(|| ctx.to_minitrace_properties())
+        .with_properties(|| ctx.to_fastrace_properties())
 }

@@ -32,6 +32,7 @@ use databend_common_expression::CheckAbort;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
@@ -51,13 +52,14 @@ use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -145,10 +147,12 @@ pub trait TableContext: Send + Sync {
     fn get_join_spill_progress(&self) -> Arc<Progress>;
     fn get_group_by_spill_progress(&self) -> Arc<Progress>;
     fn get_aggregate_spill_progress(&self) -> Arc<Progress>;
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress>;
     fn get_write_progress_value(&self) -> ProgressValues;
     fn get_join_spill_progress_value(&self) -> ProgressValues;
     fn get_group_by_spill_progress_value(&self) -> ProgressValues;
     fn get_aggregate_spill_progress_value(&self) -> ProgressValues;
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
@@ -170,6 +174,10 @@ pub trait TableContext: Send + Sync {
     fn set_enable_sort_spill(&self, enable: bool);
     fn set_compaction_num_block_hint(&self, hint: u64);
     fn get_compaction_num_block_hint(&self) -> u64;
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
+    fn set_lazy_mutation_delete(&self, lazy: bool);
+    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
@@ -286,9 +294,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
 
-    fn add_merge_status(&self, merge_status: MergeStatus);
+    fn add_mutation_status(&self, mutation_status: MutationStatus);
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>>;
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>>;
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
 
@@ -323,6 +331,10 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_queued_duration(&self) -> Duration;
     fn set_query_queued_duration(&self, queued_duration: Duration);
+
+    fn set_variable(&self, key: String, value: Scalar);
+    fn unset_variable(&self, key: &str);
+    fn get_variable(&self, key: &str) -> Option<Scalar>;
 
     async fn load_datalake_schema(
         &self,

@@ -32,21 +32,22 @@ use databend_common_meta_sled_store::openraft::error::decompose::DecomposeResult
 use databend_common_meta_sled_store::openraft::error::PayloadTooLarge;
 use databend_common_meta_sled_store::openraft::error::ReplicationClosed;
 use databend_common_meta_sled_store::openraft::error::Unreachable;
+use databend_common_meta_sled_store::openraft::network::v2::RaftNetworkV2;
 use databend_common_meta_sled_store::openraft::network::RPCOption;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
-use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_sled_store::openraft::ToStorageResult;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ErrorSubject;
-use databend_common_meta_types::Fatal;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::InstallSnapshotError;
@@ -58,24 +59,22 @@ use databend_common_meta_types::NetworkError;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RPCError;
 use databend_common_meta_types::RaftError;
-use databend_common_meta_types::RemoteError;
 use databend_common_meta_types::Snapshot;
 use databend_common_meta_types::SnapshotResponse;
-use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::StorageError;
 use databend_common_meta_types::StreamingError;
 use databend_common_meta_types::TypeConfig;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_meta_types::VoteResponse;
 use databend_common_metrics::count::Count;
+use fastrace::func_name;
 use futures::FutureExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::func_name;
-use openraft::RaftNetwork;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -157,11 +156,6 @@ pub struct Network {
     /// The node id to send message to.
     target: NodeId,
 
-    /// The node info to send message to.
-    ///
-    /// This is not used, because meta-service does not store node info in membership.
-    target_node: MembershipNode,
-
     /// The endpoint of the target node.
     endpoint: Endpoint,
 
@@ -175,7 +169,7 @@ pub struct Network {
 impl Network {
     /// Create a new RaftClient to the specified target node.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn new_client(&self, addr: &str) -> Result<RaftClient, tonic::transport::Error> {
         info!(id = self.id; "Raft NetworkConnection connect: target={}: {}", self.target, addr);
 
@@ -199,7 +193,7 @@ impl Network {
 
     /// Take the last used client or create a new one.
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn take_client(&mut self) -> Result<RaftClient, Unreachable> {
         let mut client = self.client.lock().await;
 
@@ -271,9 +265,8 @@ impl Network {
     }
 
     /// Wrap a RaftError with RPCError
-    pub(crate) fn to_rpc_err<E: Error>(&self, e: RaftError<E>) -> RPCError<RaftError<E>> {
-        let remote_err = RemoteError::new_with_node(self.target, self.target_node.clone(), e);
-        RPCError::RemoteError(remote_err)
+    pub(crate) fn to_rpc_err<E: Error + 'static>(&self, e: RaftError<E>) -> RPCError {
+        RPCError::Unreachable(Unreachable::new(&e))
     }
 
     /// Create a new RaftRequest for AppendEntriesRequest,
@@ -342,7 +335,7 @@ impl Network {
     fn parse_grpc_resp<R, E>(
         &self,
         grpc_res: Result<tonic::Response<RaftReply>, tonic::Status>,
-    ) -> Result<R, RPCError<RaftError<E>>>
+    ) -> Result<R, RPCError>
     where
         R: serde::de::DeserializeOwned + 'static,
         E: serde::de::DeserializeOwned + 'static,
@@ -398,10 +391,9 @@ impl Network {
             chunk_size
         );
 
-        let mut bf = db.open_file().map_err(|e| {
-            let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
-            StorageError::from(io_err)
-        })?;
+        let mut bf = db
+            .open_file()
+            .map_err(|e| StorageError::read_snapshot(Some(snapshot_meta.signature()), &e))?;
 
         let mut c = std::pin::pin!(cancel);
 
@@ -423,8 +415,7 @@ impl Network {
             let mut offset = 0;
             while offset < buf.len() {
                 let n_read = bf.read(&mut buf[offset..]).map_err(|e| {
-                    let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
-                    StorageError::from(io_err)
+                    StorageError::read_snapshot(Some(snapshot_meta.signature()), &e)
                 })?;
 
                 debug!("offset: {}, n_read: {}", offset, n_read);
@@ -590,10 +581,8 @@ impl Network {
                 return Err(err.into());
             }
 
-            let mut buf = serde_json::to_vec(&ent).map_err(|e| {
-                let io_err = StorageIOError::read_snapshot(Some(snapshot_meta.signature()), &e);
-                StorageError::from(io_err)
-            })?;
+            let mut buf = serde_json::to_vec(&ent)
+                .map_err(|e| StorageError::read_snapshot(Some(snapshot_meta.signature()), &e))?;
             buf.push(b'\n');
 
             let len = buf.len();
@@ -660,14 +649,14 @@ impl Network {
     }
 }
 
-impl RaftNetwork<TypeConfig> for Network {
+impl RaftNetworkV2<TypeConfig> for Network {
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn append_entries(
         &mut self,
         rpc: AppendEntriesRequest,
         _option: RPCOption,
-    ) -> Result<AppendEntriesResponse, RPCError<RaftError>> {
+    ) -> Result<AppendEntriesResponse, RPCError> {
         debug!(
             id = self.id,
             target = self.target,
@@ -704,18 +693,18 @@ impl RaftNetwork<TypeConfig> for Network {
             }
         }
 
-        self.parse_grpc_resp(grpc_res)
+        self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
     }
 
     #[logcall::logcall(err = "error", input = "")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn full_snapshot(
         &mut self,
         vote: Vote,
         snapshot: Snapshot,
         cancel: impl Future<Output = ReplicationClosed> + Send + 'static,
         option: RPCOption,
-    ) -> Result<SnapshotResponse, StreamingError<Fatal>> {
+    ) -> Result<SnapshotResponse, StreamingError> {
         debug!(id = self.id, target = self.target; "{}", func_name!());
 
         // dup the cancel future
@@ -740,8 +729,7 @@ impl RaftNetwork<TypeConfig> for Network {
                 },
                 option.clone(),
             )
-            .await
-            .map_err(to_streaming_error_with_fatal);
+            .await;
 
         let Err(strm_err) = res else {
             return res;
@@ -768,19 +756,18 @@ impl RaftNetwork<TypeConfig> for Network {
                 },
                 option,
             )
-            .await
-            .map_err(to_streaming_error_with_fatal)?;
+            .await?;
 
         Ok(resp)
     }
 
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn vote(
         &mut self,
         rpc: VoteRequest,
         _option: RPCOption,
-    ) -> Result<VoteResponse, RPCError<RaftError>> {
+    ) -> Result<VoteResponse, RPCError> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
         let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
@@ -807,7 +794,44 @@ impl RaftNetwork<TypeConfig> for Network {
             }
         }
 
-        self.parse_grpc_resp(grpc_res)
+        self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
+    }
+
+    async fn transfer_leader(
+        &mut self,
+        req: TransferLeaderRequest,
+        _option: RPCOption,
+    ) -> Result<(), RPCError> {
+        info!(id = self.id, target = self.target, req :? = req; "{}", func_name!());
+
+        let r = pb::TransferLeaderRequest::from(req);
+
+        let req = GrpcHelper::traced_req(r);
+
+        let mut client = self
+            .take_client()
+            .debug_elapsed("Raft NetworkConnection transfer_leader take_client()")
+            .await?;
+
+        let grpc_res = client.transfer_leader(req).await;
+        info!(
+            "{}: resp from target={} {:?}",
+            func_name!(),
+            self.target,
+            grpc_res
+        );
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target; "{} failed: {}", func_name!(), e);
+            }
+        }
+
+        grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        Ok(())
     }
 
     /// When a `Unreachable` error is returned from the `Network`,
@@ -834,7 +858,6 @@ impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
         Network {
             id: self.sto.id,
             target,
-            target_node: node.clone(),
             sto: self.sto.clone(),
             backoff: self.backoff.clone(),
             endpoint: Default::default(),
@@ -867,17 +890,4 @@ fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
 /// Create a function that increases metric value of inflight snapshot sending.
 fn snapshot_send_inflight(target: NodeId) -> impl FnMut(i64) {
     move |i: i64| raft_metrics::network::incr_snapshot_sendto_inflight(&target, i)
-}
-
-fn to_streaming_error_with_fatal(e: StreamingError) -> StreamingError<Fatal> {
-    match e {
-        StreamingError::Closed(e) => StreamingError::Closed(e),
-        StreamingError::StorageError(e) => StreamingError::StorageError(e),
-        StreamingError::Timeout(e) => StreamingError::Timeout(e),
-        StreamingError::Unreachable(e) => StreamingError::Unreachable(e),
-        StreamingError::Network(e) => StreamingError::Network(e),
-        StreamingError::RemoteError(_) => {
-            unreachable!("RemoteError should be handled in the caller")
-        }
-    }
 }

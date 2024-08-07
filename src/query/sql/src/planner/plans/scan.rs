@@ -23,6 +23,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storage::Histogram;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
 use itertools::Itertools;
 
@@ -39,7 +41,6 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics as OpStatistics;
-use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::optimizer::MAX_SELECTIVITY;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -86,6 +87,7 @@ pub struct Statistics {
     pub table_stats: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
     pub column_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
+    pub histograms: HashMap<IndexType, Option<Histogram>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -101,6 +103,8 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
     pub inverted_index: Option<InvertedIndexInfo>,
+    // Lazy row fetch.
+    pub is_lazy_table: bool,
 
     pub statistics: Arc<Statistics>,
 }
@@ -115,6 +119,14 @@ impl Scan {
             .map(|(col, stat)| (*col, stat.clone()))
             .collect();
 
+        let histograms = self
+            .statistics
+            .histograms
+            .iter()
+            .filter(|(col, _)| columns.contains(*col))
+            .map(|(col, hist)| (*col, hist.clone()))
+            .collect();
+
         Scan {
             table_index: self.table_index,
             columns,
@@ -124,20 +136,19 @@ impl Scan {
             statistics: Arc::new(Statistics {
                 table_stats: self.statistics.table_stats,
                 column_stats,
+                histograms,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
+            is_lazy_table: self.is_lazy_table,
         }
     }
 
-    pub fn update_stream_columns(&self, update_stream_columns: bool) -> Self {
-        Scan {
-            update_stream_columns,
-            ..self.clone()
-        }
+    pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
+        self.update_stream_columns = update_stream_columns;
     }
 
     fn used_columns(&self) -> ColumnSet {
@@ -222,13 +233,17 @@ impl Operator for Scan {
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
                 let ndv = col_stat.ndv.unwrap();
-                let histogram = histogram_from_ndv(
-                    ndv,
-                    num_rows,
-                    Some((min.clone(), max.clone())),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )
-                .ok();
+                let histogram = if let Some(histogram) = self.statistics.histograms.get(k) {
+                    histogram.clone()
+                } else {
+                    histogram_from_ndv(
+                        ndv,
+                        num_rows,
+                        Some((min.clone(), max.clone())),
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                    )
+                    .ok()
+                };
                 let column_stat = ColumnStat {
                     min,
                     max,

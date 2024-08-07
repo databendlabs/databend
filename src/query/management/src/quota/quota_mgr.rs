@@ -29,7 +29,7 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use super::quota_api::QuotaApi;
 use crate::serde::check_and_upgrade_to_pb;
@@ -100,7 +100,7 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
             let value = serde_json::to_vec(quota)?;
             let res = self
                 .kv_api
-                .upsert_kv(UpsertKV::update(&self.key(), &value).with(seq))
+                .upsert_kv(UpsertKV::update(self.key(), &value).with(seq))
                 .await?;
             match res.result {
                 Some(SeqV { seq: s, .. }) => Ok(s),

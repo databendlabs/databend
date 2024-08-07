@@ -206,6 +206,7 @@ impl RangeJoinState {
             left_sorted_blocks,
             self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
+            false,
         )?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
@@ -253,6 +254,7 @@ impl RangeJoinState {
             l2_sorted_blocks,
             self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
             self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
+            false,
         )?)?;
 
         // The pos col of l2 sorted blocks is permutation array

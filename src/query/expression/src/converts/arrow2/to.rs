@@ -276,7 +276,12 @@ impl Column {
                 .unwrap(),
             ),
             Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
-                let values = unsafe { std::mem::transmute(col.clone()) };
+                let values = unsafe {
+                    std::mem::transmute::<
+                        Buffer<ethnum::I256>,
+                        Buffer<databend_common_arrow::arrow::types::i256>,
+                    >(col.clone())
+                };
                 Box::new(
                     databend_common_arrow::arrow::array::PrimitiveArray::<
                         databend_common_arrow::arrow::types::i256,

@@ -243,10 +243,10 @@ async fn create_memory_table_for_cte_scan(
         PhysicalPlan::Window(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
-        PhysicalPlan::Sort(plan) => {
+        PhysicalPlan::WindowPartition(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
-        PhysicalPlan::LocalShuffle(plan) => {
+        PhysicalPlan::Sort(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
         PhysicalPlan::Limit(plan) => {
@@ -327,21 +327,21 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::DistributedInsertSelect(_)
         | PhysicalPlan::ExchangeSource(_)
         | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::DeleteSource(_)
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::CopyIntoLocation(_)
         | PhysicalPlan::ReplaceAsyncSourcer(_)
         | PhysicalPlan::ReplaceDeduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::MergeInto(_)
-        | PhysicalPlan::MergeIntoSplit(_)
-        | PhysicalPlan::MergeIntoManipulate(_)
-        | PhysicalPlan::MergeIntoOrganize(_)
+        | PhysicalPlan::ColumnMutation(_)
+        | PhysicalPlan::MutationSource(_)
+        | PhysicalPlan::Mutation(_)
+        | PhysicalPlan::MutationSplit(_)
+        | PhysicalPlan::MutationManipulate(_)
+        | PhysicalPlan::MutationOrganize(_)
+        | PhysicalPlan::AddStreamColumn(_)
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
-        | PhysicalPlan::ReclusterSource(_)
-        | PhysicalPlan::ReclusterSink(_)
-        | PhysicalPlan::UpdateSource(_)
+        | PhysicalPlan::Recluster(_)
         | PhysicalPlan::Duplicate(_)
         | PhysicalPlan::ChunkFilter(_)
         | PhysicalPlan::ChunkEvalScalar(_)

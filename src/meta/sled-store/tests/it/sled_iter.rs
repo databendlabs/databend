@@ -31,7 +31,7 @@ use crate::testing::sled_test_harness;
 
 /// Feed some data to two trees, iterate them and check output.
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_sled_iter() -> anyhow::Result<()> {
     let logs: Vec<Entry> = vec![
         Entry {

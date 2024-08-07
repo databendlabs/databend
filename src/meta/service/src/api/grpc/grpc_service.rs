@@ -50,14 +50,14 @@ use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use fastrace::full_name;
+use fastrace::func_name;
+use fastrace::prelude::*;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
-use minitrace::full_name;
-use minitrace::func_name;
-use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -106,7 +106,7 @@ impl MetaServiceImpl {
         Ok(claim)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
         info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
@@ -148,7 +148,7 @@ impl MetaServiceImpl {
         Ok(reply)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_kv_read_v1(
         &self,
         request: Request<RaftRequest>,
@@ -170,7 +170,7 @@ impl MetaServiceImpl {
         res
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_txn(
         &self,
         request: Request<TxnRequest>,
@@ -223,7 +223,7 @@ impl MetaService for MetaServiceImpl {
     type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handshake(
         &self,
         request: Request<Streaming<HandshakeRequest>>,
@@ -406,7 +406,7 @@ impl MetaService for MetaServiceImpl {
 
     type WatchStream = Pin<Box<dyn Stream<Item = Result<WatchResponse, Status>> + Send + 'static>>;
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn watch(
         &self,
         request: Request<WatchRequest>,

@@ -15,12 +15,8 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
-
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
-use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -46,10 +42,6 @@ pub struct ProjectSet {
 impl Operator for ProjectSet {
     fn rel_op(&self) -> RelOp {
         RelOp::ProjectSet
-    }
-
-    fn arity(&self) -> usize {
-        1
     }
 
     fn derive_relational_prop(
@@ -90,27 +82,10 @@ impl Operator for ProjectSet {
         }))
     }
 
-    fn derive_physical_prop(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> databend_common_exception::Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
-    }
-
     fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
         // ProjectSet is set-returning functions, precise_cardinality set None
         input_stat.statistics.precise_cardinality = None;
         Ok(Arc::new(input_stat))
-    }
-
-    fn compute_required_prop_child(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
-        _child_index: usize,
-        required: &RequiredProperty,
-    ) -> databend_common_exception::Result<RequiredProperty> {
-        Ok(required.clone())
     }
 }

@@ -21,8 +21,9 @@ use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
+use databend_common_meta_sled_store::openraft::testing::log::StoreBuilder;
 use databend_common_meta_sled_store::openraft::testing::log_id;
-use databend_common_meta_sled_store::openraft::testing::StoreBuilder;
+use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_types::new_log_id;
 use databend_common_meta_types::snapshot_db::DB;
@@ -40,13 +41,10 @@ use futures::TryStreamExt;
 use log::debug;
 use log::info;
 use maplit::btreeset;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
-use crate::testing::meta_service_test_harness_sync;
 use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
@@ -61,19 +59,17 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
     }
 }
 
-#[test(harness = meta_service_test_harness_sync)]
-#[minitrace::trace]
-fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let root = Span::root(full_name!(), SpanContext::random());
-    let _guard = root.set_local_parent();
-
-    databend_common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
+#[test(harness = meta_service_test_harness)]
+#[fastrace::trace]
+async fn test_impl_raft_storage() -> anyhow::Result<()> {
+    databend_common_meta_sled_store::openraft::testing::log::Suite::test_all(MetaStoreBuilder {})
+        .await?;
 
     Ok(())
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_restart() -> anyhow::Result<()> {
     // - Create a meta store
     // - Update meta store
@@ -121,7 +117,7 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -169,7 +165,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Apply logs
@@ -211,7 +207,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
     // - Create a metasrv
     // - Feed logs

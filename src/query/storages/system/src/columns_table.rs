@@ -238,7 +238,15 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
 ) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
     let tenant = ctx.get_tenant();
-    let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
+
+    // For performance considerations, we do not require the most up-to-date table information here:
+    // - for regular tables, the data is certainly fresh
+    // - for read-only attached tables, the data may be outdated
+
+    let catalog = ctx
+        .get_catalog(CATALOG_DEFAULT)
+        .await?
+        .disable_table_info_refresh()?;
 
     let mut tables: Vec<String> = Vec::new();
     let mut databases: Vec<String> = Vec::new();
@@ -260,6 +268,7 @@ pub(crate) async fn dump_tables(
                         }
                     }
                 }
+                Ok(())
             });
         }
     }
@@ -294,11 +303,7 @@ pub(crate) async fn dump_tables(
     let mut final_tables: Vec<(String, Vec<Arc<dyn Table>>)> = Vec::with_capacity(final_dbs.len());
     for (database, db_id) in final_dbs {
         let tables = if tables.is_empty() {
-            if let Ok(table) = catalog.list_tables(&tenant, &database).await {
-                table
-            } else {
-                vec![]
-            }
+            (catalog.list_tables(&tenant, &database).await).unwrap_or_default()
         } else {
             let mut res = Vec::new();
             for table in &tables {

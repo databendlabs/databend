@@ -55,11 +55,14 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::Filters;
+use databend_common_catalog::table::CompactionLimits;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataField;
@@ -92,6 +95,8 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::executor::cast_expr_to_non_null_boolean;
+use crate::optimizer::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
@@ -110,10 +115,12 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
-use crate::plans::OptimizeTableAction;
-use crate::plans::OptimizeTablePlan;
+use crate::plans::OptimizeCompactBlock;
+use crate::plans::OptimizeCompactSegmentPlan;
+use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
-use crate::plans::ReclusterTablePlan;
+use crate::plans::Recluster;
+use crate::plans::RelOperator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
@@ -866,7 +873,8 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let (field, comment, is_deterministic) =
+                    self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -882,6 +890,7 @@ impl Binder {
                     field,
                     comment,
                     option,
+                    is_deterministic,
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
@@ -918,7 +927,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment) =
+                            let (field, comment, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -973,7 +982,7 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let push_downs = if let Some(expr) = selection {
+                let filters = if let Some(expr) = selection {
                     let (_, mut context) =
                         self.bind_table_reference(bind_context, table_reference)?;
 
@@ -986,23 +995,39 @@ impl Binder {
                         self.m_cte_bound_ctx.clone(),
                         self.ctes_map.clone(),
                     );
-
+                    scalar_binder.forbid_udf();
                     let (scalar, _) = scalar_binder.bind(expr)?;
-                    Some(scalar)
+
+                    // prepare the filter expression
+                    let filter = cast_expr_to_non_null_boolean(
+                        scalar
+                            .as_expr()?
+                            .project_column_ref(|col| col.column_name.clone()),
+                    )?;
+                    // prepare the inverse filter expression
+                    let inverted_filter =
+                        check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+                    Some(Filters {
+                        filter: filter.as_remote_expr(),
+                        inverted_filter: inverted_filter.as_remote_expr(),
+                    })
                 } else {
                     None
                 };
 
-                Ok(Plan::ReclusterTable(Box::new(ReclusterTablePlan {
-                    tenant,
+                let recluster = RelOperator::Recluster(Recluster {
                     catalog,
                     database,
                     table,
-                    is_final: *is_final,
-                    metadata: self.metadata.clone(),
-                    push_downs,
+                    filters,
                     limit: limit.map(|v| v as usize),
-                })))
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                Ok(Plan::ReclusterTable {
+                    s_expr: Box::new(s_expr),
+                    is_final: *is_final,
+                })
             }
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
@@ -1102,31 +1127,68 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
-        let action = match ast_action {
-            AstOptimizeTableAction::All => OptimizeTableAction::All,
+        let limit = limit.map(|v| v as usize);
+        let plan = match ast_action {
+            AstOptimizeTableAction::All => {
+                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                    catalog,
+                    database,
+                    table,
+                    limit: CompactionLimits {
+                        segment_limit: limit,
+                        block_limit: None,
+                    },
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                Plan::OptimizeCompactBlock {
+                    s_expr: Box::new(s_expr),
+                    need_purge: true,
+                }
+            }
             AstOptimizeTableAction::Purge { before } => {
-                let p = if let Some(point) = before {
+                let instant = if let Some(point) = before {
                     let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
                 } else {
                     None
                 };
-                OptimizeTableAction::Purge(p)
+                Plan::OptimizePurge(Box::new(OptimizePurgePlan {
+                    catalog,
+                    database,
+                    table,
+                    instant,
+                    num_snapshot_limit: limit,
+                }))
             }
             AstOptimizeTableAction::Compact { target } => match target {
-                CompactTarget::Block => OptimizeTableAction::CompactBlocks(None),
-                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+                CompactTarget::Block => {
+                    let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                        catalog,
+                        database,
+                        table,
+                        limit: CompactionLimits {
+                            segment_limit: limit,
+                            block_limit: None,
+                        },
+                    });
+                    let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                    Plan::OptimizeCompactBlock {
+                        s_expr: Box::new(s_expr),
+                        need_purge: false,
+                    }
+                }
+                CompactTarget::Segment => {
+                    Plan::OptimizeCompactSegment(Box::new(OptimizeCompactSegmentPlan {
+                        catalog,
+                        database,
+                        table,
+                        num_segment_limit: limit,
+                    }))
+                }
             },
         };
 
-        Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
-            catalog,
-            database,
-            table,
-            action,
-            limit: limit.map(|v| v as usize),
-            lock_opt: LockTableOption::LockWithRetry,
-        })))
+        Ok(plan)
     }
 
     #[async_backtrace::framed]
@@ -1287,17 +1349,19 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String)> {
+    ) -> Result<(TableField, String, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
+        let mut is_deterministic = true;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
-                    let expr =
-                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr, true)?;
+                    let (expr, expr_is_deterministic) =
+                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                     field = field.with_default_expr(Some(expr));
+                    is_deterministic = expr_is_deterministic;
                 }
                 ColumnExpr::Virtual(virtual_expr) => {
                     let expr = parse_computed_expr_to_string(
@@ -1317,7 +1381,7 @@ impl Binder {
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment))
+        Ok((field, comment, is_deterministic))
     }
 
     #[async_backtrace::framed]
@@ -1338,12 +1402,8 @@ impl Binder {
             if let Some(expr) = &column.expr {
                 match expr {
                     ColumnExpr::Default(default_expr) => {
-                        let expr = parse_default_expr_to_string(
-                            self.ctx.clone(),
-                            &field,
-                            default_expr,
-                            false,
-                        )?;
+                        let (expr, _) =
+                            parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
                     _ => has_computed = true,

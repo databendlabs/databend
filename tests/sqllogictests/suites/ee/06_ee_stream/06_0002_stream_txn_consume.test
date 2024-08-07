@@ -241,7 +241,7 @@ SELECT a from s2
 ----
 
 query II
-SELECT a, b FROM t order by a
+SELECT a, b FROM t order by a, b
 ----
 1 1
 1 2

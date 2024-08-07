@@ -28,7 +28,7 @@ fn test_decimal_text_exact() -> Result<()> {
     let cases = vec!["", ".e", ".", ".a", "-", "+", "e1", "a", "1e1e1", "1.1.1"];
 
     for s in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, true);
+        let r = read_decimal::<i128>(s.as_bytes(), 10, 5, true);
         assert!(r.is_err(), "{s}: {r:?}");
     }
     Ok(())
@@ -50,6 +50,9 @@ fn test_decimal_text() -> Result<()> {
         ("1#", (1i128, 1, 0, 1)),
         ("-1#", (-1i128, 1, 0, 2)),
         ("10#", (10i128, 2, 0, 2)),
+        ("15.0e-1#", (15i128, 2, -1, 7)),
+        ("15.0e1#", (15i128, 2, 1, 6)),
+        ("15.0e-11#", (15i128, 2, -11, 8)),
         ("010.010#", (1001i128, 4, -2, 7)),
         ("0120.0210#", (120021i128, 6, -3, 9)),
         ("0120.0210e3#", (120021i128, 6, 0, 11)),
@@ -57,7 +60,7 @@ fn test_decimal_text() -> Result<()> {
     ];
 
     for (s, l) in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, false);
+        let r = read_decimal::<i128>(s.as_bytes(), 10, 10, false);
         match r {
             Ok(r) => assert_eq!(l, r, "{s}: {l:?} != {r:?}"),
             Err(e) => panic!("{s}: {l:?} != {e:?}"),
@@ -67,7 +70,7 @@ fn test_decimal_text() -> Result<()> {
     let cases = vec!["", "10000000000#"];
 
     for s in cases {
-        let r = read_decimal::<i128>(s.as_bytes(), 10, false);
+        let r = read_decimal::<i128>(s.as_bytes(), 10, 10, false);
         assert!(r.is_err(), "{s}: {r:?}");
     }
 
@@ -79,6 +82,7 @@ fn test_decimal_with_size_text() -> Result<()> {
     let cases = vec![
         ("0#", 0i128),
         ("+0#", 0i128),
+        ("+1.1#", 1100i128),
         ("-0#", 0i128),
         ("00#", 0i128),
         ("0.0#", 0i128),
@@ -99,6 +103,9 @@ fn test_decimal_with_size_text() -> Result<()> {
         (".0210e3#", 21000i128),
         (".010e2#", 1000i128),
         ("0120.0210e-1#", 12002i128),
+        ("15.0e-1#", 1500i128),
+        ("15.0e1#", 150000i128),
+        ("15.0e-11#", 0i128),
     ];
 
     let size = DecimalSize {

@@ -17,7 +17,6 @@ use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
 use databend_common_meta_sled_store::openraft::OptionalSend;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
-use databend_common_meta_sled_store::openraft::StorageIOError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Entry;
@@ -35,7 +34,7 @@ use crate::metrics::raft_metrics;
 use crate::store::RaftStore;
 
 impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
     }
@@ -57,7 +56,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         Ok((last_applied, last_membership))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn apply<I>(&mut self, entries: I) -> Result<Vec<AppliedState>, StorageError>
     where
         I: IntoIterator<Item = Entry> + OptionalSend,
@@ -74,16 +73,16 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     }
 
     // This method is not used
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<DB>, StorageError> {
         let ss_store = SnapshotStoreV003::new(self.inner.config.clone());
         let db = ss_store
             .new_temp()
-            .map_err(|e| StorageIOError::write_snapshot(None, &e))?;
+            .map_err(|e| StorageError::write_snapshot(None, &e))?;
         Ok(Box::new(db))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
@@ -103,10 +102,10 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         let final_path = ss_store
             .snapshot_config()
             .move_to_final_path(&snapshot.path, meta.snapshot_id.clone())
-            .map_err(|e| StorageIOError::write_snapshot(Some(sig.clone()), &e))?;
+            .map_err(|e| StorageError::write_snapshot(Some(sig.clone()), &e))?;
 
         let db = DB::open_snapshot(final_path, meta.snapshot_id.clone(), &self.inner.config)
-            .map_err(|e| StorageIOError::read_snapshot(Some(sig.clone()), &e))?;
+            .map_err(|e| StorageError::read_snapshot(Some(sig.clone()), &e))?;
 
         info!("snapshot meta: {:?}", meta);
 
@@ -123,7 +122,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
 

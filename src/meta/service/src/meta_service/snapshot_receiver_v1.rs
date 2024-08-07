@@ -24,14 +24,13 @@ use databend_common_meta_sled_store::openraft::ErrorSubject;
 use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::SnapshotId;
 use databend_common_meta_sled_store::openraft::SnapshotSegmentId;
-use databend_common_meta_sled_store::openraft::StorageError;
 use databend_common_meta_types::InstallSnapshotError;
 use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::RaftError;
 use databend_common_meta_types::SnapshotMismatch;
-use databend_common_meta_types::StorageIOError;
+use databend_common_meta_types::StorageError;
+use fastrace::func_name;
 use log::info;
-use minitrace::func_name;
 
 pub struct ReceiverV1 {
     /// The offset of the last byte written to the snapshot.
@@ -129,7 +128,7 @@ pub(crate) async fn receive_snapshot_v1(
 
         // Changed to another stream. re-init snapshot state.
         let (temp_path, f) = ss_store.new_temp_file().map_err(|e| {
-            let io_err = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
+            let io_err = StorageError::write_snapshot(Some(snapshot_meta.signature()), &e);
             RaftError::Fatal(Fatal::StorageError(StorageError::from(io_err)))
         })?;
 
@@ -146,7 +145,7 @@ pub(crate) async fn receive_snapshot_v1(
     if done {
         let r = receiver.take().unwrap();
         let (temp_path, _f) = r.into_file().map_err(|e| {
-            let io_err = StorageIOError::write_snapshot(Some(snapshot_meta.signature()), &e);
+            let io_err = StorageError::write_snapshot(Some(snapshot_meta.signature()), &e);
             StorageError::from(io_err)
         })?;
 

@@ -47,8 +47,8 @@ use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
@@ -78,6 +78,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
     /// Record how many bytes/rows have been spilled in group by
     pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in window partition
+    pub(in crate::sessions) window_partition_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
@@ -107,7 +109,7 @@ pub struct QueryContextShared {
         Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
     pub(in crate::sessions) copy_status: Arc<CopyStatus>,
-    pub(in crate::sessions) merge_status: Arc<RwLock<MergeStatus>>,
+    pub(in crate::sessions) mutation_status: Arc<RwLock<MutationStatus>>,
     pub(in crate::sessions) multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
@@ -167,7 +169,7 @@ impl QueryContextShared {
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
             copy_status: Arc::new(Default::default()),
-            merge_status: Arc::new(Default::default()),
+            mutation_status: Arc::new(Default::default()),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
@@ -179,6 +181,7 @@ impl QueryContextShared {
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
+            window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),

@@ -382,6 +382,7 @@ build_exceptions! {
 
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
+    WrongSharePrivileges(3112),
 }
 
 // Storage errors [3001, 4000].
@@ -400,6 +401,12 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     TransactionTimeout(4003),
     InvalidSessionState(4004),
+
+    // recluster error codes
+    NoNeedToRecluster(4011),
+    NoNeedToCompact(4012),
+
+    RefreshTableInfoFailure(4012),
 }
 
 // Service errors [5001,6000].

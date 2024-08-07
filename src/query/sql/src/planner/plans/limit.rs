@@ -18,7 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::optimizer::Distribution;
-use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::RequiredProperty;
@@ -37,14 +36,6 @@ pub struct Limit {
 impl Operator for Limit {
     fn rel_op(&self) -> RelOp {
         RelOp::Limit
-    }
-
-    fn arity(&self) -> usize {
-        1
-    }
-
-    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
     }
 
     fn compute_required_prop_child(
@@ -80,10 +71,17 @@ impl Operator for Limit {
             Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,
             _ => stat_info.cardinality,
         };
+        let precise_cardinality = match (self.limit, stat_info.statistics.precise_cardinality) {
+            (Some(limit), Some(pc)) => {
+                Some((pc.saturating_sub(self.offset as u64)).min(limit as u64))
+            }
+            _ => None,
+        };
+
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
-                precise_cardinality: None,
+                precise_cardinality,
                 column_stats: Default::default(),
             },
         }))

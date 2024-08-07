@@ -65,15 +65,15 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use fastrace::full_name;
+use fastrace::future::FutureExt as MTFutureExt;
+use fastrace::Span;
 use futures::stream::StreamExt;
 use futures::FutureExt;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::future::FutureExt as MTFutureExt;
-use minitrace::Span;
 use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use prost::Message;
@@ -103,7 +103,7 @@ use crate::MetaGrpcReq;
 use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
-const RPC_RETRIES: usize = 2;
+const RPC_RETRIES: usize = 4;
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
@@ -147,14 +147,27 @@ impl MetaChannelManager {
 
         let (mut real_client, once) = Self::new_real_client(chan);
 
-        let (token, server_version) = MetaGrpcClient::handshake(
+        info!(
+            "MetaChannelManager done building RealClient to {}, start handshake",
+            addr
+        );
+
+        let handshake_res = MetaGrpcClient::handshake(
             &mut real_client,
             &METACLI_COMMIT_SEMVER,
             &MIN_METASRV_SEMVER,
             &self.username,
             &self.password,
         )
-        .await?;
+        .await;
+
+        info!(
+            "MetaChannelManager done handshake to {}, result.err(): {:?}",
+            addr,
+            handshake_res.as_ref().err()
+        );
+
+        let (token, server_version) = handshake_res?;
 
         // Update the token for the client interceptor.
         // Safe unwrap(): it is the first time setting it.
@@ -186,7 +199,7 @@ impl MetaChannelManager {
     }
 
     async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
-        info!("build channel to {}", addr);
+        info!("MetaChannelManager::build_channel to {}", addr);
 
         let ch = ConnectionFactory::create_rpc_channel(addr, self.timeout, self.tls_config.clone())
             .await
@@ -212,13 +225,13 @@ impl ItemManager for MetaChannelManager {
     type Error = MetaClientError;
 
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
         self.new_established_client(addr).await
     }
 
     #[logcall::logcall(err = "debug")]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn check(&self, ch: Self::Item) -> Result<Self::Item, Self::Error> {
         // The underlying `tonic::transport::channel::Channel` reconnects when server is down.
         // But we still need to assert the readiness, e.g., when handshake token expires
@@ -243,7 +256,7 @@ pub struct ClientHandle {
 
 impl ClientHandle {
     /// Send a request to the internal worker task, which will be running in another runtime.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
         Req: RequestFor,
@@ -262,7 +275,7 @@ impl ClientHandle {
     }
 
     /// Send a request to the internal worker task, which will be running in another runtime.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn request_sync<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
         Req: RequestFor,
@@ -418,7 +431,7 @@ impl MetaGrpcClient {
         )
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn try_create(
         endpoints: Vec<String>,
         username: &str,
@@ -471,7 +484,7 @@ impl MetaGrpcClient {
     }
 
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn worker_loop(self: Arc<Self>, mut req_rx: UnboundedReceiver<ClientWorkerRequest>) {
         info!("MetaGrpcClient::worker spawned");
 
@@ -516,7 +529,7 @@ impl MetaGrpcClient {
     }
 
     /// Handle a RPC request in a separate task.
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn handle_rpc_request(self: Arc<Self>, worker_request: ClientWorkerRequest) {
         let request_id = worker_request.request_id;
         let resp_tx = worker_request.resp_tx;
@@ -569,7 +582,7 @@ impl MetaGrpcClient {
                 Response::Export(resp)
             }
             message::Request::MakeEstablishedClient(_) => {
-                let resp = self.make_established_client().await;
+                let resp = self.get_established_client().await;
                 Response::MakeEstablishedClient(resp)
             }
             message::Request::GetEndpoints(_) => {
@@ -651,8 +664,8 @@ impl MetaGrpcClient {
     }
 
     /// Return a client for communication, and a server version in form of `{major:03}.{minor:03}.{patch:03}`.
-    #[minitrace::trace]
-    pub async fn make_established_client(&self) -> Result<EstablishedClient, MetaClientError> {
+    #[fastrace::trace]
+    pub async fn get_established_client(&self) -> Result<EstablishedClient, MetaClientError> {
         let (endpoints_str, n) = {
             let eps = self.endpoints.lock();
             (eps.to_string(), eps.len())
@@ -716,7 +729,7 @@ impl MetaGrpcClient {
         eps.nodes().cloned().collect()
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<(), MetaError> {
         Self::endpoints_non_empty(&endpoints)?;
 
@@ -739,9 +752,9 @@ impl MetaGrpcClient {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn sync_endpoints(&self) -> Result<(), MetaError> {
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         let result = client
             .member_list(Request::new(MemberListRequest {
                 data: "".to_string(),
@@ -750,9 +763,9 @@ impl MetaGrpcClient {
         let endpoints: Result<MemberListReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
             Err(s) => {
-                if status_is_retryable(&s) {
+                if is_status_retryable(&s) {
                     self.choose_next_endpoint();
-                    let mut client = self.make_established_client().await?;
+                    let mut client = self.get_established_client().await?;
                     let req = Request::new(MemberListRequest {
                         data: "".to_string(),
                     });
@@ -827,7 +840,7 @@ impl MetaGrpcClient {
     /// S ---------------+------+------+------------>
     /// S.ver:           2      3      4
     /// ```
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn handshake(
         client: &mut RealClient,
         client_ver: &Version,
@@ -902,7 +915,7 @@ impl MetaGrpcClient {
     }
 
     /// Create a watching stream that receives KV change events.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
@@ -912,13 +925,13 @@ impl MetaGrpcClient {
             "MetaGrpcClient worker: handle watch request"
         );
 
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         let res = client.watch(watch_request).await?;
         Ok(res.into_inner())
     }
 
     /// Export all data in json from metasrv.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn export(
         &self,
         export_request: message::ExportReq,
@@ -928,7 +941,7 @@ impl MetaGrpcClient {
             "MetaGrpcClient worker: handle export request"
         );
 
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         // TODO: since 1.2.315, export_v1() is added, via which chunk size can be specified.
         let res = if client.server_protocol_version() >= 1002315 {
             client
@@ -943,26 +956,26 @@ impl MetaGrpcClient {
     }
 
     /// Get cluster status
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
         debug!("MetaGrpcClient::get_cluster_status");
 
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         let res = client.get_cluster_status(Empty {}).await?;
         Ok(res.into_inner())
     }
 
     /// Export all data in json from metasrv.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
         debug!("MetaGrpcClient::get_client_info");
 
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         let res = client.get_client_info(Empty {}).await?;
         Ok(res.into_inner())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn kv_api<T>(&self, v: T) -> Result<T::Reply, MetaError>
     where
         T: RequestFor,
@@ -982,7 +995,7 @@ impl MetaGrpcClient {
 
         for i in 0..RPC_RETRIES {
             let mut client = self
-                .make_established_client()
+                .get_established_client()
                 .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
 
@@ -1004,7 +1017,7 @@ impl MetaGrpcClient {
                     error :? =(&e);
                     "MetaGrpcClient::kv_api error");
 
-                if status_is_retryable(e) {
+                if is_status_retryable(e) {
                     warn!(
                         req :? =(&raft_req),
                         error :? =(&e);
@@ -1033,7 +1046,7 @@ impl MetaGrpcClient {
         Err(net_err.into())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn kv_read_v1(
         &self,
         grpc_req: MetaGrpcReadReq,
@@ -1046,15 +1059,18 @@ impl MetaGrpcClient {
         let mut failures = vec![];
 
         for i in 0..RPC_RETRIES {
-            let mut client = self
-                .make_established_client()
-                .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
+            let mut established_client = self
+                .get_established_client()
+                .timed_ge(
+                    threshold(),
+                    info_spent("MetaGrpcClient::get_established_client"),
+                )
                 .await?;
 
             let raft_req: RaftRequest = grpc_req.clone().into();
             let req = traced_req(raft_req.clone());
 
-            let result = client
+            let result = established_client
                 .kv_read_v1(req)
                 .timed_ge(threshold(), info_spent("client::kv_read_v1"))
                 .await;
@@ -1068,15 +1084,12 @@ impl MetaGrpcClient {
                 warn!(
                     req :? =(&grpc_req),
                     error :? =(&e);
-                    "MetaGrpcClient::kv_read_v1 error"
+                    "MetaGrpcClient::kv_read_v1 error, retryable: {}, target={}",
+                    is_status_retryable(e),
+                    established_client.target_endpoint()
                 );
 
-                if status_is_retryable(e) {
-                    warn!(
-                        req :? =(&grpc_req),
-                        error :? =(&e);
-                        "MetaGrpcClient::kv_read_v1 error is retryable");
-
+                if is_status_retryable(e) {
                     self.choose_next_endpoint();
                     failures.push(e.clone());
                     continue;
@@ -1099,7 +1112,7 @@ impl MetaGrpcClient {
         Err(net_err.into())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
@@ -1110,15 +1123,15 @@ impl MetaGrpcClient {
 
         let req = traced_req(txn.clone());
 
-        let mut client = self.make_established_client().await?;
+        let mut client = self.get_established_client().await?;
         let result = client.transaction(req).await;
 
         let result: Result<TxnReply, Status> = match result {
             Ok(r) => return Ok(r.into_inner()),
             Err(s) => {
-                if status_is_retryable(&s) {
+                if is_status_retryable(&s) {
                     self.choose_next_endpoint();
-                    let mut client = self.make_established_client().await?;
+                    let mut client = self.get_established_client().await?;
                     let req = traced_req(txn);
                     let ret = client.transaction(req).await?.into_inner();
                     return Ok(ret);
@@ -1144,8 +1157,12 @@ impl MetaGrpcClient {
     }
 
     fn choose_next_endpoint(&self) {
-        let mut es = self.endpoints.lock();
-        es.choose_next();
+        let next = {
+            let mut es = self.endpoints.lock();
+            es.choose_next().to_string()
+        };
+
+        info!("MetaGrpcClient choose_next_endpoint: {}", next);
     }
 }
 
@@ -1166,10 +1183,10 @@ fn traced_req<T>(t: T) -> Request<T> {
     req
 }
 
-fn status_is_retryable(status: &Status) -> bool {
+fn is_status_retryable(status: &Status) -> bool {
     matches!(
         status.code(),
-        Code::Unauthenticated | Code::Unavailable | Code::Internal
+        Code::Unauthenticated | Code::Unavailable | Code::Internal | Code::Cancelled
     )
 }
 
@@ -1203,10 +1220,6 @@ fn threshold() -> Duration {
 
 fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
     move |total, busy| {
-        info!(
-            total :? =(&total),
-            busy :? =(&busy);
-            "{} spent", msg
-        );
+        info!("{} spent: total: {:?}, busy: {:?}", msg, total, busy);
     }
 }

@@ -16,7 +16,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'attempt_number'                  | 'system'             | 'task_history'         | 'Int32'               | 'INT'               | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                       | 'system'             | 'users'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auto_increment'                  | 'information_schema' | 'tables'               | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'block_count'                     | 'system'             | 'clustering_history'   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'byte_size'                       | 'system'             | 'clustering_history'   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_local_disk'           | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'bytes_from_memory'               | 'system'             | 'query_log'            | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -210,6 +209,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'invalid_reason'                  | 'system'             | 'streams'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_aggregate'                    | 'system'             | 'functions'            | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_aggregate'                    | 'system'             | 'user_functions'       | 'Nullable(Boolean)'   | 'BOOLEAN'           | ''       | ''       | 'YES'    | ''       |
+| 'is_attach'                       | 'system'             | 'tables'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'is_attach'                       | 'system'             | 'tables_with_history'  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_configured'                   | 'system'             | 'users'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'              | 'information_schema' | 'views'                | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                     | 'information_schema' | 'columns'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

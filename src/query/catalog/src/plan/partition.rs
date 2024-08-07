@@ -13,18 +13,24 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 use sha2::Digest;
 
+use crate::plan::PartStatistics;
 use crate::table_context::TableContext;
 
 /// Partition information.
@@ -90,6 +96,8 @@ pub enum PartitionsShuffleKind {
     Seq,
     // Bind the Partition to executor by partition.hash()%executor_nums order.
     Mod,
+    // Bind the Partition to executor by ConsistentHash(partition.hash()) order.
+    ConsistentHash,
     // Bind the Partition to executor by partition.rand() order.
     Rand,
     // Bind the Partition to executor by broadcast
@@ -132,6 +140,49 @@ impl Partitions {
                 parts.sort_by(|a, b| a.0.cmp(&b.0));
                 parts.into_iter().map(|x| x.1).collect()
             }
+            PartitionsShuffleKind::ConsistentHash => {
+                let mut scale = 0;
+                let num_executors = executors_sorted.len();
+                const EXPECT_NODES: usize = 100;
+                while num_executors << scale < EXPECT_NODES {
+                    scale += 1;
+                }
+
+                let mut executor_part = executors_sorted
+                    .iter()
+                    .map(|e| (e.clone(), Partitions::default()))
+                    .collect::<HashMap<_, _>>();
+
+                let mut ring = executors_sorted
+                    .iter()
+                    .flat_map(|e| {
+                        let mut s = DefaultHasher::new();
+                        e.hash(&mut s);
+                        (0..1 << scale).map(move |i| {
+                            i.hash(&mut s);
+                            (e, s.finish())
+                        })
+                    })
+                    .collect::<Vec<_>>();
+
+                ring.sort_by(|&(_, a), &(_, b)| a.cmp(&b));
+
+                for p in self.partitions.iter() {
+                    let k = p.hash();
+                    let idx = match ring.binary_search_by(|&(_, h)| h.cmp(&k)) {
+                        Err(i) => i,
+                        Ok(i) => i,
+                    };
+                    let executor = if idx == ring.len() {
+                        ring[0].0
+                    } else {
+                        ring[idx].0
+                    };
+                    let part = executor_part.get_mut(executor).unwrap();
+                    part.partitions.push(p.clone());
+                }
+                return Ok(executor_part);
+            }
             PartitionsShuffleKind::Rand => {
                 let mut rng = thread_rng();
                 let mut parts = self.partitions.clone();
@@ -139,15 +190,15 @@ impl Partitions {
                 parts
             }
             PartitionsShuffleKind::Broadcast => {
-                let mut executor_part = HashMap::default();
-                for executor in executors_sorted.iter() {
-                    executor_part.insert(
-                        executor.clone(),
-                        Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
-                    );
-                }
-
-                return Ok(executor_part);
+                return Ok(executors_sorted
+                    .into_iter()
+                    .map(|executor| {
+                        (
+                            executor,
+                            Partitions::create(PartitionsShuffleKind::Seq, self.partitions.clone()),
+                        )
+                    })
+                    .collect());
             }
         };
 
@@ -284,5 +335,64 @@ impl StealablePartitions {
 
         drop(partitions);
         self.ctx.get_partitions(max_size)
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReclusterTask {
+    pub parts: Partitions,
+    pub stats: PartStatistics,
+    pub total_rows: usize,
+    pub total_bytes: usize,
+    pub level: i32,
+}
+
+#[derive(Clone)]
+pub enum ReclusterParts {
+    Recluster {
+        tasks: Vec<ReclusterTask>,
+        remained_blocks: Vec<Arc<BlockMeta>>,
+        removed_segment_indexes: Vec<usize>,
+        removed_segment_summary: Statistics,
+    },
+    Compact(Partitions),
+}
+
+impl ReclusterParts {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ReclusterParts::Recluster {
+                tasks,
+                remained_blocks,
+                ..
+            } => tasks.is_empty() && remained_blocks.is_empty(),
+            ReclusterParts::Compact(parts) => parts.is_empty(),
+        }
+    }
+
+    pub fn new_recluster_parts() -> Self {
+        Self::Recluster {
+            tasks: vec![],
+            remained_blocks: vec![],
+            removed_segment_indexes: vec![],
+            removed_segment_summary: Statistics::default(),
+        }
+    }
+
+    pub fn new_compact_parts() -> Self {
+        Self::Compact(Partitions::default())
+    }
+
+    pub fn is_distributed(&self, ctx: Arc<dyn TableContext>) -> bool {
+        match self {
+            ReclusterParts::Recluster { tasks, .. } => tasks.len() > 1,
+            ReclusterParts::Compact(_) => {
+                (!ctx.get_cluster().is_empty())
+                    && ctx
+                        .get_settings()
+                        .get_enable_distributed_compact()
+                        .unwrap_or(false)
+            }
+        }
     }
 }

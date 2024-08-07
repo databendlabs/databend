@@ -435,6 +435,19 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("window_partition_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
+
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
@@ -493,7 +506,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(20),
+                    value: UserSettingValue::UInt64(30),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -537,6 +550,12 @@ impl DefaultSettings {
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables distributed execution of table compaction.",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_analyze_histogram", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables analyze histogram for query optimization during analyzing table.",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
@@ -702,6 +721,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_strict_datetime_parser", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",
@@ -785,6 +810,12 @@ impl DefaultSettings {
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables loser tree merge sort",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("format_null_as_str", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 })

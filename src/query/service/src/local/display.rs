@@ -146,7 +146,6 @@ impl<'a> FormatDisplay<'a> {
                 read_rows: progress.rows,
                 read_bytes: progress.bytes,
                 write_rows: write_progress.rows,
-                write_bytes: write_progress.bytes,
             };
             FormatDisplay::display_progress(bar, &pg).await;
             Some(pg)
@@ -393,7 +392,6 @@ pub struct QueryProgress {
     pub read_bytes: usize,
 
     pub write_rows: usize,
-    pub write_bytes: usize,
 }
 
 impl QueryProgress {

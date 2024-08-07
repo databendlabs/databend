@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -33,15 +32,14 @@ pub struct CachedReader<L, C> {
     loader: L,
 }
 
-pub type CacheHolder<V, S, M> = Arc<RwLock<InMemoryCache<V, S, M>>>;
+pub type CacheHolder<V, M> = Arc<RwLock<InMemoryCache<V, M>>>;
 
-impl<V, L, S, M> CachedReader<L, NamedCache<CacheHolder<V, S, M>>>
+impl<V, L, M> CachedReader<L, NamedCache<CacheHolder<V, M>>>
 where
     L: Loader<V> + Sync,
-    S: BuildHasher,
     M: CountableMeter<String, Arc<V>>,
 {
-    pub fn new(cache: Option<NamedCache<CacheHolder<V, S, M>>>, loader: L) -> Self {
+    pub fn new(cache: Option<NamedCache<CacheHolder<V, M>>>, loader: L) -> Self {
         Self { cache, loader }
     }
 

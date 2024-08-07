@@ -42,7 +42,7 @@ use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::plans::insert::InsertValue;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;

@@ -34,8 +34,8 @@ use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::plans::insert::InsertValue;
 use databend_common_sql::plans::InsertInputSource;
+use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Replace;
 use databend_common_sql::BindContext;
@@ -45,7 +45,7 @@ use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -164,20 +164,15 @@ impl ReplaceInterpreter {
         })?;
 
         let table_info = fuse_table.get_table_info();
-        let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(
-                schema.as_ref().clone(),
-                Some(table_info.ident.seq),
-            ))
-        });
+        let base_snapshot = fuse_table.read_table_snapshot().await?;
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
-        let table_is_empty = base_snapshot.segments.is_empty();
-        let table_level_range_index = base_snapshot.summary.col_stats.clone();
+        let table_is_empty = base_snapshot.segments().is_empty();
+        let table_level_range_index = base_snapshot.summary().col_stats;
         let mut purge_info = None;
 
         let ReplaceSourceCtx {
@@ -328,9 +323,9 @@ impl ReplaceInterpreter {
             on_conflicts,
             bloom_filter_column_indexes,
             segments: base_snapshot
-                .segments
-                .clone()
-                .into_iter()
+                .segments()
+                .iter()
+                .cloned()
                 .enumerate()
                 .collect(),
             block_slots: None,
@@ -358,6 +353,7 @@ impl ReplaceInterpreter {
             merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);
         Ok((root, purge_info))

@@ -2992,6 +2992,24 @@ CreateCatalog(
 
 
 ---------- Input ----------
+create catalog ctl type=share connection=(name='provider.test_share' endpoint='endpoint_name');
+---------- Output ---------
+CREATE CATALOG ctl TYPE=SHARE CONNECTION = ( endpoint = 'endpoint_name', name = 'provider.test_share' )
+---------- AST ------------
+CreateCatalog(
+    CreateCatalogStmt {
+        if_not_exists: false,
+        catalog_name: "ctl",
+        catalog_type: Share,
+        catalog_options: {
+            "endpoint": "endpoint_name",
+            "name": "provider.test_share",
+        },
+    },
+)
+
+
+---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
 CREATE DATABASE IF NOT EXISTS a
@@ -3012,7 +3030,6 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        share_params: None,
     },
 )
 
@@ -3049,7 +3066,6 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        share_params: None,
     },
 )
 
@@ -3077,62 +3093,6 @@ CreateDatabase(
             Default,
         ),
         options: [],
-        share_params: None,
-    },
-)
-
-
----------- Input ----------
-create database t FROM SHARE a.s using b;
----------- Output ---------
-CREATE DATABASE t FROM SHARE a.s USING b
----------- AST ------------
-CreateDatabase(
-    CreateDatabaseStmt {
-        create_option: Create,
-        database: DatabaseRef {
-            catalog: None,
-            database: Identifier {
-                span: Some(
-                    16..17,
-                ),
-                name: "t",
-                quote: None,
-                is_hole: false,
-            },
-        },
-        engine: None,
-        options: [],
-        share_params: Some(
-            (
-                ShareNameIdent {
-                    tenant: Identifier {
-                        span: Some(
-                            29..30,
-                        ),
-                        name: "a",
-                        quote: None,
-                        is_hole: false,
-                    },
-                    share: Identifier {
-                        span: Some(
-                            31..32,
-                        ),
-                        name: "s",
-                        quote: None,
-                        is_hole: false,
-                    },
-                },
-                Identifier {
-                    span: Some(
-                        39..40,
-                    ),
-                    name: "b",
-                    quote: None,
-                    is_hole: false,
-                },
-            ),
-        ),
     },
 )
 
@@ -3244,7 +3204,6 @@ CreateDatabase(
         },
         engine: None,
         options: [],
-        share_params: None,
     },
 )
 
@@ -15656,28 +15615,117 @@ Update(
 
 
 ---------- Input ----------
+select $abc + 3
+---------- Output ---------
+SELECT getvariable('abc') + 3
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..15,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..15,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: BinaryOp {
+                            span: Some(
+                                12..13,
+                            ),
+                            op: Plus,
+                            left: FunctionCall {
+                                span: Some(
+                                    7..11,
+                                ),
+                                func: FunctionCall {
+                                    distinct: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            7..11,
+                                        ),
+                                        name: "getvariable",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    args: [
+                                        Literal {
+                                            span: Some(
+                                                7..11,
+                                            ),
+                                            value: String(
+                                                "abc",
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                    lambda: None,
+                                },
+                            },
+                            right: Literal {
+                                span: Some(
+                                    14..15,
+                                ),
+                                value: UInt64(
+                                    3,
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 SET max_threads = 10;
 ---------- Output ---------
 SET max_threads = 10
 ---------- AST ------------
-SetVariable {
-    is_global: false,
-    variable: Identifier {
-        span: Some(
-            4..15,
-        ),
-        name: "max_threads",
-        quote: None,
-        is_hole: false,
-    },
-    value: Literal {
-        span: Some(
-            18..20,
-        ),
-        value: UInt64(
-            10,
-        ),
-    },
+SetStmt {
+    set_type: SettingsSession,
+    identifiers: [
+        Identifier {
+            span: Some(
+                4..15,
+            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+    values: Expr(
+        [
+            Literal {
+                span: Some(
+                    18..20,
+                ),
+                value: UInt64(
+                    10,
+                ),
+            },
+        ],
+    ),
 }
 
 
@@ -15686,38 +15734,120 @@ SET max_threads = 10*2;
 ---------- Output ---------
 SET max_threads = 10 * 2
 ---------- AST ------------
-SetVariable {
-    is_global: false,
-    variable: Identifier {
-        span: Some(
-            4..15,
-        ),
-        name: "max_threads",
-        quote: None,
-        is_hole: false,
-    },
-    value: BinaryOp {
-        span: Some(
-            20..21,
-        ),
-        op: Multiply,
-        left: Literal {
+SetStmt {
+    set_type: SettingsSession,
+    identifiers: [
+        Identifier {
             span: Some(
-                18..20,
+                4..15,
             ),
-            value: UInt64(
-                10,
-            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-        right: Literal {
+    ],
+    values: Expr(
+        [
+            BinaryOp {
+                span: Some(
+                    20..21,
+                ),
+                op: Multiply,
+                left: Literal {
+                    span: Some(
+                        18..20,
+                    ),
+                    value: UInt64(
+                        10,
+                    ),
+                },
+                right: Literal {
+                    span: Some(
+                        21..22,
+                    ),
+                    value: UInt64(
+                        2,
+                    ),
+                },
+            },
+        ],
+    ),
+}
+
+
+---------- Input ----------
+SET global (max_threads, max_memory_usage) = (10*2, 10*4);
+---------- Output ---------
+SET GLOBAL (max_threads, max_memory_usage) = (10 * 2, 10 * 4)
+---------- AST ------------
+SetStmt {
+    set_type: SettingsGlobal,
+    identifiers: [
+        Identifier {
             span: Some(
-                21..22,
+                12..23,
             ),
-            value: UInt64(
-                2,
-            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-    },
+        Identifier {
+            span: Some(
+                25..41,
+            ),
+            name: "max_memory_usage",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+    values: Expr(
+        [
+            BinaryOp {
+                span: Some(
+                    48..49,
+                ),
+                op: Multiply,
+                left: Literal {
+                    span: Some(
+                        46..48,
+                    ),
+                    value: UInt64(
+                        10,
+                    ),
+                },
+                right: Literal {
+                    span: Some(
+                        49..50,
+                    ),
+                    value: UInt64(
+                        2,
+                    ),
+                },
+            },
+            BinaryOp {
+                span: Some(
+                    54..55,
+                ),
+                op: Multiply,
+                left: Literal {
+                    span: Some(
+                        52..54,
+                    ),
+                    value: UInt64(
+                        10,
+                    ),
+                },
+                right: Literal {
+                    span: Some(
+                        55..56,
+                    ),
+                    value: UInt64(
+                        4,
+                    ),
+                },
+            },
+        ],
+    ),
 }
 
 
@@ -15726,21 +15856,19 @@ UNSET max_threads;
 ---------- Output ---------
 UNSET max_threads
 ---------- AST ------------
-UnSetVariable(
-    UnSetStmt {
-        session_level: false,
-        source: Var {
-            variable: Identifier {
-                span: Some(
-                    6..17,
-                ),
-                name: "max_threads",
-                quote: None,
-                is_hole: false,
-            },
+UnSetStmt {
+    unset_type: SettingsGlobal,
+    identifiers: [
+        Identifier {
+            span: Some(
+                6..17,
+            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-    },
-)
+    ],
+}
 
 
 ---------- Input ----------
@@ -15748,21 +15876,19 @@ UNSET session max_threads;
 ---------- Output ---------
 UNSET SESSION max_threads
 ---------- AST ------------
-UnSetVariable(
-    UnSetStmt {
-        session_level: true,
-        source: Var {
-            variable: Identifier {
-                span: Some(
-                    14..25,
-                ),
-                name: "max_threads",
-                quote: None,
-                is_hole: false,
-            },
+UnSetStmt {
+    unset_type: SettingsSession,
+    identifiers: [
+        Identifier {
+            span: Some(
+                14..25,
+            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-    },
-)
+    ],
+}
 
 
 ---------- Input ----------
@@ -15770,31 +15896,27 @@ UNSET (max_threads, sql_dialect);
 ---------- Output ---------
 UNSET (max_threads, sql_dialect)
 ---------- AST ------------
-UnSetVariable(
-    UnSetStmt {
-        session_level: false,
-        source: Vars {
-            variables: [
-                Identifier {
-                    span: Some(
-                        7..18,
-                    ),
-                    name: "max_threads",
-                    quote: None,
-                    is_hole: false,
-                },
-                Identifier {
-                    span: Some(
-                        20..31,
-                    ),
-                    name: "sql_dialect",
-                    quote: None,
-                    is_hole: false,
-                },
-            ],
+UnSetStmt {
+    unset_type: SettingsGlobal,
+    identifiers: [
+        Identifier {
+            span: Some(
+                7..18,
+            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-    },
-)
+        Identifier {
+            span: Some(
+                20..31,
+            ),
+            name: "sql_dialect",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+}
 
 
 ---------- Input ----------
@@ -15802,31 +15924,248 @@ UNSET session (max_threads, sql_dialect);
 ---------- Output ---------
 UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
-UnSetVariable(
-    UnSetStmt {
-        session_level: true,
-        source: Vars {
-            variables: [
-                Identifier {
-                    span: Some(
-                        15..26,
-                    ),
-                    name: "max_threads",
-                    quote: None,
-                    is_hole: false,
-                },
-                Identifier {
-                    span: Some(
-                        28..39,
-                    ),
-                    name: "sql_dialect",
-                    quote: None,
-                    is_hole: false,
-                },
-            ],
+UnSetStmt {
+    unset_type: SettingsSession,
+    identifiers: [
+        Identifier {
+            span: Some(
+                15..26,
+            ),
+            name: "max_threads",
+            quote: None,
+            is_hole: false,
         },
-    },
-)
+        Identifier {
+            span: Some(
+                28..39,
+            ),
+            name: "sql_dialect",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+}
+
+
+---------- Input ----------
+SET variable a = 3
+---------- Output ---------
+SET VARIABLE a = 3
+---------- AST ------------
+SetStmt {
+    set_type: Variable,
+    identifiers: [
+        Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+    values: Expr(
+        [
+            Literal {
+                span: Some(
+                    17..18,
+                ),
+                value: UInt64(
+                    3,
+                ),
+            },
+        ],
+    ),
+}
+
+
+---------- Input ----------
+SET variable a = select 3
+---------- Output ---------
+SET VARIABLE a = SELECT 3
+---------- AST ------------
+SetStmt {
+    set_type: Variable,
+    identifiers: [
+        Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+    values: Query(
+        Query {
+            span: Some(
+                17..25,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        17..25,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    24..25,
+                                ),
+                                value: UInt64(
+                                    3,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SET variable a = (select max(number) from numbers(10))
+---------- Output ---------
+SET VARIABLE a = (SELECT max(number) FROM numbers(10))
+---------- AST ------------
+SetStmt {
+    set_type: Variable,
+    identifiers: [
+        Identifier {
+            span: Some(
+                13..14,
+            ),
+            name: "a",
+            quote: None,
+            is_hole: false,
+        },
+    ],
+    values: Expr(
+        [
+            Subquery {
+                span: Some(
+                    17..54,
+                ),
+                modifier: None,
+                subquery: Query {
+                    span: Some(
+                        18..53,
+                    ),
+                    with: None,
+                    body: Select(
+                        SelectStmt {
+                            span: Some(
+                                18..53,
+                            ),
+                            hints: None,
+                            distinct: false,
+                            top_n: None,
+                            select_list: [
+                                AliasedExpr {
+                                    expr: FunctionCall {
+                                        span: Some(
+                                            25..36,
+                                        ),
+                                        func: FunctionCall {
+                                            distinct: false,
+                                            name: Identifier {
+                                                span: Some(
+                                                    25..28,
+                                                ),
+                                                name: "max",
+                                                quote: None,
+                                                is_hole: false,
+                                            },
+                                            args: [
+                                                ColumnRef {
+                                                    span: Some(
+                                                        29..35,
+                                                    ),
+                                                    column: ColumnRef {
+                                                        database: None,
+                                                        table: None,
+                                                        column: Name(
+                                                            Identifier {
+                                                                span: Some(
+                                                                    29..35,
+                                                                ),
+                                                                name: "number",
+                                                                quote: None,
+                                                                is_hole: false,
+                                                            },
+                                                        ),
+                                                    },
+                                                },
+                                            ],
+                                            params: [],
+                                            window: None,
+                                            lambda: None,
+                                        },
+                                    },
+                                    alias: None,
+                                },
+                            ],
+                            from: [
+                                TableFunction {
+                                    span: Some(
+                                        42..53,
+                                    ),
+                                    lateral: false,
+                                    name: Identifier {
+                                        span: Some(
+                                            42..49,
+                                        ),
+                                        name: "numbers",
+                                        quote: None,
+                                        is_hole: false,
+                                    },
+                                    params: [
+                                        Literal {
+                                            span: Some(
+                                                50..52,
+                                            ),
+                                            value: UInt64(
+                                                10,
+                                            ),
+                                        },
+                                    ],
+                                    named_params: [],
+                                    alias: None,
+                                },
+                            ],
+                            selection: None,
+                            group_by: None,
+                            having: None,
+                            window_list: None,
+                            qualify: None,
+                        },
+                    ),
+                    order_by: [],
+                    limit: [],
+                    offset: None,
+                    ignore_result: false,
+                },
+            },
+        ],
+    ),
+}
 
 
 ---------- Input ----------
@@ -22258,6 +22597,107 @@ Query(
         limit: [],
         offset: None,
         ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
+(
+    user_name String,
+    age Int16
+)
+PRIMARY KEY username
+SOURCE (mysql(host='localhost' username='root' password='1234'))
+COMMENT 'This is a comment';
+---------- Output ---------
+CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary(user_name STRING, age Int16)PRIMARY KEY username SOURCE(mysql( host = 'localhost' password = '1234' username = 'root'))COMMENT 'This is a comment' 
+---------- AST ------------
+CreateDictionary(
+    CreateDictionaryStmt {
+        create_option: CreateOrReplace,
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    29..39,
+                ),
+                name: "my_catalog",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    40..51,
+                ),
+                name: "my_database",
+                quote: None,
+                is_hole: false,
+            },
+        ),
+        dictionary_name: Identifier {
+            span: Some(
+                52..65,
+            ),
+            name: "my_dictionary",
+            quote: None,
+            is_hole: false,
+        },
+        columns: [
+            ColumnDefinition {
+                name: Identifier {
+                    span: Some(
+                        72..81,
+                    ),
+                    name: "user_name",
+                    quote: None,
+                    is_hole: false,
+                },
+                data_type: String,
+                expr: None,
+                comment: None,
+            },
+            ColumnDefinition {
+                name: Identifier {
+                    span: Some(
+                        94..97,
+                    ),
+                    name: "age",
+                    quote: None,
+                    is_hole: false,
+                },
+                data_type: Int16,
+                expr: None,
+                comment: None,
+            },
+        ],
+        primary_keys: [
+            Identifier {
+                span: Some(
+                    118..126,
+                ),
+                name: "username",
+                quote: None,
+                is_hole: false,
+            },
+        ],
+        source_name: Identifier {
+            span: Some(
+                135..140,
+            ),
+            name: "mysql",
+            quote: None,
+            is_hole: false,
+        },
+        source_options: {
+            "host": "localhost",
+            "password": "1234",
+            "username": "root",
+        },
+        comment: Some(
+            "This is a comment",
+        ),
     },
 )
 
