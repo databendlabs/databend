@@ -1224,23 +1224,23 @@ evaluation (internal):
 ast            : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
 raw expr       : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
 checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>("POINT(4.500212 52.161170)"), to_int32<UInt16>(4326_u16), to_int32<UInt16>(28992_u16))
-optimized expr : "SRID=28992;POINT(94308.670502 464038.168655)"
+optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
 output type    : Geometry
 output domain  : Undefined
-output         : 'SRID=28992;POINT(94308.670502 464038.168655)'
+output         : 'SRID=28992;POINT(94308.670475 464038.168827)'
 
 
 ast            : st_transform(st_geomfromwkt(a), b, c)
 raw expr       : st_transform(st_geomfromwkt(a::String), b::Int32, c::Int32)
 checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>(a), b, c)
-optimized expr : "SRID=28992;POINT(94308.670502 464038.168655)"
+optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
 evaluation:
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 |        | a                                                           | b             | c               | Output                                         |
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 | Type   | String                                                      | Int32         | Int32           | Geometry                                       |
 | Domain | {"POINT(4.500212 52.161170)"..="POINT(4.500212 52.161170)"} | {4326..=4326} | {28992..=28992} | Undefined                                      |
-| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | 'SRID=28992;POINT(94308.670502 464038.168655)' |
+| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | 'SRID=28992;POINT(94308.670475 464038.168827)' |
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------+
@@ -1249,7 +1249,7 @@ evaluation (internal):
 | a      | StringColumn { data: 0x504f494e5428342e3530303231322035322e31363131373029, offsets: [0, 25] } |
 | b      | Int32([4326])                                                                                 |
 | c      | Int32([28992])                                                                                |
-| Output | BinaryColumn { data: 0x0101000020407100001e4e60ba4a06f74075e5b3ac98521c41, offsets: [0, 25] } |
+| Output | BinaryColumn { data: 0x0101000020407100005dfe43ba4a06f7402ffce0ac98521c41, offsets: [0, 25] } |
 +--------+-----------------------------------------------------------------------------------------------+
 
 

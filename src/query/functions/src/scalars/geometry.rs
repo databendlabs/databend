@@ -43,6 +43,8 @@ use geo::EuclideanLength;
 use geo::HasDimensions;
 use geo::HaversineDistance;
 use geo::Point;
+use geo::ToDegrees;
+use geo::ToRadians;
 use geo_types::coord;
 use geo_types::Polygon;
 use geohash::decode_bbox;
@@ -64,8 +66,8 @@ use geozero::ToWkt;
 use jsonb::parse_value;
 use jsonb::to_string;
 use num_traits::AsPrimitive;
-use proj::Proj;
-use proj::Transform;
+use proj4rs::transform::transform;
+use proj4rs::Proj;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // aliases
@@ -1510,7 +1512,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "st_transform",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<GeometryType, Int32Type, GeometryType>(
-            |original, srid, builder, ctx| {
+            |original, to_srid, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
                         builder.commit_row();
@@ -1525,7 +1527,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     _ => {
                         ctx.set_error(
                             builder.len(),
-                            ErrorCode::GeometryError(" input geometry must has the correct SRID")
+                            ErrorCode::GeometryError("input geometry must has the correct SRID")
                                 .to_string(),
                         );
                         builder.commit_row();
@@ -1533,26 +1535,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 };
 
-                let result = {
-                    Ewkb(original).to_geo().map_err(ErrorCode::from).and_then(
-                        |mut geom: geo::Geometry| {
-                            Proj::new_known_crs(&make_crs(from_srid), &make_crs(srid), None)
-                                .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-                                .and_then(|proj| {
-                                    geom.transform(&proj)
-                                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-                                        .and_then(|_| {
-                                            let round_geom = round_geometry_coordinates(geom);
-                                            round_geom
-                                                .to_ewkb(round_geom.dims(), Some(srid))
-                                                .map_err(ErrorCode::from)
-                                        })
-                                })
-                        },
-                    )
-                };
-
-                match result {
+                match st_transform_impl(original, from_srid, to_srid) {
                     Ok(data) => {
                         builder.put_slice(data.as_slice());
                     }
@@ -1569,7 +1552,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType, _, _>(
         "st_transform",
         |_, _, _,_| FunctionDomain::MayThrow,
-        vectorize_with_builder_3_arg::<GeometryType, Int32Type,Int32Type, GeometryType>(
+        vectorize_with_builder_3_arg::<GeometryType, Int32Type, Int32Type, GeometryType>(
             |original, from_srid, to_srid, builder, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(builder.len()) {
@@ -1578,20 +1561,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                let result = {
-                    Proj::new_known_crs(&make_crs(from_srid), &make_crs(to_srid), None)
-                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
-                        .and_then(|proj| {
-                        let old = Ewkb(original.to_vec());
-                        Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap()).to_geo().map_err(ErrorCode::from).and_then(|mut geom| {
-                            geom.transform(&proj).map_err(|e|ErrorCode::GeometryError(e.to_string())).and_then(|_| {
-                                let round_geom = round_geometry_coordinates(geom);
-                                round_geom.to_ewkb(round_geom.dims(), Some(to_srid)).map_err(ErrorCode::from)
-                            })
-                        })
-                    })
-                };
-                match result {
+                match st_transform_impl(original, from_srid, to_srid) {
                     Ok(data) => {
                         builder.put_slice(data.as_slice());
                     }
@@ -1606,8 +1576,39 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-fn make_crs(srid: i32) -> String {
-    format!("EPSG:{}", srid)
+fn st_transform_impl(
+    original: &[u8],
+    from_srid: i32,
+    to_srid: i32,
+) -> databend_common_exception::Result<Vec<u8>> {
+    let from_proj = Proj::from_epsg_code(
+        u16::try_from(from_srid).map_err(|_| ErrorCode::GeometryError("invalid from srid"))?,
+    )
+    .map_err(|_| ErrorCode::GeometryError("invalid from srid"))?;
+    let to_proj = Proj::from_epsg_code(
+        u16::try_from(to_srid).map_err(|_| ErrorCode::GeometryError("invalid to srid"))?,
+    )
+    .map_err(|_| ErrorCode::GeometryError("invalid to srid"))?;
+
+    let old = Ewkb(original.to_vec());
+    Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap())
+        .to_geo()
+        .map_err(ErrorCode::from)
+        .and_then(|mut geom| {
+            // EPSG:4326 WGS84 in proj4rs is in radians, not degrees.
+            if from_srid == 4326 {
+                geom.to_radians_in_place();
+            }
+            transform(&from_proj, &to_proj, &mut geom)
+                .map_err(|_| ErrorCode::GeometryError("transfrom failed"))?;
+            if to_srid == 4326 {
+                geom.to_degrees_in_place();
+            }
+            let round_geom = round_geometry_coordinates(geom);
+            round_geom
+                .to_ewkb(round_geom.dims(), Some(to_srid))
+                .map_err(ErrorCode::from)
+        })
 }
 
 #[inline]
