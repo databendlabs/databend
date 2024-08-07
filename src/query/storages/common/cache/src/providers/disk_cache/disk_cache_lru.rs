@@ -19,9 +19,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use databend_common_cache::Count;
-use databend_common_cache::DefaultHashBuilder;
-use databend_common_cache::FileSize;
-use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -32,9 +29,7 @@ use parking_lot::RwLock;
 use crate::providers::disk_cache::DiskCache;
 use crate::CacheAccessor;
 
-impl CacheAccessor<String, Bytes, databend_common_cache::DefaultHashBuilder, Count>
-    for LruDiskCacheHolder
-{
+impl CacheAccessor<String, Bytes, Count> for LruDiskCacheHolder {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         let k = k.as_ref();
         {
@@ -152,7 +147,7 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
     }
 }
 
-pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;
+pub type LruDiskCache = DiskCache;
 pub type LruDiskCacheHolder = Arc<RwLock<LruDiskCache>>;
 
 pub struct LruDiskCacheBuilder;
