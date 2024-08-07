@@ -117,9 +117,11 @@ select c_variant   FROM fuse_compat_table;
 
 # Modify columns, but keep the version table [meta]data as it is
 statement ok
-ALTER TABLE fuse_compact_table DROP COLUMN c_int;
+ALTER TABLE fuse_compat_table DROP COLUMN c_int;
+
+
 statement ok
-ALTER TABLE fuse_compact_table ADD COLUMN brand_new uint64;
+ALTER TABLE fuse_compat_table ADD COLUMN brand_new uint64;
 
 
 # Let's see if nothing broken
@@ -130,4 +132,5 @@ select count() FROM fuse_compat_table where brand_new = 100;
 
 query T
 select * FROM fuse_compat_table ignore_result;
+----
 
