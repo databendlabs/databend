@@ -253,6 +253,7 @@ hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
 jsonb = "0.4.1"
+jwt-simple = "0.11.0"
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["rustls-tls"] }
 object_store_opendal = "0.45"

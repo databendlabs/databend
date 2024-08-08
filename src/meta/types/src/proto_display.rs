@@ -15,8 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
-use std::time::SystemTime;
 
+use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use num_traits::FromPrimitive;
 
 use crate::txn_condition::Target;
@@ -167,8 +167,11 @@ impl Display for TxnPutRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Put key={}", self.key)?;
         if let Some(expire_at) = self.expire_at {
-            let t = SystemTime::UNIX_EPOCH + Duration::from_millis(expire_at);
-            write!(f, " expire_at: {:?}", t)?;
+            write!(
+                f,
+                " expire_at: {}",
+                Duration::from_millis(expire_at).display_unix_timestamp()
+            )?;
         }
         if let Some(ttl_ms) = self.ttl_ms {
             write!(f, "  ttl: {:?}", Duration::from_millis(ttl_ms))?;
