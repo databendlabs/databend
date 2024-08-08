@@ -1,72 +1,39 @@
 statement ok
-create or replace table t1(a int, b int);
+create or replace table t1 as select * from numbers(250000);
 
 statement ok
-create or replace table t2(a int, b int);
-
-statement ok
-insert into t1 values(1, 2), (2, 3), (3, 4), (4, 5), (5, 6), (6, 7);
-
-statement ok
-insert into t2 values(2, 3);
+create or replace table t2(number int);
 
 statement ok
 create or replace stream t2_s ON TABLE t2;
 
+statement ok
+insert into t2(number) select * from numbers(500000);
+
+statement ok
+delete from t2 where number % 3 = 0;
+
+statement ok
+set disable_join_reorder = 1;
+
 query T
-explain merge into t1 USING t2_s AS t2 ON t1.a = t2.a when matched then UPDATE SET t1.b = t2.b + 1 when not matched then insert (a, b) values(t2.a, t2.b);
+MERGE INTO t1 USING (SELECT number FROM t2_s QUALIFY row_number() OVER ( PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number WHEN MATCHED then UPDATE SET t1.number = t2.number WHEN NOT MATCHED THEN INSERT(number) VALUES(t2.number);
 ----
-CommitSink
-└── Exchange
-    ├── output columns: []
-    ├── exchange type: Merge
-    └── DataMutation
-        ├── target table: [catalog: default] [database: default] [table: t1]
-        ├── matched update: [condition: None, update set b = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t2.b (#1) + 1 AS Int32 NULL), t1.b (#12))]
-        ├── unmatched insert: [condition: None, insert into (a,b) values(t2.a (#0),t2.b (#1))]
-        └── RowFetch
-            ├── output columns: [t1.a (#11), t1._row_id (#13), _change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), change$action (#8), change$is_update (#9), change$row_id (#10), t1.b (#12)]
-            ├── columns to fetch: [b]
-            └── Exchange
-                ├── output columns: [t1.a (#11), t1._row_id (#13), _change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), change$action (#8), change$is_update (#9), change$row_id (#10)]
-                ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#13), CAST(31 AS UInt64 NULL)), CAST(2047 AS UInt64 NULL)))
-                └── HashJoin
-                    ├── output columns: [t1.a (#11), t1._row_id (#13), _change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), change$action (#8), change$is_update (#9), change$row_id (#10)]
-                    ├── join type: RIGHT OUTER
-                    ├── build keys: [t2.a (#0)]
-                    ├── probe keys: [t1.a (#11)]
-                    ├── filters: []
-                    ├── estimated rows: 0.00
-                    ├── Exchange(Build)
-                    │   ├── output columns: [_change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), change$action (#8), change$is_update (#9), change$row_id (#10)]
-                    │   ├── exchange type: Hash(t2.a (#0))
-                    │   └── EvalScalar
-                    │       ├── output columns: [_change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), change$action (#8), change$is_update (#9), change$row_id (#10)]
-                    │       ├── expressions: ['INSERT', false, if(CAST(is_not_null(_change_append$66b39c4a._origin_block_id (#3)) AS Boolean NULL), concat(to_uuid(_change_append$66b39c4a._origin_block_id (#3)), lpad(to_hex(CAST(_change_append$66b39c4a._origin_block_row_num (#4) AS Int64 NULL)), 6, '0')), CAST(t2_s._base_row_id (#6) AS String NULL))]
-                    │       ├── estimated rows: 0.00
-                    │       └── Filter
-                    │           ├── output columns: [_change_append$66b39c4a.a (#0), _change_append$66b39c4a.b (#1), _change_append$66b39c4a._origin_block_id (#3), _change_append$66b39c4a._origin_block_row_num (#4), _change_append$66b39c4a._base_row_id (#6)]
-                    │           ├── filters: [is_true(NOT (CAST(is_not_null(_change_append$66b39c4a._origin_version (#2)) AS Boolean NULL) AND (_change_append$66b39c4a._origin_version (#2) < 3353 OR contains(CAST(t2_s._base_block_ids (#7) AS Array(Float64) NULL), CAST(_change_append$66b39c4a._origin_block_id (#3) AS Float64 NULL)))))]
-                    │           ├── estimated rows: 0.00
-                    │           └── TableScan
-                    │               ├── table: default.default.t2_s
-                    │               ├── output columns: [a (#0), b (#1), _origin_version (#2), _origin_block_id (#3), _origin_block_row_num (#4), _base_row_id (#6), _base_block_ids (#7)]
-                    │               ├── read rows: 0
-                    │               ├── read size: 0
-                    │               ├── partitions total: 0
-                    │               ├── partitions scanned: 0
-                    │               ├── push downs: [filters: [is_true(NOT (CAST(is_not_null(t2_s._origin_version (#2)) AS Boolean NULL) AND (t2_s._origin_version (#2) < 3353 OR contains(CAST(t2_s._base_block_ids (#7) AS Array(Float64) NULL), CAST(t2_s._origin_block_id (#3) AS Float64 NULL)))))], limit: NONE]
-                    │               └── estimated rows: 0.00
-                    └── Exchange(Probe)
-                        ├── output columns: [t1.a (#11), t1._row_id (#13)]
-                        ├── exchange type: Hash(t1.a (#11))
-                        └── TableScan
-                            ├── table: default.default.t1
-                            ├── output columns: [a (#11), _row_id (#13)]
-                            ├── read rows: 6
-                            ├── read size: < 1 KiB
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-                            ├── push downs: [filters: [], limit: NONE]
-                            └── estimated rows: 6.00
+166667 166666
+
+query T
+select count(*) from t1;
+----
+416667
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop stream if exists t2_s;
+
+statement ok
+drop table if exists t2;
