@@ -31,21 +31,20 @@ pub struct SharePresignedCacheManager {
 impl SharePresignedCacheManager {
     /// Fetch manager from global instance.
     pub fn instance() -> Arc<SharePresignedCacheManager> {
-        let global_instance: Arc<SharePresignedCacheManager> = GlobalInstance::get();
-        global_instance
+        GlobalInstance::get()
     }
 
     /// Init the manager in global instance.
-    #[async_backtrace::framed]
     pub fn init() -> Result<()> {
         let cache = Cache::builder()
             // Databend Cloud Presign will expire after 3600s (1 hour).
             // We will expire them 10 minutes before to avoid edge cases.
             .time_to_live(Duration::from_secs(3000))
             .build();
-        GlobalInstance::set(SharePresignedCacheManager {
+        let manager = SharePresignedCacheManager {
             cache: Arc::new(RwLock::new(cache)),
-        });
+        };
+        GlobalInstance::set(Arc::new(manager));
 
         Ok(())
     }
