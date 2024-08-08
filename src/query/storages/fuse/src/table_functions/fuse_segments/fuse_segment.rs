@@ -25,75 +25,29 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use futures_util::TryStreamExt;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
-use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
+use crate::table_functions::CommonArgFunction;
+use crate::table_functions::SimpleCommonArgsFunc;
 use crate::FuseTable;
 
-pub struct FuseSegment<'a> {
-    pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
-    pub snapshot_id: Option<String>,
-    pub limit: Option<usize>,
-}
+pub struct FuseSegment;
 
-impl<'a> FuseSegment<'a> {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        table: &'a FuseTable,
-        snapshot_id: Option<String>,
+pub type FuseSegmentFunc = SimpleCommonArgsFunc<FuseSegment>;
+
+#[async_trait::async_trait]
+impl CommonArgFunction for FuseSegment {
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        tbl: &FuseTable,
+        snapshot: Arc<TableSnapshot>,
         limit: Option<usize>,
-    ) -> Self {
-        Self {
-            ctx,
-            table,
-            snapshot_id,
-            limit,
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_segments(&self) -> Result<DataBlock> {
-        let tbl = self.table;
-        let snapshot_id = self.snapshot_id.clone();
-        let maybe_snapshot = tbl.read_table_snapshot().await?;
-        if let Some(snapshot) = maybe_snapshot {
-            // find the element by snapshot_id in stream
-            if let Some(snapshot_id) = snapshot_id {
-                // prepare the stream of snapshot
-                let snapshot_version = tbl.snapshot_format_version(None).await?;
-                let snapshot_location = tbl
-                    .meta_location_generator
-                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
-                let reader = MetaReaders::table_snapshot_reader(tbl.get_operator());
-                let mut snapshot_stream = reader.snapshot_history(
-                    snapshot_location,
-                    snapshot_version,
-                    tbl.meta_location_generator().clone(),
-                );
-                while let Some((snapshot, _)) = snapshot_stream.try_next().await? {
-                    if snapshot.snapshot_id.simple().to_string() == snapshot_id {
-                        return self.to_block(&snapshot.segments).await;
-                    }
-                }
-            } else {
-                return self.to_block(&snapshot.segments).await;
-            }
-        }
-
-        Ok(DataBlock::empty_with_schema(Arc::new(
-            Self::schema().into(),
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn to_block(&self, segment_locations: &[Location]) -> Result<DataBlock> {
-        let limit = self.limit.unwrap_or(usize::MAX);
+    ) -> Result<DataBlock> {
+        let segment_locations = &snapshot.segments;
+        let limit = limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(segment_locations.len(), limit);
 
         let mut format_versions: Vec<u64> = Vec::with_capacity(len);
@@ -103,16 +57,12 @@ impl<'a> FuseSegment<'a> {
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut file_location: Vec<String> = Vec::with_capacity(len);
 
-        let segments_io = SegmentsIO::create(
-            self.ctx.clone(),
-            self.table.operator.clone(),
-            self.table.schema(),
-        );
+        let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
         let mut row_num = 0;
         let mut end_flag = false;
         let chunk_size =
-            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, true)
@@ -149,7 +99,7 @@ impl<'a> FuseSegment<'a> {
         ]))
     }
 
-    pub fn schema() -> Arc<TableSchema> {
+    fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("file_location", TableDataType::String),
             TableField::new(

@@ -37,7 +37,7 @@ use super::TenantQuotaTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
-use crate::storages::fuse::table_functions::FuseSegmentTable;
+use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotTable;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
@@ -142,7 +142,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_segment".to_string(),
-            (next_id(), Arc::new(FuseSegmentTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseSegmentFunc>::create),
+            ),
         );
         creators.insert(
             "fuse_block".to_string(),

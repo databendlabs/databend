@@ -19,6 +19,7 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -52,7 +53,7 @@ impl From<&CommonArgs> for TableArgs {
 pub async fn location_snapshot(
     tbl: &FuseTable,
     args: &CommonArgs,
-) -> databend_common_exception::Result<Option<Arc<TableSnapshot>>> {
+) -> Result<Option<Arc<TableSnapshot>>> {
     let snapshot_id = args.arg_snapshot_id.clone();
     let maybe_snapshot = tbl.read_table_snapshot().await?;
     if let Some(snapshot) = maybe_snapshot {
@@ -91,12 +92,12 @@ pub trait CommonArgFunction {
         tbl: &FuseTable,
         snapshot: Arc<TableSnapshot>,
         limit: Option<usize>,
-    ) -> databend_common_exception::Result<DataBlock>;
+    ) -> Result<DataBlock>;
 }
 
 pub struct SimpleCommonArgsFunc<T> {
     args: CommonArgs,
-    _a: PhantomData<T>,
+    _marker: PhantomData<T>,
 }
 
 #[async_trait::async_trait]
@@ -114,7 +115,7 @@ where T: CommonArgFunction + Send + Sync + 'static
         &self,
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
-    ) -> databend_common_exception::Result<Option<DataBlock>> {
+    ) -> Result<Option<DataBlock>> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(CATALOG_DEFAULT)
@@ -136,7 +137,7 @@ where T: CommonArgFunction + Send + Sync + 'static
         }
     }
 
-    fn create(name: &str, table_args: TableArgs) -> databend_common_exception::Result<Self>
+    fn create(name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
             parse_db_tb_opt_args(&table_args, name)?;
@@ -146,7 +147,7 @@ where T: CommonArgFunction + Send + Sync + 'static
                 arg_table_name,
                 arg_snapshot_id,
             },
-            _a: PhantomData,
+            _marker: PhantomData,
         })
     }
 }
