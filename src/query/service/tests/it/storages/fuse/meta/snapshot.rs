@@ -109,3 +109,9 @@ fn test_snapshot_v1_to_v4() {
     assert_eq!(v4.snapshot_id, v1.snapshot_id);
     assert_eq!(v4.timestamp, v1.timestamp);
 }
+
+#[test]
+fn test_snapshot_reader() {
+    let meta = include_bytes!("legacy_tpch_v4.mpk");
+    TableSnapshot::from_slice(meta).unwrap();
+}
