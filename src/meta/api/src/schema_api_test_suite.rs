@@ -7452,9 +7452,7 @@ impl SchemaApiTestSuite {
                 db_id: util.db_id,
                 dictionary_name: dict_name.to_string(),
             };
-            let req = GetDictionaryReq {
-                db_id_dict_name
-            };
+            let req = GetDictionaryReq { db_id_dict_name };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
 

@@ -154,7 +154,7 @@ impl DropDictionaryReq {
         };
         DropDictionaryReq {
             if_exists,
-            db_id_dict_name
+            db_id_dict_name,
         }
     }
     pub fn dict_name(&self) -> String {
@@ -230,7 +230,7 @@ pub struct ListDictionaryReq {
 }
 
 impl ListDictionaryReq {
-    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq{
+    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq {
         let db_id_dict_name = DBIdDictionaryName {
             db_id,
             dictionary_name: dict_name,

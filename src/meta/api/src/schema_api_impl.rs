@@ -4458,7 +4458,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // get an dictionary with drop time
         if dict_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetDictionaryWithDropTime(
-                GetDictionaryWithDropTime::new(key_dbid_dict_name.dictionary_name),
+                GetDictionaryWithDropTime::new(key_dbid_dict_name.dictionary_name.clone()),
             )));
         }
 
