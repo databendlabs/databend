@@ -255,7 +255,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut get_ownership = true;
         let mut owner_field_indexes: HashSet<usize> = HashSet::new();
         let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
-        let schema = TablesTable::<T, U>::schema();
+        let schema = TablesTable::<WITH_HISTORY, WITHOUT_VIEW>::schema();
         for (i, name) in schema.fields.iter().enumerate() {
             match name.name().as_str() {
                 "num_rows"
