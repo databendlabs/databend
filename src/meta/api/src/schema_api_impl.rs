@@ -34,7 +34,6 @@ use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::DictionaryAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
-use databend_common_meta_app::app_error::DropDictionaryWithDropTime;
 use databend_common_meta_app::app_error::DropIndexWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
@@ -4452,13 +4451,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             "drop_dictionary"
         );
 
-        // get an dictionary with drop time
-        if dict_meta.dropped_on.is_some() {
-            return Err(KVAppError::AppError(AppError::GetDictionaryWithDropTime(
-                GetDictionaryWithDropTime::new(key_dbid_dict_name.dictionary_name.clone()),
-            )));
-        }
-
         Ok(Some(GetDictionaryReply {
             dictionary_id: dict_id,
             dictionary_meta: dict_meta,
@@ -4493,9 +4485,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for (i, seq_meta_opt) in seq_dict_metas.into_iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
                 let dict_meta: DictionaryMeta = deserialize_struct(&seq_meta.data)?;
-                if dict_meta.dropped_on.is_some() {
-                    continue;
-                }
                 dict_metas.push(dict_meta);
             } else {
                 debug!(k = &dict_meta_keys[i]; "dict_meta not found");
@@ -4775,7 +4764,7 @@ async fn construct_drop_dictionary_txn_operations(
 
     let dictionary_id_key = DictionaryId { dictionary_id };
     // Safe unwrap(): dictionary_meta_seq > 0 implies dictionary_meta is not None.
-    let mut dictionary_meta = dictionary_meta.unwrap();
+    let dictionary_meta = dictionary_meta.unwrap();
 
     debug!(dictionary_id = dictionary_id, name_key :? =(dbid_dict_name); "drop_dictionary");
 

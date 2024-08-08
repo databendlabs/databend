@@ -1397,6 +1397,10 @@ impl SchemaApiTestSuite {
 
         let catalog_name = "catalog1";
 
+        let tenant = Tenant {
+            tenant: tenant_name.to_string(),
+        };
+
         let ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
 
         info!("--- create catalog1");
@@ -7362,8 +7366,6 @@ impl SchemaApiTestSuite {
     async fn dictionary_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_literal(tenant_name);
-
         let db_name = "db1";
         let tbl_name = "tb2";
         let dict_name = "dict3";
