@@ -31,6 +31,7 @@ use ring::hmac;
 
 use crate::signer::HMAC_AUTH_METHOD;
 
+#[derive(Clone)]
 pub struct ShareEndpointClient {
     client: reqwest::Client,
 }
@@ -136,7 +137,79 @@ impl ShareEndpointClient {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_share_table(
+        &self,
+        share_endpoint_meta: &ShareEndpointMeta,
+        from_tenant: &str,
+        to_tenant: &str,
+        share_name: &str,
+        db_name: &str,
+        table_name: &str,
+    ) -> Result<TableInfo> {
+        let path = format!(
+            "/{}/{}/{}/{}/v2/share_table",
+            to_tenant, share_name, db_name, table_name
+        );
+        // skip path first `/` char
+        let uri = format!("{}{}", share_endpoint_meta.url, &path[1..]);
+        let headers = if let Some(credential) = &share_endpoint_meta.credential {
+            Self::generate_auth_headers(&path, credential, from_tenant)
+        } else {
+            HeaderMap::new()
+        };
+
+        let client = reqwest::Client::new();
+        let resp = client.get(&uri).headers(headers).send().await;
+
+        match resp {
+            Ok(resp) => {
+                let body = resp.text().await?;
+                let ret: TableInfo = serde_json::from_str(&body)?;
+                Ok(ret)
+            }
+            Err(err) => {
+                error!("get_share_spec_by_name fail: {:?}", err);
+                Err(err.into())
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
     pub async fn get_share_tables(
+        &self,
+        share_endpoint_meta: &ShareEndpointMeta,
+        from_tenant: &str,
+        to_tenant: &str,
+        share_name: &str,
+        db_name: &str,
+    ) -> Result<BTreeMap<String, TableInfo>> {
+        let path = format!("/{}/{}/{}/v2/share_tables", to_tenant, share_name, db_name);
+        // skip path first `/` char
+        let uri = format!("{}{}", share_endpoint_meta.url, &path[1..]);
+        let headers = if let Some(credential) = &share_endpoint_meta.credential {
+            Self::generate_auth_headers(&path, credential, from_tenant)
+        } else {
+            HeaderMap::new()
+        };
+
+        let client = reqwest::Client::new();
+        let resp = client.get(&uri).headers(headers).send().await;
+
+        match resp {
+            Ok(resp) => {
+                let body = resp.text().await?;
+                let ret: BTreeMap<String, TableInfo> = serde_json::from_str(&body)?;
+                Ok(ret)
+            }
+            Err(err) => {
+                error!("get_share_tables fail: {:?}", err);
+                Err(err.into())
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_share_tables_by_db_id(
         &self,
         share_endpoint_meta: &ShareEndpointMeta,
         from_tenant: &str,
