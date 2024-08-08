@@ -20,7 +20,6 @@ use crate::kernels::utils::store_advance;
 use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
-use crate::types::geography::Geography;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
@@ -93,8 +92,11 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
         Column::Timestamp(v) => store_advance::<i64>(&v[row], row_space),
         Column::Date(v) => store_advance::<i32>(&v[row], row_space),
         Column::Geography(v) => {
-            let value = unsafe { v.index_unchecked_bytes(row) };
-            copy_advance_aligned::<u8>(value.as_ptr(), row_space, Geography::ITEM_SIZE)
+            let value = unsafe { v.index_unchecked(row) };
+            let value = borsh::to_vec(&value.0).unwrap();
+            let len = value.len();
+            store_advance::<u64>(&(len as u64), row_space);
+            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
         }
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();

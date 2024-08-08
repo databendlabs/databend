@@ -18,6 +18,7 @@ use crate::Element;
 use crate::FeatureKind;
 use crate::Geometry;
 use crate::GeometryBuilder;
+use crate::GeometryRef;
 use crate::ObjectKind;
 use crate::Visitor;
 
@@ -42,7 +43,15 @@ impl TryInto<Wkt<String>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<Wkt<String>, Self::Error> {
-        let str = geozero::ToWkt::to_wkt(self)?;
+        self.as_ref().try_into()
+    }
+}
+
+impl<'a> TryInto<Wkt<String>> for GeometryRef<'a> {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Wkt<String>, Self::Error> {
+        let str = geozero::ToWkt::to_wkt(&self)?;
         Ok(Wkt(str))
     }
 }
@@ -59,7 +68,7 @@ impl<S: AsRef<str>> Ewkt<S> {
                 match prefix
                     .strip_prefix("SRID=")
                     .or_else(|| prefix.strip_prefix("srid="))
-                    .map_or(None, |srid| srid.trim().parse::<i32>().ok())
+                    .and_then(|srid| srid.trim().parse::<i32>().ok())
                 {
                     Some(srid) => Ok((Some(srid), &str[idx + 1..])),
                     None => Err(GeozeroError::Geometry(format!(
@@ -91,8 +100,16 @@ impl TryInto<Ewkt<String>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<Ewkt<String>, Self::Error> {
+        self.as_ref().try_into()
+    }
+}
+
+impl<'a> TryInto<Ewkt<String>> for GeometryRef<'a> {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Ewkt<String>, Self::Error> {
         let str = geozero::ToWkt::to_wkt_with_opts(
-            self,
+            &self,
             geozero::wkt::WktDialect::Ewkt,
             geozero::CoordDimensions::xy(),
             self.srid(),

@@ -14,6 +14,7 @@ doctest = false
 test = true
 
 [dependencies]
+borsh = { workspace = true }
 databend-common-arrow = { workspace = true }
 flatbuffers = "=24.3.25"
 flexbuffers = "2.0.0"

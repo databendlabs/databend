@@ -267,7 +267,7 @@ impl<'fbb> Visitor for GeometryBuilder<'fbb> {
 
                 if self.stack.len() == 1 && object_kind == ObjectKind::GeometryCollection {
                     let geometries = self.stack.pop().unwrap();
-                    let collection = if geometries.len() > 0 {
+                    let collection = if !geometries.is_empty() {
                         Some(self.fbb.create_vector(&geometries))
                     } else {
                         None
@@ -458,44 +458,5 @@ impl<'fbb> geozero::GeomProcessor for GeometryBuilder<'fbb> {
     fn geometrycollection_end(&mut self, _: usize) -> GeoResult<()> {
         self.visit_collection_end()?;
         self.finish(FeatureKind::Geometry(ObjectKind::GeometryCollection))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use geozero::GeozeroGeometry;
-
-    use crate::GeometryBuilder;
-
-    #[test]
-    fn test_from_wkt() {
-        run_from_wkt(&"POINT(-122.35 37.55)");
-        run_from_wkt(&"MULTIPOINT(-122.35 37.55,0 -90)");
-        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99)");
-        run_from_wkt(&"LINESTRING(-124.2 42,-120.01 41.99,-122.5 42.01)");
-        run_from_wkt(&"MULTILINESTRING((-124.2 42,-120.01 41.99,-122.5 42.01),(10 0,20 10,30 0))");
-        run_from_wkt(&"POLYGON((17 17,17 30,30 30,30 17,17 17))");
-        run_from_wkt(
-            &"POLYGON((100 0,101 0,101 1,100 1,100 0),(100.8 0.8,100.8 0.2,100.2 0.2,100.2 0.8,100.8 0.8))",
-        );
-        run_from_wkt(&"MULTIPOLYGON(((-10 0,0 10,10 0,-10 0)),((-10 40,10 40,0 20,-10 40)))");
-        run_from_wkt(
-            &"GEOMETRYCOLLECTION(POINT(99 11),LINESTRING(40 60,50 50,60 40),POINT(99 10))",
-        );
-        run_from_wkt(
-            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),LINESTRING(40 60,50 50,60 40),POINT(99 11))",
-        );
-        run_from_wkt(
-            &"GEOMETRYCOLLECTION(POLYGON((-10 0,0 10,10 0,-10 0)),GEOMETRYCOLLECTION(LINESTRING(40 60,50 50,60 40),POINT(99 11)),POINT(50 70))",
-        );
-    }
-
-    fn run_from_wkt(want: &str) {
-        let mut b = GeometryBuilder::new();
-        geozero::wkt::Wkt(want).process_geom(&mut b).unwrap();
-        let geom = b.build();
-        let crate::Wkt::<String>(got) = (&geom).try_into().unwrap();
-        assert_eq!(want, got);
     }
 }

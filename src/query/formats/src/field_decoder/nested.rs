@@ -28,14 +28,14 @@ use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::geography::Geography;
+use databend_common_expression::types::geography::GeographyColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -50,7 +50,7 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_ewkt_point;
+use databend_common_io::parse_geometry;
 use databend_common_io::parse_to_ewkb;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -345,13 +345,13 @@ impl NestedValues {
     #[allow(clippy::ptr_arg)]
     fn read_geography<R: AsRef<[u8]>>(
         &self,
-        column: &mut Vec<u8>,
+        column: &mut GeographyColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let point = parse_ewkt_point(&buf)?;
-        GeographyType::push_item(column, point.try_into()?);
+        let geom = parse_geometry(&buf)?;
+        column.push(Geography(geom).as_ref());
         Ok(())
     }
 

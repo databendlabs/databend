@@ -81,9 +81,9 @@ fn run_size(want: &str) {
         .unwrap();
     println!(
         "geo_buf_size:{}, ewkb_size:{}, points_size:{}",
-        geom.memory_size(),
+        geom.as_ref().memory_size(),
         ewkb.len(),
-        geom.points_len() * 16
+        geom.as_ref().points_len() * 16
     );
 
     let Wkt(got) = (&geom).try_into().unwrap();

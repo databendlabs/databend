@@ -17,6 +17,7 @@ use geozero::GeozeroGeometry;
 
 use crate::Geometry;
 use crate::GeometryBuilder;
+use crate::GeometryRef;
 
 pub struct Wkb<B: AsRef<[u8]>>(pub B);
 
@@ -34,7 +35,15 @@ impl TryInto<Wkb<Vec<u8>>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<Wkb<Vec<u8>>, Self::Error> {
-        let data = geozero::ToWkb::to_wkb(self, geozero::CoordDimensions::xy())?;
+        self.as_ref().try_into()
+    }
+}
+
+impl<'a> TryInto<Wkb<Vec<u8>>> for GeometryRef<'a> {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Wkb<Vec<u8>>, Self::Error> {
+        let data = geozero::ToWkb::to_wkb(&self, geozero::CoordDimensions::xy())?;
         Ok(Wkb(data))
     }
 }
@@ -55,7 +64,15 @@ impl TryInto<Ewkb<Vec<u8>>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<Ewkb<Vec<u8>>, Self::Error> {
-        let data = geozero::ToWkb::to_ewkb(self, geozero::CoordDimensions::xy(), self.srid())?;
+        self.as_ref().try_into()
+    }
+}
+
+impl<'a> TryInto<Ewkb<Vec<u8>>> for GeometryRef<'a> {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<Ewkb<Vec<u8>>, Self::Error> {
+        let data = geozero::ToWkb::to_ewkb(&self, geozero::CoordDimensions::xy(), self.srid())?;
         Ok(Ewkb(data))
     }
 }

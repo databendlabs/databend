@@ -19,7 +19,6 @@ use crate::types::decimal::Decimal128Type;
 use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
-use crate::types::geography::Geography;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
@@ -33,7 +32,6 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalDataType;
-use crate::types::GeographyType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -107,7 +105,6 @@ pub enum Domain {
     /// `Map(None)` means that the map is empty, thus there is no inner domain information.
     Map(Option<Box<Domain>>),
     Tuple(Vec<Domain>),
-    Geography(SimpleDomain<Geography>),
     /// For certain types, like `Variant`, the domain is useless therefore is not defined.
     Undefined,
 }
@@ -195,10 +192,11 @@ impl Domain {
             DataType::Array(ty) => Domain::Array(Some(Box::new(Domain::full(ty)))),
             DataType::EmptyMap => Domain::Map(None),
             DataType::Map(ty) => Domain::Map(Some(Box::new(Domain::full(ty)))),
-            DataType::Geography => Domain::Geography(GeographyType::full_domain()),
-            DataType::Binary | DataType::Bitmap | DataType::Variant | DataType::Geometry => {
-                Domain::Undefined
-            }
+            DataType::Binary
+            | DataType::Bitmap
+            | DataType::Variant
+            | DataType::Geometry
+            | DataType::Geography => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }

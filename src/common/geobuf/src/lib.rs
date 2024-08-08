@@ -18,6 +18,7 @@ mod geo_adapter;
 mod geo_generated;
 mod geojson_adapter;
 mod geometry;
+mod serde;
 mod wkb_addapter;
 mod wkt_adapter;
 
@@ -33,7 +34,8 @@ pub use wkb_addapter::Wkb;
 pub use wkt_adapter::Ewkt;
 pub use wkt_adapter::Wkt;
 
-#[derive(Clone)]
+// todo readable Debug
+#[derive(Clone, Debug)]
 pub struct Geometry {
     buf: Vec<u8>,
     column_x: Buffer<f64>,
@@ -41,7 +43,7 @@ pub struct Geometry {
 }
 
 impl Geometry {
-    pub fn as_ref<'a>(&'a self) -> GeometryRef<'a> {
+    pub fn as_ref(&self) -> GeometryRef<'_> {
         GeometryRef {
             buf: &self.buf,
             column_x: self.column_x.as_slice(),
@@ -60,7 +62,7 @@ impl Default for Geometry {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct GeometryRef<'a> {
     buf: &'a [u8],
     column_x: &'a [f64],
@@ -88,7 +90,9 @@ impl<'a> GeometryRef<'a> {
     pub fn y(&self) -> &[f64] {
         self.column_y
     }
+}
 
+impl<'a> GeometryRef<'a> {
     pub fn to_owned(&self) -> Geometry {
         Geometry {
             buf: self.buf.to_vec(),

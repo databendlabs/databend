@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::Hash;
+
 use databend_common_arrow::arrow::buffer::Buffer;
 use geozero::error::GeozeroError;
 use ordered_float::OrderedFloat;
-use serde::Deserialize;
-use serde::Serialize;
 
 use crate::geo_buf;
 use crate::geo_buf::Object;
@@ -34,7 +34,7 @@ pub struct BoundingBox {
     pub ymax: f64,
 }
 
-impl Geometry {
+impl<'a> GeometryRef<'a> {
     pub fn bounding_box(&self) -> BoundingBox {
         fn cmp(a: &f64, b: &f64) -> std::cmp::Ordering {
             std::cmp::Ord::cmp(&OrderedFloat(*a), &OrderedFloat(*b))
@@ -121,28 +121,66 @@ impl Geometry {
     }
 }
 
-impl Serialize for GeometryRef<'_> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        #[derive(Serialize)]
-        struct View<'a>(&'a [u8], &'a [f64], &'a [f64]);
-
-        View(self.buf, self.column_x, self.column_y).serialize(serializer)
+impl<'a> Hash for GeometryRef<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write(self.buf);
+        for (x, y) in self.column_x.iter().zip(self.column_y.iter()) {
+            state.write_u64(x.to_bits());
+            state.write_u64(y.to_bits());
+        }
     }
 }
 
-impl<'de> Deserialize<'de> for Geometry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        #[derive(Deserialize)]
-        struct View(Vec<u8>, Vec<f64>, Vec<f64>);
+impl<'a> PartialEq for GeometryRef<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.column_x.len() != other.column_x.len() {
+            return false;
+        }
+        if self.buf != other.buf {
+            return false;
+        }
 
-        let View(buf, x, y) = View::deserialize(deserializer)?;
+        let left = self.column_x.iter().zip(self.column_y.iter());
+        let right = other.column_x.iter().zip(other.column_y.iter());
+        left.zip(right)
+            .all(|((x1, y1), (x2, y2))| eq_f64(*x1, *x2) && eq_f64(*y1, *y2))
+    }
+}
 
-        Ok(Geometry {
+impl<'a> Eq for GeometryRef<'a> {}
+
+fn eq_f64(a: f64, b: f64) -> bool {
+    if a == b || a.is_nan() && b.is_nan() {
+        return true;
+    }
+    if a.is_sign_positive() != b.is_sign_positive() {
+        return a == b; // values of different signs are only equal if both are zero.
+    }
+    // https://jtempest.github.io/float_eq-rs/book/background/float_comparison_algorithms.html#units-in-the-last-place-ulps-comparison
+    let a_bits = a.to_bits();
+    let b_bits = b.to_bits();
+    const TOL: u64 = 10;
+    if a_bits > b_bits {
+        a_bits - b_bits <= TOL
+    } else {
+        b_bits - a_bits <= TOL
+    }
+}
+
+impl Geometry {
+    pub fn new(buf: Vec<u8>, x: Vec<f64>, y: Vec<f64>) -> Self {
+        Geometry {
             buf,
             column_x: Buffer::from(x),
             column_y: Buffer::from(y),
-        })
+        }
+    }
+
+    pub fn point(x: f64, y: f64) -> Self {
+        Self::new(
+            vec![FeatureKind::Geometry(ObjectKind::Point).as_u8()],
+            vec![x],
+            vec![y],
+        )
     }
 }

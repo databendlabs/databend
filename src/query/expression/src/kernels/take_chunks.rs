@@ -783,9 +783,9 @@ impl Column {
                 let mut builder = GeographyType::create_builder(num_rows, &[]);
                 for item in indices.iter().map(|row_ptr| unsafe {
                     let col = columns.get_unchecked(row_ptr.chunk_index as usize);
-                    col.index_unchecked_bytes(row_ptr.row_index as usize)
+                    col.index_unchecked(row_ptr.row_index as usize)
                 }) {
-                    builder.extend_from_slice(item)
+                    builder.push(item)
                 }
                 Column::Geography(GeographyType::build_column(builder))
             }

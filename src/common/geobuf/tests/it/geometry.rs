@@ -16,7 +16,7 @@ use databend_common_geobuf::Geometry;
 use databend_common_geobuf::Wkt;
 
 #[test]
-fn test_serialize() {
+fn test_serde_serialize() {
     use serde::Deserialize;
     use serde::Serialize;
 
@@ -29,6 +29,24 @@ fn test_serialize() {
         .unwrap();
 
     let geo = Geometry::deserialize(data).unwrap();
+    let Wkt(got) = (&geo).try_into().unwrap();
+
+    assert_eq!(want, got)
+}
+
+#[test]
+fn test_borsh_serialize() {
+    use borsh::BorshDeserialize;
+    use borsh::BorshSerialize;
+
+    let want = "POINT(-122.35 37.55)";
+    let geo = Geometry::try_from(Wkt(want)).unwrap();
+
+    let mut buffer: Vec<u8> = Vec::new();
+
+    geo.as_ref().serialize(&mut buffer).unwrap();
+
+    let geo = Geometry::deserialize_reader(&mut buffer.as_slice()).unwrap();
     let Wkt(got) = (&geo).try_into().unwrap();
 
     assert_eq!(want, got)

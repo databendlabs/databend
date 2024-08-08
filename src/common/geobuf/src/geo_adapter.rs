@@ -20,6 +20,7 @@ use crate::geo_buf;
 use crate::geo_buf::InnerObject;
 use crate::Geometry;
 use crate::GeometryBuilder;
+use crate::GeometryRef;
 use crate::ObjectKind;
 
 impl TryFrom<&geo::Geometry<f64>> for Geometry {
@@ -36,14 +37,22 @@ impl TryInto<geo::Geometry<f64>> for &Geometry {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<geo::Geometry<f64>, Self::Error> {
-        debug_assert!(self.column_x.len() == self.column_y.len());
-        geozero::ToGeo::to_geo(self)
+        self.as_ref().try_into()
     }
 }
 
-impl geozero::GeozeroGeometry for Geometry {
+impl<'a> TryInto<geo::Geometry<f64>> for GeometryRef<'a> {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<geo::Geometry<f64>, Self::Error> {
+        debug_assert!(self.column_x.len() == self.column_y.len());
+        geozero::ToGeo::to_geo(&self)
+    }
+}
+
+impl<'a> geozero::GeozeroGeometry for GeometryRef<'a> {
     fn srid(&self) -> Option<i32> {
-        self.srid()
+        GeometryRef::srid(self)
     }
 
     fn process_geom<P>(&self, processor: &mut P) -> geozero::error::Result<()>
@@ -131,7 +140,7 @@ impl geozero::GeozeroGeometry for Geometry {
     }
 }
 
-impl Geometry {
+impl<'a> GeometryRef<'a> {
     fn process_lines<P>(
         &self,
         processor: &mut P,

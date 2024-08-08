@@ -49,7 +49,7 @@ pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
-pub use geography::parse_ewkt_point;
+pub use geography::parse_geometry;
 pub use geometry::geometry_format;
 pub use geometry::parse_to_ewkb;
 pub use geometry::parse_to_subtype;

@@ -17,9 +17,9 @@ use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
+use databend_common_geobuf::GeoJson;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::prelude::FormatSettings;
-use geo::Geometry;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 use serde_json::Map as JsonMap;
@@ -154,10 +154,8 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
             jsonb::from_slice(geom.as_bytes()).unwrap().into()
         }
         ScalarRef::Geography(x) => {
-            let geog = Geometry::Point(x.to_point())
-                .to_json()
-                .expect("failed to convert ewkb to json");
-            jsonb::from_slice(geog.as_bytes()).unwrap().into()
+            let GeoJson(str) = x.0.try_into().expect("failed to encode to json");
+            jsonb::from_slice(str.as_bytes()).unwrap().into()
         }
     }
 }

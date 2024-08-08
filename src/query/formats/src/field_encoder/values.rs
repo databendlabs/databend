@@ -35,7 +35,6 @@ use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::GeometryDataType;
-use geo::Geometry;
 use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
 use geozero::GeozeroGeometry;
@@ -338,22 +337,35 @@ impl FieldEncoderValues {
         out_buf: &mut Vec<u8>,
         in_nested: bool,
     ) {
+        use databend_common_geobuf::Ewkb;
+        use databend_common_geobuf::Ewkt;
+        use databend_common_geobuf::GeoJson;
+        use databend_common_geobuf::Wkb;
+        use databend_common_geobuf::Wkt;
+
         let geog = unsafe { column.index_unchecked(row_index) };
-        let point = Geometry::Point(geog.to_point());
 
         let s = match self.common_settings().geometry_format {
             GeometryDataType::WKB => {
-                hex::encode_upper(point.to_wkb(CoordDimensions::xy()).unwrap().as_bytes())
+                let Wkb(data) = geog.0.try_into().unwrap();
+                hex::encode_upper(data)
             }
-            GeometryDataType::WKT => point.to_wkt().unwrap(),
+            GeometryDataType::WKT => {
+                let Wkt(str) = geog.0.try_into().unwrap();
+                str
+            }
             GeometryDataType::EWKB => {
-                hex::encode_upper(point.to_ewkb(CoordDimensions::xy(), Some(4326)).unwrap())
+                let Ewkb(data) = geog.0.try_into().unwrap();
+                hex::encode_upper(data)
             }
             GeometryDataType::EWKT => {
-                let geos = point.to_geos().unwrap();
-                geos.to_ewkt(geos.srid()).unwrap()
+                let Ewkt(str) = geog.0.try_into().unwrap();
+                str
             }
-            GeometryDataType::GEOJSON => point.to_json().unwrap(),
+            GeometryDataType::GEOJSON => {
+                let GeoJson(str) = geog.0.try_into().unwrap();
+                str
+            }
         };
 
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);

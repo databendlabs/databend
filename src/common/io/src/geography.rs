@@ -14,31 +14,34 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use geo::Geometry;
-use geo::Point;
-use wkt::TryFromWkt;
+use databend_common_geobuf::Ewkb;
+use databend_common_geobuf::Ewkt;
+use databend_common_geobuf::GeoJson;
+use databend_common_geobuf::Geometry;
 
-pub fn parse_ewkt_point(buf: &[u8]) -> Result<Point<f64>> {
-    let wkt = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-    let input_wkt = wkt.trim().to_ascii_uppercase();
+pub fn parse_geometry(buf: &[u8]) -> Result<Geometry> {
+    let geom = if let Ok(geom) = Geometry::try_from(Ewkb(&buf)) {
+        geom
+    } else {
+        let str = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
 
-    let parts: Vec<&str> = input_wkt.split(';').collect();
+        if let Ok(geom) = Geometry::try_from(GeoJson(&str)) {
+            geom
+        } else if let Ok(geom) = Geometry::try_from(Ewkt(&str)) {
+            geom
+        } else {
+            return Err(ErrorCode::GeometryError("can not parse geometry"));
+        }
+    };
 
     const WGS84: i32 = 4326;
-    if input_wkt.starts_with("SRID=") {
-        let srid = parts[0].replace("SRID=", "").parse::<i32>()?;
-        if srid != WGS84 {
+    match geom.as_ref().srid() {
+        None => {}
+        Some(WGS84) => {}
+        _ => {
             return Err(ErrorCode::GeometryError("supports only WGS84"));
         }
     }
 
-    let geo_part = if parts.len() == 2 { parts[1] } else { parts[0] };
-
-    let geom: Geometry<f64> = Geometry::try_from_wkt_str(geo_part)
-        .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-
-    match geom {
-        Geometry::Point(p) => Ok(p),
-        _ => Err(ErrorCode::GeometryError("not a point")),
-    }
+    Ok(geom)
 }

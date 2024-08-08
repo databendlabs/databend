@@ -3391,6 +3391,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-datavalues",
  "databend-common-exception",
+ "databend-common-geobuf",
  "databend-common-hashtable",
  "databend-common-io",
  "educe",
@@ -3439,12 +3440,12 @@ dependencies = [
  "databend-common-arrow",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-common-geobuf",
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "geo",
  "geos",
  "geozero 0.13.0",
  "hex",
@@ -3525,6 +3526,7 @@ dependencies = [
 name = "databend-common-geobuf"
 version = "0.1.0"
 dependencies = [
+ "borsh",
  "databend-common-arrow",
  "flatbuffers",
  "flexbuffers",
@@ -3597,6 +3599,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "databend-common-exception",
+ "databend-common-geobuf",
  "ethnum",
  "geo",
  "geos",

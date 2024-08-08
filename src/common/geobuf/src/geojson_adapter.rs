@@ -21,6 +21,7 @@ use crate::Element;
 use crate::FeatureKind;
 use crate::Geometry;
 use crate::GeometryBuilder;
+use crate::GeometryRef;
 use crate::ObjectKind;
 use crate::Visitor;
 
@@ -38,6 +39,14 @@ impl<S: AsRef<str>> TryFrom<GeoJson<S>> for Geometry {
 }
 
 impl TryInto<GeoJson<String>> for &Geometry {
+    type Error = GeozeroError;
+
+    fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
+        self.as_ref().try_into()
+    }
+}
+
+impl<'a> TryInto<GeoJson<String>> for GeometryRef<'a> {
     type Error = GeozeroError;
 
     fn try_into(self) -> Result<GeoJson<String>, Self::Error> {
@@ -188,7 +197,7 @@ fn normalize_point(point: &[f64]) -> Result<(f64, f64), GeozeroError> {
     }
 }
 
-impl Geometry {
+impl<'a> GeometryRef<'a> {
     pub fn process_features<P>(&self, processor: &mut P) -> geozero::error::Result<()>
     where
         Self: Sized,

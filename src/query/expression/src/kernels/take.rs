@@ -202,8 +202,8 @@ impl Column {
                 let num_rows = indices.len();
                 let mut builder = GeographyType::create_builder(num_rows, &[]);
                 for index in indices.iter() {
-                    let data = unsafe { column.index_unchecked_bytes(index.to_usize()) };
-                    builder.extend_from_slice(data)
+                    let data = unsafe { column.index_unchecked(index.to_usize()) };
+                    builder.push(data);
                 }
                 GeographyType::upcast_column(GeographyType::build_column(builder))
             }

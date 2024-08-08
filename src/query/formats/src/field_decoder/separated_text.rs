@@ -27,13 +27,13 @@ use databend_common_expression::types::date::check_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::geography::Geography;
+use databend_common_expression::types::geography::GeographyColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -48,7 +48,7 @@ use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_ewkt_point;
+use databend_common_io::parse_geometry;
 use databend_common_io::parse_to_ewkb;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
@@ -327,9 +327,9 @@ impl SeparatedTextDecoder {
     }
 
     #[allow(clippy::ptr_arg)]
-    fn read_geography(&self, column: &mut Vec<u8>, data: &[u8]) -> Result<()> {
-        let point = parse_ewkt_point(data)?;
-        GeographyType::push_item(column, point.try_into()?);
+    fn read_geography(&self, column: &mut GeographyColumnBuilder, data: &[u8]) -> Result<()> {
+        let geom = parse_geometry(data)?;
+        column.push(Geography(geom).as_ref());
         Ok(())
     }
 

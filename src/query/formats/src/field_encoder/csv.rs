@@ -148,9 +148,10 @@ impl FieldEncoderCSV {
             }
 
             Column::Geography(c) => {
+                use databend_common_geobuf::Wkt;
                 let geog = unsafe { c.index_unchecked(row_index) };
-                let s = format!("{geog}");
-                self.string_formatter.write_string(s.as_bytes(), out_buf);
+                let Wkt(str) = geog.0.try_into().unwrap();
+                self.string_formatter.write_string(str.as_bytes(), out_buf);
             }
 
             Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {

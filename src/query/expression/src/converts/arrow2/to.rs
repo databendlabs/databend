@@ -340,14 +340,40 @@ impl Column {
                 )
                 .unwrap(),
             ),
-            Column::Geography(col) => Box::new(
-                databend_common_arrow::arrow::array::FixedSizeBinaryArray::try_new(
-                    arrow_type,
-                    col.data().clone(),
-                    None,
+            Column::Geography(col) => {
+                use databend_common_arrow::arrow::array;
+                let arr_buf = Column::Binary(col.buf.clone()).as_arrow();
+
+                let arr_x = Box::new(
+                    array::PrimitiveArray::<f64>::try_new(arrow_type.clone(), col.x.clone(), None)
+                        .unwrap(),
+                );
+                let arr_y = Box::new(
+                    array::PrimitiveArray::<f64>::try_new(arrow_type.clone(), col.y.clone(), None)
+                        .unwrap(),
+                );
+                let arr_point = Box::new(
+                    array::StructArray::try_new(arrow_type.clone(), vec![arr_x, arr_y], None)
+                        .unwrap(),
+                );
+
+                let point_offsets: Buffer<i64> =
+                    col.offsets.iter().map(|offset| *offset as i64).collect();
+                let arr_list_point = Box::new(
+                    array::ListArray::<i64>::try_new(
+                        arrow_type.clone(),
+                        unsafe { OffsetsBuffer::new_unchecked(point_offsets) },
+                        arr_point,
+                        None,
+                    )
+                    .unwrap(),
+                );
+
+                Box::new(
+                    array::StructArray::try_new(arrow_type, vec![arr_buf, arr_list_point], None)
+                        .unwrap(),
                 )
-                .unwrap(),
-            ),
+            }
             Column::Array(col) => {
                 let offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();
