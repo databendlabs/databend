@@ -31,12 +31,16 @@ use ring::hmac;
 
 use crate::signer::HMAC_AUTH_METHOD;
 
-pub struct ShareEndpointClient {}
+pub struct ShareEndpointClient {
+    client: reqwest::Client,
+}
 
 impl ShareEndpointClient {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self {}
+        Self {
+            client: reqwest::Client::new(),
+        }
     }
 
     pub fn generate_auth_headers(
@@ -80,8 +84,7 @@ impl ShareEndpointClient {
             HeaderMap::new()
         };
 
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
@@ -117,8 +120,7 @@ impl ShareEndpointClient {
         } else {
             HeaderMap::new()
         };
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
@@ -153,8 +155,7 @@ impl ShareEndpointClient {
         } else {
             HeaderMap::new()
         };
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
@@ -190,8 +191,7 @@ impl ShareEndpointClient {
             &share_params.share_endpoint_credential,
             from_tenant,
         );
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
