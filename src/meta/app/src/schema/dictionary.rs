@@ -31,12 +31,11 @@ use crate::tenant::ToTenant;
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
-    // The name of the dictionary.
-    pub name: String,
-    // The source from which the dictionary is derived.
+    // The source of the dictionary, which could be a file path, a database, or any other origin, like `MySQL`.
     pub source: String,
     // A map of options associated with the dictionary,
     // where each option is a key-value pair.
+    // For example, `host='localhost' user='root' password='1234'`
     pub options: BTreeMap<String, String>,
     // The schema of the table associated with the dictionary,
     // wrapped in an `Arc` for shared ownership.
@@ -44,15 +43,15 @@ pub struct DictionaryMeta {
     // A list of comments for each field in the dictionary.
     pub field_comments: Vec<String>,
     // A list of primary column IDs.
+    // For example, vec![1, 2] indicating the first and second columns are part of the primary key.
     pub primary_column_ids: Vec<u32>,
-
+    // A general comment string that can be used to provide additional notes or information about the dictionary.
     pub comment: String,
+    // The timestamp indicating when the dictionary was created, in Coordinated Universal Time (UTC).
     pub created_on: DateTime<Utc>,
-
     // if used in CreateDictionaryReq,
-    // `dropped_on` and `updated_on` MUST set to None.
+    // `updated_on` MUST set to None.
     pub updated_on: Option<DateTime<Utc>>,
-    pub dropped_on: Option<DateTime<Utc>>,
 }
 
 impl Display for DictionaryMeta {
@@ -68,13 +67,11 @@ impl Display for DictionaryMeta {
 impl Default for DictionaryMeta {
     fn default() -> Self {
         DictionaryMeta {
-            name: "".to_string(),
             source: "".to_string(),
             options: BTreeMap::new(),
             schema: Arc::new(TableSchema::empty()),
             primary_column_ids: Vec::new(),
             created_on: Utc::now(),
-            dropped_on: None,
             updated_on: None,
             comment: "".to_string(),
             field_comments: Vec::new(),
@@ -146,12 +143,26 @@ pub struct CreateDictionaryReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReq {
     pub if_exists: bool,
-    pub name_ident: DictionaryNameIdent,
+    pub db_id_dict_name: DBIdDictionaryName,
 }
 
 impl DropDictionaryReq {
+    pub fn new(if_exists: bool, db_id: u64, dict_name: String) -> DropDictionaryReq {
+        let db_id_dict_name = DBIdDictionaryName {
+            db_id,
+            dictionary_name: dict_name,
+        };
+        DropDictionaryReq {
+            if_exists,
+            db_id_dict_name
+        }
+    }
     pub fn dict_name(&self) -> String {
-        self.name_ident.dictionary_name.clone()
+        self.db_id_dict_name.dictionary_name
+    }
+
+    pub fn db_id(&self) -> u64 {
+        self.db_id_dict_name.db_id
     }
 }
 
@@ -161,8 +172,8 @@ impl Display for DropDictionaryReq {
             f,
             "drop_dictionary(if_exists={}):{}/{}",
             self.if_exists,
-            self.name_ident.tenant_name(),
-            self.name_ident.dictionary_name(),
+            self.db_id(),
+            self.dict_name(),
         )
     }
 }
@@ -172,13 +183,16 @@ pub struct DropDictionaryReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReq {
-    pub name_ident: DictionaryNameIdent,
+    pub db_id_dict_name: DBIdDictionaryName,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReply {
     pub dictionary_id: u64,
     pub dictionary_meta: DictionaryMeta,
+    /// seq AKA version of this table snapshot.
+    /// Any change to a dictionary causes the seq to increment
+    pub seq: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
@@ -212,22 +226,23 @@ impl Display for DictionaryId {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDictionaryReq {
-    pub inner: DatabaseNameIdent,
-}
-
-impl Deref for ListDictionaryReq {
-    type Target = DatabaseNameIdent;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
+    pub db_id_dict_name: DBIdDictionaryName,
 }
 
 impl ListDictionaryReq {
-    pub fn new(tenant: &Tenant, db_name: impl ToString) -> ListDictionaryReq {
-        ListDictionaryReq {
-            inner: DatabaseNameIdent::new(tenant, db_name),
-        }
+    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq{
+        let db_id_dict_name = DBIdDictionaryName {
+            db_id,
+            dictionary_name: dict_name,
+        };
+        ListDictionaryReq { db_id_dict_name }
+    }
+    pub fn db_id(&self) -> u64 {
+        self.db_id_dict_name.db_id
+    }
+
+    pub fn dict_name(&self) -> String {
+        self.db_id_dict_name.dictionary_name
     }
 }
 

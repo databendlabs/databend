@@ -38,17 +38,12 @@ impl FromToProto for mt::DictionaryMeta {
             reason: "DictionaryMeta.schema can not be None".to_string(),
         })?;
         let v = Self {
-            name: p.name,
             source: p.source,
             options: p.options,
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
             primary_column_ids: p.primary_column_ids,
             comment: p.comment,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            dropped_on: match p.dropped_on {
-                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
-                None => None,
-            },
             updated_on: match p.updated_on {
                 Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
                 None => None,
@@ -61,15 +56,10 @@ impl FromToProto for mt::DictionaryMeta {
         let p = pb::DictionaryMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            name: self.name.clone(),
             source: self.source.clone(),
             options: self.options.clone(),
             primary_column_ids: self.primary_column_ids.clone(),
             created_on: self.created_on.to_pb()?,
-            dropped_on: match self.dropped_on {
-                Some(dropped_on) => Some(dropped_on.to_pb()?),
-                None => None,
-            },
             updated_on: match self.updated_on {
                 Some(updated_on) => Some(updated_on.to_pb()?),
                 None => None,

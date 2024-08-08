@@ -4271,13 +4271,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateDictionaryReply, KVAppError> {
         debug!(req :? = (&req); "SchemaApi: {}", func_name!());
         let tenant_dictionary = &req.name_ident;
-        if req.dictionary_meta.dropped_on.is_some() {
-            return Err(KVAppError::AppError(
-                AppError::CreateDictionaryWithDropTime(CreateDictionaryWithDropTime::new(
-                    tenant_dictionary.dictionary_name(),
-                )),
-            ));
-        }
         let mut trials = txn_backoff(None, func_name!());
 
         loop {
@@ -4388,18 +4381,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<DropDictionaryReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant_dictionary = &req.name_ident;
         let mut trials = txn_backoff(None, func_name!());
 
-        let tenant_dbname = req.name_ident.db_name_ident();
-        let db_id = {
-            let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
-            SeqV::from_tuple((seq, id))
-        };
-        let key_dbid_dict_name = DBIdDictionaryName {
-            db_id: db_id.data,
-            dictionary_name: req.name_ident.dictionary_name.clone(),
-        };
+        let db_id = req.db_id();
+        let key_dbid_dict_name = req.db_id_dict_name.clone();
 
         loop {
             trials.next().unwrap()?.await;
@@ -4430,7 +4415,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
             debug!(
-                name :? = (tenant_dictionary),
+                name :? = (&key_dbid_dict_name),
                 id :? = (&DictionaryId { dictionary_id: dict_id }),
                 succ = succ;
                 "drop_dictionary"
@@ -4450,18 +4435,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         req: GetDictionaryReq,
     ) -> Result<Option<GetDictionaryReply>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        let db_id = req.db_id_dict_name.db_id;
 
-        let tenant_dbname = req.name_ident.db_name_ident();
-        let db_id = {
-            let (seq, id) = get_db_id_or_err(self, &tenant_dbname, "create_table").await?;
-            SeqV::from_tuple((seq, id))
-        };
-        let key_dbid_dict_name = DBIdDictionaryName {
-            db_id: db_id.data,
-            dictionary_name: req.name_ident.dictionary_name.clone(),
-        };
+        let key_dbid_dict_name = req.db_id_dict_name;
 
-        let tenant_dict = &req.name_ident;
         let res = get_dictionary_or_err(self, &key_dbid_dict_name).await?;
         let (dict_id_seq, dict_id, _, dict_meta) = res;
 
@@ -4474,20 +4451,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         debug!(
             dict_id = dict_id,
-            name_key :? =(tenant_dict);
+            name_key :? =(&key_dbid_dict_name);
             "drop_dictionary"
         );
 
         // get an dictionary with drop time
         if dict_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetDictionaryWithDropTime(
-                GetDictionaryWithDropTime::new(tenant_dict.dictionary_name()),
+                GetDictionaryWithDropTime::new(key_dbid_dict_name.dictionary_name),
             )));
         }
 
         Ok(Some(GetDictionaryReply {
             dictionary_id: dict_id,
             dictionary_meta: dict_meta,
+            seq: dict_id_seq,
         }))
     }
 
@@ -4499,29 +4477,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<Vec<DictionaryMeta>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let tenant_dbname = &req.inner;
-
-        // Get db by name to ensure presence
-        let res = get_db_or_err(
-            self,
-            tenant_dbname,
-            format!("get_dictionary: {}", tenant_dbname.display()),
-        )
-        .await;
-
-        let (_db_id_seq, db_id, _db_meta_seq, _db_meta) = match res {
-            Ok(x) => x,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
         // List dictionaries by db_id, dictionary_name.
-        let dbid_dict_name = DBIdDictionaryName {
-            db_id,
-            // Use empty name to scan all dictionaries
-            dictionary_name: "".to_string(),
-        };
+        let dbid_dict_name = req.db_id_dict_name.clone();
 
         let (_, dict_id_list) = list_u64_value(self, &dbid_dict_name).await?;
         if dict_id_list.is_empty() {

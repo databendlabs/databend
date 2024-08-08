@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DBIdDictionaryName;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -7370,10 +7371,12 @@ impl SchemaApiTestSuite {
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
+        let db_id;
 
         info!("--- prepare db");
         {
             util.create_db().await?;
+            db_id = util.db_id;
         }
 
         let schema = || {
@@ -7385,7 +7388,6 @@ impl SchemaApiTestSuite {
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
         let dictionary_meta = |name: &str| DictionaryMeta {
-            name: name.to_string(),
             source: "mysql".to_string(),
             schema: schema(),
             options: options(),
@@ -7397,7 +7399,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list dictionary with no create before");
-            let req = ListDictionaryReq::new(&tenant, db_name);
+            let req = ListDictionaryReq::new(db_id, dict_name.to_string());
             let res = mt.list_dictionaries(req).await?;
             assert!(res.is_empty())
         }
@@ -7446,19 +7448,22 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- get dictionary");
+            let db_id_dict_name = DBIdDictionaryName {
+                db_id: util.db_id,
+                dictionary_name: dict_name.to_string(),
+            };
             let req = GetDictionaryReq {
-                name_ident: name_ident_dict.clone(),
+                db_id_dict_name
             };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
 
-            let name_ident_dict2 = DictionaryNameIdent {
-                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
-                db_name: db_name.to_string(),
+            let db_id_dict_name_dummy = DBIdDictionaryName {
+                db_id: util.db_id,
                 dictionary_name: "dummy_dict".to_string(),
             };
             let req = GetDictionaryReq {
-                name_ident: name_ident_dict2,
+                db_id_dict_name: db_id_dict_name_dummy,
             };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_none());
@@ -7466,7 +7471,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list dictionary");
-            let req = ListDictionaryReq::new(&tenant, db_name);
+            let req = ListDictionaryReq::new(db_id, dict_name.to_string());
             let res = mt.list_dictionaries(req).await?;
             println!("res={:?}", res);
 
@@ -7475,10 +7480,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- drop dictionary");
-            let req = DropDictionaryReq {
-                if_exists: false,
-                name_ident: name_ident_dict.clone(),
-            };
+            let req = DropDictionaryReq::new(false, db_id, dict_name.to_string());
 
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok())
@@ -7486,29 +7488,21 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list dictionary after drop one");
-            let req = ListDictionaryReq::new(&tenant, db_name);
-
+            let req = ListDictionaryReq::new(db_id, dict_name.to_string());
             let res = mt.list_dictionaries(req).await?;
             assert_eq!(0, res.len());
         }
 
         {
             info!("--- drop dictionary with if_exists = false");
-            let req = DropDictionaryReq {
-                if_exists: false,
-                name_ident: name_ident_dict.clone(),
-            };
+            let req = DropDictionaryReq::new(false, db_id, dict_name.to_string());
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_err())
         }
 
         {
             info!("--- drop dictionary with if_exists = true");
-            let req = DropDictionaryReq {
-                if_exists: true,
-                name_ident: name_ident_dict.clone(),
-            };
-
+            let req = DropDictionaryReq::new(true, db_id, dict_name.to_string());
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok())
         }
