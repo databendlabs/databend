@@ -11,13 +11,14 @@ authors = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
+chrono = { workspace = true }
 databend-client = { workspace = true }
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
+tokio-stream = { workspace = true }
 
 anyhow = "1.0"
 async-recursion = "1.1.0"
 async-trait = "0.1"
-chrono = { version = "0.4.35", default-features = false, features = ["clock"] }
 clap = { version = "4.4", features = ["derive", "env"] }
 comfy-table = "7.1"
 csv = "1.3"
@@ -25,8 +26,8 @@ databend-common-ast = "0.0.2"
 fern = { version = "0.6", features = ["colored"] }
 indicatif = "0.17"
 log = "0.4"
-percent-encoding = "2.3"
 once_cell = "1.18"
+percent-encoding = "2.3"
 rustyline = "12.0"
 serde = { version = "1.0", features = ["derive"] }
 terminal_size = "0.3"
@@ -37,7 +38,6 @@ tokio = { version = "1.34", features = [
     "sync",
     "parking_lot",
 ] }
-tokio-stream = "0.1"
 toml = "0.8"
 tracing-appender = "0.2"
 unicode-segmentation = "1.10"

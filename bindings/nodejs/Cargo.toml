@@ -13,9 +13,10 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
+chrono = { workspace = true }
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
+tokio-stream = { workspace = true }
 
-chrono = { version = "0.4.35", default-features = false }
 napi = { version = "2.14", default-features = false, features = [
     "napi6",
     "async",
@@ -24,7 +25,6 @@ napi = { version = "2.14", default-features = false, features = [
 ] }
 napi-derive = "2.14"
 once_cell = "1.18"
-tokio-stream = "0.1"
 
 [build-dependencies]
 napi-build = "2"

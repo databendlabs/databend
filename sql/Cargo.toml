@@ -14,30 +14,22 @@ repository = { workspace = true }
 flight-sql = ["dep:arrow-array", "dep:arrow-schema", "dep:tonic"]
 
 [dependencies]
+arrow = { workspace = true }
+arrow-array = { workspace = true, optional = true }
+arrow-schema = { workspace = true, optional = true }
 databend-client = { workspace = true }
+tokio-stream = { workspace = true }
+tonic = { workspace = true, optional = true }
 
 chrono = { version = "0.4.35", default-features = false }
 geozero = { version = "0.13", features = ["default", "with-wkb"] }
 glob = "0.3"
+hex = "0.4.3"
 itertools = "0.12"
 jsonb = "0.4"
 lexical-core = "0.8"
 memchr = "2.7"
-
 roaring = { version = "0.10", features = ["serde"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
-tokio-stream = "0.1"
 url = { version = "2.5", default-features = false }
-
-arrow = { version = "52.0" }
-arrow-array = { version = "52.0", optional = true }
-arrow-schema = { version = "52.0", optional = true }
-hex = "0.4.3"
-tonic = { version = "0.11", default-features = false, features = [
-    "transport",
-    "codegen",
-    "tls",
-    "tls-webpki-roots",
-    "prost",
-], optional = true }
