@@ -41,7 +41,6 @@ pub use fuse_columns::FuseColumnFunc;
 pub use fuse_encodings::FuseEncoding;
 pub use fuse_encodings::FuseEncodingTable;
 pub use fuse_segments::FuseSegmentFunc;
-pub use fuse_snapshots::FuseSnapshot;
-pub use fuse_snapshots::FuseSnapshotTable;
+pub use fuse_snapshots::FuseSnapshotFunc;
 pub use fuse_statistics::FuseStatisticTable;
 pub use table_args::*;

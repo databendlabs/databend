@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod template;
+mod fuse_table_meta_func;
+mod simple_func_template;
 
-pub use common::CommonArgFunction;
-pub use common::SimpleCommonArgsFunc;
-pub use template::SimpleTableFunc;
-pub use template::TableFunctionTemplate;
+pub use fuse_table_meta_func::SimpleTableMetaFunc;
+pub use fuse_table_meta_func::TableMetaFunc;
+pub use simple_func_template::SimpleTableFunc;
+pub use simple_func_template::TableFunctionTemplate;

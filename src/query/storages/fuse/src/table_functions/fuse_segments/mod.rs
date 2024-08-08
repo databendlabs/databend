@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod fuse_segment;
-// mod fuse_segment_table;
 
 pub use fuse_segment::FuseSegmentFunc;
-// pub use fuse_segment_table::FuseSegmentTable;

@@ -32,14 +32,14 @@ use crate::table_functions::string_literal;
 use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
-pub struct CommonArgs {
+pub struct TableMetaFuncCommonArgs {
     pub arg_database_name: String,
     pub arg_table_name: String,
     pub arg_snapshot_id: Option<String>,
 }
 
-impl From<&CommonArgs> for TableArgs {
-    fn from(value: &CommonArgs) -> Self {
+impl From<&TableMetaFuncCommonArgs> for TableArgs {
+    fn from(value: &TableMetaFuncCommonArgs) -> Self {
         let mut args = Vec::new();
         args.push(string_literal(value.arg_database_name.as_str()));
         args.push(string_literal(value.arg_table_name.as_str()));
@@ -50,9 +50,9 @@ impl From<&CommonArgs> for TableArgs {
     }
 }
 
-pub async fn location_snapshot(
+async fn location_snapshot(
     tbl: &FuseTable,
-    args: &CommonArgs,
+    args: &TableMetaFuncCommonArgs,
 ) -> Result<Option<Arc<TableSnapshot>>> {
     let snapshot_id = args.arg_snapshot_id.clone();
     let maybe_snapshot = tbl.read_table_snapshot().await?;
@@ -85,7 +85,7 @@ pub async fn location_snapshot(
 }
 
 #[async_trait::async_trait]
-pub trait CommonArgFunction {
+pub trait TableMetaFunc {
     fn schema() -> TableSchemaRef;
     async fn apply(
         ctx: &Arc<dyn TableContext>,
@@ -95,14 +95,14 @@ pub trait CommonArgFunction {
     ) -> Result<DataBlock>;
 }
 
-pub struct SimpleCommonArgsFunc<T> {
-    args: CommonArgs,
+pub struct SimpleTableMetaFunc<T> {
+    args: TableMetaFuncCommonArgs,
     _marker: PhantomData<T>,
 }
 
 #[async_trait::async_trait]
-impl<T> SimpleTableFunc for SimpleCommonArgsFunc<T>
-where T: CommonArgFunction + Send + Sync + 'static
+impl<T> SimpleTableFunc for SimpleTableMetaFunc<T>
+where T: TableMetaFunc + Send + Sync + 'static
 {
     fn table_args(&self) -> Option<TableArgs> {
         Some((&self.args).into())
@@ -142,7 +142,7 @@ where T: CommonArgFunction + Send + Sync + 'static
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
             parse_db_tb_opt_args(&table_args, name)?;
         Ok(Self {
-            args: CommonArgs {
+            args: TableMetaFuncCommonArgs {
                 arg_database_name,
                 arg_table_name,
                 arg_snapshot_id,
