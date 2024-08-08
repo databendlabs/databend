@@ -325,7 +325,7 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<DropDictionaryReply, KVAppError>;
 
     async fn get_dictionary(&self, req: GetDictionaryReq)
-    -> Result<GetDictionaryReply, KVAppError>;
+    -> Result<Option<GetDictionaryReply>, KVAppError>;
 
     async fn list_dictionaries(
         &self,

@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -7441,6 +7442,26 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_dictionary(req).await?;
             assert_eq!(dict_id, res.dictionary_id);
+        }
+
+        {
+            info!("--- get dictionary");
+            let req = GetDictionaryReq{
+                name_ident: name_ident_dict,
+            };
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+
+            let name_ident_dict2 = DictionaryNameIdent {
+                tenant: Tenant::new_or_err(tenant_name, func_name!())?,
+                db_name: db_name.to_string(),
+                dictionary_name: "dummy_dict".to_string(),
+            };
+            let req = GetDictionaryReq{
+                name_ident: name_ident_dict2,
+            };
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_none());
         }
 
         {

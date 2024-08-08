@@ -4448,7 +4448,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn get_dictionary(
         &self,
         req: GetDictionaryReq,
-    ) -> Result<GetDictionaryReply, KVAppError> {
+    ) -> Result<Option<GetDictionaryReply>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let tenant_dbname = req.name_ident.db_name_ident();
@@ -4466,9 +4466,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let (dict_id_seq, dict_id, _, dict_meta) = res;
 
         if dict_id_seq == 0 {
-            return Err(KVAppError::AppError(AppError::UnknownDictionary(
-                UnknownDictionary::new(tenant_dict.dictionary_name(), "get_dictionary"),
-            )));
+            Ok(None)
         }
 
         // Safe unwrap(): dict_meta_seq > 0 implies dict_meta is not None.
@@ -4487,10 +4485,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             )));
         }
 
-        Ok(GetDictionaryReply {
+        Ok(Some(GetDictionaryReply {
             dictionary_id: dict_id,
             dictionary_meta: dict_meta,
-        })
+        }))
     }
 
     #[logcall::logcall]

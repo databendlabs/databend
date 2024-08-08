@@ -28,16 +28,29 @@ use super::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
+/// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
+    // The name of the dictionary.
     pub name: String,
+    // The source from which the dictionary is derived.
     pub source: String,
+    // A map of options associated with the dictionary,
+    // where each option is a key-value pair.
     pub options: BTreeMap<String, String>,
+    // The schema of the table associated with the dictionary,
+    // wrapped in an `Arc` for shared ownership.
     pub schema: Arc<TableSchema>,
+    // A list of comments for each field in the dictionary.
     pub field_comments: Vec<String>,
+    // A list of primary column IDs.
     pub primary_column_ids: Vec<u32>,
+
     pub comment: String,
     pub created_on: DateTime<Utc>,
+
+    // if used in CreateDictionaryReq,
+    // `dropped_on` and `updated_on` MUST set to None.
     pub updated_on: Option<DateTime<Utc>>,
     pub dropped_on: Option<DateTime<Utc>>,
 }
@@ -133,7 +146,6 @@ pub struct CreateDictionaryReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReq {
     pub if_exists: bool,
-
     pub name_ident: DictionaryNameIdent,
 }
 
@@ -243,6 +255,7 @@ mod kvapi_key_impl {
         }
     }
 
+    /// "<prefix>/<dictionary_id>"
     impl kvapi::Key for DictionaryId {
         const PREFIX: &'static str = "__fd_dictionary_by_id";
 
