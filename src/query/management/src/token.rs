@@ -29,8 +29,6 @@ use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::With;
 
-use crate::token::token_api::TokenApi;
-
 pub struct TokenMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError>>,
     tenant: Tenant,
@@ -49,19 +47,18 @@ impl TokenMgr {
     }
 }
 
-#[async_trait::async_trait]
-impl TokenApi for TokenMgr {
+impl TokenMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn upsert_token(
+    pub async fn upsert_token(
         &self,
         token_hash: &str,
         token_info: QueryTokenInfo,
         ttl_in_secs: u64,
-        is_update: bool,
+        update_only: bool,
     ) -> Result<bool> {
         let ident = self.token_ident(token_hash);
-        let seq = MatchSeq::GE(if is_update { 1 } else { 0 });
+        let seq = MatchSeq::GE(if update_only { 1 } else { 0 });
         let upsert = UpsertPB::update(ident, token_info)
             .with(seq)
             .with_ttl(Duration::from_secs(ttl_in_secs));
@@ -73,7 +70,7 @@ impl TokenApi for TokenMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn get_token(&self, token_hash: &str) -> Result<Option<QueryTokenInfo>> {
+    pub async fn get_token(&self, token_hash: &str) -> Result<Option<QueryTokenInfo>> {
         let ident = self.token_ident(token_hash);
         let res = self.kv_api.get_pb(&ident).await?;
 
@@ -82,7 +79,7 @@ impl TokenApi for TokenMgr {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn drop_token(&self, token_hash: &str) -> Result<()> {
+    pub async fn drop_token(&self, token_hash: &str) -> Result<()> {
         let key = self.token_ident(token_hash).to_string_key();
 
         // simply ignore the result

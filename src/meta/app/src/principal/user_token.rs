@@ -15,11 +15,14 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+// Instead of store diff kind of token in diff path, we store the type in value is simpler and enough.
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
 )]
 pub enum TokenType {
+    // refresh token, with a longer TTL, is only used for auth when get new refresh token and session token.
     Refresh = 1,
+    // session token, is used for auth when do real work, like query, upload, etc.
     Session = 2,
 }
 

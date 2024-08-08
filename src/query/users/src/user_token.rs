@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_management::TokenApi;
 use databend_common_meta_app::principal::user_token::QueryTokenInfo;
 use databend_common_meta_app::tenant::Tenant;
 
@@ -27,11 +26,11 @@ impl UserApiProvider {
         token_hash: &str,
         token_info: QueryTokenInfo,
         ttl_in_secs: u64,
-        is_update: bool,
+        update_only: bool,
     ) -> Result<bool> {
         let token_api_provider = self.token_api(tenant);
         token_api_provider
-            .upsert_token(token_hash, token_info, ttl_in_secs, is_update)
+            .upsert_token(token_hash, token_info, ttl_in_secs, update_only)
             .await
     }
 
