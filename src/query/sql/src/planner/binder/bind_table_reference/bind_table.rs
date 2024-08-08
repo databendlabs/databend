@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
@@ -44,6 +45,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
         consume: bool,
+        sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
         let (catalog, database, table_name, table_name_alias) = (
@@ -142,6 +144,7 @@ impl Binder {
                     database.as_str(),
                     table_index,
                     change_type,
+                    sample,
                 )?;
 
                 if let Some(alias) = alias {
@@ -247,8 +250,13 @@ impl Binder {
                     false,
                 );
 
-                let (s_expr, mut bind_context) =
-                    self.bind_base_table(bind_context, database.as_str(), table_index, None)?;
+                let (s_expr, mut bind_context) = self.bind_base_table(
+                    bind_context,
+                    database.as_str(),
+                    table_index,
+                    None,
+                    sample,
+                )?;
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
