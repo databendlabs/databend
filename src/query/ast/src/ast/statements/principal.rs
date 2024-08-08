@@ -96,6 +96,7 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
+    Share,
 }
 
 impl Display for CatalogType {
@@ -104,6 +105,7 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
+            CatalogType::Share => write!(f, "SHARE"),
         }
     }
 }
@@ -188,6 +190,8 @@ pub enum ShareGrantObjectName {
     Database(Identifier),
     // database name, table name
     Table(Identifier, Identifier),
+    // database name, table name
+    View(Identifier, Identifier),
 }
 
 impl Display for ShareGrantObjectName {
@@ -198,6 +202,9 @@ impl Display for ShareGrantObjectName {
             }
             ShareGrantObjectName::Table(db, table) => {
                 write!(f, "TABLE {db}.{table}")
+            }
+            ShareGrantObjectName::View(db, table) => {
+                write!(f, "VIEW {db}.{table}")
             }
         }
     }

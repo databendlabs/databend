@@ -26,7 +26,7 @@ use tokio_stream::StreamExt;
 
 use crate::testing::meta_service_test_harness;
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_export() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Write some data

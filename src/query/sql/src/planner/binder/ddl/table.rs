@@ -873,7 +873,8 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let (field, comment, is_deterministic) =
+                    self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -889,6 +890,7 @@ impl Binder {
                     field,
                     comment,
                     option,
+                    is_deterministic,
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
@@ -925,7 +927,7 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, comment) =
+                            let (field, comment, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
                             field_and_comment.push((field, comment));
                         }
@@ -1347,17 +1349,19 @@ impl Binder {
         &self,
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableField, String)> {
+    ) -> Result<(TableField, String, bool)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
+        let mut is_deterministic = true;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
                 ColumnExpr::Default(default_expr) => {
-                    let expr =
-                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr, true)?;
+                    let (expr, expr_is_deterministic) =
+                        parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                     field = field.with_default_expr(Some(expr));
+                    is_deterministic = expr_is_deterministic;
                 }
                 ColumnExpr::Virtual(virtual_expr) => {
                     let expr = parse_computed_expr_to_string(
@@ -1377,7 +1381,7 @@ impl Binder {
             }
         }
         let comment = column.comment.clone().unwrap_or_default();
-        Ok((field, comment))
+        Ok((field, comment, is_deterministic))
     }
 
     #[async_backtrace::framed]
@@ -1398,12 +1402,8 @@ impl Binder {
             if let Some(expr) = &column.expr {
                 match expr {
                     ColumnExpr::Default(default_expr) => {
-                        let expr = parse_default_expr_to_string(
-                            self.ctx.clone(),
-                            &field,
-                            default_expr,
-                            false,
-                        )?;
+                        let (expr, _) =
+                            parse_default_expr_to_string(self.ctx.clone(), &field, default_expr)?;
                         field = field.with_default_expr(Some(expr));
                     }
                     _ => has_computed = true,

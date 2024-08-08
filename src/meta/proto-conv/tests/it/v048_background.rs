@@ -27,7 +27,7 @@ use databend_common_meta_app::background::CompactionStats;
 use databend_common_meta_app::background::ManualTriggerParams;
 use databend_common_meta_app::background::VacuumStats;
 use databend_common_meta_app::schema::TableStatistics;
-use minitrace::func_name;
+use fastrace::func_name;
 
 use crate::common;
 

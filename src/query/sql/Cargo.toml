@@ -42,6 +42,7 @@ databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-settings = { workspace = true }
+databend-common-sharing = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
@@ -51,12 +52,12 @@ databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
+fastrace = { workspace = true }
 globiter = "0.1"
 indexmap = "2.0.0"
 itertools = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
-minitrace = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 opendal = { workspace = true }

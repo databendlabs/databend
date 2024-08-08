@@ -46,6 +46,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::share::GetShareEndpointReq;
 use databend_common_meta_app::share::ShareEndpointMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_sharing::ShareEndpointClient;
 use log::error;
 
@@ -200,6 +201,11 @@ impl Database for ShareDatabase {
 
     fn get_db_info(&self) -> &DatabaseInfo {
         &self.db_info
+    }
+
+    // use context tenant, instead of db info tenant
+    fn get_tenant(&self) -> &Tenant {
+        &self.ctx.tenant
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {

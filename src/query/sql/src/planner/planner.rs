@@ -68,7 +68,7 @@ impl Planner {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let start = Instant::now();
         let settings = self.ctx.get_settings();

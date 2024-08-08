@@ -892,6 +892,8 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PARTIAL", ignore(ascii_case))]
+    PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]
     QUARTER,
     #[token("QUERY", ignore(ascii_case))]

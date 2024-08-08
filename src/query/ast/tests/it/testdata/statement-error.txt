@@ -283,7 +283,7 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, or `TABLE`
+  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `TABLE`, or `VIEW`
 
 
 ---------- Input ----------

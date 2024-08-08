@@ -64,7 +64,6 @@ use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
-use crate::plans::DeletePlan;
 use crate::plans::DescConnectionPlan;
 use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
@@ -148,7 +147,6 @@ use crate::plans::TruncateTablePlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetPlan;
-use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
@@ -181,6 +179,7 @@ pub enum Plan {
         formatted_sql: String,
     },
     ExplainAnalyze {
+        partial: bool,
         plan: Box<Plan>,
     },
 
@@ -239,9 +238,7 @@ pub enum Plan {
     Insert(Box<Insert>),
     InsertMultiTable(Box<InsertMultiTable>),
     Replace(Box<Replace>),
-    Delete(Box<DeletePlan>),
-    Update(Box<UpdatePlan>),
-    MergeInto {
+    DataMutation {
         s_expr: Box<SExpr>,
         schema: DataSchemaRef,
         metadata: MetadataRef,
@@ -430,12 +427,10 @@ impl Plan {
             | Plan::ExplainSyntax { .. } => QueryKind::Explain,
             Plan::Insert(_) => QueryKind::Insert,
             Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::MergeInto { .. }
+            | Plan::DataMutation { .. }
             | Plan::OptimizePurge(_)
             | Plan::OptimizeCompactSegment(_)
-            | Plan::OptimizeCompactBlock { .. }
-            | Plan::Update(_) => QueryKind::Update,
+            | Plan::OptimizeCompactBlock { .. } => QueryKind::Update,
             _ => QueryKind::Other,
         }
     }
@@ -462,7 +457,7 @@ impl Plan {
             | Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
-            Plan::MergeInto { schema, .. } => schema.clone(),
+            Plan::DataMutation { schema, .. } => schema.clone(),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),

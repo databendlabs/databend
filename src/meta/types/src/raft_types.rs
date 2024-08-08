@@ -82,6 +82,7 @@ pub type InstallSnapshotError = openraft::error::InstallSnapshotError;
 pub type SnapshotMismatch = openraft::error::SnapshotMismatch;
 pub type VoteRequest = openraft::raft::VoteRequest<TypeConfig>;
 pub type VoteResponse = openraft::raft::VoteResponse<TypeConfig>;
+pub type TransferLeaderRequest = openraft::raft::TransferLeaderRequest<TypeConfig>;
 
 pub fn new_log_id(term: u64, node_id: NodeId, index: u64) -> LogId {
     LogId::new(CommittedLeaderId::new(term, node_id), index)

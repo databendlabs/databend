@@ -562,6 +562,14 @@ impl NumberScalar {
             _ => None,
         }
     }
+
+    pub fn to_f64(&self) -> F64 {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => (*num as f64).into(),
+            NumberScalar::Float32(num) => (num.into_inner() as f64).into(),
+            NumberScalar::Float64(num) => *num,
+        })
+    }
 }
 
 impl<T> From<T> for NumberScalar

@@ -364,7 +364,7 @@ impl QueryEntry {
                 }
             }
 
-            Plan::ExplainAnalyze { plan }
+            Plan::ExplainAnalyze { plan, .. }
             | Plan::Explain {
                 kind: ExplainKind::AnalyzePlan,
                 plan,
@@ -379,9 +379,7 @@ impl QueryEntry {
             Plan::Insert(_)
             | Plan::InsertMultiTable(_)
             | Plan::Replace(_)
-            | Plan::Delete(_)
-            | Plan::Update(_)
-            | Plan::MergeInto { .. }
+            | Plan::DataMutation { .. }
             | Plan::CopyIntoTable(_)
             | Plan::CopyIntoLocation(_) => {
                 return true;

@@ -51,7 +51,7 @@ impl kvapi::ApiBuilder<StateMachine> for StateMachineBuilder {
 }
 
 #[test(harness = raft_store_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_embedded_single() -> anyhow::Result<()> {
     let builder = StateMachineBuilder {
         test_context: Default::default(),

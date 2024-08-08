@@ -1,0 +1,42 @@
+statement ok
+create or replace table t1 as select * from numbers(250000);
+
+statement ok
+create or replace table t2(number int);
+
+statement ok
+create or replace stream t2_s ON TABLE t2;
+
+statement ok
+insert into t2(number) select * from numbers(500000);
+
+statement ok
+delete from t2 where number % 3 = 0;
+
+statement ok
+insert into t2 select * from numbers(400000);
+
+statement ok
+set disable_join_reorder = 1;
+
+query T
+MERGE INTO t1 USING (SELECT number FROM t2_s QUALIFY row_number() OVER ( PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number WHEN MATCHED then UPDATE SET t1.number = t2.number WHEN NOT MATCHED THEN INSERT(number) VALUES(t2.number);
+----
+216667 250000
+
+query T
+select count(*) from t1;
+----
+466667
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop stream if exists t2_s;
+
+statement ok
+drop table if exists t2;

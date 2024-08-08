@@ -51,7 +51,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         true
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");

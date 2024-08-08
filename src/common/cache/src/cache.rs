@@ -15,22 +15,12 @@
 pub mod lru;
 
 use std::borrow::Borrow;
-use std::hash::BuildHasher;
 use std::hash::Hash;
 
 use crate::Meter;
 
 /// A trait for a cache.
-pub trait Cache<K, V, S, M>
-where
-    K: Eq + Hash,
-    S: BuildHasher,
-    M: Meter<K, V>,
-{
-    /// Creates an empty cache that can hold at most `capacity` as measured by `meter` with the
-    /// given hash builder.
-    fn with_meter_and_hasher(cap: u64, meter: M, hash_builder: S) -> Self;
-
+pub trait Cache<K: Eq + Hash, V, M: Meter<K, V>> {
     /// Returns a reference to the value corresponding to the given key in the cache, if
     /// any.
     fn get<'a, Q>(&'a mut self, k: &Q) -> Option<&'a V>

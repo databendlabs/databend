@@ -44,6 +44,8 @@ pub enum Statement {
         query: Box<Statement>,
     },
     ExplainAnalyze {
+        // if partial is true, only scan/filter/join will be shown.
+        partial: bool,
         query: Box<Statement>,
     },
 
@@ -414,8 +416,12 @@ impl Display for Statement {
                 }
                 write!(f, " {query}")?;
             }
-            Statement::ExplainAnalyze { query } => {
-                write!(f, "EXPLAIN ANALYZE {query}")?;
+            Statement::ExplainAnalyze { partial, query } => {
+                if *partial {
+                    write!(f, "EXPLAIN ANALYZE PARTIAL {query}")?;
+                } else {
+                    write!(f, "EXPLAIN ANALYZE {query}")?;
+                }
             }
             Statement::Query(stmt) => write!(f, "{stmt}")?,
             Statement::Insert(stmt) => write!(f, "{stmt}")?,

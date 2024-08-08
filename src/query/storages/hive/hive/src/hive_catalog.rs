@@ -25,6 +25,7 @@ use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -98,6 +99,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::*;
 use faststr::FastStr;
 use hive_metastore::Partition;
@@ -115,7 +117,12 @@ use crate::utils::from_thrift_exception;
 pub struct HiveCreator;
 
 impl CatalogCreator for HiveCreator {
-    fn try_create(&self, info: Arc<CatalogInfo>) -> Result<Arc<dyn Catalog>> {
+    fn try_create(
+        &self,
+        info: Arc<CatalogInfo>,
+        _conf: InnerConfig,
+        _meta: &MetaStore,
+    ) -> Result<Arc<dyn Catalog>> {
         let opt = match &info.meta.catalog_option {
             CatalogOption::Hive(opt) => opt,
             _ => unreachable!(
@@ -214,7 +221,7 @@ impl HiveCatalog {
             .map_err(from_thrift_error)?
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn get_partition_names(
         &self,
@@ -268,11 +275,7 @@ impl Catalog for HiveCatalog {
         self.info.clone()
     }
 
-    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
-        Ok(self)
-    }
-
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db = self
@@ -288,7 +291,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get all the databases.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let db_names = self
@@ -391,7 +394,7 @@ impl Catalog for HiveCatalog {
     }
 
     // Get one table by db and table name.
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_table(
         &self,
@@ -432,7 +435,7 @@ impl Catalog for HiveCatalog {
         Ok(res)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn list_tables(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {
         let table_names = self

@@ -411,7 +411,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             options,
             query,
         } => visitor.visit_explain(kind, options, query),
-        Statement::ExplainAnalyze { query } => visitor.visit_statement(query),
+        Statement::ExplainAnalyze { query, .. } => visitor.visit_statement(query),
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),

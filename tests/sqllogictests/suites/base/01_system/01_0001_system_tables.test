@@ -12,11 +12,70 @@ select name from system.tables where database='system' and table_id='xx'
 statement ok
 create or replace table default.tables(id int)
 
+# default.tables, system.tables, system.columns, and other table under system database
 query T
-select * from (select database, name from system.tables where database='system' or name in ('tables', 'columns')) where name in ('tables') order by database;
+select count() > 10 from system.tables where database='system' or name in ('tables', 'columns');
 ----
-default tables
-system tables
+1
+
+statement ok
+create or replace database a;
+
+statement ok
+create or replace database b;
+
+statement ok
+create or replace database c;
+
+statement ok
+create or replace table a.t(id int);
+
+statement ok
+create or replace table b.t(id int);
+
+statement ok
+create or replace table c.t(id int);
+
+statement ok
+create or replace table c.t100(id int);
+
+statement ok
+insert into c.t100 values(1), (2), (3), (4), (5), (6), (7), (8);
+
+query T
+select name, database from system.tables where database='c' or name ='t' order by name,database;
+----
+t a
+t b
+t c
+t100 c
+
+query T
+select name, database from system.tables where database='c' or name ='t' or name like 't10%' order by name, database;
+----
+t a
+t b
+t c
+t100 c
 
 statement ok
 drop table default.tables
+
+query T
+select name, database, num_rows from system.tables where database='c' and name ='t100';
+----
+t100 c 8
+
+query T
+select name, database, owner from system.tables where database='c' and name ='t100';
+----
+t100 c account_admin
+
+statement ok
+drop database if exists a;
+
+statement ok
+drop database if exists b;
+
+statement ok
+drop database if exists c;

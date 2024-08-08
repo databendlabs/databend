@@ -65,7 +65,7 @@ impl CollectStatisticsOptimizer {
                     .column_statistics_provider(self.table_ctx.clone())
                     .await?;
                 let table_stats = table
-                    .table_statistics(self.table_ctx.clone(), scan.change_type.clone())
+                    .table_statistics(self.table_ctx.clone(), true, scan.change_type.clone())
                     .await?;
 
                 let mut column_stats = HashMap::new();

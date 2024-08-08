@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -40,6 +43,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
@@ -47,7 +51,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_and_or_filter;
+use crate::util::find_eq_or_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
     table_info: TableInfo,
@@ -145,6 +149,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 TableField::new("engine_full", TableDataType::String),
                 TableField::new("cluster_by", TableDataType::String),
                 TableField::new("is_transient", TableDataType::String),
+                TableField::new("is_attach", TableDataType::String),
                 TableField::new("created_on", TableDataType::Timestamp),
                 TableField::new(
                     "dropped_on",
@@ -246,39 +251,75 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
 
+        let mut get_stats = true;
+        let mut get_ownership = true;
+        let mut owner_field_indexes: HashSet<usize> = HashSet::new();
+        let mut stats_fields_indexes: HashSet<usize> = HashSet::new();
+        let schema = TablesTable::<T, U>::schema();
+        for (i, name) in schema.fields.iter().enumerate() {
+            match name.name().as_str() {
+                "num_rows"
+                | "data_size"
+                | "data_compressed_size"
+                | "index_size"
+                | "number_of_segments"
+                | "number_of_blocks" => {
+                    stats_fields_indexes.insert(i);
+                }
+                "owner" => {
+                    owner_field_indexes.insert(i);
+                }
+                _ => {}
+            }
+        }
+
+        let mut invalid_optimize = false;
         if let Some(push_downs) = &push_downs {
+            if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
+                get_stats = v
+                    .iter()
+                    .any(|field_index| stats_fields_indexes.contains(field_index));
+                get_ownership = v
+                    .iter()
+                    .any(|field_index| owner_field_indexes.contains(field_index));
+            }
+
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_and_or_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !db_name.contains(database) {
-                                db_name.push(database.clone());
+                invalid_optimize = find_eq_or_filter(
+                    &expr,
+                    &mut |col_name, scalar| {
+                        if col_name == "database" {
+                            if let Scalar::String(database) = scalar {
+                                if !db_name.contains(database) {
+                                    db_name.push(database.clone());
+                                }
+                            }
+                        } else if col_name == "table_id" {
+                            match check_number::<_, u64>(
+                                None,
+                                &FunctionContext::default(),
+                                &Expr::<usize>::Constant {
+                                    span: None,
+                                    scalar: scalar.clone(),
+                                    data_type: scalar.as_ref().infer_data_type(),
+                                },
+                                &BUILTIN_FUNCTIONS,
+                            ) {
+                                Ok(id) => tables_ids.push(id),
+                                Err(_) => invalid_tables_ids = true,
+                            }
+                        } else if col_name == "name" {
+                            if let Scalar::String(t_name) = scalar {
+                                if !tables_names.contains(t_name) {
+                                    tables_names.push(t_name.clone());
+                                }
                             }
                         }
-                    } else if col_name == "table_id" {
-                        match check_number::<_, u64>(
-                            None,
-                            &FunctionContext::default(),
-                            &Expr::<usize>::Constant {
-                                span: None,
-                                scalar: scalar.clone(),
-                                data_type: scalar.as_ref().infer_data_type(),
-                            },
-                            &BUILTIN_FUNCTIONS,
-                        ) {
-                            Ok(id) => tables_ids.push(id),
-                            Err(_) => invalid_tables_ids = true,
-                        }
-                    } else if col_name == "name" {
-                        if let Scalar::String(t_name) = scalar {
-                            if !tables_names.contains(t_name) {
-                                tables_names.push(t_name.clone());
-                            }
-                        }
-                    }
-                    Ok(())
-                });
+                        Ok(())
+                    },
+                    invalid_optimize,
+                );
             }
         }
 
@@ -299,7 +340,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
-                                    tables_names.push(table);
+                                    if !tables_names.contains(&table) {
+                                        tables_names.push(table.clone());
+                                    }
                                 }
                             }
                             Err(err) => {
@@ -311,7 +354,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             }
 
-            if dbs.is_empty() {
+            if dbs.is_empty() || invalid_optimize {
                 dbs = match ctl.list_databases(&tenant).await {
                     Ok(dbs) => dbs,
                     Err(err) => {
@@ -337,7 +380,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 })
                 .collect::<Vec<_>>();
 
-            let ownership = user_api.get_ownerships(&tenant).await.unwrap_or_default();
+            let ownership = if get_ownership {
+                user_api.get_ownerships(&tenant).await.unwrap_or_default()
+            } else {
+                HashMap::new()
+            };
             for db in final_dbs {
                 let db_id = db.get_db_info().ident.db_id;
                 let db_name = db.name();
@@ -345,6 +392,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     || tables_names.len() > 10
                     || WITH_HISTORY
                     || invalid_tables_ids
+                    || invalid_optimize
                 {
                     match Self::list_tables(ctl, &tenant, db_name, WITH_HISTORY, WITHOUT_VIEW).await
                     {
@@ -446,19 +494,25 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         if WITHOUT_VIEW {
             for tbl in &database_tables {
-                let stats = match tbl.table_statistics(ctx.clone(), None).await {
-                    Ok(stats) => stats,
-                    Err(err) => {
-                        let msg = format!(
-                            "Unable to get table statistics on table {}: {}",
-                            tbl.name(),
-                            err
-                        );
-                        warn!("{}", msg);
-                        ctx.push_warning(msg);
+                // For performance considerations, allows using stale statistics data.
+                let require_fresh = false;
+                let stats = if get_stats {
+                    match tbl.table_statistics(ctx.clone(), require_fresh, None).await {
+                        Ok(stats) => stats,
+                        Err(err) => {
+                            let msg = format!(
+                                "Unable to get table statistics on table {}: {}",
+                                tbl.name(),
+                                err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
 
-                        None
+                            None
+                        }
                     }
+                } else {
+                    None
                 };
                 num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
                 number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
@@ -520,6 +574,16 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             })
             .collect();
+        let is_attach: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if FuseTable::is_table_attached(&v.get_table_info().meta.options) {
+                    "ATTACH".to_string()
+                } else {
+                    "".to_string()
+                }
+            })
+            .collect();
         let comment: Vec<String> = database_tables
             .iter()
             .map(|v| v.get_table_info().meta.comment.clone())
@@ -552,6 +616,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 StringType::from_data(engines_full),
                 StringType::from_data(cluster_bys),
                 StringType::from_data(is_transient),
+                StringType::from_data(is_attach),
                 TimestampType::from_data(created_on),
                 TimestampType::from_opt_data(dropped_on),
                 TimestampType::from_data(updated_on),

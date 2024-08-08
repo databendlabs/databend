@@ -17,8 +17,8 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
-use std::time::SystemTime;
 
+use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::AsKeySpace;
@@ -156,7 +156,7 @@ impl StateMachine {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn open(config: &RaftConfig, sm_id: u64) -> Result<StateMachine, MetaStorageError> {
         let db = get_sled_db();
 
@@ -232,7 +232,7 @@ impl StateMachine {
     /// If a duplicated log entry is detected by checking data.txid, no update
     /// will be made and the previous resp is returned. In this way a client is able to re-send a
     /// command safely in case of network failure etc.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn apply(&self, entry: &Entry) -> Result<AppliedState, MetaStorageError> {
         info!("apply: summary: {}", entry.summary(),);
         debug!(log_id :% =(&entry.log_id); "sled tx start: {:?}", entry);
@@ -324,7 +324,7 @@ impl StateMachine {
     /// Retrieve the proposing time from a raft-log.
     ///
     /// Only `Normal` log has a time embedded.
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn get_log_time(entry: &Entry) -> u64 {
         match &entry.payload {
             EntryPayload::Normal(data) => match data.time_ms {
@@ -336,8 +336,10 @@ impl StateMachine {
                     0
                 }
                 Some(x) => {
-                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                    info!("apply: raft-log time: {:?}", t);
+                    info!(
+                        "apply: raft-log time: {}",
+                        Duration::from_millis(x).display_unix_timestamp()
+                    );
                     x
                 }
             },
@@ -345,7 +347,7 @@ impl StateMachine {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_add_node_cmd(
         &self,
         node_id: &u64,
@@ -372,7 +374,7 @@ impl StateMachine {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_remove_node_cmd(
         &self,
         node_id: &u64,
@@ -389,7 +391,7 @@ impl StateMachine {
         Ok((prev, None).into())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_update_kv_cmd(
         &self,
         upsert_kv: &UpsertKV,
@@ -444,7 +446,7 @@ impl StateMachine {
         }
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn txn_execute_one_condition(
         &self,
         txn_tree: &TransactionSledTree,
@@ -486,7 +488,7 @@ impl StateMachine {
         Ok(false)
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn txn_execute_condition(
         &self,
         txn_tree: &TransactionSledTree,
@@ -631,7 +633,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn txn_execute_operation(
         &self,
         txn_tree: &mut TransactionSledTree,
@@ -666,7 +668,7 @@ impl StateMachine {
         Ok(())
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn apply_txn_cmd(
         &self,
         req: &TxnRequest,
@@ -716,7 +718,7 @@ impl StateMachine {
     /// Already applied log should be filtered out before passing into this function.
     /// This is the only entry to modify state machine.
     /// The `cmd` is always committed by raft before applying.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn apply_cmd(
         &self,
         cmd: &Cmd,
@@ -753,7 +755,7 @@ impl StateMachine {
     /// Before applying, list expired keys to clean.
     ///
     /// Apply is done in a sled-txn tree, which does not provide listing function.
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub fn list_expired_kvs(
         &self,
         log_time_ms: u64,
@@ -785,7 +787,7 @@ impl StateMachine {
     /// Remove expired key-values, and corresponding secondary expiration index record.
     ///
     /// This should be done inside a sled-transaction.
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn clean_expired_kvs(
         &self,
         txn_tree: &mut TransactionSledTree,

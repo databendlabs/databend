@@ -13,8 +13,11 @@
 // limitations under the License.
 
 pub mod default;
+pub mod share;
 pub use databend_common_catalog::catalog::Catalog;
 pub use databend_common_storages_hive as hive;
 pub use default::table_id_ranges::*;
 pub use default::table_memory_meta::InMemoryMetas;
 pub use default::DatabaseCatalog;
+pub use share::ShareCatalog;
+pub use share::ShareCatalogCreator;

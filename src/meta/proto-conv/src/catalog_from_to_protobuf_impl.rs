@@ -87,6 +87,9 @@ impl FromToProto for mt::CatalogOption {
                 }
                 mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
             }
+            pb::catalog_option::CatalogOption::Share(v) => {
+                mt::CatalogOption::Share(mt::ShareCatalogOption::from_pb(v)?)
+            }
         })
     }
 
@@ -96,6 +99,9 @@ impl FromToProto for mt::CatalogOption {
             mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb()?)),
             mt::CatalogOption::Iceberg(v) => {
                 Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?))
+            }
+            mt::CatalogOption::Share(v) => {
+                Some(pb::catalog_option::CatalogOption::Share(v.to_pb()?))
             }
         };
 
@@ -244,6 +250,35 @@ impl FromToProto for mt::HiveCatalogOption {
                 .as_ref()
                 .map(|v| v.to_pb())
                 .transpose()?,
+        })
+    }
+}
+
+impl FromToProto for mt::ShareCatalogOption {
+    type PB = pb::ShareCatalogOption;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            provider: p.provider,
+            share_name: p.share_name,
+            share_endpoint: p.share_endpoint,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::ShareCatalogOption {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            provider: self.provider.clone(),
+            share_name: self.share_name.clone(),
+            share_endpoint: self.share_endpoint.clone(),
         })
     }
 }
