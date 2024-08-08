@@ -14,7 +14,5 @@
 
 #[allow(clippy::module_inception)]
 mod clustering_information;
-mod clustering_information_table;
 
-pub use clustering_information::ClusteringInformation;
-pub use clustering_information_table::ClusteringInformationTable;
+pub use clustering_information::ClusteringInformationFunc;

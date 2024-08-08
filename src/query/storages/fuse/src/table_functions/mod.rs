@@ -26,10 +26,8 @@ mod fuse_statistics;
 mod table_args;
 
 pub use cache_admin::SetCacheCapacityFunc;
-pub use clustering_information::ClusteringInformation;
-pub use clustering_information::ClusteringInformationTable;
-pub use clustering_statistics::ClusteringStatistics;
-pub use clustering_statistics::ClusteringStatisticsTable;
+pub use clustering_information::ClusteringInformationFunc;
+pub use clustering_statistics::ClusteringStatisticsFunc;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 pub use function_template::SimpleTableFunc;

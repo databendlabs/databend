@@ -19,7 +19,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
-use databend_common_storages_fuse::table_functions::ClusteringStatisticsTable;
+use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
@@ -36,7 +36,7 @@ use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
-use crate::storages::fuse::table_functions::ClusteringInformationTable;
+use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseStatisticTable;
@@ -173,11 +173,17 @@ impl TableFunctionFactory {
 
         creators.insert(
             "clustering_information".to_string(),
-            (next_id(), Arc::new(ClusteringInformationTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<ClusteringInformationFunc>::create),
+            ),
         );
         creators.insert(
             "clustering_statistics".to_string(),
-            (next_id(), Arc::new(ClusteringStatisticsTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
+            ),
         );
 
         creators.insert(

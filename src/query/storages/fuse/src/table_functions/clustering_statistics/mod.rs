@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod clustering_stat;
-mod clustering_stat_table;
 
-pub use clustering_stat::ClusteringStatistics;
-pub use clustering_stat_table::ClusteringStatisticsTable;
+pub use clustering_stat::ClusteringStatisticsFunc;
