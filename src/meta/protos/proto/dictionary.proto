@@ -46,7 +46,4 @@ message DictionaryMeta {
 
  // The time dictionary updated.
  optional string updated_on = 8;
-
- // The time dictionary dropped.
- optional string dropped_on = 9;
 }
