@@ -14,17 +14,20 @@ statement ok
 delete from t2 where number % 3 = 0;
 
 statement ok
+insert into t2 select * from numbers(400000);
+
+statement ok
 set disable_join_reorder = 1;
 
 query T
 MERGE INTO t1 USING (SELECT number FROM t2_s QUALIFY row_number() OVER ( PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number WHEN MATCHED then UPDATE SET t1.number = t2.number WHEN NOT MATCHED THEN INSERT(number) VALUES(t2.number);
 ----
-166667 166666
+216667 250000
 
 query T
 select count(*) from t1;
 ----
-416667
+466667
 
 statement ok
 set disable_join_reorder = 0;
