@@ -226,6 +226,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -240,6 +241,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -265,6 +267,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -277,6 +280,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -330,6 +334,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -342,6 +347,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -395,6 +401,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -404,6 +411,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -566,6 +574,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -580,6 +589,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -615,6 +625,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -626,6 +637,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -685,6 +697,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -699,6 +712,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -745,6 +759,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -754,6 +769,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), table_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -1587,6 +1603,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database("unknown_db".to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1602,6 +1619,7 @@ impl ShareApiTestSuite {
                 ),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1617,6 +1635,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database("db2".to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1632,6 +1651,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db2_name.to_string(), tbl2_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1647,6 +1667,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -1663,6 +1684,7 @@ impl ShareApiTestSuite {
                 object: tbl_ob_name.clone(),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -1700,6 +1722,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db2_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1712,6 +1735,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db2_name.to_string(), tbl2_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await;
@@ -1804,6 +1828,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Table(db_name.to_string(), tbl_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -1950,6 +1975,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -1962,6 +1988,7 @@ impl ShareApiTestSuite {
                 object: tbl_ob_name.clone(),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2087,6 +2114,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2097,6 +2125,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2109,6 +2138,7 @@ impl ShareApiTestSuite {
                 object: tbl_ob_name.clone(),
                 grant_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2191,6 +2221,7 @@ impl ShareApiTestSuite {
                     object: ShareGrantObjectName::Database(db2.to_string()),
                     grant_on,
                     privilege: ShareGrantObjectPrivilege::Usage,
+                    reference_tables: None,
                 };
 
                 let res = mt.grant_share_object(req).await;
@@ -2331,6 +2362,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2343,6 +2375,7 @@ impl ShareApiTestSuite {
                 object: tbl_ob_name.clone(),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;
@@ -2353,6 +2386,7 @@ impl ShareApiTestSuite {
                 object: ShareGrantObjectName::Database(db_name.to_string()),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Usage,
+                reference_tables: None,
             };
 
             let _res = mt.grant_share_object(req).await?;
@@ -2364,6 +2398,7 @@ impl ShareApiTestSuite {
                 object: tbl_ob_name.clone(),
                 grant_on: create_on,
                 privilege: ShareGrantObjectPrivilege::Select,
+                reference_tables: None,
             };
 
             let res = mt.grant_share_object(req).await?;

@@ -59,6 +59,9 @@ impl FromToProto for mt::ShareGrantObject {
             mt::ShareGrantObject::Table(table_id) => {
                 Some(pb::share_grant_object::Object::TableId(*table_id))
             }
+            mt::ShareGrantObject::View(_table_id) => {
+                unreachable!()
+            }
         };
 
         let p = pb::ShareGrantObject {

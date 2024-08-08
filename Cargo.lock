@@ -3241,7 +3241,6 @@ dependencies = [
  "bytes",
  "hashbrown 0.14.3",
  "hashlink 0.8.4",
- "heapsize",
 ]
 
 [[package]]
@@ -4152,6 +4151,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-transforms",
  "databend-common-settings",
+ "databend-common-sharing",
  "databend-common-storage",
  "databend-common-storages-result-cache",
  "databend-common-storages-view",
@@ -8770,15 +8770,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "heapsize"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1679e6ea370dee694f91f1dc469bf94cf8f52051d147aec3e1f9497c6fc22461"
-dependencies = [
- "winapi",
-]
-
-[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11085,7 +11076,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -11107,7 +11098,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.3#94c820c3047aa07da41bb6bd1524f9dc00eeed02"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.10.0-alpha.6#c6f4a779e0bb563788c4187381065162e76ea996"
 dependencies = [
  "chrono",
  "proc-macro2",

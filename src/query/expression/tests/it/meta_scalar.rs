@@ -94,7 +94,7 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
                 simple_scalars.push(simple_scalar.clone());
                 scalars.push(scalar.clone());
 
-                let convert_back_scalar: Scalar = simple_scalar.into();
+                let convert_back_scalar: Scalar = simple_scalar.try_into().unwrap();
                 assert_eq!(scalar, convert_back_scalar);
             }
 

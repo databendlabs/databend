@@ -2487,7 +2487,7 @@ pub struct MetaConfig {
     #[clap(
         long = "meta-client-timeout-in-second",
         value_name = "VALUE",
-        default_value = "10"
+        default_value = "4"
     )]
     pub client_timeout_in_second: u64,
 

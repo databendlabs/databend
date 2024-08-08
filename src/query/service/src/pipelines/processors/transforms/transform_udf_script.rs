@@ -50,7 +50,7 @@ pub enum ScriptRuntime {
 impl ScriptRuntime {
     pub fn try_create(
         lang: &str,
-        code: Option<Vec<u8>>,
+        code: Option<&[u8]>,
         runtime_num: usize,
     ) -> Result<Self, ErrorCode> {
         match lang {
@@ -87,11 +87,11 @@ impl ScriptRuntime {
         }
     }
 
-    fn create_wasm_runtime(code_blob: Option<Vec<u8>>) -> Result<Self, ErrorCode> {
+    fn create_wasm_runtime(code_blob: Option<&[u8]>) -> Result<Self, ErrorCode> {
         let decoded_code_blob = code_blob
             .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
 
-        let runtime = arrow_udf_wasm::Runtime::new(&decoded_code_blob).map_err(|err| {
+        let runtime = arrow_udf_wasm::Runtime::new(decoded_code_blob).map_err(|err| {
             ErrorCode::UDFDataError(format!("Failed to create WASM runtime for module: {}", err))
         })?;
 
@@ -224,7 +224,13 @@ impl TransformUdfScript {
 impl Transform for TransformUdfScript {
     const NAME: &'static str = "UDFScriptTransform";
 
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
     fn transform(&mut self, mut data_block: DataBlock) -> Result<DataBlock> {
+        if data_block.is_empty() {
+            return Ok(data_block);
+        }
+
         let index = self.index_seq.fetch_add(1, Ordering::SeqCst);
         for func in &self.funcs {
             let num_rows = data_block.num_rows();
@@ -271,7 +277,7 @@ impl TransformUdfScript {
         let start = std::time::Instant::now();
         for func in funcs {
             let (lang, code_opt) = match &func.udf_type {
-                UDFType::Script((lang, _, _code)) => (lang, None),
+                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref())),
                 _ => continue,
             };
 

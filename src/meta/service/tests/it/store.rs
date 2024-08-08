@@ -21,8 +21,8 @@ use databend_common_meta_sled_store::openraft::storage::RaftLogReaderExt;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::storage::RaftStateMachine;
+use databend_common_meta_sled_store::openraft::testing::log::StoreBuilder;
 use databend_common_meta_sled_store::openraft::testing::log_id;
-use databend_common_meta_sled_store::openraft::testing::StoreBuilder;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_types::new_log_id;
@@ -37,8 +37,6 @@ use databend_meta::meta_service::meta_node::LogStore;
 use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
 use databend_meta::Opened;
-use fastrace::full_name;
-use fastrace::prelude::*;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
@@ -47,7 +45,6 @@ use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
-use crate::testing::meta_service_test_harness_sync;
 use crate::tests::service::MetaSrvTestContext;
 
 struct MetaStoreBuilder {}
@@ -62,13 +59,11 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
     }
 }
 
-#[test(harness = meta_service_test_harness_sync)]
+#[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
-fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let root = Span::root(full_name!(), SpanContext::random());
-    let _guard = root.set_local_parent();
-
-    databend_common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;
+async fn test_impl_raft_storage() -> anyhow::Result<()> {
+    databend_common_meta_sled_store::openraft::testing::log::Suite::test_all(MetaStoreBuilder {})
+        .await?;
 
     Ok(())
 }

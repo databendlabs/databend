@@ -63,6 +63,10 @@ impl HttpService {
                 get(super::http::v1::ctrl::trigger_snapshot),
             )
             .at(
+                "/v1/ctrl/trigger_transfer_leader",
+                get(super::http::v1::ctrl::trigger_transfer_leader),
+            )
+            .at(
                 "/v1/ctrl/block_write_snapshot",
                 get(super::http::v1::ctrl::block_write_snapshot),
             )
