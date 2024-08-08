@@ -1122,20 +1122,6 @@ impl DropDictionaryWithDropTime {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("GetDictionaryWithDropTime: get {dictionary_name} with drop time")]
-pub struct GetDictionaryWithDropTime {
-    dictionary_name: String,
-}
-
-impl GetDictionaryWithDropTime {
-    pub fn new(dictionary_name: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDictionaryWithDropTime: create {dictionary_name} with drop time")]
 pub struct CreateDictionaryWithDropTime {
     dictionary_name: String,
@@ -1348,9 +1334,6 @@ pub enum AppError {
 
     #[error(transparent)]
     DropDictionaryWithDropTime(#[from] DropDictionaryWithDropTime),
-
-    #[error(transparent)]
-    GetDictionaryWithDropTime(#[from] GetDictionaryWithDropTime),
 
     #[error(transparent)]
     CreateDictionaryWithDropTime(#[from] CreateDictionaryWithDropTime),
@@ -1816,12 +1799,6 @@ impl AppErrorMessage for DropDictionaryWithDropTime {
     }
 }
 
-impl AppErrorMessage for GetDictionaryWithDropTime {
-    fn message(&self) -> String {
-        format!("Get Dictionary '{}' with drop time", self.dictionary_name)
-    }
-}
-
 impl AppErrorMessage for CreateDictionaryWithDropTime {
     fn message(&self) -> String {
         format!(
@@ -1948,9 +1925,6 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
             AppError::DropDictionaryWithDropTime(err) => {
                 ErrorCode::DropDictionaryWithDropTime(err.message())
-            }
-            AppError::GetDictionaryWithDropTime(err) => {
-                ErrorCode::GetDictionaryWithDropTime(err.message())
             }
             AppError::CreateDictionaryWithDropTime(err) => {
                 ErrorCode::CreateDictionaryWithDropTime(err.message())

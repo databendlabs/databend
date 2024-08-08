@@ -4315,7 +4315,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             self,
                             &key_dbid_dict_name,
                             false,
-                            true,
                             &mut condition,
                             &mut if_then,
                         )
@@ -4391,7 +4390,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 self,
                 &key_dbid_dict_name,
                 req.if_exists,
-                true,
                 &mut condition,
                 &mut if_then,
             )
@@ -4742,7 +4740,6 @@ async fn construct_drop_dictionary_txn_operations(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     dbid_dict_name: &DBIdDictionaryName,
     drop_if_exists: bool,
-    if_delete: bool,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(u64, u64), KVAppError> {
@@ -4775,11 +4772,10 @@ async fn construct_drop_dictionary_txn_operations(
         &dictionary_id_key,
         serialize_struct(&dictionary_meta)?,
     ));
-    if if_delete {
-        condition.push(txn_cond_seq(dbid_dict_name, Eq, dictionary_id_seq));
-        // (db_id, dictionary_name) -> index_id
-        if_then.push(txn_op_del(dbid_dict_name));
-    }
+
+    condition.push(txn_cond_seq(dbid_dict_name, Eq, dictionary_id_seq));
+    // (db_id, dictionary_name) -> index_id
+    if_then.push(txn_op_del(dbid_dict_name));
 
     Ok((dictionary_id, dictionary_id_seq))
 }
@@ -5482,6 +5478,11 @@ pub(crate) async fn get_dictionary_or_err(
     name_key: &DBIdDictionaryName,
 ) -> Result<(u64, u64, u64, Option<DictionaryMeta>), KVAppError> {
     let (dictionary_id_seq, dictionary_id) = get_u64_value(kv_api, name_key).await?;
+    if (dictionary_id_seq, dictionary_id) = (0,0) {
+        return Err(KVAppError::AppError(AppError::UnknownDictionary(
+            UnknownDictionary::new(name_key.dictionary_name.clone(), "get_dictionary"),
+        )));
+    }
     let id_key = DictionaryId { dictionary_id };
     let (dictionary_meta_seq, dictionary_meta) = get_pb_value(kv_api, &id_key).await?;
 
