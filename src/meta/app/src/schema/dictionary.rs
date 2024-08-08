@@ -16,7 +16,6 @@ use core::fmt;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -154,11 +153,11 @@ impl DropDictionaryReq {
         };
         DropDictionaryReq {
             if_exists,
-            db_id_dict_name,
+            db_id_dict_name
         }
     }
     pub fn dict_name(&self) -> String {
-        self.db_id_dict_name.dictionary_name
+        self.db_id_dict_name.dictionary_name.clone()
     }
 
     pub fn db_id(&self) -> u64 {
@@ -230,7 +229,7 @@ pub struct ListDictionaryReq {
 }
 
 impl ListDictionaryReq {
-    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq {
+    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq{
         let db_id_dict_name = DBIdDictionaryName {
             db_id,
             dictionary_name: dict_name,
@@ -242,7 +241,7 @@ impl ListDictionaryReq {
     }
 
     pub fn dict_name(&self) -> String {
-        self.db_id_dict_name.dictionary_name
+        self.db_id_dict_name.dictionary_name.clone()
     }
 }
 
