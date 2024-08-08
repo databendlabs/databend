@@ -58,6 +58,7 @@ use databend_common_meta_types::Node;
 use databend_common_meta_types::NodeId;
 use databend_common_meta_types::RaftMetrics;
 use databend_common_meta_types::TypeConfig;
+use databend_enterprise_meta::MetaServiceEnterpriseGate;
 use fastrace::func_name;
 use fastrace::prelude::*;
 use futures::channel::oneshot;
@@ -122,6 +123,7 @@ impl Opened for MetaNode {
 pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
     raft_config: Option<Config>,
+    ee_gate: MetaServiceEnterpriseGate,
     sto: Option<RaftStore>,
     raft_service_endpoint: Option<Endpoint>,
 }
@@ -142,7 +144,9 @@ impl MetaNodeBuilder {
             .take()
             .ok_or_else(|| MetaStartupError::InvalidConfig(String::from("sto is not set")))?;
 
-        let net = NetworkFactory::new(sto.clone());
+        let ee_gate = self.ee_gate.clone();
+
+        let net = NetworkFactory::new(sto.clone(), ee_gate);
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
@@ -208,11 +212,19 @@ impl MetaNodeBuilder {
 
 impl MetaNode {
     pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
+        assert!(config.fake_ee_license);
+        let ee_gate = if config.fake_ee_license {
+            MetaServiceEnterpriseGate::new_testing()
+        } else {
+            MetaServiceEnterpriseGate::new(config.databend_enterprise_license.clone())
+        };
+
         let raft_config = MetaNode::new_raft_config(config);
 
         MetaNodeBuilder {
             node_id: None,
             raft_config: Some(raft_config),
+            ee_gate,
             sto: None,
             raft_service_endpoint: None,
         }

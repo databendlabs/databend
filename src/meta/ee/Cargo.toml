@@ -12,6 +12,11 @@ doctest = false
 test = true
 
 [dependencies]
+anyhow = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-license = { workspace = true }
+jwt-simple = { workspace = true }
+log = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }
