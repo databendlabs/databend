@@ -607,7 +607,9 @@ impl<'a> EvalContext<'a> {
             Some((valids, error)) => {
                 let first_error_row = match selection {
                     None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
-                    Some(_) if valids.len() == 1 => 0,
+                    Some(selection) if valids.len() == 1 => {
+                        selection.get(0).map(|x| *x as usize).unwrap_or(0)
+                    }
                     Some(selection) => {
                         let Some(first_invalid) =
                             selection.iter().find(|idx| !valids.get(**idx as usize))
