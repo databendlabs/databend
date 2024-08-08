@@ -30,19 +30,19 @@ use crate::tenant::ToTenant;
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
-    // The source of the dictionary, which could be a file path, a database, or any other origin, like `MySQL`.
+    // The source of the dictionary, which specifies where the dictionary data comes from, like `MySQL`.
     pub source: String,
-    // A map of options associated with the dictionary,
-    // where each option is a key-value pair.
+    // Specify the configuration related to the data source in the form of key-value pairs.
     // For example, `host='localhost' user='root' password='1234'`
     pub options: BTreeMap<String, String>,
-    // The schema of the table associated with the dictionary,
-    // wrapped in an `Arc` for shared ownership.
+    // Schema refers to an external table that corresponds to the dictionary.
+    // This is typically used to understand the layout and types of data within the dictionary.
     pub schema: Arc<TableSchema>,
     // A list of comments for each field in the dictionary.
+    // For example, if we have `id, address` fields, then field_comments could be `[ 'student's number','home address']`
     pub field_comments: Vec<String>,
     // A list of primary column IDs.
-    // For example, vec![1, 2] indicating the first and second columns are part of the primary key.
+    // For example, vec![1, 2] indicating the first and second columns are the primary keys.
     pub primary_column_ids: Vec<u32>,
     // A general comment string that can be used to provide additional notes or information about the dictionary.
     pub comment: String,
@@ -153,7 +153,7 @@ impl DropDictionaryReq {
         };
         DropDictionaryReq {
             if_exists,
-            db_id_dict_name
+            db_id_dict_name,
         }
     }
     pub fn dict_name(&self) -> String {
@@ -229,7 +229,7 @@ pub struct ListDictionaryReq {
 }
 
 impl ListDictionaryReq {
-    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq{
+    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq {
         let db_id_dict_name = DBIdDictionaryName {
             db_id,
             dictionary_name: dict_name,
