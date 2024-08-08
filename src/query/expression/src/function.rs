@@ -612,7 +612,7 @@ impl<'a> EvalContext<'a> {
                             return Ok(());
                         }
 
-                        selection.get(0).map(|x| *x as usize).unwrap()
+                        selection.first().map(|x| *x as usize).unwrap()
                     }
                     Some(selection) => {
                         let Some(first_invalid) =
