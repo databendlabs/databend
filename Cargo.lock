@@ -4114,6 +4114,7 @@ dependencies = [
  "log",
  "moka",
  "opendal",
+ "parking_lot 0.12.1",
  "reqwest 0.12.4",
  "ring 0.16.20",
  "serde",
