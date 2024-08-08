@@ -24,7 +24,6 @@ use chrono::MappedLocalTime;
 use chrono_tz::Tz;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
-use databend_common_ast::ParseError;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::{error_to_null, Scalar};
