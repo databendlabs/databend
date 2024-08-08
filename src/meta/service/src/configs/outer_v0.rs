@@ -303,6 +303,7 @@ pub struct ConfigViaEnv {
     pub sled_tree_prefix: String,
     pub sled_max_cache_size_mb: u64,
     pub cluster_name: String,
+    pub databend_enterprise_license: Option<String>,
 }
 
 impl Default for ConfigViaEnv {
@@ -356,6 +357,7 @@ impl From<Config> for ConfigViaEnv {
             sled_tree_prefix: cfg.raft_config.sled_tree_prefix,
             sled_max_cache_size_mb: cfg.raft_config.sled_max_cache_size_mb,
             cluster_name: cfg.raft_config.cluster_name,
+            databend_enterprise_license: cfg.raft_config.databend_enterprise_license,
         }
     }
 }
@@ -393,6 +395,7 @@ impl Into<Config> for ConfigViaEnv {
             sled_tree_prefix: self.sled_tree_prefix,
             sled_max_cache_size_mb: self.sled_max_cache_size_mb,
             cluster_name: self.cluster_name,
+            databend_enterprise_license: self.databend_enterprise_license,
         };
         let log_config = LogConfig {
             file: FileLogConfig {
@@ -564,6 +567,10 @@ pub struct RaftConfig {
     /// Max timeout(in milli seconds) when waiting a cluster leader.
     #[clap(long, default_value = "180000")]
     pub wait_leader_timeout: u64,
+
+    /// License token in string to enable enterprise features(including: `cluster`)
+    #[clap(long, value_name = "VALUE")]
+    pub databend_enterprise_license: Option<String>,
 }
 
 // TODO(rotbl): should not be used.
@@ -602,6 +609,8 @@ impl From<RaftConfig> for InnerRaftConfig {
             sled_max_cache_size_mb: x.sled_max_cache_size_mb,
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
+            databend_enterprise_license: x.databend_enterprise_license,
+            fake_ee_license: false,
         }
     }
 }
@@ -635,6 +644,7 @@ impl From<InnerRaftConfig> for RaftConfig {
             sled_max_cache_size_mb: inner.sled_max_cache_size_mb,
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
+            databend_enterprise_license: inner.databend_enterprise_license,
         }
     }
 }
