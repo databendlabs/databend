@@ -29,7 +29,6 @@ use databend_common_meta_app::app_error::CatalogAlreadyExists;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
 use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
-use databend_common_meta_app::app_error::CreateDictionaryWithDropTime;
 use databend_common_meta_app::app_error::CreateIndexWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
@@ -4382,8 +4381,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let mut trials = txn_backoff(None, func_name!());
-
-        let db_id = req.db_id();
         let key_dbid_dict_name = req.db_id_dict_name.clone();
 
         loop {
@@ -4781,15 +4778,6 @@ async fn construct_drop_dictionary_txn_operations(
     let mut dictionary_meta = dictionary_meta.unwrap();
 
     debug!(dictionary_id = dictionary_id, name_key :? =(dbid_dict_name); "drop_dictionary");
-
-    // drop an dictionary with drop time
-    if dictionary_meta.dropped_on.is_some() {
-        return Err(KVAppError::AppError(AppError::DropDictionaryWithDropTime(
-            DropDictionaryWithDropTime::new(dbid_dict_name.dictionary_name.clone()),
-        )));
-    }
-    // update drop on time
-    dictionary_meta.dropped_on = Some(Utc::now());
 
     // Delete dictionary by these operations:
     // del (db_id, dictionary_name) -> dictionary_id

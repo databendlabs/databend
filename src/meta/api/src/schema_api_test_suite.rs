@@ -1394,7 +1394,6 @@ impl SchemaApiTestSuite {
     #[fastrace::trace]
     async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_literal(tenant_name);
 
         let catalog_name = "catalog1";
 
@@ -7387,7 +7386,7 @@ impl SchemaApiTestSuite {
         };
         let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
 
-        let dictionary_meta = |name: &str| DictionaryMeta {
+        let dictionary_meta = DictionaryMeta {
             source: "mysql".to_string(),
             schema: schema(),
             options: options(),
@@ -7415,7 +7414,7 @@ impl SchemaApiTestSuite {
             let req = CreateDictionaryReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(dict_name),
+                dictionary_meta: dictionary_meta.clone(),
             };
             let res = mt.create_dictionary(req).await?;
             dict_id = res.dictionary_id;
@@ -7426,7 +7425,7 @@ impl SchemaApiTestSuite {
             let req = CreateDictionaryReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(dict_name),
+                dictionary_meta: dictionary_meta.clone(),
             };
             let res = mt.create_dictionary(req).await;
             let status = res.err().unwrap();
@@ -7440,7 +7439,7 @@ impl SchemaApiTestSuite {
             let req = CreateDictionaryReq {
                 create_option: CreateOption::CreateIfNotExists,
                 name_ident: name_ident_dict.clone(),
-                dictionary_meta: dictionary_meta(dict_name),
+                dictionary_meta: dictionary_meta.clone(),
             };
             let res = mt.create_dictionary(req).await?;
             assert_eq!(dict_id, res.dictionary_id);
