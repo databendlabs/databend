@@ -14,4 +14,4 @@
 
 mod fuse_block;
 
-pub use fuse_block::FuseBlock;
+pub use fuse_block::FuseBlockFunc;

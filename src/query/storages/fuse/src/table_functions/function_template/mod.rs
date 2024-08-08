@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod common;
 mod template;
 
+pub use common::CommonArgFunction;
+pub use common::SimpleCommonArgsFunc;
 pub use template::SimpleTableFunc;
 pub use template::TableFunctionTemplate;

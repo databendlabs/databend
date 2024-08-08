@@ -94,7 +94,7 @@ pub trait CommonArgFunction {
     ) -> databend_common_exception::Result<DataBlock>;
 }
 
-struct SimpleCommonArgsFunc<T> {
+pub struct SimpleCommonArgsFunc<T> {
     args: CommonArgs,
     _a: PhantomData<T>,
 }
@@ -104,8 +104,7 @@ impl<T> SimpleTableFunc for SimpleCommonArgsFunc<T>
 where T: CommonArgFunction + Send + Sync + 'static
 {
     fn table_args(&self) -> Option<TableArgs> {
-        // Some((&self.args).into())
-        todo!()
+        Some((&self.args).into())
     }
     fn schema(&self) -> TableSchemaRef {
         T::schema()

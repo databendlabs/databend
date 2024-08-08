@@ -14,10 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
@@ -32,7 +29,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -40,37 +36,17 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::common::location_snapshot;
-use crate::table_functions::common::CommonArgs;
-use crate::table_functions::parse_db_tb_opt_args;
-use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::function_template::CommonArgFunction;
+use crate::table_functions::SimpleCommonArgsFunc;
 use crate::FuseTable;
 
-pub struct FuseBlock {
-    // pub limit: Option<usize>,
-    pub args: CommonArgs,
-}
+pub struct FuseBlock;
 
-impl FuseBlock {
-    #[async_backtrace::framed]
-    pub async fn get_blocks(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        tbl: &FuseTable,
-        limit: Option<usize>,
-    ) -> Result<DataBlock> {
-        if let Some(snapshot) = location_snapshot(tbl, &self.args).await? {
-            return self.to_block(ctx, tbl, snapshot, limit).await;
-        } else {
-            Ok(DataBlock::empty_with_schema(Arc::new(
-                Self::schema().into(),
-            )))
-        }
-    }
+pub type FuseBlockFunc = SimpleCommonArgsFunc<FuseBlock>;
 
-    #[async_backtrace::framed]
-    async fn to_block(
-        &self,
+#[async_trait::async_trait]
+impl CommonArgFunction for FuseBlock {
+    async fn apply(
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
         snapshot: Arc<TableSnapshot>,
@@ -171,7 +147,7 @@ impl FuseBlock {
         ))
     }
 
-    pub fn schema() -> Arc<TableSchema> {
+    fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("snapshot_id", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
@@ -192,49 +168,5 @@ impl FuseBlock {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
         ])
-    }
-}
-
-#[async_trait::async_trait]
-impl SimpleTableFunc for FuseBlock {
-    fn table_args(&self) -> Option<TableArgs> {
-        Some((&self.args).into())
-    }
-
-    fn schema(&self) -> TableSchemaRef {
-        Self::schema()
-    }
-
-    async fn apply(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        plan: &DataSourcePlan,
-    ) -> Result<Option<DataBlock>> {
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
-            )
-            .await?;
-        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        Ok(Some(self.get_blocks(ctx, tbl, limit).await?))
-    }
-
-    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
-    where Self: Sized {
-        let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_db_tb_opt_args(&table_args, func_name)?;
-        Ok(Self {
-            args: CommonArgs {
-                arg_database_name,
-                arg_table_name,
-                arg_snapshot_id,
-            },
-        })
     }
 }

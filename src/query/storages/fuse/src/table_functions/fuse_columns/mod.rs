@@ -14,4 +14,4 @@
 
 mod fuse_column;
 
-pub use fuse_column::FuseColumn;
+pub use fuse_column::FuseColumnFunc;
