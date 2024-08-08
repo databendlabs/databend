@@ -46,8 +46,6 @@ use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
-const FUSE_FUNC_BLOCK: &str = "fuse_block";
-
 pub struct FuseBlock {
     // pub limit: Option<usize>,
     pub args: CommonArgs,
@@ -227,10 +225,10 @@ impl SimpleTableFunc for FuseBlock {
         Ok(Some(self.get_blocks(ctx, tbl, limit).await?))
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_db_tb_opt_args(&table_args, FUSE_FUNC_BLOCK)?;
+            parse_db_tb_opt_args(&table_args, func_name)?;
         Ok(Self {
             args: CommonArgs {
                 arg_database_name,

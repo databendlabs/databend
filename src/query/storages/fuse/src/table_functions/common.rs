@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -27,7 +28,6 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::FuseColumn;
 use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
@@ -85,8 +85,8 @@ pub async fn location_snapshot(
 
 #[async_trait::async_trait]
 pub trait CommonArgFunction {
+    fn schema() -> TableSchemaRef;
     async fn apply(
-        &self,
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
         snapshot: Arc<TableSnapshot>,
@@ -94,8 +94,13 @@ pub trait CommonArgFunction {
     ) -> databend_common_exception::Result<DataBlock>;
 }
 
+struct SimpleCommonArgsFunc<T> {
+    args: CommonArgs,
+    _a: PhantomData<T>,
+}
+
 #[async_trait::async_trait]
-impl<T> SimpleTableFunc for T
+impl<T> SimpleTableFunc for SimpleCommonArgsFunc<T>
 where T: CommonArgFunction + Send + Sync + 'static
 {
     fn table_args(&self) -> Option<TableArgs> {
@@ -103,8 +108,7 @@ where T: CommonArgFunction + Send + Sync + 'static
         todo!()
     }
     fn schema(&self) -> TableSchemaRef {
-        // Self::schema()
-        todo!()
+        T::schema()
     }
 
     async fn apply(
@@ -112,21 +116,38 @@ where T: CommonArgFunction + Send + Sync + 'static
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
     ) -> databend_common_exception::Result<Option<DataBlock>> {
-        self.apply(ctx, plan).await
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                self.args.arg_database_name.as_str(),
+                self.args.arg_table_name.as_str(),
+            )
+            .await?;
+        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        if let Some(snapshot) = location_snapshot(tbl, &self.args).await? {
+            return Ok(Some(T::apply(ctx, tbl, snapshot, limit).await?));
+        } else {
+            Ok(Some(DataBlock::empty_with_schema(Arc::new(
+                T::schema().into(),
+            ))))
+        }
     }
 
-    fn create(table_args: TableArgs) -> databend_common_exception::Result<Self>
+    fn create(name: &str, table_args: TableArgs) -> databend_common_exception::Result<Self>
     where Self: Sized {
-        // let (arg_database_name, arg_table_name, arg_snapshot_id) = parse_db_tb_opt_args(
-        //    &table_args,
-        //    crate::table_functions::fuse_columns::fuse_column::FUSE_FUNC_COLUMN,
-        //)?;
-        // Ok(Self {
-        //    args: CommonArgs {
-        //        arg_database_name,
-        //        arg_table_name,
-        //        arg_snapshot_id,
-        //    },
-        //})
+        let (arg_database_name, arg_table_name, arg_snapshot_id) =
+            parse_db_tb_opt_args(&table_args, name)?;
+        Ok(Self {
+            args: CommonArgs {
+                arg_database_name,
+                arg_table_name,
+                arg_snapshot_id,
+            },
+            _a: PhantomData,
+        })
     }
 }

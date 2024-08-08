@@ -46,7 +46,6 @@ use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
-const FUSE_FUNC_COLUMN: &str = "fuse_column";
 pub struct FuseColumn {
     pub args: CommonArgs,
 }
@@ -247,10 +246,10 @@ impl SimpleTableFunc for FuseColumn {
         Ok(Some(self.get_blocks(ctx, tbl, limit).await?))
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_db_tb_opt_args(&table_args, FUSE_FUNC_COLUMN)?;
+            parse_db_tb_opt_args(&table_args, name)?;
         Ok(Self {
             args: CommonArgs {
                 arg_database_name,

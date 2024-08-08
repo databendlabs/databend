@@ -78,7 +78,7 @@ pub trait SimpleTableFunc: Send + Sync + 'static {
         plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>>;
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized;
 }
 
@@ -98,7 +98,7 @@ where T: SimpleTableFunc
         table_id: u64,
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
-        let func = T::create(table_args)?;
+        let func = T::create(table_func_name, table_args)?;
         let schema = func.schema();
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),

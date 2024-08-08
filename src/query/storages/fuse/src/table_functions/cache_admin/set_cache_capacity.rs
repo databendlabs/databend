@@ -85,7 +85,7 @@ impl SimpleTableFunc for SetCacheCapacity {
         ])))
     }
 
-    fn create(table_args: TableArgs) -> Result<Self>
+    fn create(_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
         let args = table_args.expect_all_positioned("", Some(2))?;
         let cache_name = string_value(&args[0])?;
