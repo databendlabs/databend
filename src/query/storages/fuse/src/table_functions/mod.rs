@@ -25,7 +25,7 @@ mod fuse_snapshots;
 mod fuse_statistics;
 mod table_args;
 
-pub use cache_admin::SetCacheCapacity;
+pub use cache_admin::SetCacheCapacityFunc;
 pub use clustering_information::ClusteringInformation;
 pub use clustering_information::ClusteringInformationTable;
 pub use clustering_statistics::ClusteringStatistics;

@@ -37,11 +37,11 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
 use crate::table_functions::function_template::TableMetaFunc;
-use crate::table_functions::SimpleTableMetaFunc;
+use crate::table_functions::TableMetaFuncTemplate;
 use crate::FuseTable;
 
 pub struct FuseColumn;
-pub type FuseColumnFunc = SimpleTableMetaFunc<FuseColumn>;
+pub type FuseColumnFunc = TableMetaFuncTemplate<FuseColumn>;
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseColumn {

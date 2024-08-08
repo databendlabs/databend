@@ -30,13 +30,13 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
-use crate::table_functions::SimpleTableMetaFunc;
 use crate::table_functions::TableMetaFunc;
+use crate::table_functions::TableMetaFuncTemplate;
 use crate::FuseTable;
 
 pub struct FuseSegment;
 
-pub type FuseSegmentFunc = SimpleTableMetaFunc<FuseSegment>;
+pub type FuseSegmentFunc = TableMetaFuncTemplate<FuseSegment>;
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseSegment {

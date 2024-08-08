@@ -14,4 +14,4 @@
 
 mod set_cache_capacity;
 
-pub use set_cache_capacity::SetCacheCapacity;
+pub use set_cache_capacity::SetCacheCapacityFunc;

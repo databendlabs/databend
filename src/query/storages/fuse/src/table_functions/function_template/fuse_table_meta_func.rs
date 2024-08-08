@@ -19,6 +19,7 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -29,7 +30,8 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
 pub struct TableMetaFuncCommonArgs {
@@ -47,6 +49,22 @@ impl From<&TableMetaFuncCommonArgs> for TableArgs {
             args.push(string_literal(arg_snapshot_id));
         }
         TableArgs::new_positioned(args)
+    }
+}
+
+impl TryFrom<(&str, TableArgs)> for TableMetaFuncCommonArgs {
+    type Error = ErrorCode;
+
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (arg_database_name, arg_table_name, arg_snapshot_id) =
+            parse_db_tb_opt_args(&table_args, func_name)?;
+        Ok(Self {
+            arg_database_name,
+            arg_table_name,
+            arg_snapshot_id,
+        })
     }
 }
 
@@ -96,58 +114,44 @@ pub trait TableMetaFunc {
 }
 
 pub struct SimpleTableMetaFunc<T> {
-    args: TableMetaFuncCommonArgs,
     _marker: PhantomData<T>,
 }
 
 #[async_trait::async_trait]
-impl<T> SimpleTableFunc for SimpleTableMetaFunc<T>
-where T: TableMetaFunc + Send + Sync + 'static
+impl<T> SimpleArgFunc for SimpleTableMetaFunc<T>
+where
+    T: TableMetaFunc + Send + Sync + 'static + Sized,
+    Self: Sized,
 {
-    fn table_args(&self) -> Option<TableArgs> {
-        Some((&self.args).into())
-    }
-    fn schema(&self) -> TableSchemaRef {
+    type Args = TableMetaFuncCommonArgs;
+
+    fn schema() -> TableSchemaRef {
         T::schema()
     }
 
     async fn apply(
-        &self,
         ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
         plan: &DataSourcePlan,
-    ) -> Result<Option<DataBlock>> {
+    ) -> Result<DataBlock> {
         let tenant_id = ctx.get_tenant();
         let tbl = ctx
             .get_catalog(CATALOG_DEFAULT)
             .await?
             .get_table(
                 &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
+                args.arg_database_name.as_str(),
+                args.arg_table_name.as_str(),
             )
             .await?;
         let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        if let Some(snapshot) = location_snapshot(tbl, &self.args).await? {
-            return Ok(Some(T::apply(ctx, tbl, snapshot, limit).await?));
+        if let Some(snapshot) = location_snapshot(tbl, &args).await? {
+            return Ok(T::apply(ctx, tbl, snapshot, limit).await?);
         } else {
-            Ok(Some(DataBlock::empty_with_schema(Arc::new(
-                T::schema().into(),
-            ))))
+            Ok(DataBlock::empty_with_schema(Arc::new(T::schema().into())))
         }
     }
-
-    fn create(name: &str, table_args: TableArgs) -> Result<Self>
-    where Self: Sized {
-        let (arg_database_name, arg_table_name, arg_snapshot_id) =
-            parse_db_tb_opt_args(&table_args, name)?;
-        Ok(Self {
-            args: TableMetaFuncCommonArgs {
-                arg_database_name,
-                arg_table_name,
-                arg_snapshot_id,
-            },
-            _marker: PhantomData,
-        })
-    }
 }
+
+pub type TableMetaFuncTemplate<T> = SimpleArgFuncTemplate<SimpleTableMetaFunc<T>>;

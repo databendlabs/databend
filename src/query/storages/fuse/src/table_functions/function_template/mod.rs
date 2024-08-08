@@ -13,9 +13,13 @@
 // limitations under the License.
 
 mod fuse_table_meta_func;
+mod simple_arg_func;
 mod simple_func_template;
 
 pub use fuse_table_meta_func::SimpleTableMetaFunc;
 pub use fuse_table_meta_func::TableMetaFunc;
+pub use fuse_table_meta_func::TableMetaFuncTemplate;
+pub use simple_arg_func::SimpleArgFunc;
+pub use simple_arg_func::SimpleArgFuncTemplate;
 pub use simple_func_template::SimpleTableFunc;
 pub use simple_func_template::TableFunctionTemplate;

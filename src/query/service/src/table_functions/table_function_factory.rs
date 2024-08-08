@@ -24,7 +24,7 @@ use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingTable;
-use databend_common_storages_fuse::table_functions::SetCacheCapacity;
+use databend_common_storages_fuse::table_functions::SetCacheCapacityFunc;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
@@ -139,7 +139,7 @@ impl TableFunctionFactory {
             "set_cache_capacity".to_string(),
             (
                 next_id(),
-                Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+                Arc::new(TableFunctionTemplate::<SetCacheCapacityFunc>::create),
             ),
         );
 
@@ -150,6 +150,7 @@ impl TableFunctionFactory {
                 Arc::new(TableFunctionTemplate::<FuseSegmentFunc>::create),
             ),
         );
+
         creators.insert(
             "fuse_block".to_string(),
             (
@@ -164,6 +165,7 @@ impl TableFunctionFactory {
                 Arc::new(TableFunctionTemplate::<FuseColumnFunc>::create),
             ),
         );
+
         creators.insert(
             "fuse_statistic".to_string(),
             (next_id(), Arc::new(FuseStatisticTable::create)),
