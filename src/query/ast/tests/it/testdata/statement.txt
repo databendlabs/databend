@@ -15854,10 +15854,10 @@ SetStmt {
 ---------- Input ----------
 UNSET max_threads;
 ---------- Output ---------
-UNSET max_threads
+UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsGlobal,
+    unset_type: SettingsSession,
     identifiers: [
         Identifier {
             span: Some(
@@ -15894,10 +15894,10 @@ UnSetStmt {
 ---------- Input ----------
 UNSET (max_threads, sql_dialect);
 ---------- Output ---------
-UNSET (max_threads, sql_dialect)
+UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsGlobal,
+    unset_type: SettingsSession,
     identifiers: [
         Identifier {
             span: Some(
