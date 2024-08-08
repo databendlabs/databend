@@ -7447,7 +7447,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- get dictionary");
             let req = GetDictionaryReq{
-                name_ident: name_ident_dict,
+                name_ident: name_ident_dict.clone(),
             };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
