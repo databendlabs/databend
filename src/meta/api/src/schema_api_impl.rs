@@ -5478,7 +5478,7 @@ pub(crate) async fn get_dictionary_or_err(
     name_key: &DBIdDictionaryName,
 ) -> Result<(u64, u64, u64, Option<DictionaryMeta>), KVAppError> {
     let (dictionary_id_seq, dictionary_id) = get_u64_value(kv_api, name_key).await?;
-    if let (dictionary_id_seq, dictionary_id) = (0,0) {
+    if dictionary_id == 0 && dictionary_id_seq == 0 {
         return Err(KVAppError::AppError(AppError::UnknownDictionary(
             UnknownDictionary::new(name_key.dictionary_name.clone(), "get_dictionary"),
         )));
