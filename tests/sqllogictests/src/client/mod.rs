@@ -80,6 +80,12 @@ impl Client {
             Client::Http(_) => "http",
         }
     }
+
+    pub async fn set_table_lock_expire_secs(&mut self, secs: u64) -> Result<()> {
+        let sql = format!("set global table_lock_expire_secs = {}", secs);
+        self.query(sql.as_str()).await?;
+        Ok(())
+    }
 }
 
 fn replace_rand_values(input: &str) -> Cow<'_, str> {

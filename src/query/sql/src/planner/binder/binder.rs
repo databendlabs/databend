@@ -185,9 +185,9 @@ impl<'a> Binder {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze { query } => {
+            Statement::ExplainAnalyze {partial, query } => {
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {

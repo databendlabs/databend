@@ -14,13 +14,11 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::hash::BuildHasher;
 use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_cache::Count;
 use databend_common_cache::CountableMeter;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_metrics::cache::*;
 
 #[derive(Copy, Clone, Debug)]
@@ -39,10 +37,9 @@ impl Display for Unit {
 }
 
 // The cache accessor, crate users usually working on this interface while manipulating caches
-pub trait CacheAccessor<K, V, S = DefaultHashBuilder, M = Count>
+pub trait CacheAccessor<K, V, M = Count>
 where
     K: Eq + Hash,
-    S: BuildHasher,
     M: CountableMeter<K, Arc<V>>,
 {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>>;
@@ -92,15 +89,14 @@ impl<C> NamedCache<C> {
     }
 }
 
-pub trait CacheAccessorExt<K, V, S, M> {
+pub trait CacheAccessorExt<K, V, M> {
     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>>;
 }
 
-impl<K, V, S, M, C> CacheAccessorExt<K, V, S, M> for NamedCache<C>
+impl<K, V, M, C> CacheAccessorExt<K, V, M> for NamedCache<C>
 where
-    C: CacheAccessor<K, V, S, M>,
+    C: CacheAccessor<K, V, M>,
     K: Eq + Hash,
-    S: BuildHasher,
     M: CountableMeter<K, Arc<V>>,
 {
     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>> {
@@ -112,11 +108,10 @@ where
     }
 }
 
-impl<K, V, S, M, C> CacheAccessorExt<K, V, S, M> for Option<NamedCache<C>>
+impl<K, V, M, C> CacheAccessorExt<K, V, M> for Option<NamedCache<C>>
 where
-    C: CacheAccessor<K, V, S, M>,
+    C: CacheAccessor<K, V, M>,
     K: Eq + Hash,
-    S: BuildHasher,
     M: CountableMeter<K, Arc<V>>,
 {
     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<V>> {
@@ -124,11 +119,10 @@ where
     }
 }
 
-impl<K, V, S, M, C> CacheAccessor<K, V, S, M> for NamedCache<C>
+impl<K, V, M, C> CacheAccessor<K, V, M> for NamedCache<C>
 where
-    C: CacheAccessor<K, V, S, M>,
+    C: CacheAccessor<K, V, M>,
     K: Eq + Hash,
-    S: BuildHasher,
     M: CountableMeter<K, Arc<V>>,
 {
     fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {

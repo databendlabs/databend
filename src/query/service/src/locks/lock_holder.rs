@@ -56,7 +56,7 @@ impl LockHolder {
         revision: u64,
         expire_secs: u64,
     ) -> Result<()> {
-        let sleep_range = (expire_secs * 1000 / 3)..=(expire_secs * 1000 / 2);
+        let sleep_range = (expire_secs * 1000 / 3)..=(expire_secs * 1000 * 2 / 3);
 
         let tenant_name = lock.tenant_name();
         let tenant = Tenant::new_or_err(tenant_name, func_name!())?;

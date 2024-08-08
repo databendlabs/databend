@@ -41,6 +41,7 @@ use crate::aggregates::aggregate_array_agg_function_desc;
 use crate::aggregates::aggregate_array_moving_avg_function_desc;
 use crate::aggregates::aggregate_array_moving_sum_function_desc;
 use crate::aggregates::aggregate_histogram_function_desc;
+use crate::aggregates::aggregate_json_array_agg_function_desc;
 use crate::aggregates::aggregate_kurtosis_function_desc;
 use crate::aggregates::aggregate_median_function_desc;
 use crate::aggregates::aggregate_median_tdigest_function_desc;
@@ -109,6 +110,7 @@ impl Aggregators {
             "group_array_moving_sum",
             aggregate_array_moving_sum_function_desc(),
         );
+        factory.register("json_array_agg", aggregate_json_array_agg_function_desc());
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());

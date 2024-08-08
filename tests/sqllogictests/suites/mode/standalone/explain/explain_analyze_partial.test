@@ -1,0 +1,112 @@
+statement ok
+create or replace table t2 as select number as b from numbers(10);
+
+statement ok
+create or replace table t1 as select number as a from numbers(10);
+
+query T
+explain analyze partial select * from t1 join t2 on t1.a = t2.b;
+----
+HashJoin
+├── estimated rows: 10.00
+├── output rows: 10
+├── TableScan
+│   ├── table: default.default.t2
+│   ├── estimated rows: 10.00
+│   └── output rows: 10
+└── TableScan
+    ├── table: default.default.t1
+    ├── estimated rows: 10.00
+    └── output rows: 10
+
+query T
+explain analyze partial select * from t1 where t1.a > 1;
+----
+Filter
+├── filters: [t1.a (#0) > 1]
+├── estimated rows: 8.00
+├── output rows: 8
+└── TableScan
+    ├── table: default.default.t1
+    ├── estimated rows: 10.00
+    └── output rows: 10
+
+query T
+explain analyze partial select * from t1 join t2 on t1.a = t2.b  union all select * from t2 join t1 on t1.a = t2.b;
+----
+UnionAll
+├── Left
+│   └── HashJoin
+│       ├── estimated rows: 10.00
+│       ├── output rows: 10
+│       ├── TableScan
+│       │   ├── table: default.default.t2
+│       │   ├── estimated rows: 10.00
+│       │   └── output rows: 10
+│       └── TableScan
+│           ├── table: default.default.t1
+│           ├── estimated rows: 10.00
+│           └── output rows: 10
+└── Right
+    └── HashJoin
+        ├── estimated rows: 10.00
+        ├── output rows: 10
+        ├── TableScan
+        │   ├── table: default.default.t1
+        │   ├── estimated rows: 10.00
+        │   └── output rows: 10
+        └── TableScan
+            ├── table: default.default.t2
+            ├── estimated rows: 10.00
+            └── output rows: 10
+
+
+query T
+explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 1;
+----
+HashJoin
+├── estimated rows: 8.00
+├── output rows: 8
+├── Filter
+│   ├── filters: [t2.b (#1) > 1]
+│   ├── estimated rows: 8.00
+│   ├── output rows: 8
+│   └── TableScan
+│       ├── table: default.default.t2
+│       ├── estimated rows: 10.00
+│       └── output rows: 10
+└── Filter
+    ├── filters: [t1.a (#0) > 1]
+    ├── estimated rows: 8.00
+    ├── output rows: 8
+    └── TableScan
+        ├── table: default.default.t1
+        ├── estimated rows: 10.00
+        └── output rows: 10
+
+
+# if the output rows is zero, it will be hidden.
+query T
+explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 10;
+----
+HashJoin
+├── estimated rows: 0.00
+├── Filter
+│   ├── filters: [t2.b (#1) > 10]
+│   ├── estimated rows: 0.00
+│   └── TableScan
+│       ├── table: default.default.t2
+│       └── estimated rows: 10.00
+└── Filter
+    ├── filters: [t1.a (#0) > 10]
+    ├── estimated rows: 0.00
+    └── TableScan
+        ├── table: default.default.t1
+        └── estimated rows: 10.00
+
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;

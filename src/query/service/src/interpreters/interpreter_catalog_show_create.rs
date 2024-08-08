@@ -79,6 +79,13 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                     format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
                 }
             }),
+            CatalogOption::Share(op) => (
+                String::from("share"),
+                format!(
+                    "SHARE\n{}.{}\nUSING\n{}",
+                    op.provider, op.share_name, op.share_endpoint,
+                ),
+            ),
         };
 
         let block = DataBlock::new(
