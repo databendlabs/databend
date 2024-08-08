@@ -290,7 +290,7 @@ impl<'a> Evaluator<'a> {
                                 expr,
                                 &self.data_block.domains().into_iter().enumerate().collect(),
                                 self.func_ctx,
-                                self.fn_registry,
+                                self.fn_registry
                             )
                             .1,
                             None,
@@ -846,22 +846,13 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let num_rows = match validity.as_ref() {
-            Some(validity) => validity.len(),
-            None => match value {
-                Value::Scalar(_) => {
-                    let mut options = EvaluateOptions::new(None);
-                    let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], 1);
-                    let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
-                    return Ok(Some(evaluator.partial_run(
-                        &cast_expr,
-                        validity,
-                        &mut options,
-                    )?));
-                }
+        let num_rows = validity
+            .as_ref()
+            .map(|validity| validity.len())
+            .unwrap_or_else(|| match &value {
+                Value::Scalar(_) => 1,
                 Value::Column(col) => col.len(),
-            },
-        };
+            });
 
         let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
@@ -1455,7 +1446,7 @@ impl<'a> Evaluator<'a> {
                         expr,
                         &self.data_block.domains().into_iter().enumerate().collect(),
                         self.func_ctx,
-                        self.fn_registry,
+                        self.fn_registry
                     )
                     .1,
                     None,

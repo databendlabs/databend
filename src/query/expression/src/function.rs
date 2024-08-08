@@ -605,23 +605,18 @@ impl<'a> EvalContext<'a> {
         }
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = if let Some(selection) = selection {
-                    if let Some(first_invalid) =
-                        selection.iter().find(|idx| !valids.get(**idx as usize))
-                    {
+                let first_error_row = match selection {
+                    None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+                    Some(_) if valids.len() == 1 => 0,
+                    Some(selection) => {
+                        let Some(first_invalid) =
+                            selection.iter().find(|idx| !valids.get(**idx as usize))
+                        else {
+                            return Ok(());
+                        };
+
                         *first_invalid as usize
-                    } else {
-                        return Ok(());
                     }
-                } else {
-                    valids
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, valid)| !valid)
-                        .take(1)
-                        .next()
-                        .unwrap()
-                        .0
                 };
 
                 let args = args
