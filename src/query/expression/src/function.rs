@@ -608,7 +608,11 @@ impl<'a> EvalContext<'a> {
                 let first_error_row = match selection {
                     None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
                     Some(selection) if valids.len() == 1 => {
-                        selection.get(0).map(|x| *x as usize).unwrap_or(0)
+                        if valids.get(0) || selection.is_empty() {
+                            return Ok(());
+                        }
+
+                        selection.get(0).map(|x| *x as usize).unwrap()
                     }
                     Some(selection) => {
                         let Some(first_invalid) =
