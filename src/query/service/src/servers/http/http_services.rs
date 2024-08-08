@@ -129,7 +129,7 @@ impl HttpHandler {
     fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
         let cfg = OpensslTlsConfig::new()
             .cert_from_file(config.query.http_handler_tls_server_cert.as_str())
-            .key_from_file(&config.query.http_handler_tls_server_key.as_str());
+            .key_from_file(config.query.http_handler_tls_server_key.as_str());
 
         // if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
         //     cfg = cfg.client_auth_required(std::fs::read(
