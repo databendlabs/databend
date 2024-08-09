@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use jwt_simple::prelude::Duration;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -33,12 +34,11 @@ pub struct SessionClaim {
     pub expire_at_in_secs: u64,
 }
 
-pub fn unix_ts() -> u64 {
+pub fn unix_ts() -> Duration {
     let unix_ts_now_sys = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("The system clock is not properly set");
-    let unix_ts_now = Duration::from(unix_ts_now_sys);
-    unix_ts_now.as_secs()
+    Duration::from(unix_ts_now_sys)
 }
 
 impl SessionClaim {

@@ -27,6 +27,7 @@ use databend_common_users::UserApiProvider;
 use parking_lot::RwLock;
 use sha2::Digest;
 use sha2::Sha256;
+use time::Duration;
 
 use crate::servers::http::v1::session::token::unix_ts;
 use crate::servers::http::v1::SessionClaim;
@@ -34,18 +35,18 @@ use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
 
 /// target TTL
-pub const REFRESH_TOKEN_VALIDITY_IN_SECS: u64 = 3600 * 4; // 4 hours
-pub const SESSION_TOKEN_VALIDITY_IN_SECS: u64 = 3600; // 1 hour
+pub const REFRESH_TOKEN_VALIDITY: Duration = Duration::hours(4);
+pub const SESSION_TOKEN_VALIDITY: Duration = Duration::hours(1);
 
 /// to cove network latency, retry and time skew
-const TOKEN_TTL_DELAY: u64 = 300;
+const TOKEN_TTL_DELAY: Duration = Duration::seconds(300);
 /// in case of client retry, shorted the ttl instead of drop at once
 /// only required for refresh token.
-const TOKEN_DROP_DELAY: u64 = 90;
+const TOKEN_DROP_DELAY: Duration = Duration::seconds(90);
 
 /// by adding SESSION_TOKEN_VALIDITY_IN_SECS, avoid touch refresh token for each request.
 /// note the ttl is not accurate, the TTL is in fact longer (by 0 to 1 hour) then expected.
-const REFRESH_TOKEN_TTL: u64 = REFRESH_TOKEN_VALIDITY_IN_SECS + SESSION_TOKEN_VALIDITY_IN_SECS;
+const REFRESH_TOKEN_TTL: Duration = REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY;
 
 pub struct TokenPair {
     pub refresh: String,
@@ -111,7 +112,7 @@ impl TokenManager {
             auth_role: auth_role.clone(),
             session_id: client_session_id.to_string(),
             nonce: uuid::Uuid::new_v4().to_string(),
-            expire_at_in_secs: now + REFRESH_TOKEN_TTL,
+            expire_at_in_secs: (now + REFRESH_TOKEN_TTL).whole_seconds() as u64,
         };
         let refresh_token = if let Some(old) = &old_token_pair {
             old.refresh.clone()
@@ -129,7 +130,8 @@ impl TokenManager {
                 &tenant,
                 &refresh_token_hash,
                 token_info.clone(),
-                REFRESH_TOKEN_VALIDITY_IN_SECS + SESSION_TOKEN_VALIDITY_IN_SECS + TOKEN_TTL_DELAY,
+                (REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds()
+                    as u64,
                 false,
             )
             .await?;
@@ -139,7 +141,7 @@ impl TokenManager {
                     &tenant,
                     &old.refresh,
                     token_info,
-                    REFRESH_TOKEN_VALIDITY_IN_SECS + TOKEN_DROP_DELAY,
+                    (REFRESH_TOKEN_VALIDITY + TOKEN_DROP_DELAY).whole_seconds() as u64,
                     true,
                 )
                 .await?;
@@ -148,7 +150,7 @@ impl TokenManager {
             .write()
             .put(refresh_token_hash.clone(), ());
 
-        claim.expire_at_in_secs = now + SESSION_TOKEN_VALIDITY_IN_SECS;
+        claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).whole_seconds() as u64;
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
         let session_token = claim.encode();
@@ -162,7 +164,7 @@ impl TokenManager {
                 &tenant,
                 &session_token_hash,
                 token_info,
-                REFRESH_TOKEN_VALIDITY_IN_SECS + TOKEN_TTL_DELAY,
+                (REFRESH_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds() as u64,
                 false,
             )
             .await?;
@@ -180,7 +182,7 @@ impl TokenManager {
         token_type: TokenType,
     ) -> Result<SessionClaim> {
         let claim = SessionClaim::decode(token)?;
-        let now = unix_ts();
+        let now = unix_ts().as_secs();
         if now > claim.expire_at_in_secs {
             return match token_type {
                 TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired("refresh token expired")),
