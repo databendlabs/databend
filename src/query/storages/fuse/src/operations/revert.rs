@@ -63,21 +63,17 @@ impl FuseTable {
         // 4. let's roll
         let reply = catalog.update_single_table_meta(req, table_info).await;
         if reply.is_ok() {
-            if ctx
-                .get_settings()
-                .get_enable_last_snapshot_location_hint()?
-            {
-                // try keeping the snapshot hit
-                let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
+            // try keeping the snapshot hit
+            let snapshot_location = table_reverting_to.snapshot_loc().await?.ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
-                Self::write_last_snapshot_hint(
-                    &table_reverting_to.operator,
-                    &table_reverting_to.meta_location_generator,
-                    snapshot_location,
-                )
-                .await;
-            }
+            Self::write_last_snapshot_hint(
+                ctx.as_ref(),
+                &table_reverting_to.operator,
+                &table_reverting_to.meta_location_generator,
+                &snapshot_location,
+            )
+            .await;
         };
 
         reply.map(|_| ())

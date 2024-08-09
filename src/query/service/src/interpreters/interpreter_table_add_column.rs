@@ -187,23 +187,18 @@ pub(crate) async fn generate_new_snapshot(
                 .write(&new_snapshot_location, data)
                 .await?;
 
-            if ctx
-                .get_settings()
-                .get_enable_last_snapshot_location_hint()?
-            {
-                // write down hint
-                FuseTable::write_last_snapshot_hint(
-                    fuse_table.get_operator_ref(),
-                    fuse_table.meta_location_generator(),
-                    new_snapshot_location.clone(),
-                )
-                .await;
-            }
+            // write down hint
+            FuseTable::write_last_snapshot_hint(
+                ctx,
+                fuse_table.get_operator_ref(),
+                fuse_table.meta_location_generator(),
+                &new_snapshot_location,
+            )
+            .await;
 
-            new_table_meta.options.insert(
-                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
-                new_snapshot_location.clone(),
-            );
+            new_table_meta
+                .options
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
         } else {
             info!("Snapshot not found, no need to generate new snapshot");
         }

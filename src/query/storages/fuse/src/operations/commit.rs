@@ -244,12 +244,7 @@ impl FuseTable {
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-        if ctx
-            .get_settings()
-            .get_enable_last_snapshot_location_hint()?
-        {
-            Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
-        }
+        Self::write_last_snapshot_hint(ctx, operator, location_generator, &snapshot_location).await;
 
         Ok(())
     }
@@ -257,10 +252,19 @@ impl FuseTable {
     // Left a hint file which indicates the location of the latest snapshot
     #[async_backtrace::framed]
     pub async fn write_last_snapshot_hint(
+        ctx: &dyn TableContext,
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
-        last_snapshot_path: String,
+        last_snapshot_path: &str,
     ) {
+        if let Ok(false) = ctx.get_settings().get_enable_last_snapshot_location_hint() {
+            info!(
+                "Write last_snapshot_location_hint disabled. Snapshot {}",
+                last_snapshot_path
+            );
+            return;
+        }
+
         // Just try our best to write down the hint file of last snapshot
         // - will retry in the case of temporary failure
         // but
