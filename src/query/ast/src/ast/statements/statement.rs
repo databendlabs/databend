@@ -546,7 +546,7 @@ impl Display for Statement {
                 write!(f, "UNSET ")?;
                 match *unset_type {
                     SetType::SettingsSession => write!(f, "SESSION ")?,
-                    SetType::SettingsGlobal => {}
+                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
                     SetType::Variable => write!(f, "VARIABLE ")?,
                 }
                 if identifiers.len() == 1 {
