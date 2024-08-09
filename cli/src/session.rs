@@ -21,6 +21,7 @@ use anyhow::anyhow;
 use anyhow::Result;
 use async_recursion::async_recursion;
 use chrono::NaiveDateTime;
+use databend_common_ast::parser::all_reserved_keywords;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
 use databend_driver::ServerStats;
@@ -41,7 +42,7 @@ use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay};
 use crate::helper::CliHelper;
 use crate::VERSION;
 
-static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions limit 10000";
+static PROMPT_SQL: &str = "select name, 'f' as type from system.functions union all select name, 'd' as type from system.databases union all select name, 't' as type from system.tables union all select name, 'c' as type from system.columns limit 10000";
 
 static VERSION_SHORT: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
@@ -70,7 +71,7 @@ pub struct Session {
     settings: Settings,
     query: String,
 
-    keywords: Arc<Vec<String>>,
+    keywords: Option<Arc<sled::Db>>,
 }
 
 impl Session {
@@ -78,7 +79,8 @@ impl Session {
         let client = Client::new(dsn).with_name(format!("bendsql/{}", VERSION_SHORT.as_str()));
         let conn = client.get_conn().await?;
         let info = conn.info().await;
-        let mut keywords = Vec::with_capacity(1024);
+        let mut keywords: Option<Arc<sled::Db>> = None;
+
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
             match info.warehouse {
@@ -97,22 +99,44 @@ impl Session {
             }
             let version = conn.version().await.unwrap_or_default();
             println!("Connected to {}", version);
-            println!();
 
+            let config = sled::Config::new().temporary(true);
+            let db = config.open()?;
+            // ast keywords
+            {
+                let keywords = all_reserved_keywords();
+                let mut batch = sled::Batch::default();
+                for word in keywords {
+                    batch.insert(word.to_ascii_lowercase().as_str(), "k")
+                }
+                db.apply_batch(batch)?;
+            }
+            // server keywords
             if !settings.no_auto_complete {
                 let rows = conn.query_iter(PROMPT_SQL).await;
                 match rows {
                     Ok(mut rows) => {
+                        let mut count = 0;
+                        let mut batch = sled::Batch::default();
                         while let Some(Ok(row)) = rows.next().await {
-                            let name: (String,) = row.try_into().unwrap();
-                            keywords.push(name.0);
+                            let (w, t): (String, String) = row.try_into().unwrap();
+                            batch.insert(w.as_str(), t.as_str());
+                            count += 1;
+                            if count % 1000 == 0 {
+                                db.apply_batch(batch)?;
+                                batch = sled::Batch::default();
+                            }
                         }
+                        db.apply_batch(batch)?;
+                        println!("Loaded {} auto complete keywords from server.", db.len());
                     }
                     Err(e) => {
-                        eprintln!("loading auto complete keywords failed: {}", e);
+                        eprintln!("WARN: loading auto complete keywords failed: {}", e);
                     }
                 }
             }
+            keywords = Some(Arc::new(db));
+            println!();
         }
 
         Ok(Self {
@@ -121,7 +145,7 @@ impl Session {
             is_repl,
             settings,
             query: String::new(),
-            keywords: Arc::new(keywords),
+            keywords,
         })
     }
 
@@ -232,12 +256,12 @@ impl Session {
 
     pub async fn handle_repl(&mut self) {
         let config = Builder::new()
-            .completion_prompt_limit(5)
-            .completion_type(CompletionType::Circular)
+            .completion_prompt_limit(10)
+            .completion_type(CompletionType::List)
             .build();
         let mut rl = Editor::<CliHelper, DefaultHistory>::with_config(config).unwrap();
 
-        rl.set_helper(Some(CliHelper::with_keywords(self.keywords.clone())));
+        rl.set_helper(Some(CliHelper::new(self.keywords.clone())));
         rl.load_history(&get_history_path()).ok();
 
         'F: loop {

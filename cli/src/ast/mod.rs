@@ -14,7 +14,7 @@
 
 use databend_common_ast::{
     ast::pretty_statement,
-    parser::{parse_sql, Dialect},
+    parser::{parse_sql, token::TokenKind, tokenize_sql, Dialect},
 };
 
 use crate::session::QueryKind;
@@ -30,4 +30,30 @@ pub fn format_query(query: &str) -> String {
         }
     }
     query.to_string()
+}
+
+pub fn highlight_query(line: &str) -> String {
+    let tokens = tokenize_sql(line);
+    let mut line = line.to_owned();
+
+    if let Ok(tokens) = tokens {
+        for token in tokens.iter().rev() {
+            if TokenKind::is_keyword(&token.kind)
+                || TokenKind::is_reserved_ident(&token.kind, false)
+                || TokenKind::is_reserved_function_name(&token.kind)
+            {
+                line.replace_range(
+                    std::ops::Range::from(token.span),
+                    &format!("\x1b[1;32m{}\x1b[0m", token.text()),
+                );
+            } else if TokenKind::is_literal(&token.kind) {
+                line.replace_range(
+                    std::ops::Range::from(token.span),
+                    &format!("\x1b[1;33m{}\x1b[0m", token.text()),
+                );
+            }
+        }
+    }
+
+    line
 }

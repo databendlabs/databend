@@ -19,16 +19,14 @@ use anyhow::{anyhow, Result};
 use comfy_table::{Cell, CellAlignment, Table};
 use databend_driver::{Row, RowStatsIterator, RowWithStats, SchemaRef, ServerStats};
 use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
-use rustyline::highlight::Highlighter;
 use terminal_size::{terminal_size, Width};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::{
-    ast::format_query,
+    ast::{format_query, highlight_query},
     config::{ExpandMode, OutputFormat, OutputQuoteStyle, Settings},
-    helper::CliHelper,
     session::QueryKind,
 };
 
@@ -93,7 +91,7 @@ impl<'a> FormatDisplay<'a> {
     async fn display_table(&mut self) -> Result<()> {
         if self.settings.display_pretty_sql {
             let format_sql = format_query(self.query);
-            let format_sql = CliHelper::new().highlight(&format_sql, format_sql.len());
+            let format_sql = highlight_query(&format_sql);
             println!("\n{}\n", format_sql);
         }
         let mut rows = Vec::new();

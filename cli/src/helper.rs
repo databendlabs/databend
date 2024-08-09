@@ -15,9 +15,6 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use databend_common_ast::parser::all_reserved_keywords;
-use databend_common_ast::parser::token::TokenKind;
-use databend_common_ast::parser::tokenize_sql;
 use rustyline::completion::Completer;
 use rustyline::completion::FilenameCompleter;
 use rustyline::completion::Pair;
@@ -31,20 +28,15 @@ use rustyline::Context;
 use rustyline::Helper;
 use rustyline::Result;
 
+use crate::ast::highlight_query;
+
 pub struct CliHelper {
     completer: FilenameCompleter,
-    keywords: Arc<Vec<String>>,
+    keywords: Option<Arc<sled::Db>>,
 }
 
 impl CliHelper {
-    pub fn new() -> Self {
-        Self {
-            completer: FilenameCompleter::new(),
-            keywords: Arc::new(Vec::new()),
-        }
-    }
-
-    pub fn with_keywords(keywords: Arc<Vec<String>>) -> Self {
+    pub fn new(keywords: Option<Arc<sled::Db>>) -> Self {
         Self {
             completer: FilenameCompleter::new(),
             keywords,
@@ -54,28 +46,7 @@ impl CliHelper {
 
 impl Highlighter for CliHelper {
     fn highlight<'l>(&self, line: &'l str, _pos: usize) -> Cow<'l, str> {
-        let tokens = tokenize_sql(line);
-        let mut line = line.to_owned();
-
-        if let Ok(tokens) = tokens {
-            for token in tokens.iter().rev() {
-                if TokenKind::is_keyword(&token.kind)
-                    || TokenKind::is_reserved_ident(&token.kind, false)
-                    || TokenKind::is_reserved_function_name(&token.kind)
-                {
-                    line.replace_range(
-                        std::ops::Range::from(token.span),
-                        &format!("\x1b[1;32m{}\x1b[0m", token.text()),
-                    );
-                } else if TokenKind::is_literal(&token.kind) {
-                    line.replace_range(
-                        std::ops::Range::from(token.span),
-                        &format!("\x1b[1;33m{}\x1b[0m", token.text()),
-                    );
-                }
-            }
-        }
-
+        let line = highlight_query(line);
         Cow::Owned(line)
     }
 
@@ -118,12 +89,16 @@ impl Hinter for CliHelper {
         if last_word.is_empty() {
             return None;
         }
-
-        let (_, res) = KeyWordCompleter::complete(line, pos, &self.keywords);
-        if !res.is_empty() {
-            Some(res[0].replacement[last_word.len()..].to_owned())
-        } else {
-            None
+        match self.keywords {
+            Some(ref keywords) => {
+                let (_, res) = KeyWordCompleter::complete(line, pos, keywords);
+                if !res.is_empty() {
+                    Some(res[0].replacement[last_word.len()..].to_owned())
+                } else {
+                    None
+                }
+            }
+            None => None,
         }
     }
 }
@@ -137,9 +112,11 @@ impl Completer for CliHelper {
         pos: usize,
         ctx: &Context<'_>,
     ) -> std::result::Result<(usize, Vec<Pair>), ReadlineError> {
-        let keyword_candidates = KeyWordCompleter::complete(line, pos, self.keywords.as_ref());
-        if !keyword_candidates.1.is_empty() {
-            return Ok(keyword_candidates);
+        if let Some(ref keywords) = self.keywords {
+            let keyword_candidates = KeyWordCompleter::complete(line, pos, keywords);
+            if !keyword_candidates.1.is_empty() {
+                return Ok(keyword_candidates);
+            }
         }
         self.completer.complete(line, pos, ctx)
     }
@@ -161,35 +138,24 @@ impl Helper for CliHelper {}
 struct KeyWordCompleter {}
 
 impl KeyWordCompleter {
-    fn complete(s: &str, pos: usize, keywords: &[String]) -> (usize, Vec<Pair>) {
+    fn complete(s: &str, pos: usize, db: &sled::Db) -> (usize, Vec<Pair>) {
         let hint = s
             .split(|p: char| p.is_whitespace() || p == '.')
             .last()
-            .unwrap_or(s);
-        let all_keywords = all_reserved_keywords();
+            .unwrap_or(s)
+            .to_ascii_lowercase();
 
-        let mut results: Vec<Pair> = all_keywords
-            .iter()
-            .filter(|keyword| keyword.starts_with(&hint.to_ascii_lowercase()))
-            .map(|keyword| Pair {
-                display: keyword.to_string(),
-                replacement: keyword.to_string(),
-            })
-            .collect();
-
-        results.extend(
-            keywords
-                .iter()
-                .filter(|keyword| {
-                    keyword
-                        .to_lowercase()
-                        .starts_with(&hint.to_ascii_lowercase())
-                })
-                .map(|keyword| Pair {
-                    display: keyword.to_string(),
-                    replacement: keyword.to_string(),
-                }),
-        );
+        let r = db.scan_prefix(&hint);
+        let mut results = Vec::new();
+        for line in r {
+            let (w, t) = line.unwrap();
+            let word = String::from_utf8_lossy(&w);
+            let category = String::from_utf8_lossy(&t);
+            results.push(Pair {
+                display: format!("{}({})", word, category),
+                replacement: word.to_string(),
+            });
+        }
 
         if pos >= hint.len() {
             (pos - hint.len(), results)
