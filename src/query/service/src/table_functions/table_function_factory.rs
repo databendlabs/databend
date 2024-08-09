@@ -23,8 +23,8 @@ use databend_common_storages_fuse::table_functions::ClusteringStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseAmendTable;
 use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
-use databend_common_storages_fuse::table_functions::FuseEncodingTable;
-use databend_common_storages_fuse::table_functions::SetCacheCapacityFunc;
+use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
+use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use itertools::Itertools;
@@ -39,7 +39,7 @@ use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
-use crate::storages::fuse::table_functions::FuseStatisticTable;
+use crate::storages::fuse::table_functions::SetCacheCapacityFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
@@ -158,6 +158,7 @@ impl TableFunctionFactory {
                 Arc::new(TableFunctionTemplate::<FuseBlockFunc>::create),
             ),
         );
+
         creators.insert(
             "fuse_column".to_string(),
             (
@@ -168,7 +169,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_statistic".to_string(),
-            (next_id(), Arc::new(FuseStatisticTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseStatisticsFunc>::create),
+            ),
         );
 
         creators.insert(
@@ -178,6 +182,7 @@ impl TableFunctionFactory {
                 Arc::new(TableFunctionTemplate::<ClusteringInformationFunc>::create),
             ),
         );
+
         creators.insert(
             "clustering_statistics".to_string(),
             (
@@ -252,7 +257,10 @@ impl TableFunctionFactory {
 
         creators.insert(
             "fuse_encoding".to_string(),
-            (next_id(), Arc::new(FuseEncodingTable::create)),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseEncodingFunc>::create),
+            ),
         );
 
         creators.insert(

@@ -13,6 +13,5 @@
 // limitations under the License.
 
 mod fuse_statistic;
-mod fuse_statistic_table;
 
-pub use fuse_statistic_table::FuseStatisticTable;
+pub use fuse_statistic::FuseStatisticsFunc;

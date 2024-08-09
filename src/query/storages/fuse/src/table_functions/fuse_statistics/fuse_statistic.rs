@@ -14,6 +14,11 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
@@ -23,17 +28,83 @@ use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 
+use crate::table_functions::parse_db_tb_args;
+use crate::table_functions::string_literal;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
-pub struct FuseStatistic<'a> {
+pub struct FuseStatsArgs {
+    arg_database_name: String,
+    arg_table_name: String,
+}
+
+impl From<&FuseStatsArgs> for TableArgs {
+    fn from(value: &FuseStatsArgs) -> Self {
+        let args = vec![
+            string_literal(value.arg_database_name.as_str()),
+            string_literal(value.arg_table_name.as_str()),
+        ];
+        TableArgs::new_positioned(args)
+    }
+}
+
+impl TryFrom<(&str, TableArgs)> for FuseStatsArgs {
+    type Error = ErrorCode;
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
+        Ok(Self {
+            arg_database_name,
+            arg_table_name,
+        })
+    }
+}
+
+pub type FuseStatisticsFunc = SimpleArgFuncTemplate<FuseStatistics>;
+
+pub struct FuseStatistics;
+
+#[async_trait::async_trait]
+impl SimpleArgFunc for FuseStatistics {
+    type Args = FuseStatsArgs;
+
+    fn schema() -> TableSchemaRef {
+        FuseStatisticImpl::schema().into()
+    }
+
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
+        _plan: &DataSourcePlan,
+    ) -> Result<DataBlock> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                args.arg_database_name.as_str(),
+                args.arg_table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        FuseStatisticImpl::new(tbl).get_statistic().await
+    }
+}
+
+pub struct FuseStatisticImpl<'a> {
     pub table: &'a FuseTable,
 }
 
-impl<'a> FuseStatistic<'a> {
+impl<'a> FuseStatisticImpl<'a> {
     pub fn new(table: &'a FuseTable) -> Self {
         Self { table }
     }
@@ -49,7 +120,7 @@ impl<'a> FuseStatistic<'a> {
             return self.to_block(&snapshot.summary, &table_statistics);
         }
         Ok(DataBlock::empty_with_schema(Arc::new(
-            FuseStatistic::schema().into(),
+            FuseStatisticImpl::schema().into(),
         )))
     }
 

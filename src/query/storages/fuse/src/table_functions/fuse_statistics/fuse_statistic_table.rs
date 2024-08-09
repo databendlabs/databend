@@ -31,7 +31,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
 
-use super::fuse_statistic::FuseStatistic;
+use super::fuse_statistic::FuseStatisticImpl;
 use crate::sessions::TableContext;
 use crate::table_functions::parse_db_tb_args;
 use crate::table_functions::string_literal;
@@ -65,7 +65,7 @@ impl FuseStatisticTable {
             desc: format!("'{}'.'{}'", database_name, table_func_name),
             name: table_func_name.to_string(),
             meta: TableMeta {
-                schema: FuseStatistic::schema(),
+                schema: FuseStatisticImpl::schema(),
                 engine,
                 ..Default::default()
             },
@@ -189,6 +189,6 @@ impl AsyncSource for FuseStatisticSource {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        Ok(Some(FuseStatistic::new(tbl).get_statistic().await?))
+        Ok(Some(FuseStatisticImpl::new(tbl).get_statistic().await?))
     }
 }

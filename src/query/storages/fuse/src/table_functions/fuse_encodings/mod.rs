@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod fuse_encoding;
-mod fuse_encoding_table;
 
-pub use fuse_encoding::FuseEncoding;
-pub use fuse_encoding_table::FuseEncodingTable;
+pub use fuse_encoding::FuseEncodingFunc;
