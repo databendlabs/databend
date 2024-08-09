@@ -44,10 +44,6 @@ const TOKEN_TTL_DELAY: Duration = Duration::seconds(300);
 /// only required for refresh token.
 const TOKEN_DROP_DELAY: Duration = Duration::seconds(90);
 
-/// by adding SESSION_TOKEN_VALIDITY_IN_SECS, avoid touch refresh token for each request.
-/// note the ttl is not accurate, the TTL is in fact longer (by 0 to 1 hour) then expected.
-const REFRESH_TOKEN_TTL: Duration = REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY;
-
 pub struct TokenPair {
     pub refresh: String,
     pub session: String,
@@ -89,7 +85,7 @@ impl TokenManager {
     ) -> Result<(String, TokenPair)> {
         // those infos are set when the request is authed
         let tenant = session.get_current_tenant();
-        let tenant_name = tenant.tenant.to_string();
+        let tenant_name = tenant.tenant_name().to_string();
         let user = session.get_current_user()?.name;
         let auth_role = session.privilege_mgr().get_auth_role();
 
@@ -103,7 +99,7 @@ impl TokenManager {
             uuid::Uuid::new_v4().to_string()
         };
 
-        let meta_store = UserApiProvider::instance();
+        let token_api = UserApiProvider::instance().token_api(&tenant);
 
         let now = unix_ts();
         let mut claim = SessionClaim {
@@ -112,7 +108,8 @@ impl TokenManager {
             auth_role: auth_role.clone(),
             session_id: client_session_id.to_string(),
             nonce: uuid::Uuid::new_v4().to_string(),
-            expire_at_in_secs: (now + REFRESH_TOKEN_TTL).whole_seconds() as u64,
+            expire_at_in_secs: (now + REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY)
+                .whole_seconds() as u64,
         };
         let refresh_token = if let Some(old) = &old_token_pair {
             old.refresh.clone()
@@ -125,9 +122,10 @@ impl TokenManager {
             parent: None,
         };
 
-        meta_store
+        // by adding SESSION_TOKEN_VALIDITY_IN_SECS, avoid touch refresh token for each request.
+        // note the ttl is not accurate, the TTL is in fact longer (by 0 to 1 hour) then expected.
+        token_api
             .upsert_token(
-                &tenant,
                 &refresh_token_hash,
                 token_info.clone(),
                 (REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds()
@@ -136,9 +134,8 @@ impl TokenManager {
             )
             .await?;
         if let Some(old) = old_token_pair {
-            meta_store
+            token_api
                 .upsert_token(
-                    &tenant,
                     &old.refresh,
                     token_info,
                     (REFRESH_TOKEN_VALIDITY + TOKEN_DROP_DELAY).whole_seconds() as u64,
@@ -159,9 +156,8 @@ impl TokenManager {
             token_type: TokenType::Session,
             parent: Some(refresh_token_hash.clone()),
         };
-        meta_store
+        token_api
             .upsert_token(
-                &tenant,
                 &session_token_hash,
                 token_info,
                 (REFRESH_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds() as u64,
@@ -199,7 +195,8 @@ impl TokenManager {
         if !cache.read().contains(&hash) {
             let tenant = Tenant::new_literal(&claim.tenant);
             match UserApiProvider::instance()
-                .get_token(&tenant, &hash)
+                .token_api(&tenant)
+                .get_token(&hash)
                 .await?
             {
                 Some(info) if info.token_type == token_type => cache.write().put(hash, ()),
