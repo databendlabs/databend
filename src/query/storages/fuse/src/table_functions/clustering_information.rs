@@ -76,10 +76,12 @@ pub struct ClusteringInformationArgs {
 
 impl From<&ClusteringInformationArgs> for TableArgs {
     fn from(args: &ClusteringInformationArgs) -> Self {
-        let tbl_args = vec![
-            string_literal(args.database_name.as_str()),
-            string_literal(args.table_name.as_str()),
-        ];
+        let mut tbl_args = Vec::new();
+        tbl_args.push(string_literal(args.database_name.as_str()));
+        tbl_args.push(string_literal(args.table_name.as_str()));
+        if let Some(arg_cluster_key) = &args.cluster_key {
+            tbl_args.push(string_literal(arg_cluster_key));
+        }
         TableArgs::new_positioned(tbl_args)
     }
 }
