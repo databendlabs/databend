@@ -80,4 +80,3 @@ tow new rows should be copied into table t16
 6	6
 >>>> drop table if exists t16
 >>>> drop stage if exists s16
-

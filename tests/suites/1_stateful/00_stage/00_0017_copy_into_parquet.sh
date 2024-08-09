@@ -5,7 +5,6 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 stmt "drop stage if exists s1;"
 stmt "create stage s1;"
-stmt "unset global (max_threads, max_memory_usage);"
 
 # one file when #row is small even though multi-threads
 echo "copy into @s1/ from (select * from numbers(6000000)) max_file_size=64000000 detailed_output=true" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
