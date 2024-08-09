@@ -29,6 +29,7 @@ use super::ARROW_EXT_TYPE_VARIANT;
 use crate::types::array::ArrayColumn;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::geography::GeographyColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
@@ -780,6 +781,66 @@ impl Column {
                     let offsets =
                         unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
                     Column::Geometry(BinaryColumn::new(arrow_col.values().clone(), offsets))
+                }
+                (DataType::Geography, ArrowDataType::Struct(_)) => {
+                    use databend_common_arrow::arrow::array;
+
+                    let struct_col = arrow_col
+                        .as_any()
+                        .downcast_ref::<array::StructArray>()
+                        .expect(
+                            "fail to read `Geography` from arrow: array should be `StructArray`",
+                        )
+                        .values();
+
+                    let buf: &array::BinaryArray<i64> = struct_col[0]
+                        .as_any()
+                        .downcast_ref()
+                        .expect("fail to read `Geography`.buf from arrow");
+
+                    let offsets = buf
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+
+                    let buf = BinaryColumn::new(buf.values().clone(), offsets.into());
+
+                    let points: &array::ListArray<i64> = struct_col[1]
+                        .as_any()
+                        .downcast_ref()
+                        .expect("fail to read `Geography`.points from arrow");
+
+                    let offsets = points
+                        .offsets()
+                        .buffer()
+                        .iter()
+                        .map(|x| *x as u64)
+                        .collect::<Vec<_>>();
+
+                    let point = points
+                        .values()
+                        .as_any()
+                        .downcast_ref::<array::StructArray>()
+                        .expect("fail to read `Geography`.point from arrow")
+                        .values();
+
+                    let x: &array::Float64Array = point[0]
+                        .as_any()
+                        .downcast_ref()
+                        .expect("fail to read `Geography`.x from arrow");
+                    let y: &array::Float64Array = point[1]
+                        .as_any()
+                        .downcast_ref()
+                        .expect("fail to read `Geography`.y from arrow");
+
+                    Column::Geography(GeographyColumn {
+                        buf,
+                        offsets: offsets.into(),
+                        x: x.values().clone(),
+                        y: y.values().clone(),
+                    })
                 }
                 (data_type, ArrowDataType::Extension(_, arrow_type, _)) => {
                     from_arrow_with_arrow_type(arrow_col, arrow_type, data_type)?

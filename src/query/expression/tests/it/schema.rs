@@ -663,9 +663,12 @@ fn test_geography_as_arrow() {
     builder.push(GeographyType::point(4.0, 5.0).as_ref());
     let col = Column::Geography(builder.build());
 
-    let got = col.as_arrow();
+    let arr = col.as_arrow();
     assert_eq!(
         "StructArray[{buf: [1], points: [{x: 1, y: 2}]}, {buf: [1], points: [{x: 2, y: 3}]}, {buf: [1], points: [{x: 4, y: 5}]}]",
-        format!("{:?}", got)
+        format!("{:?}", arr)
     );
+
+    let got = Column::from_arrow(&*arr, &col.data_type()).unwrap();
+    assert_eq!(col, got)
 }
