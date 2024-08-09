@@ -15,20 +15,21 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-// Instead of store diff kind of token in diff path, we store the type in value is simpler and enough.
+/// A client starts with /session/login to get the initial refresh_token and session_token pair.
+/// - Use session_token for computing.
+/// - Use refresh_token to auth /session/renew and get new pair when session_token expires.
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
 )]
 pub enum TokenType {
-    // refresh token, with a longer TTL, is only used for auth when get new refresh token and session token.
     Refresh = 1,
-    // session token, is used for auth when do real work, like query, upload, etc.
     Session = 2,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct QueryTokenInfo {
     pub token_type: TokenType,
-    // used to delete refresh token when close session
+    /// used to delete refresh token when close session, which authed by session_token too.
+    /// None for Refresh token.
     pub parent: Option<String>,
 }
