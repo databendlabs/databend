@@ -3192,6 +3192,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "bytesize",
+ "chrono",
  "ctrlc",
  "databend-common-building",
  "databend-common-exception",
@@ -3885,6 +3886,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
  "databend-common-meta-stoerr",
@@ -4151,6 +4153,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-transforms",
  "databend-common-settings",
+ "databend-common-sharing",
  "databend-common-storage",
  "databend-common-storages-result-cache",
  "databend-common-storages-view",

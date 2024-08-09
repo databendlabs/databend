@@ -20,6 +20,7 @@ use databend_common_base::headers::HEADER_AUTH_METHOD;
 use databend_common_base::headers::HEADER_SIGNATURE;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::share::ShareCredential;
 use databend_common_meta_app::share::ShareEndpointMeta;
@@ -159,6 +160,43 @@ impl ShareEndpointClient {
             Ok(resp) => {
                 let body = resp.text().await?;
                 let ret: BTreeMap<String, TableInfo> = serde_json::from_str(&body)?;
+                Ok(ret)
+            }
+            Err(err) => {
+                error!("get_share_spec_by_name fail: {:?}", err);
+                Err(err.into())
+            }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_reference_table_by_name(
+        &self,
+        share_params: &ShareDBParams,
+        from_tenant: &str,
+        db: &str,
+        table_name: &str,
+    ) -> Result<TableInfo> {
+        let to_tenant = share_params.share_ident.tenant_name();
+        let share_name = share_params.share_ident.share_name();
+        let path = format!(
+            "/{}/{}/{}/{}/v2/reference_table",
+            to_tenant, share_name, db, table_name
+        );
+        // skip path first `/` char
+        let uri = format!("{}{}", share_params.share_endpoint_url, &path[1..]);
+        let headers = Self::generate_auth_headers(
+            &path,
+            &share_params.share_endpoint_credential,
+            from_tenant,
+        );
+        let client = reqwest::Client::new();
+        let resp = client.get(&uri).headers(headers).send().await;
+
+        match resp {
+            Ok(resp) => {
+                let body = resp.text().await?;
+                let ret: TableInfo = serde_json::from_str(&body)?;
                 Ok(ret)
             }
             Err(err) => {
