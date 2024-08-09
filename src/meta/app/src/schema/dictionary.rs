@@ -22,7 +22,6 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
 
-use super::database_name_ident::DatabaseNameIdent;
 use super::CreateOption;
 use crate::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use crate::tenant::Tenant;
@@ -180,7 +179,7 @@ pub struct ListDictionaryReq {
 impl ListDictionaryReq {
     pub fn new(tenant: impl ToTenant, db_id: u64) -> ListDictionaryReq {
         ListDictionaryReq { 
-            tenant,
+            tenant: tenant.to_tenant(),
             db_id,
          }
     }
@@ -189,7 +188,7 @@ impl ListDictionaryReq {
     }
 
     pub fn tenant(&self) -> String {
-        self.tenant
+        self.tenant.tenant_name().to_string()
     }
 }
 
@@ -225,12 +224,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-    }
-
-    impl kvapi::Value for DictionaryMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 

@@ -57,7 +57,6 @@ use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DBIdDictionaryName;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -7382,10 +7381,10 @@ impl SchemaApiTestSuite {
 
         let db_name_ident = DatabaseNameIdent::new(
             Tenant::new_literal(tenant_name),
-            db_name,
+            db_name.to_string(),
         );
         let get_db_req = GetDatabaseReq {
-            inner: db_name_ident,
+            inner: db_name_ident.clone(),
         };
         let db_info = mt.get_database(get_db_req).await?;
         db_id = db_info.ident.db_id;
@@ -7415,7 +7414,7 @@ impl SchemaApiTestSuite {
             assert!(res.is_empty());
         }
 
-        let dict_tenant = Tenant::new_or_err(tenant_name, func_name!())?;
+        let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
         let dict_ident =
             TenantDictionaryIdent::new_dict_db(
                 dict_tenant.clone(),

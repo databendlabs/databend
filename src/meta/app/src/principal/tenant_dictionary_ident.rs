@@ -14,7 +14,6 @@
 
 use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
-use crate::tenant_key::raw::TIdentRaw;
 use crate::KeyWithTenant;
 
 use super::DictionaryIdentity;

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_kvapi::kvapi;
-
 /// Uniquely identifies a dictionary with a db_id and a dict_name
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct DictionaryIdentity {
@@ -25,7 +23,7 @@ impl DictionaryIdentity {
     pub fn new(db_id: u64, dict_name: impl ToString) -> Self {
         Self {
             db_id,
-            dict_name,
+            dict_name: dict_name.to_string(),
         }
     }
 }
