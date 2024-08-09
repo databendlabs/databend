@@ -152,7 +152,7 @@ fn is_primitive(data_type: &DataType) -> bool {
     )
 }
 
-fn columns_to_iter_recursive<'a, I: 'a>(
+fn columns_to_iter_recursive<'a, I>(
     mut columns: Vec<I>,
     mut types: Vec<&PrimitiveType>,
     field: Field,
@@ -161,7 +161,7 @@ fn columns_to_iter_recursive<'a, I: 'a>(
     chunk_size: Option<usize>,
 ) -> Result<NestedArrayIter<'a>>
 where
-    I: Pages,
+    I: Pages + 'a,
 {
     if init.is_empty() && is_primitive(&field.data_type) {
         return Ok(Box::new(
@@ -222,7 +222,7 @@ pub fn n_columns(data_type: &DataType) -> usize {
 /// For nested types, `columns` must be composed by all parquet columns with associated types `types`.
 ///
 /// The arrays are guaranteed to be at most of size `chunk_size` and data type `field.data_type`.
-pub fn column_iter_to_arrays<'a, I: 'a>(
+pub fn column_iter_to_arrays<'a, I>(
     columns: Vec<I>,
     types: Vec<&PrimitiveType>,
     field: Field,
@@ -230,7 +230,7 @@ pub fn column_iter_to_arrays<'a, I: 'a>(
     num_rows: usize,
 ) -> Result<ArrayIter<'a>>
 where
-    I: Pages,
+    I: Pages + 'a,
 {
     Ok(Box::new(
         columns_to_iter_recursive(columns, types, field, vec![], num_rows, chunk_size)?
@@ -240,7 +240,7 @@ where
 
 /// Basically the same as `column_iter_to_arrays`, with the addition of the `init` parameter
 /// to read the inner columns of the nested type directly, instead of reading the entire nested type.
-pub fn nested_column_iter_to_arrays<'a, I: 'a>(
+pub fn nested_column_iter_to_arrays<'a, I>(
     columns: Vec<I>,
     types: Vec<&PrimitiveType>,
     field: Field,
@@ -249,7 +249,7 @@ pub fn nested_column_iter_to_arrays<'a, I: 'a>(
     num_rows: usize,
 ) -> Result<ArrayIter<'a>>
 where
-    I: Pages,
+    I: Pages + 'a,
 {
     Ok(Box::new(
         nested::columns_to_iter_recursive(columns, types, field, init, num_rows, chunk_size)?

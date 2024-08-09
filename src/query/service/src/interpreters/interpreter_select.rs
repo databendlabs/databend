@@ -145,14 +145,13 @@ impl SelectInterpreter {
             .main_pipeline
             .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                 Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                    info!("Updating the stream meta to consume data");
-
                     match update_stream_metas {
                         Some(streams) => {
                             let r = UpdateMultiTableMetaReq {
                                 update_table_metas: streams.update_table_metas,
                                 ..Default::default()
                             };
+                            info!("Updating the stream meta to consume data");
                             catalog.update_multi_table_meta(r).await.map(|_| ())
                         }
                         None => Ok(()),
@@ -275,7 +274,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();

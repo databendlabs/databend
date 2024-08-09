@@ -16,7 +16,6 @@ use std::io::Read;
 use std::io::SeekFrom;
 
 use bytes::Buf;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
@@ -51,7 +50,6 @@ pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrap
 pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     CompactSegmentInfo,
     LoaderWrapper<(Operator, TableSchemaRef)>,
-    DefaultHashBuilder,
     CompactSegmentInfoMeter,
 >;
 pub type InvertedIndexMetaReader =

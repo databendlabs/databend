@@ -45,10 +45,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
+use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
+use databend_common_sharing::ShareEndpointClient;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -206,8 +209,8 @@ impl Binder {
             inverted_index_map: Box::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
-            allow_internal_columns: true,
             window_definitions: DashMap::new(),
+            share_paramas: None,
         };
 
         let (s_expr, mut res_bind_context) =
@@ -475,6 +478,31 @@ impl Binder {
             )),
             bind_context,
         ))
+    }
+
+    pub fn resolve_share_reference_data_source(
+        &self,
+        share_params: &ShareDBParams,
+        tenant: &str,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<Arc<dyn Table>> {
+        databend_common_base::runtime::block_on(async move {
+            let client = ShareEndpointClient::new();
+
+            let mut table_info = client
+                .get_reference_table_by_name(share_params, tenant, database_name, table_name)
+                .await?;
+            table_info.db_type = DatabaseType::ShareDB(share_params.clone());
+            let table = self
+                .ctx
+                .get_catalog(catalog_name)
+                .await?
+                .get_table_by_info(&table_info)?;
+
+            Ok(table)
+        })
     }
 
     pub fn resolve_data_source(

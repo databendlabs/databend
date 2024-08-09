@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::Udf;
+use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::TransformUdfScript;
 use crate::pipelines::processors::transforms::TransformUdfServer;
@@ -25,12 +29,15 @@ impl PipelineBuilder {
         self.build_pipeline(&udf.input)?;
 
         if udf.script_udf {
-            let runtimes = TransformUdfScript::init_runtime(&udf.udf_funcs)?;
+            let index_seq = Arc::new(AtomicUsize::new(0));
+            let runtime_num = self.ctx.get_settings().get_max_threads()? as usize;
+            let runtimes = TransformUdfScript::init_runtime(&udf.udf_funcs, runtime_num)?;
             self.main_pipeline.try_add_transformer(|| {
                 Ok(TransformUdfScript::new(
                     self.func_ctx.clone(),
                     udf.udf_funcs.clone(),
                     runtimes.clone(),
+                    index_seq.clone(),
                 ))
             })
         } else {

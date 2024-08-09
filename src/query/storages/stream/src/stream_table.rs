@@ -216,7 +216,7 @@ impl StreamTable {
             .await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn check_stream_status(&self, ctx: Arc<dyn TableContext>) -> Result<StreamStatus> {
         let base_table = self.source_table(ctx).await?;
         let status = if base_table.get_table_info().ident.seq == self.offset()? {
@@ -230,6 +230,10 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
+    fn is_local(&self) -> bool {
+        false
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -264,7 +268,7 @@ impl Table for StreamTable {
         ]
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -275,7 +279,7 @@ impl Table for StreamTable {
         self.do_read_partitions(ctx, push_downs).await
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -290,6 +294,7 @@ impl Table for StreamTable {
     async fn table_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
         change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
         let table = self.source_table(ctx.clone()).await?;
@@ -310,7 +315,7 @@ impl Table for StreamTable {
     }
 
     #[async_backtrace::framed]
-    async fn generage_changes_query(
+    async fn generate_changes_query(
         &self,
         ctx: Arc<dyn TableContext>,
         database_name: &str,

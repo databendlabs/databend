@@ -15,9 +15,6 @@
 pub mod bytes_meter;
 pub mod count_meter;
 pub mod file_meter;
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-pub mod heap_meter;
 
 use std::borrow::Borrow;
 

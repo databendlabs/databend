@@ -62,6 +62,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -90,8 +91,8 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -105,6 +106,7 @@ use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
@@ -143,6 +145,8 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    snapshot: Arc<RwLock<Option<Arc<TableSnapshot>>>>,
+    lazy_mutaion_delete: Arc<RwLock<bool>>,
 }
 
 impl QueryContext {
@@ -165,6 +169,8 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
+            snapshot: Arc::new(RwLock::new(None)),
+            lazy_mutaion_delete: Arc::new(RwLock::new(false)),
         })
     }
 
@@ -471,6 +477,22 @@ impl TableContext for QueryContext {
             partition_queue.push_back(part);
         }
         Ok(())
+    }
+
+    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>) {
+        *self.snapshot.write() = Some(snapshot);
+    }
+
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
+        self.snapshot.read().clone()
+    }
+
+    fn set_lazy_mutation_delete(&self, lazy: bool) {
+        *self.lazy_mutaion_delete.write() = lazy;
+    }
+
+    fn get_lazy_mutation_delete(&self) -> bool {
+        *self.lazy_mutaion_delete.read()
     }
 
     fn partition_num(&self) -> usize {
@@ -998,12 +1020,15 @@ impl TableContext for QueryContext {
         self.shared.copy_status.clone()
     }
 
-    fn add_merge_status(&self, merge_status: MergeStatus) {
-        self.shared.merge_status.write().merge_status(merge_status)
+    fn add_mutation_status(&self, mutation_status: MutationStatus) {
+        self.shared
+            .mutation_status
+            .write()
+            .merge_mutation_status(mutation_status)
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
-        self.shared.merge_status.clone()
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        self.shared.mutation_status.clone()
     }
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
@@ -1132,6 +1157,18 @@ impl TableContext for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.shared.session.session_ctx.set_variable(key, value)
+    }
+
+    fn unset_variable(&self, key: &str) {
+        self.shared.session.session_ctx.unset_variable(key)
+    }
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.shared.session.session_ctx.get_variable(key)
     }
 
     #[async_backtrace::framed]

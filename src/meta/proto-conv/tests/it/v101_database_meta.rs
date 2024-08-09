@@ -19,8 +19,8 @@ use chrono::Utc;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::schema::ShareDbId;
 use databend_common_meta_app::share::share_name_ident::ShareNameIdentRaw;
+use fastrace::func_name;
 use maplit::btreemap;
-use minitrace::func_name;
 
 use crate::common;
 

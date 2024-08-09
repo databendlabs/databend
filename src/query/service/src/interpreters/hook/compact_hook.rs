@@ -23,14 +23,17 @@ use databend_common_exception::Result;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::plans::OptimizeTableAction;
-use databend_common_sql::plans::OptimizeTablePlan;
+use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::OptimizeCompactBlock;
+use databend_common_sql::plans::Recluster;
+use databend_common_sql::plans::RelOperator;
 use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
 use crate::interpreters::Interpreter;
-use crate::interpreters::OptimizeTableInterpreter;
+use crate::interpreters::OptimizeCompactBlockInterpreter;
+use crate::interpreters::ReclusterTableInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
@@ -130,6 +133,15 @@ async fn compact_table(
     compaction_limits: CompactionLimits,
     lock_opt: LockTableOption,
 ) -> Result<()> {
+    let table = ctx
+        .get_table(
+            &compact_target.catalog,
+            &compact_target.database,
+            &compact_target.table,
+        )
+        .await?;
+    let do_recluster = !table.cluster_keys(ctx.clone()).is_empty();
+
     // evict the table from cache
     ctx.evict_table_from_cache(
         &compact_target.catalog,
@@ -137,18 +149,30 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
-    // build the optimize table pipeline with compact action.
-    let optimize_interpreter =
-        OptimizeTableInterpreter::try_create(ctx.clone(), OptimizeTablePlan {
+    let mut build_res = if do_recluster {
+        let recluster = RelOperator::Recluster(Recluster {
             catalog: compact_target.catalog,
             database: compact_target.database,
             table: compact_target.table,
-            action: OptimizeTableAction::CompactBlocks(compaction_limits.block_limit),
+            filters: None,
             limit: compaction_limits.segment_limit,
-            lock_opt,
-        })?;
-
-    let mut build_res = optimize_interpreter.execute2().await?;
+        });
+        let s_expr = SExpr::create_leaf(Arc::new(recluster));
+        let recluster_interpreter =
+            ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
+        recluster_interpreter.execute2().await?
+    } else {
+        let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+            catalog: compact_target.catalog,
+            database: compact_target.database,
+            table: compact_target.table,
+            limit: compaction_limits,
+        });
+        let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+        let compact_interpreter =
+            OptimizeCompactBlockInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
+        compact_interpreter.execute2().await?
+    };
 
     if build_res.main_pipeline.is_empty() {
         return Ok(());

@@ -15,6 +15,7 @@
 // DO NOT EDIT.
 // This crate keeps some Index codes for compatibility, it's locked by bincode of meta's v3 version
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -38,27 +39,34 @@ pub enum IndexScalar {
     Tuple(Vec<IndexScalar>),
 }
 
-impl From<IndexScalar> for Scalar {
-    fn from(value: IndexScalar) -> Self {
-        match value {
+impl TryFrom<IndexScalar> for Scalar {
+    type Error = ErrorCode;
+
+    fn try_from(value: IndexScalar) -> Result<Self> {
+        Ok(match value {
             IndexScalar::Null => Scalar::Null,
             IndexScalar::Number(num_scalar) => Scalar::Number(num_scalar),
             IndexScalar::Decimal(dec_scalar) => Scalar::Decimal(dec_scalar),
             IndexScalar::Timestamp(ts) => Scalar::Timestamp(ts),
             IndexScalar::Date(date) => Scalar::Date(date),
             IndexScalar::Boolean(b) => Scalar::Boolean(b),
-            IndexScalar::String(s) => Scalar::String(unsafe { String::from_utf8_unchecked(s) }),
-            IndexScalar::Tuple(tuple) => {
-                Scalar::Tuple(tuple.into_iter().map(|c| c.into()).collect())
-            }
-        }
+            IndexScalar::String(s) => Scalar::String(String::from_utf8(s).map_err(|e| {
+                ErrorCode::InvalidUtf8String(format!("invalid utf8 data for string type: {}", e))
+            })?),
+            IndexScalar::Tuple(tuple) => Scalar::Tuple(
+                tuple
+                    .into_iter()
+                    .map(|c| c.try_into())
+                    .collect::<Result<_>>()?,
+            ),
+        })
     }
 }
 
 impl TryFrom<Scalar> for IndexScalar {
-    type Error = ();
+    type Error = ErrorCode;
 
-    fn try_from(value: Scalar) -> Result<Self, ()> {
+    fn try_from(value: Scalar) -> Result<Self> {
         Ok(match value {
             Scalar::Null => IndexScalar::Null,
             Scalar::Number(num_scalar) => IndexScalar::Number(num_scalar),
@@ -72,7 +80,7 @@ impl TryFrom<Scalar> for IndexScalar {
                 tuple
                     .into_iter()
                     .map(|c| c.try_into())
-                    .collect::<Result<_, _>>()?,
+                    .collect::<Result<_>>()?,
             ),
             Scalar::Array(_)
             | Scalar::Map(_)
@@ -81,7 +89,7 @@ impl TryFrom<Scalar> for IndexScalar {
             | Scalar::Geometry(_)
             | Scalar::Geography(_)
             | Scalar::EmptyArray
-            | Scalar::EmptyMap => return Err(()),
+            | Scalar::EmptyMap => return Err(ErrorCode::Unimplemented("Unsupported scalar type")),
         })
     }
 }

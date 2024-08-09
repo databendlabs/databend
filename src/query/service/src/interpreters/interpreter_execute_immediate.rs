@@ -76,7 +76,7 @@ impl Interpreter for ExecuteImmediateInterpreter {
         false
     }
 
-    #[minitrace::trace]
+    #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let res: Result<_> = try {

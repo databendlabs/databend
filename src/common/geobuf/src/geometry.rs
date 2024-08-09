@@ -155,7 +155,7 @@ fn eq_f64(a: f64, b: f64) -> bool {
     if a == b || a.is_nan() && b.is_nan() {
         return true;
     }
-    return false;
+    false
     // if a.is_sign_positive() != b.is_sign_positive() {
     //     return a == b; // values of different signs are only equal if both are zero.
     // }

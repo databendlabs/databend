@@ -139,7 +139,7 @@ pub struct TopK {
     /// Record the leaf field of the topk column.
     /// - The `name` of `field` will be used to track column in the read block.
     /// - The `column_id` of `field` will be used to retrieve column stats from block meta
-    /// (only used for fuse engine, for parquet table, we will use `leaf_id`).
+    ///   (only used for fuse engine, for parquet table, we will use `leaf_id`).
     pub field: TableField,
     pub asc: bool,
     /// The index in `table_schema.leaf_fields()`.

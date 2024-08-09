@@ -28,7 +28,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::DescSharePlan;
+use crate::sql::plans::DescSharePlan;
 
 pub struct DescShareInterpreter {
     ctx: Arc<QueryContext>,
@@ -73,6 +73,10 @@ impl Interpreter for DescShareInterpreter {
                 }
                 ShareGrantObjectName::Table(db, table_name) => {
                     kinds.push("TABLE".to_string());
+                    names.push(format!("{}.{}", db, table_name));
+                }
+                ShareGrantObjectName::View(db, table_name) => {
+                    kinds.push("VIEW".to_string());
                     names.push(format!("{}.{}", db, table_name));
                 }
             }

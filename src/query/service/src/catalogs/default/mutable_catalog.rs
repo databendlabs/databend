@@ -112,8 +112,8 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use fastrace::func_name;
 use log::info;
-use minitrace::func_name;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -132,6 +132,7 @@ use crate::storages::Table;
 pub struct MutableCatalog {
     ctx: CatalogContext,
     tenant: Tenant,
+    disable_table_info_refresh: bool,
 }
 
 impl Debug for MutableCatalog {
@@ -186,7 +187,11 @@ impl MutableCatalog {
             storage_factory: Arc::new(storage_factory),
             database_factory: Arc::new(database_factory),
         };
-        Ok(MutableCatalog { ctx, tenant })
+        Ok(MutableCatalog {
+            ctx,
+            tenant,
+            disable_table_info_refresh: false,
+        })
     }
 
     fn build_db_instance(&self, db_info: &Arc<DatabaseInfo>) -> Result<Arc<dyn Database>> {
@@ -194,10 +199,15 @@ impl MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: self.disable_table_info_refresh,
         };
         self.ctx
             .database_factory
             .build_database_by_engine(ctx, db_info)
+    }
+
+    pub(crate) fn disable_table_info_refresh(&mut self) {
+        self.disable_table_info_refresh = true;
     }
 }
 
@@ -436,6 +446,7 @@ impl Catalog for MutableCatalog {
             meta: self.ctx.meta.clone(),
             storage_factory: self.ctx.storage_factory.clone(),
             tenant: self.tenant.clone(),
+            disable_table_info_refresh: true,
         };
 
         let resp = ctx.meta.get_drop_table_infos(req).await?;
@@ -443,7 +454,7 @@ impl Catalog for MutableCatalog {
         let drop_ids = resp.drop_ids.clone();
         let drop_table_infos = resp.drop_table_infos;
 
-        let storage = ctx.storage_factory.clone();
+        let storage = ctx.storage_factory;
 
         let mut tables = vec![];
         for table_info in drop_table_infos {

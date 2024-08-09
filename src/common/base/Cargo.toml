@@ -24,14 +24,15 @@ memory-profiling = [
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytesize = "1.1.0"
+chrono = { workspace = true }
 ctrlc = { version = "3.2.3", features = ["termination"] }
 databend-common-exception = { workspace = true }
 enquote = "1.1.0"
+fastrace = { workspace = true }
 futures = { workspace = true }
 libc = "0.2.153"
 log = { workspace = true }
 logcall = { workspace = true }
-minitrace = { workspace = true }
 num_cpus = "1.13.1"
 once_cell = { workspace = true }
 parking_lot = { workspace = true }

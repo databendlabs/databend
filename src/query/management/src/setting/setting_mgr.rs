@@ -62,7 +62,7 @@ impl SettingMgr {
 #[async_trait::async_trait]
 impl SettingApi for SettingMgr {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn set_setting(&self, setting: UserSetting) -> Result<u64> {
         // Upsert.
         let seq = MatchSeq::GE(0);
@@ -78,7 +78,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_settings(&self) -> Result<Vec<UserSetting>> {
         let prefix = self.setting_prefix();
         let values = self.kv_api.prefix_list_kv(&prefix).await?;
@@ -92,7 +92,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>> {
         let key = self.setting_key(name);
         let res = self.kv_api.get_kv(&key).await?;
@@ -111,7 +111,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = self.setting_key(name);
         let _res = self

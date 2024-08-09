@@ -44,6 +44,7 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
@@ -133,8 +134,8 @@ use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MergeStatus;
 use databend_common_storage::MultiTableInsertStatus;
+use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -479,6 +480,22 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
+        todo!()
+    }
+
+    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
+        todo!()
+    }
+
+    fn set_lazy_mutation_delete(&self, _lazy: bool) {
+        todo!()
+    }
+
+    fn get_lazy_mutation_delete(&self) -> bool {
+        todo!()
+    }
+
     fn add_partitions_sha(&self, _sha: String) {
         todo!()
     }
@@ -694,6 +711,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_variable(&self, _key: String, _value: Scalar) {}
+    fn unset_variable(&self, _key: &str) {}
+    fn get_variable(&self, _key: &str) -> Option<Scalar> {
+        None
+    }
+
     fn set_materialized_cte(
         &self,
         _idx: (usize, usize),
@@ -749,11 +772,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_merge_status(&self, _merge_status: MergeStatus) {
+    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
         todo!()
     }
 
-    fn get_merge_status(&self) -> Arc<RwLock<MergeStatus>> {
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
         todo!()
     }
 

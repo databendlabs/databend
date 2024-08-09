@@ -27,7 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::share::AlterShareTenantsPlan;
+use crate::sql::plans::AlterShareTenantsPlan;
 
 pub struct AlterShareTenantsInterpreter {
     ctx: Arc<QueryContext>,

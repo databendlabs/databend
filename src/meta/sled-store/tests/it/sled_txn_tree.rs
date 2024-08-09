@@ -23,7 +23,7 @@ use crate::testing::new_sled_test_context;
 use crate::testing::sled_test_harness;
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> {
     // Test transactional API insert, get, remove on a sub key space of TransactionSledTree
 
@@ -66,7 +66,7 @@ async fn test_sled_txn_tree_key_space_insert_get_remove() -> anyhow::Result<()> 
 }
 
 #[test(harness = sled_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_sled_txn_tree_key_space_remove() -> anyhow::Result<()> {
     // Test transactional API insert, get, remove on a sub key space of TransactionSledTree
 

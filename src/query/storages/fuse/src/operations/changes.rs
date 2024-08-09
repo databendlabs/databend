@@ -431,7 +431,7 @@ impl FuseTable {
         change_type: ChangeType,
     ) -> Result<Option<TableStatistics>> {
         let Some(base_location) = base_location else {
-            return self.table_statistics(ctx, None).await;
+            return self.table_statistics(ctx, true, None).await;
         };
 
         let (base_snapshot, _) =

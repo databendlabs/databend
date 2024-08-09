@@ -58,7 +58,8 @@ impl Geography {
         {
             return Err("longitude is out of range".to_string());
         }
-        if !r.y()
+        if !r
+            .y()
             .iter()
             .all(|latitude| (LATITUDE_MIN..=LATITUDE_MAX).contains(latitude))
         {

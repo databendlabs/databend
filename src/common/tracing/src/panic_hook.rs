@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::panic::PanicInfo;
+use std::panic::PanicHookInfo;
 use std::sync::atomic::Ordering;
 
 use backtrace::trace;
@@ -45,7 +45,7 @@ fn should_backtrace() -> bool {
     }
 }
 
-pub fn log_panic(panic: &PanicInfo) {
+pub fn log_panic(panic: &PanicHookInfo) {
     let backtrace_str = backtrace(50);
 
     eprintln!("{}", panic);

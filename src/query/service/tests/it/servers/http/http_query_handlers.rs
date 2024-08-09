@@ -292,7 +292,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 19, "{:?}", result);
+    assert_eq!(result.schema.len(), 20, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -1297,6 +1297,7 @@ async fn test_http_handler_tls_server_failed_case_1() -> Result<()> {
     Ok(())
 }
 
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
     let config = ConfigBuilder::create()
@@ -1347,6 +1348,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
 }
 
 // cannot connect with server unless it have CA signed identity
+#[ignore = "remove client cert support for now"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_http_service_tls_server_mutual_tls_failed() -> Result<()> {
     let config = ConfigBuilder::create()

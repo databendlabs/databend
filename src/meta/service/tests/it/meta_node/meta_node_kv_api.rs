@@ -69,7 +69,7 @@ impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
 }
 
 #[test(harness = meta_service_test_harness)]
-#[minitrace::trace]
+#[fastrace::trace]
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {
         test_contexts: Arc::new(Mutex::new(vec![])),

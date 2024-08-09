@@ -20,19 +20,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::future::TimingFutureExt;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::MessageSummary;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::raft_service_server::RaftService;
+use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::GrpcHelper;
@@ -47,12 +50,12 @@ use databend_common_meta_types::StorageError;
 use databend_common_meta_types::Vote;
 use databend_common_meta_types::VoteRequest;
 use databend_common_metrics::count::Count;
+use fastrace::full_name;
+use fastrace::prelude::*;
 use futures::TryStreamExt;
 use log::error;
 use log::info;
 use log::warn;
-use minitrace::full_name;
-use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
 use tonic::Request;
 use tonic::Response;
@@ -117,7 +120,7 @@ impl RaftServiceImpl {
 
         let res = self
             .receive_chunked_snapshot_v1(install_snapshot_req)
-            .timed(observe_snapshot_recv_spent(&addr))
+            .with_timing(observe_snapshot_recv_spent(&addr))
             .await;
 
         raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
@@ -382,6 +385,32 @@ impl RaftService for RaftServiceImpl {
         }
         .in_span(root)
         .await
+    }
+
+    async fn transfer_leader(
+        &self,
+        request: Request<pb::TransferLeaderRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let fu = async {
+            let req = request.into_inner();
+            let req: TransferLeaderRequest = req.try_into()?;
+
+            let req_str = req.to_string();
+
+            info!("RaftServiceImpl::{}: start: {}", func_name!(), req_str);
+
+            let raft = &self.meta_node.raft;
+
+            raft.handle_transfer_leader(req)
+                .await
+                .map_err(GrpcHelper::internal_err)?;
+
+            info!("RaftServiceImpl::{}: done: {}", func_name!(), req_str);
+
+            Ok(Response::new(pb::Empty {}))
+        };
+        fu.in_span(root).await
     }
 }
 

@@ -43,9 +43,9 @@ use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use enumflags2::make_bitflags;
+use fastrace::func_name;
 use log::debug;
 use log::error;
-use minitrace::func_name;
 
 use crate::role::role_api::RoleApi;
 use crate::serde::check_and_upgrade_to_pb;
@@ -135,7 +135,7 @@ impl RoleMgr {
 #[async_trait::async_trait]
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn add_role(&self, role_info: RoleInfo) -> databend_common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.role_ident(role_info.identity()).to_string_key();
@@ -156,7 +156,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.role_ident(role).to_string_key();
         let res = self.kv_api.get_kv(&key).await?;
@@ -181,7 +181,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_meta_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let values = self.get_raw_meta_roles().await?;
 
@@ -198,14 +198,14 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
         Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_ownerships(&self) -> Result<Vec<SeqV<OwnershipInfo>>, ErrorCode> {
         let object_owner_prefix = self.ownership_object_prefix();
         let values = self
@@ -239,7 +239,7 @@ impl RoleApi for RoleMgr {
     ///
     /// Seq number ensures there is no other write happens between get and set.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn update_role_with<F>(
         &self,
         role: &String,
@@ -273,7 +273,7 @@ impl RoleApi for RoleMgr {
     ///
     /// According to Txn reduce meta call. If role own n objects, will generate once meta call.
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn transfer_ownership_to_admin(
         &self,
         role: &str,
@@ -330,7 +330,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn grant_ownership(
         &self,
         object: &OwnershipObject,
@@ -343,7 +343,6 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-
             let owner_value = serialize_struct(
                 &OwnershipInfo {
                     object: object.clone(),
@@ -395,7 +394,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn get_ownership(
         &self,
         object: &OwnershipObject,
@@ -419,7 +418,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn revoke_ownership(
         &self,
         object: &OwnershipObject,
@@ -484,7 +483,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.role_ident(&role).to_string_key();
 

@@ -16,10 +16,10 @@ derive-visitor = { workspace = true }
 enum-as-inner = "0.5.1"
 ethnum = { workspace = true }
 fast-float = "0.2.0"
+fastrace = { workspace = true }
 indent = "0.1.1"
 itertools = { workspace = true }
 logos = "0.12.1"
-minitrace = { workspace = true }
 nom = "7.1.1"
 nom-rule = "0.3.1"
 ordered-float = { workspace = true }

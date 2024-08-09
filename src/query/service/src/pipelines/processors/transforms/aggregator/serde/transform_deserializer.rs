@@ -222,7 +222,7 @@ where
             DataPacket::QueryProfiles(_) => unreachable!(),
             DataPacket::SerializeProgress { .. } => unreachable!(),
             DataPacket::CopyStatus { .. } => unreachable!(),
-            DataPacket::MergeStatus { .. } => unreachable!(),
+            DataPacket::MutationStatus { .. } => unreachable!(),
             DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
         }

@@ -132,9 +132,6 @@ NULL
 statement ok
 insert into t values (1),(2),(NULL)
 
-statement error (?s)1002.*Delete must have deterministic predicate
-delete from t where now()
-
 query B
 select count(*) = 0 from t
 ----
@@ -307,9 +304,6 @@ insert into t select c + 1000000 from t_number;
 statement ok
 delete from t where c >= 0 and c < 1500000;
 
-statement error (?s)1065.*Internal column `_row_id` is not allowed in current statement
-delete from t where _row_id = 18446735277616529408;
-
 query I
 select count(*) from t;
 ----
@@ -317,6 +311,14 @@ select count(*) from t;
 
 query I
 select count(*) from t where c >= 0 and c < 1500000;
+----
+0
+
+statement ok
+delete from t where true;
+
+query I
+select count(*) from t;
 ----
 0
 

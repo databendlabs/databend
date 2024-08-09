@@ -15,7 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::FunctionDomain;

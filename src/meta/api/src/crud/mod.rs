@@ -81,7 +81,7 @@ where
     ValueOf<R>: ValueWithName + FromToProto + Clone,
 {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn add(
         &self,
         value: ValueOf<R>,
@@ -104,7 +104,7 @@ where
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn update(
         &self,
         value: ValueOf<R>,
@@ -122,7 +122,7 @@ where
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn remove(
         &self,
         name: &str,
@@ -144,7 +144,7 @@ where
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn get(
         &self,
         name: &str,
@@ -163,7 +163,7 @@ where
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[fastrace::trace]
     pub async fn list(&self) -> Result<Vec<ValueOf<R>>, MetaError> {
         let dir_name = DirName::new(self.ident("dummy"));
 

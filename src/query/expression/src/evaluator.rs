@@ -222,6 +222,7 @@ impl<'a> Evaluator<'a> {
 
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
+
                 ctx.render_error(
                     *span,
                     id.params(),
@@ -852,6 +853,7 @@ impl<'a> Evaluator<'a> {
                 Value::Scalar(_) => 1,
                 Value::Column(col) => col.len(),
             });
+
         let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         Ok(Some(evaluator.partial_run(&cast_expr, validity, options)?))

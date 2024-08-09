@@ -106,4 +106,6 @@ mod v099_parquet_format_params;
 mod v100_tenant_quota;
 mod v101_database_meta;
 mod v102_user_must_change_password;
-mod v103_geography_datatype;
+mod v103_share_meta_v2;
+mod v104_share_catalog;
+mod v105_geography_datatype;
