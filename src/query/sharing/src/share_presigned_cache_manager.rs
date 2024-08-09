@@ -20,12 +20,11 @@ use databend_common_exception::Result;
 use moka::sync::Cache;
 use opendal::raw::Operation;
 use opendal::raw::PresignedRequest;
-use parking_lot::RwLock;
 
 use crate::signer::PresignRequest;
 
 pub struct SharePresignedCacheManager {
-    cache: Arc<RwLock<Cache<PresignRequest, PresignedRequest>>>,
+    cache: Cache<PresignRequest, PresignedRequest>,
 }
 
 impl SharePresignedCacheManager {
@@ -41,9 +40,7 @@ impl SharePresignedCacheManager {
             // We will expire them 10 minutes before to avoid edge cases.
             .time_to_live(Duration::from_secs(3000))
             .build();
-        let manager = SharePresignedCacheManager {
-            cache: Arc::new(RwLock::new(cache)),
-        };
+        let manager = SharePresignedCacheManager { cache };
         GlobalInstance::set(Arc::new(manager));
 
         Ok(())
@@ -51,15 +48,13 @@ impl SharePresignedCacheManager {
 
     /// Get a presign request.
     pub fn get(&self, path: &str, op: Operation) -> Option<PresignedRequest> {
-        let cache = self.cache.read();
-        cache.get(&PresignRequest::new(path, op))
+        self.cache.get(&PresignRequest::new(path, op))
     }
 
     /// Set a presigned request.
     ///
     /// This operation will update the expiry time about this request.
     pub fn set(&self, path: &str, op: Operation, signed: PresignedRequest) {
-        let cache = self.cache.write();
-        cache.insert(PresignRequest::new(path, op), signed)
+        self.cache.insert(PresignRequest::new(path, op), signed)
     }
 }
