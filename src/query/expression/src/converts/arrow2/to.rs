@@ -166,7 +166,21 @@ fn table_type_to_arrow_type(ty: &TableDataType) -> ArrowDataType {
         ),
         TableDataType::Geography => ArrowDataType::Extension(
             ARROW_EXT_TYPE_GEOGRAPHY.to_string(),
-            Box::new(ArrowDataType::FixedSizeBinary(16)),
+            Box::new(ArrowDataType::Struct(vec![
+                ArrowField::new("buf", ArrowDataType::LargeBinary, false),
+                ArrowField::new(
+                    "points",
+                    ArrowDataType::LargeList(Box::new(ArrowField::new(
+                        "point",
+                        ArrowDataType::Struct(vec![
+                            ArrowField::new("x", ArrowDataType::Float64, false),
+                            ArrowField::new("y", ArrowDataType::Float64, false),
+                        ]),
+                        false,
+                    ))),
+                    false,
+                ),
+            ])),
             None,
         ),
     }
@@ -350,23 +364,42 @@ impl Column {
                 let arr_buf = Column::Binary(col.buf.clone()).as_arrow();
 
                 let arr_x = Box::new(
-                    array::PrimitiveArray::<f64>::try_new(arrow_type.clone(), col.x.clone(), None)
-                        .unwrap(),
+                    array::PrimitiveArray::<f64>::try_new(
+                        ArrowDataType::Float64,
+                        col.x.clone(),
+                        None,
+                    )
+                    .unwrap(),
                 );
                 let arr_y = Box::new(
-                    array::PrimitiveArray::<f64>::try_new(arrow_type.clone(), col.y.clone(), None)
-                        .unwrap(),
+                    array::PrimitiveArray::<f64>::try_new(
+                        ArrowDataType::Float64,
+                        col.y.clone(),
+                        None,
+                    )
+                    .unwrap(),
                 );
                 let arr_point = Box::new(
-                    array::StructArray::try_new(arrow_type.clone(), vec![arr_x, arr_y], None)
-                        .unwrap(),
+                    array::StructArray::try_new(
+                        ArrowDataType::Struct(vec![
+                            ArrowField::new("x", ArrowDataType::Float64, false),
+                            ArrowField::new("y", ArrowDataType::Float64, false),
+                        ]),
+                        vec![arr_x, arr_y],
+                        None,
+                    )
+                    .unwrap(),
                 );
 
                 let point_offsets: Buffer<i64> =
                     col.offsets.iter().map(|offset| *offset as i64).collect();
                 let arr_list_point = Box::new(
                     array::ListArray::<i64>::try_new(
-                        arrow_type.clone(),
+                        ArrowDataType::LargeList(Box::new(ArrowField::new(
+                            "point",
+                            arr_point.data_type().clone(),
+                            false,
+                        ))),
                         unsafe { OffsetsBuffer::new_unchecked(point_offsets) },
                         arr_point,
                         None,
