@@ -26,7 +26,6 @@ http = { workspace = true }
 log = { workspace = true }
 moka = "0.12"
 opendal = { workspace = true }
-parking_lot = { workspace = true }
 reqwest = { workspace = true }
 ring = "0.16.20"
 serde = { workspace = true }
