@@ -149,6 +149,7 @@ impl FuseTable {
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         // 2. update table meta
         let res = Self::update_table_meta(
+            ctx,
             catalog,
             table_info,
             location_generator,
@@ -207,6 +208,7 @@ impl FuseTable {
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn update_table_meta(
+        ctx: &dyn TableContext,
         catalog: Arc<dyn Catalog>,
         table_info: &TableInfo,
         location_generator: &TableMetaLocationGenerator,
@@ -242,7 +244,12 @@ impl FuseTable {
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
-        Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+        if ctx
+            .get_settings()
+            .get_enable_last_snapshot_location_hint()?
+        {
+            Self::write_last_snapshot_hint(operator, location_generator, snapshot_location).await;
+        }
 
         Ok(())
     }
