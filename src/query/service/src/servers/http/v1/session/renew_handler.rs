@@ -20,7 +20,7 @@ use poem::IntoResponse;
 
 use crate::servers::http::v1::session::token_manager::TokenManager;
 use crate::servers::http::v1::session::token_manager::TokenPair;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY_IN_SECS;
+use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::QueryError;
 
@@ -29,16 +29,17 @@ struct RenewRequest {
     pub session_token: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RenewResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token_validity_in_secs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<QueryError>,
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum RenewResponse {
+    Ok {
+        session_token: String,
+        refresh_token: String,
+        refresh_token_validity_in_secs: u64,
+    },
+    Error {
+        error: QueryError,
+    },
 }
 
 #[poem::handler]
@@ -62,17 +63,13 @@ pub async fn renew_handler(
         )
         .await
     {
-        Ok((_, token_pair)) => Ok(Json(RenewResponse {
-            session_token: Some(token_pair.session.clone()),
-            refresh_token: Some(token_pair.refresh.clone()),
-            refresh_token_validity_in_secs: Some(REFRESH_TOKEN_VALIDITY_IN_SECS),
-            error: None,
+        Ok((_, token_pair)) => Ok(Json(RenewResponse::Ok {
+            session_token: token_pair.session,
+            refresh_token: token_pair.refresh,
+            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.whole_seconds() as u64,
         })),
-        Err(e) => Ok(Json(RenewResponse {
-            session_token: None,
-            refresh_token: None,
-            refresh_token_validity_in_secs: None,
-            error: Some(QueryError::from_error_code(e)),
+        Err(e) => Ok(Json(RenewResponse::Error {
+            error: QueryError::from_error_code(e),
         })),
     }
 }

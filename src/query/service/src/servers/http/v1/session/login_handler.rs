@@ -23,7 +23,7 @@ use poem::web::Json;
 use poem::IntoResponse;
 
 use crate::servers::http::v1::session::token_manager::TokenManager;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY_IN_SECS;
+use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::QueryError;
 
@@ -35,19 +35,19 @@ struct LoginRequest {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LoginResponse {
-    pub version: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refresh_token_validity_in_secs: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<QueryError>,
+#[derive(Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum LoginResponse {
+    Ok {
+        version: String,
+        session_id: String,
+        session_token: String,
+        refresh_token: String,
+        refresh_token_validity_in_secs: u64,
+    },
+    Error {
+        error: QueryError,
+    },
 }
 
 /// Although theses can be checked for each /v1/query for now,
@@ -94,30 +94,25 @@ pub async fn login_handler(
     Json(req): Json<LoginRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let version = QUERY_SEMVER.to_string();
-    let error = check_login(ctx, &req)
-        .await
-        .map_err(QueryError::from_error_code)
-        .err();
+    if let Err(error) = check_login(ctx, &req).await {
+        return Ok(Json(LoginResponse::Error {
+            error: QueryError::from_error_code(error),
+        }));
+    }
 
     match TokenManager::instance()
         .new_token_pair(&ctx.session, None)
         .await
     {
-        Ok((session_id, token_pair)) => Ok(Json(LoginResponse {
+        Ok((session_id, token_pair)) => Ok(Json(LoginResponse::Ok {
             version,
-            session_id: Some(session_id),
-            session_token: Some(token_pair.session),
-            refresh_token: Some(token_pair.refresh),
-            refresh_token_validity_in_secs: Some(REFRESH_TOKEN_VALIDITY_IN_SECS),
-            error,
+            session_id,
+            session_token: token_pair.session,
+            refresh_token: token_pair.refresh,
+            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.whole_seconds() as u64,
         })),
-        Err(e) => Ok(Json(LoginResponse {
-            version,
-            session_id: None,
-            session_token: None,
-            refresh_token: None,
-            refresh_token_validity_in_secs: None,
-            error: Some(QueryError::from_error_code(e)),
+        Err(e) => Ok(Json(LoginResponse::Error {
+            error: QueryError::from_error_code(e),
         })),
     }
 }
