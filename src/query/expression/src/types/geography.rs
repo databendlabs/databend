@@ -51,17 +51,20 @@ pub struct Geography(pub Geometry);
 impl Geography {
     pub fn check(&self) -> Result<(), String> {
         let r = self.0.as_ref();
-        if r.x()
+        if !r
+            .x()
             .iter()
             .all(|longitude| (LONGITUDE_MIN..=LONGITUDE_MAX).contains(longitude))
-            && r.y()
-                .iter()
-                .all(|latitude| (LATITUDE_MIN..=LATITUDE_MAX).contains(latitude))
         {
-            Ok(())
-        } else {
-            Err("geography is out of range".to_string())
+            return Err("longitude is out of range".to_string());
         }
+        if !r.y()
+            .iter()
+            .all(|latitude| (LATITUDE_MIN..=LATITUDE_MAX).contains(latitude))
+        {
+            return Err("latitude is out of range".to_string());
+        }
+        Ok(())
     }
 }
 
@@ -231,7 +234,7 @@ impl ValueType for GeographyType {
     }
 
     fn push_default(builder: &mut Self::ColumnBuilder) {
-        Self::push_item(builder, Geography::default().as_ref())
+        builder.push_default()
     }
 
     fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {

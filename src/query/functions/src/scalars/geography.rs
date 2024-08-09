@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
@@ -30,16 +31,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, GeographyType>(|longitude, latitude, builder, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(builder.len()) {
-                    GeographyType::push_default(builder);
+                    builder.push_default();
                     return;
                 }
             }
             let geog = GeographyType::point(*longitude, *latitude);
             if let Err(e) = geog.check() {
-                ctx.set_error(builder.len(), e);
-                return;
+                ctx.set_error(
+                    builder.len(),
+                    ErrorCode::GeometryError(e.to_string()).to_string(),
+                );
+                builder.push_default();
+            } else {
+                builder.push(geog.as_ref())
             }
-            builder.push(geog.as_ref());
         })
     );
 }
