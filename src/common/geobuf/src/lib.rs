@@ -51,16 +51,6 @@ impl Geometry {
     }
 }
 
-impl Default for Geometry {
-    fn default() -> Self {
-        Self {
-            buf: vec![FeatureKind::Geometry(ObjectKind::GeometryCollection).as_u8()],
-            column_x: Buffer::default(),
-            column_y: Buffer::default(),
-        }
-    }
-}
-
 #[derive(Clone, Copy)]
 pub struct GeometryRef<'a> {
     buf: &'a [u8],

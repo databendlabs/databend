@@ -170,6 +170,14 @@ fn eq_f64(a: f64, b: f64) -> bool {
     // }
 }
 
+impl PartialEq for Geometry {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_ref().eq(&other.as_ref())
+    }
+}
+
+impl Eq for Geometry {}
+
 impl Geometry {
     pub fn new(buf: Vec<u8>, x: Vec<f64>, y: Vec<f64>) -> Self {
         Geometry {
@@ -185,6 +193,16 @@ impl Geometry {
             vec![x],
             vec![y],
         )
+    }
+}
+
+impl Default for Geometry {
+    fn default() -> Self {
+        Self {
+            buf: vec![FeatureKind::Geometry(ObjectKind::GeometryCollection).as_u8()],
+            column_x: Buffer::default(),
+            column_y: Buffer::default(),
+        }
     }
 }
 
@@ -215,14 +233,6 @@ impl PartialOrd for Geometry {
         self.as_ref().partial_cmp(&other.as_ref())
     }
 }
-
-impl PartialEq for Geometry {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_ref().eq(&other.as_ref())
-    }
-}
-
-impl Eq for Geometry {}
 
 impl<'a> Debug for GeometryRef<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
