@@ -733,7 +733,7 @@ impl RangeClasses {
         // if the range predicate in aggregating index and the query have three cases.
         // 1. the range of aggregating index and query are same, don't need extra filter ranges.
         // 2. the range of aggregating index filter less values than the query,
-        //    we can add extra range predicate to implemente the filter.
+        //    we can add extra range predicate to implement the filter.
         //    for example: aggregating index: a > 10 and query: a > 15
         //    we can add extra range as a > 15
         // 3. the range of aggregating index filter more values than the query,
@@ -1161,7 +1161,7 @@ impl AggIndexRewriter {
             }
             // both query and view don't have group, don't need check.
             (true, true) => {}
-            // query don't have group, but view have group, impossibile to match.
+            // query don't have group, but view have group, impossible to match.
             (true, false) => {
                 return false;
             }

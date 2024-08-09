@@ -14,8 +14,8 @@
 
 use std::io;
 use std::time::Duration;
-use std::time::SystemTime;
 
+use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
@@ -529,8 +529,10 @@ impl<'a> Applier<'a> {
                     0
                 }
                 Some(ms) => {
-                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(ms);
-                    debug!("apply: raft-log time: {:?}", t);
+                    debug!(
+                        "apply: raft-log time: {}",
+                        Duration::from_millis(ms).display_unix_timestamp()
+                    );
                     ms
                 }
             },
