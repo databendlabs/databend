@@ -343,7 +343,6 @@ impl RoleApi for RoleMgr {
             let grant_object = convert_to_grant_obj(object);
 
             let owner_key = self.ownership_object_ident(object);
-
             let owner_value = serialize_struct(
                 &OwnershipInfo {
                     object: object.clone(),
