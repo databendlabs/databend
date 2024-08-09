@@ -169,7 +169,7 @@ impl SimpleTableFunc for FuseSnapshotFunc {
             .await?;
 
         let table = FuseTable::try_from_table(tbl.as_ref()).map_err(|_| {
-            ErrorCode::StorageOther("Invalid table engine, only fuse table is supported")
+            ErrorCode::StorageOther("Invalid table engine, only FUSE table supports fuse_snapshot")
         })?;
 
         let meta_location_generator = table.meta_location_generator.clone();
