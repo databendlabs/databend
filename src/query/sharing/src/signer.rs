@@ -70,6 +70,9 @@ impl SharedSigner {
 
     /// Get a presign request.
     pub fn get(&self, path: &str, op: Operation) -> Option<PresignedRequest> {
+        if op == Operation::Stat {
+            return None;
+        }
         SharePresignedCacheManager::instance().get(path, op)
     }
 
