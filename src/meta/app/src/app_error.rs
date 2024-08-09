@@ -1107,34 +1107,6 @@ impl UnknownDictionary {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("DropDictionaryWithDropTime: drop {dictionary_name} with drop time")]
-pub struct DropDictionaryWithDropTime {
-    dictionary_name: String,
-}
-
-impl DropDictionaryWithDropTime {
-    pub fn new(dictionary_name: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
-#[error("CreateDictionaryWithDropTime: create {dictionary_name} with drop time")]
-pub struct CreateDictionaryWithDropTime {
-    dictionary_name: String,
-}
-
-impl CreateDictionaryWithDropTime {
-    pub fn new(dictionary_name: impl Into<String>) -> Self {
-        Self {
-            dictionary_name: dictionary_name.into(),
-        }
-    }
-}
-
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -1331,12 +1303,6 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownDictionary(#[from] UnknownDictionary),
-
-    #[error(transparent)]
-    DropDictionaryWithDropTime(#[from] DropDictionaryWithDropTime),
-
-    #[error(transparent)]
-    CreateDictionaryWithDropTime(#[from] CreateDictionaryWithDropTime),
 }
 
 #[derive(thiserror::Error, serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -1793,21 +1759,6 @@ impl AppErrorMessage for UnknownDictionary {
     }
 }
 
-impl AppErrorMessage for DropDictionaryWithDropTime {
-    fn message(&self) -> String {
-        format!("Drop Dictionary '{}' with drop time", self.dictionary_name)
-    }
-}
-
-impl AppErrorMessage for CreateDictionaryWithDropTime {
-    fn message(&self) -> String {
-        format!(
-            "Create Dictionary '{}' with drop time",
-            self.dictionary_name
-        )
-    }
-}
-
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1923,12 +1874,6 @@ impl From<AppError> for ErrorCode {
                 ErrorCode::DictionaryAlreadyExists(err.message())
             }
             AppError::UnknownDictionary(err) => ErrorCode::UnknownDictionary(err.message()),
-            AppError::DropDictionaryWithDropTime(err) => {
-                ErrorCode::DropDictionaryWithDropTime(err.message())
-            }
-            AppError::CreateDictionaryWithDropTime(err) => {
-                ErrorCode::CreateDictionaryWithDropTime(err.message())
-            }
         }
     }
 }

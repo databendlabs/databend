@@ -24,32 +24,33 @@ use databend_common_expression::TableSchema;
 
 use super::database_name_ident::DatabaseNameIdent;
 use super::CreateOption;
+use crate::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct DictionaryMeta {
-    // The source of the dictionary, which specifies where the dictionary data comes from, like `MySQL`.
+    /// The source of the dictionary, which specifies where the dictionary data comes from, like `MySQL`.
     pub source: String,
-    // Specify the configuration related to the data source in the form of key-value pairs.
-    // For example, `host='localhost' user='root' password='1234'`
+    /// Specify the configuration related to the data source in the form of key-value pairs.
+    /// For example, `host='localhost' user='root' password='1234'`
     pub options: BTreeMap<String, String>,
-    // Schema refers to an external table that corresponds to the dictionary.
-    // This is typically used to understand the layout and types of data within the dictionary.
+    /// Schema refers to an external table that corresponds to the dictionary.
+    /// This is typically used to understand the layout and types of data within the dictionary.
     pub schema: Arc<TableSchema>,
-    // A list of comments for each field in the dictionary.
-    // For example, if we have `id, address` fields, then field_comments could be `[ 'student's number','home address']`
+    /// A list of comments for each field in the dictionary.
+    /// For example, if we have `id, address` fields, then field_comments could be `[ 'student's number','home address']`
     pub field_comments: Vec<String>,
-    // A list of primary column IDs.
-    // For example, vec![1, 2] indicating the first and second columns are the primary keys.
+    /// A list of primary column IDs.
+    /// For example, vec![1, 2] indicating the first and second columns are the primary keys.
     pub primary_column_ids: Vec<u32>,
-    // A general comment string that can be used to provide additional notes or information about the dictionary.
+    /// A general comment string that can be used to provide additional notes or information about the dictionary.
     pub comment: String,
-    // The timestamp indicating when the dictionary was created, in Coordinated Universal Time (UTC).
+    /// The timestamp indicating when the dictionary was created, in Coordinated Universal Time (UTC).
     pub created_on: DateTime<Utc>,
-    // if used in CreateDictionaryReq,
-    // `updated_on` MUST set to None.
+    /// if used in CreateDictionaryReq,
+    /// `updated_on` MUST set to None.
     pub updated_on: Option<DateTime<Utc>>,
 }
 
@@ -81,57 +82,8 @@ impl Default for DictionaryMeta {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
     pub create_option: CreateOption,
-    pub name_ident: DictionaryNameIdent,
+    pub dictionary_ident: TenantDictionaryIdent,
     pub dictionary_meta: DictionaryMeta,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct DictionaryNameIdent {
-    pub tenant: Tenant,
-    pub db_name: String,
-    pub dictionary_name: String,
-}
-
-impl DictionaryNameIdent {
-    pub fn new(
-        tenant: impl ToTenant,
-        db_name: impl ToString,
-        dictionary_name: impl ToString,
-    ) -> DictionaryNameIdent {
-        DictionaryNameIdent {
-            tenant: tenant.to_tenant(),
-            db_name: db_name.to_string(),
-            dictionary_name: dictionary_name.to_string(),
-        }
-    }
-
-    pub fn tenant(&self) -> &Tenant {
-        &self.tenant
-    }
-
-    pub fn dictionary_name(&self) -> String {
-        self.dictionary_name.clone()
-    }
-
-    pub fn db_name_ident(&self) -> DatabaseNameIdent {
-        DatabaseNameIdent::new(&self.tenant, &self.db_name)
-    }
-
-    pub fn tenant_name(&self) -> &str {
-        self.tenant.tenant_name()
-    }
-
-    pub fn new_generic(
-        tenant: impl ToTenant,
-        dictionary_name: impl ToString,
-        db_name: impl ToString,
-    ) -> Self {
-        Self {
-            tenant: tenant.to_tenant(),
-            dictionary_name: dictionary_name.to_string(),
-            db_name: db_name.to_string(),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -142,26 +94,23 @@ pub struct CreateDictionaryReply {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReq {
     pub if_exists: bool,
-    pub db_id_dict_name: DBIdDictionaryName,
+    pub dictionary_ident: TenantDictionaryIdent,
 }
 
 impl DropDictionaryReq {
-    pub fn new(if_exists: bool, db_id: u64, dict_name: String) -> DropDictionaryReq {
-        let db_id_dict_name = DBIdDictionaryName {
-            db_id,
-            dictionary_name: dict_name,
-        };
+    pub fn new(if_exists: bool, db_id: u64, dict_name: String, tenant: impl ToTenant) -> DropDictionaryReq {
+        let dictionary_ident = TenantDictionaryIdent::new_dict_db(tenant, dict_name, db_id);
         DropDictionaryReq {
             if_exists,
-            db_id_dict_name,
+            dictionary_ident,
         }
     }
     pub fn dict_name(&self) -> String {
-        self.db_id_dict_name.dictionary_name.clone()
+        self.dictionary_ident.dict_name()
     }
 
     pub fn db_id(&self) -> u64 {
-        self.db_id_dict_name.db_id
+        self.dictionary_ident.db_id()
     }
 }
 
@@ -177,30 +126,29 @@ impl Display for DropDictionaryReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReq {
-    pub db_id_dict_name: DBIdDictionaryName,
+    pub dictionary_ident: TenantDictionaryIdent,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReply {
     pub dictionary_id: u64,
     pub dictionary_meta: DictionaryMeta,
-    /// seq AKA version of this table snapshot.
     /// Any change to a dictionary causes the seq to increment
-    pub seq: u64,
+    pub dictionary_meta_seq: u64,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DBIdDictionaryName {
-    pub db_id: u64,
-    pub dictionary_name: String,
+pub struct DictionaryIdent {
+ pub db_id: u64,
+ pub dictionary_name: String,
 }
 
-impl Display for DBIdDictionaryName {
+impl Display for DictionaryIdent {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "{}.'{}'", self.db_id, self.dictionary_name)
     }
@@ -225,23 +173,23 @@ impl Display for DictionaryId {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDictionaryReq {
-    pub db_id_dict_name: DBIdDictionaryName,
+    pub tenant: Tenant,
+    pub db_id: u64,
 }
 
 impl ListDictionaryReq {
-    pub fn new(db_id: u64, dict_name: String) -> ListDictionaryReq {
-        let db_id_dict_name = DBIdDictionaryName {
+    pub fn new(tenant: impl ToTenant, db_id: u64) -> ListDictionaryReq {
+        ListDictionaryReq { 
+            tenant,
             db_id,
-            dictionary_name: dict_name,
-        };
-        ListDictionaryReq { db_id_dict_name }
+         }
     }
     pub fn db_id(&self) -> u64 {
-        self.db_id_dict_name.db_id
+        self.db_id
     }
 
-    pub fn dict_name(&self) -> String {
-        self.db_id_dict_name.dictionary_name.clone()
+    pub fn tenant(&self) -> String {
+        self.tenant
     }
 }
 
@@ -250,7 +198,7 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::DBIdDictionaryName;
+    use super::DictionaryIdent;
     use super::DictionaryId;
     use super::DictionaryMeta;
     use crate::schema::DatabaseId;
@@ -286,7 +234,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for DBIdDictionaryName {
+    impl kvapi::KeyCodec for DictionaryIdent {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_u64(self.db_id).push_str(&self.dictionary_name)
         }
@@ -302,7 +250,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Key for DBIdDictionaryName {
+    impl kvapi::Key for DictionaryIdent {
         const PREFIX: &'static str = "__fd_dictionary";
 
         type ValueType = DictionaryId;
@@ -318,7 +266,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DBIdDictionaryName {
+    impl kvapi::Value for DictionaryIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }

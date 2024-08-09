@@ -332,5 +332,5 @@ pub trait SchemaApi: Send + Sync {
     async fn list_dictionaries(
         &self,
         req: ListDictionaryReq,
-    ) -> Result<Vec<DictionaryMeta>, KVAppError>;
+    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
 }
