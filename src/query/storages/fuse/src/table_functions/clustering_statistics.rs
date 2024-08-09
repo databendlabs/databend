@@ -47,17 +47,17 @@ use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
 pub struct ClusteringStatsArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+    database_name: String,
+    table_name: String,
 }
 
 impl From<&ClusteringStatsArgs> for TableArgs {
-    fn from(value: &ClusteringStatsArgs) -> Self {
-        let args = vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+    fn from(args: &ClusteringStatsArgs) -> Self {
+        let tbl_args = vec![
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ];
-        TableArgs::new_positioned(args)
+        TableArgs::new_positioned(tbl_args)
     }
 }
 
@@ -66,10 +66,10 @@ impl TryFrom<(&str, TableArgs)> for ClusteringStatsArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
+        let (database_name, table_name) = parse_db_tb_args(&table_args, func_name)?;
         Ok(Self {
-            arg_database_name,
-            arg_table_name,
+            database_name,
+            table_name,
         })
     }
 }
@@ -98,8 +98,8 @@ impl SimpleArgFunc for ClusteringStatistics {
             .await?
             .get_table(
                 &tenant_id,
-                args.arg_database_name.as_str(),
-                args.arg_table_name.as_str(),
+                args.database_name.as_str(),
+                args.table_name.as_str(),
             )
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
@@ -107,7 +107,7 @@ impl SimpleArgFunc for ClusteringStatistics {
         let Some(cluster_key_id) = tbl.cluster_key_id() else {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table '{}.{}'",
-                args.arg_database_name, args.arg_table_name,
+                args.database_name, args.table_name,
             )));
         };
 

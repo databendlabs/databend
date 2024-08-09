@@ -35,20 +35,20 @@ use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
 pub struct TableMetaFuncCommonArgs {
-    pub arg_database_name: String,
-    pub arg_table_name: String,
-    pub arg_snapshot_id: Option<String>,
+    pub database_name: String,
+    pub table_name: String,
+    pub snapshot_id: Option<String>,
 }
 
 impl From<&TableMetaFuncCommonArgs> for TableArgs {
-    fn from(value: &TableMetaFuncCommonArgs) -> Self {
-        let mut args = Vec::new();
-        args.push(string_literal(value.arg_database_name.as_str()));
-        args.push(string_literal(value.arg_table_name.as_str()));
-        if let Some(arg_snapshot_id) = &value.arg_snapshot_id {
-            args.push(string_literal(arg_snapshot_id));
+    fn from(args: &TableMetaFuncCommonArgs) -> Self {
+        let mut table_args = Vec::new();
+        table_args.push(string_literal(args.database_name.as_str()));
+        table_args.push(string_literal(args.table_name.as_str()));
+        if let Some(arg_snapshot_id) = &args.snapshot_id {
+            table_args.push(string_literal(arg_snapshot_id));
         }
-        TableArgs::new_positioned(args)
+        TableArgs::new_positioned(table_args)
     }
 }
 
@@ -58,12 +58,12 @@ impl TryFrom<(&str, TableArgs)> for TableMetaFuncCommonArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let (arg_database_name, arg_table_name, arg_snapshot_id) =
+        let (database_name, table_name, snapshot_id) =
             parse_db_tb_opt_args(&table_args, func_name)?;
         Ok(Self {
-            arg_database_name,
-            arg_table_name,
-            arg_snapshot_id,
+            database_name,
+            table_name,
+            snapshot_id,
         })
     }
 }
@@ -72,7 +72,7 @@ async fn location_snapshot(
     tbl: &FuseTable,
     args: &TableMetaFuncCommonArgs,
 ) -> Result<Option<Arc<TableSnapshot>>> {
-    let snapshot_id = args.arg_snapshot_id.clone();
+    let snapshot_id = args.snapshot_id.clone();
     let maybe_snapshot = tbl.read_table_snapshot().await?;
     if let Some(snapshot) = maybe_snapshot {
         if let Some(snapshot_id) = snapshot_id {
@@ -140,8 +140,8 @@ where
             .await?
             .get_table(
                 &tenant_id,
-                args.arg_database_name.as_str(),
-                args.arg_table_name.as_str(),
+                args.database_name.as_str(),
+                args.table_name.as_str(),
             )
             .await?;
         let limit = plan.push_downs.as_ref().and_then(|x| x.limit);

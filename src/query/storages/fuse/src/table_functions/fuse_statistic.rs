@@ -40,17 +40,17 @@ use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 
 pub struct FuseStatsArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+    database_name: String,
+    table_name: String,
 }
 
 impl From<&FuseStatsArgs> for TableArgs {
-    fn from(value: &FuseStatsArgs) -> Self {
-        let args = vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+    fn from(args: &FuseStatsArgs) -> Self {
+        let tbl_args = vec![
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ];
-        TableArgs::new_positioned(args)
+        TableArgs::new_positioned(tbl_args)
     }
 }
 
@@ -59,10 +59,10 @@ impl TryFrom<(&str, TableArgs)> for FuseStatsArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
+        let (database_name, table_name) = parse_db_tb_args(&table_args, func_name)?;
         Ok(Self {
-            arg_database_name,
-            arg_table_name,
+            database_name,
+            table_name,
         })
     }
 }
@@ -90,8 +90,8 @@ impl SimpleArgFunc for FuseStatistics {
             .await?
             .get_table(
                 &tenant_id,
-                args.arg_database_name.as_str(),
-                args.arg_table_name.as_str(),
+                args.database_name.as_str(),
+                args.table_name.as_str(),
             )
             .await?;
 

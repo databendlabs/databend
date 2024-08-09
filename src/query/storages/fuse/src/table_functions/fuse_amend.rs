@@ -38,15 +38,15 @@ use crate::table_functions::TableArgs;
 use crate::FuseTable;
 
 struct AmendTableArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+    database_name: String,
+    table_name: String,
 }
 
 impl From<&AmendTableArgs> for TableArgs {
-    fn from(value: &AmendTableArgs) -> Self {
+    fn from(args: &AmendTableArgs) -> Self {
         TableArgs::new_positioned(vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ])
     }
 }
@@ -81,8 +81,8 @@ impl SimpleTableFunc for FuseAmendTable {
             .await?
             .get_table(
                 &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
+                self.args.database_name.as_str(),
+                self.args.table_name.as_str(),
             )
             .await?;
 
@@ -107,8 +107,8 @@ impl SimpleTableFunc for FuseAmendTable {
         let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
         Ok(Self {
             args: AmendTableArgs {
-                arg_database_name,
-                arg_table_name,
+                database_name: arg_database_name,
+                table_name: arg_table_name,
             },
             fail_safe_handler,
         })

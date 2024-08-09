@@ -63,7 +63,7 @@ use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 pub struct FuseEncodingArgs {
-    arg_database_name: String,
+    database_name: String,
 }
 
 impl TryFrom<(&str, TableArgs)> for FuseEncodingArgs {
@@ -71,15 +71,14 @@ impl TryFrom<(&str, TableArgs)> for FuseEncodingArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let arg_database_name = parse_db_tb_col_args(&table_args, func_name)?;
-        Ok(Self { arg_database_name })
+        let database_name = parse_db_tb_col_args(&table_args, func_name)?;
+        Ok(Self { database_name })
     }
 }
 
 impl From<&FuseEncodingArgs> for TableArgs {
-    fn from(value: &FuseEncodingArgs) -> Self {
-        let args = vec![string_literal(value.arg_database_name.as_str())];
-        TableArgs::new_positioned(args)
+    fn from(args: &FuseEncodingArgs) -> Self {
+        TableArgs::new_positioned(vec![string_literal(args.database_name.as_str())])
     }
 }
 
@@ -103,7 +102,7 @@ impl SimpleArgFunc for FuseEncoding {
         let tbls = ctx
             .get_catalog(CATALOG_DEFAULT)
             .await?
-            .get_database(&tenant_id, args.arg_database_name.as_str())
+            .get_database(&tenant_id, args.database_name.as_str())
             .await?
             .list_tables()
             .await?;

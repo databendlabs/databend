@@ -41,8 +41,8 @@ use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 
 pub struct FuseSnapshotArgs {
-    arg_database_name: String,
-    arg_table_name: String,
+    database_name: String,
+    table_name: String,
 }
 
 pub struct FuseSnapshotFunc {
@@ -50,10 +50,10 @@ pub struct FuseSnapshotFunc {
 }
 
 impl From<&FuseSnapshotArgs> for TableArgs {
-    fn from(value: &FuseSnapshotArgs) -> Self {
+    fn from(args: &FuseSnapshotArgs) -> Self {
         TableArgs::new_positioned(vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ])
     }
 }
@@ -163,8 +163,8 @@ impl SimpleTableFunc for FuseSnapshotFunc {
             .await?
             .get_table(
                 &tenant_id,
-                self.args.arg_database_name.as_str(),
-                self.args.arg_table_name.as_str(),
+                self.args.database_name.as_str(),
+                self.args.table_name.as_str(),
             )
             .await?;
 
@@ -234,8 +234,8 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         let (arg_database_name, arg_table_name) = parse_db_tb_args(&table_args, func_name)?;
         Ok(Self {
             args: FuseSnapshotArgs {
-                arg_database_name,
-                arg_table_name,
+                database_name: arg_database_name,
+                table_name: arg_table_name,
             },
         })
     }

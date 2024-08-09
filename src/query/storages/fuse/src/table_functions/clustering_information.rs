@@ -69,18 +69,18 @@ use crate::FuseTable;
 use crate::Table;
 
 pub struct ClusteringInformationArgs {
-    arg_database_name: String,
-    arg_table_name: String,
-    arg_cluster_key: Option<String>,
+    database_name: String,
+    table_name: String,
+    cluster_key: Option<String>,
 }
 
 impl From<&ClusteringInformationArgs> for TableArgs {
-    fn from(value: &ClusteringInformationArgs) -> Self {
-        let args = vec![
-            string_literal(value.arg_database_name.as_str()),
-            string_literal(value.arg_table_name.as_str()),
+    fn from(args: &ClusteringInformationArgs) -> Self {
+        let tbl_args = vec![
+            string_literal(args.database_name.as_str()),
+            string_literal(args.table_name.as_str()),
         ];
-        TableArgs::new_positioned(args)
+        TableArgs::new_positioned(tbl_args)
     }
 }
 impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
@@ -88,13 +88,13 @@ impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
     fn try_from(
         (func_name, table_args): (&str, TableArgs),
     ) -> std::result::Result<Self, Self::Error> {
-        let (arg_database_name, arg_table_name, arg_cluster_key) =
+        let (database_name, table_name, cluster_key) =
             parse_db_tb_opt_args(&table_args, func_name)?;
 
         Ok(Self {
-            arg_database_name,
-            arg_table_name,
-            arg_cluster_key,
+            database_name,
+            table_name,
+            cluster_key,
         })
     }
 }
@@ -121,14 +121,14 @@ impl SimpleArgFunc for ClusteringInformationNew {
             .await?
             .get_table(
                 &tenant_id,
-                args.arg_database_name.as_str(),
-                args.arg_table_name.as_str(),
+                args.database_name.as_str(),
+                args.table_name.as_str(),
             )
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        ClusteringInformation::new(ctx.clone(), tbl, args.arg_cluster_key.clone())
+        ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
             .get_clustering_info()
             .await
     }
