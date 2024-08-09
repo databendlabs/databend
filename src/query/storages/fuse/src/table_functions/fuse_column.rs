@@ -45,6 +45,28 @@ pub type FuseColumnFunc = TableMetaFuncTemplate<FuseColumn>;
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseColumn {
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp),
+            TableField::new("block_location", TableDataType::String),
+            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("column_name", TableDataType::String),
+            TableField::new("column_type", TableDataType::String),
+            TableField::new("column_id", TableDataType::Number(NumberDataType::UInt32)),
+            TableField::new(
+                "block_offset",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_compressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+        ])
+    }
+
     async fn apply(
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
@@ -168,27 +190,5 @@ impl TableMetaFunc for FuseColumn {
             ],
             row_num,
         ))
-    }
-
-    fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("snapshot_id", TableDataType::String),
-            TableField::new("timestamp", TableDataType::Timestamp),
-            TableField::new("block_location", TableDataType::String),
-            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("column_name", TableDataType::String),
-            TableField::new("column_type", TableDataType::String),
-            TableField::new("column_id", TableDataType::Number(NumberDataType::UInt32)),
-            TableField::new(
-                "block_offset",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-        ])
     }
 }

@@ -74,16 +74,16 @@ impl TryFrom<(&str, TableArgs)> for ClusteringStatsArgs {
     }
 }
 
-pub type ClusteringStatisticsFunc = SimpleArgFuncTemplate<ClusteringStatisticsNew>;
+pub type ClusteringStatisticsFunc = SimpleArgFuncTemplate<ClusteringStatistics>;
 
-pub struct ClusteringStatisticsNew;
+pub struct ClusteringStatistics;
 
 #[async_trait::async_trait]
-impl SimpleArgFunc for ClusteringStatisticsNew {
+impl SimpleArgFunc for ClusteringStatistics {
     type Args = ClusteringStatsArgs;
 
     fn schema() -> TableSchemaRef {
-        ClusteringStatistics::schema().into()
+        ClusteringStatisticsImpl::schema()
     }
 
     async fn apply(
@@ -112,20 +112,20 @@ impl SimpleArgFunc for ClusteringStatisticsNew {
         };
 
         let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
-        ClusteringStatistics::new(ctx.clone(), tbl, limit, cluster_key_id)
+        ClusteringStatisticsImpl::new(ctx.clone(), tbl, limit, cluster_key_id)
             .get_blocks()
             .await
     }
 }
 
-pub struct ClusteringStatistics<'a> {
+pub struct ClusteringStatisticsImpl<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
     pub limit: Option<usize>,
     pub cluster_key_id: u32,
 }
 
-impl<'a> ClusteringStatistics<'a> {
+impl<'a> ClusteringStatisticsImpl<'a> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,

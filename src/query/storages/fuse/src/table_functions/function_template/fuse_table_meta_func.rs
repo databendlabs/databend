@@ -146,8 +146,8 @@ where
             .await?;
         let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        if let Some(snapshot) = location_snapshot(tbl, &args).await? {
-            return Ok(T::apply(ctx, tbl, snapshot, limit).await?);
+        if let Some(snapshot) = location_snapshot(tbl, args).await? {
+            return T::apply(ctx, tbl, snapshot, limit).await;
         } else {
             Ok(DataBlock::empty_with_schema(Arc::new(T::schema().into())))
         }

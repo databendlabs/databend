@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod clustering_information;
-mod clustering_stat;
+mod clustering_statistics;
 mod function_template;
 mod fuse_amend;
 mod fuse_block;
@@ -26,7 +26,7 @@ mod set_cache_capacity;
 mod table_args;
 
 pub use clustering_information::ClusteringInformationFunc;
-pub use clustering_stat::ClusteringStatisticsFunc;
+pub use clustering_statistics::ClusteringStatisticsFunc;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_function::TableFunction;
 pub use function_template::SimpleTableFunc;

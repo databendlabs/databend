@@ -45,6 +45,29 @@ pub type FuseBlockFunc = TableMetaFuncTemplate<FuseBlock>;
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseBlock {
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp),
+            TableField::new("block_location", TableDataType::String),
+            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bloom_filter_location",
+                TableDataType::String.wrap_nullable(),
+            ),
+            TableField::new(
+                "bloom_filter_size",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "inverted_index_size",
+                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+        ])
+    }
+
     async fn apply(
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
@@ -144,28 +167,5 @@ impl TableMetaFunc for FuseBlock {
             ],
             row_num,
         ))
-    }
-
-    fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("snapshot_id", TableDataType::String),
-            TableField::new("timestamp", TableDataType::Timestamp),
-            TableField::new("block_location", TableDataType::String),
-            TableField::new("block_size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("file_size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "bloom_filter_location",
-                TableDataType::String.wrap_nullable(),
-            ),
-            TableField::new(
-                "bloom_filter_size",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "inverted_index_size",
-                TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
-            ),
-        ])
     }
 }

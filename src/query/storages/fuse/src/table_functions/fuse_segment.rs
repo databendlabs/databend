@@ -40,6 +40,26 @@ pub type FuseSegmentFunc = TableMetaFuncTemplate<FuseSegment>;
 
 #[async_trait::async_trait]
 impl TableMetaFunc for FuseSegment {
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("file_location", TableDataType::String),
+            TableField::new(
+                "format_version",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bytes_uncompressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_compressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+        ])
+    }
+
     async fn apply(
         ctx: &Arc<dyn TableContext>,
         tbl: &FuseTable,
@@ -97,25 +117,5 @@ impl TableMetaFunc for FuseSegment {
             UInt64Type::from_data(uncompressed),
             UInt64Type::from_data(compressed),
         ]))
-    }
-
-    fn schema() -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("file_location", TableDataType::String),
-            TableField::new(
-                "format_version",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "bytes_uncompressed",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-        ])
     }
 }

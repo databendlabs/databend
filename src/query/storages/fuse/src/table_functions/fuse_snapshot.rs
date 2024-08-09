@@ -121,6 +121,37 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         Some((&self.args).into())
     }
 
+    fn schema(&self) -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("snapshot_id", TableDataType::String),
+            TableField::new("snapshot_location", TableDataType::String),
+            TableField::new(
+                "format_version",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "previous_snapshot_id",
+                TableDataType::String.wrap_nullable(),
+            ),
+            TableField::new(
+                "segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bytes_uncompressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "bytes_compressed",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
+        ])
+    }
+
     async fn apply(
         &self,
         ctx: &Arc<dyn TableContext>,
@@ -196,37 +227,6 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         Ok(Some(DataBlock::empty_with_schema(Arc::new(
             self.schema().into(),
         ))))
-    }
-
-    fn schema(&self) -> Arc<TableSchema> {
-        TableSchemaRefExt::create(vec![
-            TableField::new("snapshot_id", TableDataType::String),
-            TableField::new("snapshot_location", TableDataType::String),
-            TableField::new(
-                "format_version",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "previous_snapshot_id",
-                TableDataType::String.wrap_nullable(),
-            ),
-            TableField::new(
-                "segment_count",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new("block_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("row_count", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new(
-                "bytes_uncompressed",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "bytes_compressed",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
-        ])
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>

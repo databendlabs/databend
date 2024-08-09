@@ -76,7 +76,7 @@ impl SimpleArgFunc for FuseStatistics {
     type Args = FuseStatsArgs;
 
     fn schema() -> TableSchemaRef {
-        FuseStatisticImpl::schema().into()
+        FuseStatisticImpl::schema()
     }
 
     async fn apply(

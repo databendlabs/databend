@@ -76,9 +76,10 @@ pub struct ClusteringInformationArgs {
 
 impl From<&ClusteringInformationArgs> for TableArgs {
     fn from(value: &ClusteringInformationArgs) -> Self {
-        let mut args = Vec::new();
-        args.push(string_literal(value.arg_database_name.as_str()));
-        args.push(string_literal(value.arg_table_name.as_str()));
+        let args = vec![
+            string_literal(value.arg_database_name.as_str()),
+            string_literal(value.arg_table_name.as_str()),
+        ];
         TableArgs::new_positioned(args)
     }
 }
@@ -106,7 +107,7 @@ impl SimpleArgFunc for ClusteringInformationNew {
     type Args = ClusteringInformationArgs;
 
     fn schema() -> TableSchemaRef {
-        ClusteringInformation::schema().into()
+        ClusteringInformation::schema()
     }
 
     async fn apply(
