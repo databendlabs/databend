@@ -158,8 +158,7 @@ impl ShareEndpointClient {
             HeaderMap::new()
         };
 
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
@@ -192,8 +191,7 @@ impl ShareEndpointClient {
             HeaderMap::new()
         };
 
-        let client = reqwest::Client::new();
-        let resp = client.get(&uri).headers(headers).send().await;
+        let resp = self.client.get(&uri).headers(headers).send().await;
 
         match resp {
             Ok(resp) => {
