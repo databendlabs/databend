@@ -28,21 +28,21 @@ use crate::sessions::TableContext;
 
 pub struct UnSetInterpreter {
     ctx: Arc<QueryContext>,
-    set: UnsetPlan,
+    unset: UnsetPlan,
 }
 
 impl UnSetInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, set: UnsetPlan) -> Result<Self> {
-        Ok(UnSetInterpreter { ctx, set })
+        Ok(UnSetInterpreter { ctx, unset: set })
     }
 
     async fn execute_unset_settings(&self) -> Result<()> {
-        let plan = self.set.clone();
+        let plan = self.unset.clone();
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
         let settings = self.ctx.get_shared_settings();
-        let session_level = self.set.unset_type == SetType::SettingsSession;
+        let session_level = self.unset.unset_type == SetType::SettingsSession;
         settings.load_changes().await?;
 
         // Fetch global settings asynchronously if necessary
@@ -93,6 +93,7 @@ impl UnSetInterpreter {
                     match default_val {
                         Some(val) => {
                             let final_val = if global_settings.is_empty() {
+                                self.ctx.get_shared_settings().unset_setting(&var);
                                 val.to_string()
                             } else {
                                 global_settings
@@ -132,7 +133,7 @@ impl UnSetInterpreter {
     }
 
     async fn execute_unset_variables(&self) -> Result<()> {
-        for var in self.set.vars.iter() {
+        for var in self.unset.vars.iter() {
             self.ctx.unset_variable(var);
         }
         Ok(())
@@ -151,7 +152,7 @@ impl Interpreter for UnSetInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        match self.set.unset_type {
+        match self.unset.unset_type {
             databend_common_ast::ast::SetType::SettingsSession
             | databend_common_ast::ast::SetType::SettingsGlobal => {
                 self.execute_unset_settings().await?

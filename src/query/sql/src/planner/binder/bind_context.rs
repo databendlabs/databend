@@ -32,6 +32,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_meta_app::schema::ShareDBParams;
 use enum_as_inner::EnumAsInner;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -146,6 +147,9 @@ pub struct BindContext {
     pub planning_agg_index: bool,
 
     pub window_definitions: DashMap<String, WindowSpec>,
+
+    // when access a share view, save share db params to access all the table referenced by the view
+    pub share_paramas: Option<ShareDBParams>,
 }
 
 #[derive(Clone, Debug)]
@@ -178,6 +182,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
+            share_paramas: None,
         }
     }
 
@@ -197,6 +202,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
+            share_paramas: None,
         }
     }
 

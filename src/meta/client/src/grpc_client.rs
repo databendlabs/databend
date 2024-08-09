@@ -33,7 +33,7 @@ use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::containers::ItemManager;
 use databend_common_base::containers::Pool;
-use databend_common_base::future::TimingFutureExt;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -542,7 +542,7 @@ impl MetaGrpcClient {
             message::Request::StreamMGet(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
-                    .timed_ge(
+                    .with_timing_threshold(
                         threshold(),
                         info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
                     )
@@ -552,7 +552,7 @@ impl MetaGrpcClient {
             message::Request::StreamList(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
-                    .timed_ge(
+                    .with_timing_threshold(
                         threshold(),
                         info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
                     )
@@ -562,14 +562,14 @@ impl MetaGrpcClient {
             message::Request::Upsert(r) => {
                 let resp = self
                     .kv_api(r)
-                    .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                    .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::kv_api"))
                     .await;
                 Response::Upsert(resp)
             }
             message::Request::Txn(r) => {
                 let resp = self
                     .transaction(r)
-                    .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
+                    .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::transaction"))
                     .await;
                 Response::Txn(resp)
             }
@@ -996,14 +996,14 @@ impl MetaGrpcClient {
         for i in 0..RPC_RETRIES {
             let mut client = self
                 .get_established_client()
-                .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
+                .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
 
             let req = traced_req(raft_req.clone());
 
             let result = client
                 .kv_api(req)
-                .timed_ge(threshold(), info_spent("client::kv_api"))
+                .with_timing_threshold(threshold(), info_spent("client::kv_api"))
                 .await;
 
             debug!(
@@ -1061,7 +1061,7 @@ impl MetaGrpcClient {
         for i in 0..RPC_RETRIES {
             let mut established_client = self
                 .get_established_client()
-                .timed_ge(
+                .with_timing_threshold(
                     threshold(),
                     info_spent("MetaGrpcClient::get_established_client"),
                 )
@@ -1072,7 +1072,7 @@ impl MetaGrpcClient {
 
             let result = established_client
                 .kv_read_v1(req)
-                .timed_ge(threshold(), info_spent("client::kv_read_v1"))
+                .with_timing_threshold(threshold(), info_spent("client::kv_read_v1"))
                 .await;
 
             debug!(

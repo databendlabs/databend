@@ -48,6 +48,7 @@ use crate::FunctionDomain;
 use crate::Scalar;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
@@ -183,7 +184,7 @@ pub struct FunctionRegistry {
 
     /// Default cast rules for all functions.
     pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Cast rules for specific functions, in addition to default cast rules.
+    /// Cast rules for specific functions, which will override the default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
@@ -604,24 +605,26 @@ impl<'a> EvalContext<'a> {
         }
         match &self.errors {
             Some((valids, error)) => {
-                let first_error_row = if let Some(selection) = selection {
-                    if let Some(first_invalid) =
-                        selection.iter().find(|idx| !valids.get(**idx as usize))
-                    {
-                        *first_invalid as usize
-                    } else {
-                        return Ok(());
+                let first_error_row = match selection {
+                    None => valids.iter().enumerate().find(|(_, v)| !v).unwrap().0,
+                    Some(selection) if valids.len() == 1 => {
+                        if valids.get(0) || selection.is_empty() {
+                            return Ok(());
+                        }
+
+                        selection.first().map(|x| *x as usize).unwrap()
                     }
-                } else {
-                    valids
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, valid)| !valid)
-                        .take(1)
-                        .next()
-                        .unwrap()
-                        .0
+                    Some(selection) => {
+                        let Some(first_invalid) =
+                            selection.iter().find(|idx| !valids.get(**idx as usize))
+                        else {
+                            return Ok(());
+                        };
+
+                        *first_invalid as usize
+                    }
                 };
+
                 let args = args
                     .iter()
                     .map(|arg| {

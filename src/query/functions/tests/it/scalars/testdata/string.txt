@@ -2374,14 +2374,10 @@ output         : '?'
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:12
   |
 1 | lpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `lpad(String, Int16, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  lpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `lpad('hi', to_uint64(- 1), '?')`
 
 
 
@@ -2488,14 +2484,10 @@ output         : '?'
 
 
 error: 
-  --> SQL:1:1
+  --> SQL:1:12
   |
 1 | rpad('hi', -1, '?')
-  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `rpad(String, Int16, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  rpad(String, UInt64, String) :: String                      : unable to unify `Int16` with `UInt64`
-  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL  : unable to unify `Int16` with `UInt64`
+  |            ^ number overflowed while evaluating function `to_uint64(-1)` in expr `to_uint64(- 1)`, during run expr: `rpad('hi', to_uint64(- 1), '?')`
 
 
 
@@ -3387,6 +3379,15 @@ evaluation (internal):
 ast            : mid('1234567890', -3, 3)
 raw expr       : mid('1234567890', minus(3), 3)
 checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<UInt8>(3_u8))
+optimized expr : "890"
+output type    : String
+output domain  : {"890"..="890"}
+output         : '890'
+
+
+ast            : mid('1234567890', -3, 4 - 1)
+raw expr       : mid('1234567890', minus(3), minus(4, 1))
+checked expr   : substr<String, Int64, UInt64>("1234567890", to_int64<Int16>(minus<UInt8>(3_u8)), to_uint64<Int16>(minus<UInt8, UInt8>(4_u8, 1_u8)))
 optimized expr : "890"
 output type    : String
 output domain  : {"890"..="890"}
