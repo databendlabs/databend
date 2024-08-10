@@ -4282,10 +4282,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_id: dictionary_ident.db_id,
                 dictionary_name: dictionary_ident.dictionary_name.clone(),
             };
-            let res = get_dictionary_or_err(
-                self,
-                &dict_ident
-            ).await?;
+            let res = get_dictionary_or_err(self, &dict_ident).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
@@ -4384,10 +4381,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let res: (u64, u64, u64, Option<DictionaryMeta>) = get_dictionary_or_err(
-                self,
-                &dictionary_ident
-            ).await?;
+            let res: (u64, u64, u64, Option<DictionaryMeta>) =
+                get_dictionary_or_err(self, &dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
             let drop_if_exists = req.if_exists;
 
@@ -4482,8 +4477,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
         // Using a empty dictionary name to to list all
         let dictionary_ident = DictionaryIdent {
-                db_id: req.db_id,
-                dictionary_name: "".to_string(),
+            db_id: req.db_id,
+            dictionary_name: "".to_string(),
         };
 
         let (dict_keys, dict_id_list) = list_u64_value(self, &dictionary_ident).await?;

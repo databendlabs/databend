@@ -101,7 +101,7 @@ impl DropDictionaryReq {
         if_exists: bool,
         db_id: u64,
         dict_name: String,
-        tenant: impl ToTenant
+        tenant: impl ToTenant,
     ) -> DropDictionaryReq {
         let dictionary_ident = TenantDictionaryIdent::new_dict_db(tenant, dict_name, db_id);
         DropDictionaryReq {
@@ -186,7 +186,7 @@ impl ListDictionaryReq {
         ListDictionaryReq {
             tenant: tenant.to_tenant(),
             db_id,
-         }
+        }
     }
 
     pub fn db_id(&self) -> u64 {

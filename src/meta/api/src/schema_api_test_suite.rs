@@ -7372,7 +7372,6 @@ impl SchemaApiTestSuite {
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
-        let db_id;
 
         info!("--- prepare db");
         {
@@ -7385,7 +7384,7 @@ impl SchemaApiTestSuite {
             inner: db_name_ident.clone(),
         };
         let db_info = mt.get_database(get_db_req).await?;
-        db_id = db_info.ident.db_id;
+        let db_id = db_info.ident.db_id;
 
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -7460,7 +7459,11 @@ impl SchemaApiTestSuite {
             assert!(res.is_some());
 
             let req = GetDictionaryReq {
-                dictionary_ident: TenantDictionaryIdent::new_dict_db(dict_tenant.clone(), "dummy_dict".to_string(), db_id),
+                dictionary_ident: TenantDictionaryIdent::new_dict_db(
+                    dict_tenant.clone(),
+                    "dummy_dict".to_string(),
+                    db_id,
+                ),
             };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_none());
