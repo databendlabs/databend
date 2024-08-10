@@ -64,7 +64,6 @@ use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::CatalogIdIdent;
@@ -4389,7 +4388,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 self,
                 &dictionary_ident
             ).await?;
-            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
+            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
             let drop_if_exists = req.if_exists;
 
             if dictionary_id_seq == 0 {
@@ -4507,7 +4506,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         {
             if let Some(seq_meta) = seq_meta_opt {
                 let dict_meta: DictionaryMeta = deserialize_struct(&seq_meta.data)?;
-                dict_metas.push((key.dict_name().clone(), dict_meta));
+                dict_metas.push((key.dictionary_name.clone(), dict_meta));
             } else {
                 debug!(k = &dict_meta_keys[i]; "dict_meta not found");
             }
