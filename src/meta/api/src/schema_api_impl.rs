@@ -4374,8 +4374,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let dictionary_ident = DictionaryIdent {
-            db_id: req.db_id(),
-            dictionary_name: req.dict_name().clone(),
+            db_id: req.dictionary_ident.db_id(),
+            dictionary_name: req.dictionary_ident.dict_name().clone(),
         };
         let mut trials = txn_backoff(None, func_name!());
 
@@ -4385,13 +4385,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut condition = vec![];
             let mut if_then = vec![];
 
-            let dict_ident = DictionaryIdent {
-                db_id: dictionary_ident.db_id,
-                dictionary_name: dictionary_ident.dict_name.clone(),
-            };
             let res: (u64, u64, u64, Option<DictionaryMeta>) = get_dictionary_or_err(
                 self,
-                &dict_ident
+                &dictionary_ident
             ).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
             let drop_if_exists = req.if_exists;
@@ -4402,7 +4398,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 } else {
                     return Err(KVAppError::AppError(AppError::UnknownDictionary(
                         UnknownDictionary::new(
-                            dictionary_ident.dict_name.clone(),
+                            dictionary_ident.dictionary_name.clone(),
                             "drop_dictionary",
                         ),
                     )));
@@ -4450,8 +4446,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let dictionary_ident = DictionaryIdent {
-            db_id: req.db_id(),
-            dictionary_name: req.dict_name().clone(),
+            db_id: req.dictionary_ident.db_id(),
+            dictionary_name: req.dictionary_ident.dict_name().clone(),
         };
 
         let res = get_dictionary_or_err(self, &dictionary_ident).await?;
@@ -4486,8 +4482,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Using a empty dictionary name to to list all
-        let dictionary_ident =
-            TenantDictionaryIdent::new_dict_db(req.tenant, "".to_string(), req.db_id);
+        let dictionary_ident = DictionaryIdent {
+                db_id: req.db_id,
+                dictionary_name: "".to_string(),
+        };
 
         let (dict_keys, dict_id_list) = list_u64_value(self, &dictionary_ident).await?;
         if dict_id_list.is_empty() {

@@ -7408,7 +7408,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list dictionary with no create before");
-            let req = ListDictionaryReq::new(dict_tenant, db_id);
+            let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
             let res = mt.list_dictionaries(req).await?;
             assert!(res.is_empty());
         }
