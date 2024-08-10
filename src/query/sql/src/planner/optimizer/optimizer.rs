@@ -454,7 +454,8 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
             if mutation.distributed {
                 let join = Join::try_from(input_s_expr.plan().clone())?;
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
-                let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr);
+                let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
+                    && broadcast_to_shuffle.is_broadcast(&input_s_expr)?;
 
                 // If the mutation strategy is matched only, the join type is inner join, if it is a broadcast
                 // join and the target table on the probe side, we can avoid row id shuffle after the join.
