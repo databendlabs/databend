@@ -160,7 +160,7 @@ impl<'a> RecursiveOptimizer<'a> {
 
 #[fastrace::trace]
 #[async_recursion(#[recursive::recursive])]
-pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
+pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     match plan {
         Plan::Query {
             s_expr,
@@ -170,7 +170,7 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
             formatted_ast,
             ignore_result,
         } => Ok(Plan::Query {
-            s_expr: Box::new(optimize_query(opt_ctx, *s_expr).await?),
+            s_expr: Box::new(optimize_query(&mut opt_ctx, *s_expr).await?),
             bind_context,
             metadata,
             rewrite_kind,
@@ -303,10 +303,9 @@ pub async fn optimize(opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan> {
     }
 }
 
-pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
-    let mut enable_distributed_query = opt_ctx.enable_distributed_optimization;
+pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -> Result<SExpr> {
     if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
-        enable_distributed_query = false;
+        opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
     }
 
@@ -331,7 +330,7 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     s_expr = PullUpFilterOptimizer::new(opt_ctx.metadata.clone()).run(&s_expr)?;
 
     // Run default rewrite rules
-    s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, &opt_ctx).run(&s_expr)?;
+    s_expr = RecursiveOptimizer::new(&DEFAULT_REWRITE_RULES, opt_ctx).run(&s_expr)?;
 
     // Cost based optimization
     let mut dphyp_optimized = false;
@@ -354,12 +353,11 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
         opt_ctx.table_ctx.clone(),
         opt_ctx.metadata.clone(),
         dphyp_optimized,
-        enable_distributed_query,
+        opt_ctx.enable_distributed_optimization,
     )?;
 
     if opt_ctx.enable_join_reorder {
-        s_expr =
-            RecursiveOptimizer::new([RuleID::CommuteJoin].as_slice(), &opt_ctx).run(&s_expr)?;
+        s_expr = RecursiveOptimizer::new([RuleID::CommuteJoin].as_slice(), opt_ctx).run(&s_expr)?;
     }
 
     // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
@@ -367,7 +365,7 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
         Ok(mut s_expr) => {
             // Push down sort and limit
             // TODO(leiysky): do this optimization in cascades optimizer
-            if enable_distributed_query {
+            if opt_ctx.enable_distributed_optimization {
                 let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
                 s_expr = sort_and_limit_optimizer.optimize(&s_expr)?;
             }
@@ -379,7 +377,7 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
                 "CascadesOptimizer failed, fallback to heuristic optimizer: {}",
                 e
             );
-            if enable_distributed_query {
+            if opt_ctx.enable_distributed_optimization {
                 s_expr = optimize_distributed_query(opt_ctx.table_ctx.clone(), &s_expr)?;
             }
 
@@ -388,7 +386,7 @@ pub async fn optimize_query(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
     };
 
     s_expr =
-        RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), &opt_ctx).run(&s_expr)?;
+        RecursiveOptimizer::new([RuleID::EliminateEvalScalar].as_slice(), opt_ctx).run(&s_expr)?;
 
     Ok(s_expr)
 }
@@ -440,22 +438,23 @@ async fn get_optimized_memo(opt_ctx: OptimizerContext, mut s_expr: SExpr) -> Res
 }
 
 async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
-    let enable_distributed_merge_into = opt_ctx
-        .table_ctx
-        .get_settings()
-        .get_enable_distributed_merge_into()?;
-    if opt_ctx.enable_distributed_optimization {
-        opt_ctx = opt_ctx.with_enable_distributed_optimization(enable_distributed_merge_into);
+    let mut plan: Mutation = s_expr.plan().clone().try_into()?;
+
+    if plan.mutation_type == MutationType::Merge {
+        opt_ctx.enable_distributed_optimization &= opt_ctx
+            .table_ctx
+            .get_settings()
+            .get_enable_distributed_merge_into()?;
     }
 
-    let mut plan: Mutation = s_expr.plan().clone().try_into()?;
     let original_target_table_position =
         target_table_position(s_expr.child(0)?, plan.target_table_index)?;
-    let mut input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
+    let mut input_s_expr = optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+    let new_target_table_position = target_table_position(&input_s_expr, plan.target_table_index)?;
+
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
-    let new_target_table_position = target_table_position(&input_s_expr, plan.target_table_index)?;
 
     plan.change_join_order = original_target_table_position != new_target_table_position;
     plan.distributed =
