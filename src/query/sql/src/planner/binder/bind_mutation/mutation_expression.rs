@@ -293,7 +293,7 @@ impl MutationExpression {
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,
-                        mutation_type,
+                        mutation_type: MutationType::Merge,
                         mutation_strategy,
                         required_columns,
                         bind_context,
