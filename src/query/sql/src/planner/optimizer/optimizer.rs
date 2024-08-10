@@ -466,7 +466,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
                     mutation.row_id_shuffle = false;
                 }
 
-                // Change broadcast join to shuffle join if the join type is left or left-anti join, because 
+                // Change broadcast join to shuffle join if the join type is left or left-anti join, because
                 // broadcast join can not deduplicate row ids.
                 if is_broadcast && matches!(join.join_type, JoinType::Left | JoinType::LeftAnti) {
                     broadcast_to_shuffle.optimize(&input_s_expr)?
