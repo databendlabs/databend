@@ -7369,6 +7369,7 @@ impl SchemaApiTestSuite {
         let db_name = "db1";
         let tbl_name = "tb2";
         let dict_name = "dict3";
+        let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
         let dict_id;
@@ -7379,10 +7380,8 @@ impl SchemaApiTestSuite {
             util.create_db().await?;
         }
 
-        let db_name_ident = DatabaseNameIdent::new(
-            Tenant::new_literal(tenant_name),
-            db_name.to_string(),
-        );
+        let db_name_ident =
+            DatabaseNameIdent::new(Tenant::new_literal(tenant_name), db_name.to_string());
         let get_db_req = GetDatabaseReq {
             inner: db_name_ident.clone(),
         };
@@ -7409,18 +7408,13 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list dictionary with no create before");
-            let req = ListDictionaryReq::new(db_id, dict_name.to_string());
+            let req = ListDictionaryReq::new(dict_tenant, db_id);
             let res = mt.list_dictionaries(req).await?;
             assert!(res.is_empty());
         }
 
-        let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
         let dict_ident =
-            TenantDictionaryIdent::new_dict_db(
-                dict_tenant.clone(),
-                dict_name.to_string(),
-                db_id
-            );
+            TenantDictionaryIdent::new_dict_db(dict_tenant.clone(), dict_name.to_string(), db_id);
 
         {
             info!("--- create dictionary");
@@ -7466,12 +7460,8 @@ impl SchemaApiTestSuite {
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
 
-            let dict_ident_dummy = DictionaryIdent {
-                db_id,
-                dictionary_name: "dummy_dict".to_string(),
-            };
             let req = GetDictionaryReq {
-                dictionary_ident: dict_ident_dummy.clone(),
+                dictionary_ident: TenantDictionaryIdent::new_dict_db(dict_tenant.clone(), "dummy_dict".to_string(), db_id),
             };
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_none());
@@ -7488,7 +7478,8 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- drop dictionary");
-            let req = DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
+            let req =
+                DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
 
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok());
@@ -7503,14 +7494,16 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- drop dictionary with if_exists = false");
-            let req = DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
+            let req =
+                DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_err());
         }
 
         {
             info!("--- drop dictionary with if_exists = true");
-            let req = DropDictionaryReq::new(true, db_id, dict_name.to_string(), dict_tenant.clone());
+            let req =
+                DropDictionaryReq::new(true, db_id, dict_name.to_string(), dict_tenant.clone());
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok());
         }

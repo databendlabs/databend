@@ -97,7 +97,12 @@ pub struct DropDictionaryReq {
 }
 
 impl DropDictionaryReq {
-    pub fn new(if_exists: bool, db_id: u64, dict_name: String, tenant: impl ToTenant) -> DropDictionaryReq {
+    pub fn new(
+        if_exists: bool,
+        db_id: u64,
+        dict_name: String,
+        tenant: impl ToTenant
+    ) -> DropDictionaryReq {
         let dictionary_ident = TenantDictionaryIdent::new_dict_db(tenant, dict_name, db_id);
         DropDictionaryReq {
             if_exists,
@@ -143,8 +148,8 @@ pub struct GetDictionaryReply {
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct DictionaryIdent {
- pub db_id: u64,
- pub dictionary_name: String,
+    pub db_id: u64,
+    pub dictionary_name: String,
 }
 
 impl Display for DictionaryIdent {
@@ -178,11 +183,12 @@ pub struct ListDictionaryReq {
 
 impl ListDictionaryReq {
     pub fn new(tenant: impl ToTenant, db_id: u64) -> ListDictionaryReq {
-        ListDictionaryReq { 
+        ListDictionaryReq {
             tenant: tenant.to_tenant(),
             db_id,
          }
     }
+
     pub fn db_id(&self) -> u64 {
         self.db_id
     }
@@ -197,8 +203,8 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
     use databend_common_meta_kvapi::kvapi::Key;
 
-    use super::DictionaryIdent;
     use super::DictionaryId;
+    use super::DictionaryIdent;
     use super::DictionaryMeta;
     use crate::schema::DatabaseId;
 

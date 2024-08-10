@@ -50,6 +50,7 @@ pub mod user_setting_ident;
 pub mod user_stage_ident;
 
 pub use connection::*;
+pub use dictionary_identity::DictionaryIdentity;
 pub use file_format::*;
 pub use network_policy::NetworkPolicy;
 pub use network_policy_ident::NetworkPolicyIdent;
@@ -64,8 +65,6 @@ pub use role_info::RoleInfo;
 pub use role_info::RoleInfoSerdeError;
 pub use stage_file_ident::StageFileIdent;
 pub use stage_file_path::StageFilePath;
-
-pub use dictionary_identity::DictionaryIdentity;
 pub use tenant_ownership_object_ident::TenantOwnershipObjectIdent;
 pub use tenant_user_ident::TenantUserIdent;
 pub use udf_ident::UdfIdent;

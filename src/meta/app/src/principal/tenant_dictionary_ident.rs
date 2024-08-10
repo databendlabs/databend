@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::DictionaryIdentity;
 use crate::tenant::ToTenant;
 use crate::tenant_key::ident::TIdent;
 use crate::KeyWithTenant;
-
-use super::DictionaryIdentity;
-
 
 /// A dictionary identity belonging to a tenant.
 pub type TenantDictionaryIdent = TIdent<Resource, DictionaryIdentity>;
