@@ -115,7 +115,7 @@ impl PhysicalPlanBuilder {
             distributed,
             predicate_column_index,
             row_id_index,
-            change_join_order,
+            row_id_shuffle,
             can_try_update_column_only,
             ..
         } = mutation;
@@ -230,9 +230,7 @@ impl PhysicalPlanBuilder {
         // For distributed merge, we shuffle data blocks by block_id (drived from row_id) to avoid
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
-        let source_is_broadcast =
-            matches!(strategy, MutationStrategy::MatchedOnly) && !change_join_order;
-        if *distributed && !is_not_matched_only && !source_is_broadcast {
+        if *distributed && *row_id_shuffle {
             plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
                 plan,
                 bind_context,

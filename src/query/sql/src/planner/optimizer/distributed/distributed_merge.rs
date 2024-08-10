@@ -22,14 +22,14 @@ use crate::plans::Exchange::Hash;
 use crate::plans::Join;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-pub struct MergeOptimizer {
-    pub merge_matcher: Matcher,
+pub struct BroadcastToShuffleOptimizer {
+    pub matcher: Matcher,
 }
 
-impl MergeOptimizer {
+impl BroadcastToShuffleOptimizer {
     pub fn create() -> Self {
         Self {
-            merge_matcher: Self::merge_matcher(),
+            matcher: Self::matcher(),
         }
     }
 
@@ -64,7 +64,7 @@ impl MergeOptimizer {
         Ok(join_s_expr)
     }
 
-    fn merge_matcher() -> Matcher {
+    fn matcher() -> Matcher {
         // Input:
         //         Join
         //         /  \
