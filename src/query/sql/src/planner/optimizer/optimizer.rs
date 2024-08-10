@@ -441,10 +441,7 @@ async fn optimize_merge_into(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Re
     let mut plan: Mutation = s_expr.plan().clone().try_into()?;
 
     if plan.mutation_type == MutationType::Merge {
-        opt_ctx.enable_distributed_optimization &= opt_ctx
-            .table_ctx
-            .get_settings()
-            .get_enable_distributed_merge_into()?;
+        opt_ctx.enable_distributed_optimization = false;
     }
 
     let original_target_table_position =
