@@ -13,7 +13,7 @@ set enable_last_snapshot_location_hint = 0;
 statement ok
 create or replace table t (c int) 'fs:///tmp/snapshot_hint_disabled/' as select * from numbers(1);
 
-# create a stage that points to the same location of table `ctas_test`
+# create a stage that points to the same location of table `t`
 statement ok
 create or replace stage hint_stage url='fs:///tmp/snapshot_hint_disabled/';
 
