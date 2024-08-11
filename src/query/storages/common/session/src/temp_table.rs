@@ -23,6 +23,8 @@ use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::RenameTableReply;
+use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -128,6 +130,30 @@ impl TempTblMgr {
             Some(id) => {
                 self.name_to_id.insert(req.name_ident.clone(), id);
                 Ok(Some(CommitTableMetaReply {}))
+            }
+            None => Ok(None),
+        }
+    }
+
+    pub fn rename_table(&mut self, req: &RenameTableReq) -> Result<Option<RenameTableReply>> {
+        let RenameTableReq {
+            if_exists: _,
+            name_ident,
+            new_db_name,
+            new_table_name,
+        } = req;
+        match self.name_to_id.remove(&name_ident) {
+            Some(id) => {
+                let new_name_ident = TableNameIdent {
+                    table_name: new_table_name.clone(),
+                    db_name: new_db_name.clone(),
+                    ..name_ident.clone()
+                };
+                self.name_to_id.insert(new_name_ident, id);
+                Ok(Some(RenameTableReply {
+                    table_id: 0,
+                    share_table_info: None,
+                }))
             }
             None => Ok(None),
         }

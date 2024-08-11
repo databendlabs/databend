@@ -365,7 +365,11 @@ impl Catalog for SessionCatalog {
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        self.inner.rename_table(req).await
+        let reply = self.temp_tbl_mgr.lock().rename_table(&req)?;
+        match reply {
+            Some(r) => Ok(r),
+            None => self.inner.rename_table(req).await,
+        }
     }
 
     async fn upsert_table_option(
