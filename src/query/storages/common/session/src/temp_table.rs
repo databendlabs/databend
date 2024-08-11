@@ -27,12 +27,30 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use parking_lot::Mutex;
+
+/// `TempTblId` is an unique identifier for a temporary table.
+///
+/// It should **not** be used as `MetaId`.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
+pub struct TempTblId {
+    inner: u64,
+}
+
+impl TempTblId {
+    pub fn zero() -> Self {
+        TempTblId { inner: 0 }
+    }
+
+    pub fn increment(&mut self) {
+        self.inner += 1;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
-    name_to_id: HashMap<TableNameIdent, u64>,
-    pub dropped_name_to_id: HashMap<TableNameIdent, u64>,
-    id_to_meta: HashMap<u64, TableMeta>,
-    next_id: u64,
+    name_to_id: HashMap<TableNameIdent, TempTblId>,
+    id_to_meta: HashMap<TempTblId, TableMeta>,
+    next_id: TempTblId,
 }
 
 impl TempTblMgr {
@@ -40,30 +58,31 @@ impl TempTblMgr {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
             id_to_meta: HashMap::new(),
-            dropped_name_to_id: HashMap::new(),
-            next_id: 0,
+            next_id: TempTblId::zero(),
         }))
     }
 
     pub fn create_table(&mut self, req: CreateTableReq) -> Result<CreateTableReply> {
         let CreateTableReq {
             create_option,
-            name_ident,
+            mut name_ident,
             table_meta,
             as_dropped,
         } = req;
+        let orphan_table_name = match as_dropped {
+            true => {
+                name_ident.table_name = format!("orphan@{}", name_ident.table_name);
+                Some(name_ident.table_name.clone())
+            }
+            false => None,
+        };
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
             return Err(ErrorCode::Internal(format!(
                 "Database id not set in table options"
             )));
         };
         let db_id = db_id.parse::<u64>()?;
-        let name_to_id = if as_dropped {
-            &mut self.dropped_name_to_id
-        } else {
-            &mut self.name_to_id
-        };
-        let table_id = match (name_to_id.entry(name_ident.clone()), create_option) {
+        let new_table = match (self.name_to_id.entry(name_ident.clone()), create_option) {
             (Entry::Occupied(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
@@ -74,41 +93,44 @@ impl TempTblMgr {
                 let table_id = self.next_id;
                 e.insert(table_id);
                 self.id_to_meta.insert(table_id, table_meta);
-                self.next_id += 1;
-                table_id
+                self.next_id.increment();
+                true
             }
-            (Entry::Occupied(e), CreateOption::CreateIfNotExists) => {
-                let table_id = *e.get();
-                table_id
-            }
+            (Entry::Occupied(_), CreateOption::CreateIfNotExists) => false,
             (Entry::Vacant(e), _) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
                 self.id_to_meta.insert(table_id, table_meta);
-                self.next_id += 1;
-                table_id
+                self.next_id.increment();
+                true
             }
         };
         Ok(CreateTableReply {
-            table_id,
+            table_id: 0,
             table_id_seq: Some(0),
             db_id,
-            new_table: true,
+            new_table,
             spec_vec: None,
             prev_table_id: None,
-            orphan_table_name: None,
+            orphan_table_name,
         })
     }
 
-    pub fn commit_table_meta(&mut self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        let Some(id) = self.dropped_name_to_id.remove(&req.name_ident) else {
-            return Err(ErrorCode::Internal(format!(
-                "table {} doesn't exists, it's a bug",
-                req.name_ident
-            )));
+    pub fn commit_table_meta(
+        &mut self,
+        req: &CommitTableMetaReq,
+    ) -> Result<Option<CommitTableMetaReply>> {
+        let orhan_name_ident = TableNameIdent {
+            table_name: req.orphan_table_name.clone().unwrap(),
+            ..req.name_ident.clone()
         };
-        self.name_to_id.insert(req.name_ident.clone(), id);
-        Ok(CommitTableMetaReply {})
+        match self.name_to_id.remove(&orhan_name_ident) {
+            Some(id) => {
+                self.name_to_id.insert(req.name_ident.clone(), id);
+                Ok(Some(CommitTableMetaReply {}))
+            }
+            None => Ok(None),
+        }
     }
 }
 

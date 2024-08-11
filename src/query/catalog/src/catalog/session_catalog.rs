@@ -357,14 +357,10 @@ impl Catalog for SessionCatalog {
     }
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        let is_temp_table = self
-            .temp_tbl_mgr
-            .lock()
-            .dropped_name_to_id
-            .contains_key(&req.name_ident);
-        match is_temp_table {
-            true => self.temp_tbl_mgr.lock().commit_table_meta(req),
-            false => self.inner.commit_table_meta(req).await,
+        let reply = self.temp_tbl_mgr.lock().commit_table_meta(&req)?;
+        match reply {
+            Some(r) => Ok(r),
+            None => self.inner.commit_table_meta(req).await,
         }
     }
 
