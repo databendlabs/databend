@@ -320,11 +320,11 @@ pub trait SchemaApi: Send + Sync {
     async fn drop_dictionary(
         &self,
         dict_ident: TenantDictionaryIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaError>;
+    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError>;
 
     async fn get_dictionary(
         &self,
-        req: GetDictionaryReq,
+        req: TenantDictionaryIdent,
     ) -> Result<Option<GetDictionaryReply>, KVAppError>;
 
     async fn list_dictionaries(

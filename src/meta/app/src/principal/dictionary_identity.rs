@@ -31,7 +31,6 @@ impl DictionaryIdentity {
 mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::DictionaryIdentity;
     use crate::schema::{DatabaseId, DictionaryId};
