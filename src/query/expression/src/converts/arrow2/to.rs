@@ -364,18 +364,18 @@ impl Column {
                 use databend_common_arrow::arrow::array;
                 let arr_buf = Column::Binary(col.buf.clone()).as_arrow();
 
-                let arr_x = Box::new(
+                let arr_lon = Box::new(
                     array::PrimitiveArray::<f64>::try_new(
                         ArrowDataType::Float64,
-                        col.x.clone(),
+                        col.lon.clone(),
                         None,
                     )
                     .unwrap(),
                 );
-                let arr_y = Box::new(
+                let arr_lat = Box::new(
                     array::PrimitiveArray::<f64>::try_new(
                         ArrowDataType::Float64,
-                        col.y.clone(),
+                        col.lat.clone(),
                         None,
                     )
                     .unwrap(),
@@ -386,7 +386,7 @@ impl Column {
                             ArrowField::new("x", ArrowDataType::Float64, false),
                             ArrowField::new("y", ArrowDataType::Float64, false),
                         ]),
-                        vec![arr_x, arr_y],
+                        vec![arr_lon, arr_lat],
                         None,
                     )
                     .unwrap(),

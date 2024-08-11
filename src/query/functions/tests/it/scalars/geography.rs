@@ -14,6 +14,8 @@
 
 use std::io::Write;
 
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use crate::scalars::run_ast;
@@ -27,4 +29,10 @@ fn test_geography() {
 
 fn test_st_makepoint(file: &mut impl Write) {
     run_ast(file, "st_makepoint(40.7127, -74.0059)", &[]);
+
+    let columns = [
+        ("lon", Float64Type::from_data(vec![12.57, 78.74, -48.5])),
+        ("lat", Float64Type::from_data(vec![0.0, 90.0, -45.0])),
+    ];
+    run_ast(file, "st_makepoint(lon, lat)", &columns);
 }
