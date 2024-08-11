@@ -16,7 +16,6 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-use databend_common_arrow::parquet::read;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -358,7 +357,15 @@ impl Catalog for SessionCatalog {
     }
 
     async fn commit_table_meta(&self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
-        self.inner.commit_table_meta(req).await
+        let is_temp_table = self
+            .temp_tbl_mgr
+            .lock()
+            .dropped_name_to_id
+            .contains_key(&req.name_ident);
+        match is_temp_table {
+            true => self.temp_tbl_mgr.lock().commit_table_meta(req),
+            false => self.inner.commit_table_meta(req).await,
+        }
     }
 
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {

@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::CommitTableMetaReply;
+use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -28,6 +30,7 @@ use parking_lot::Mutex;
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
     name_to_id: HashMap<TableNameIdent, u64>,
+    pub dropped_name_to_id: HashMap<TableNameIdent, u64>,
     id_to_meta: HashMap<u64, TableMeta>,
     next_id: u64,
 }
@@ -37,6 +40,7 @@ impl TempTblMgr {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
             id_to_meta: HashMap::new(),
+            dropped_name_to_id: HashMap::new(),
             next_id: 0,
         }))
     }
@@ -46,7 +50,7 @@ impl TempTblMgr {
             create_option,
             name_ident,
             table_meta,
-            as_dropped: _,
+            as_dropped,
         } = req;
         let Some(db_id) = table_meta.options.get(OPT_KEY_DATABASE_ID) else {
             return Err(ErrorCode::Internal(format!(
@@ -54,7 +58,12 @@ impl TempTblMgr {
             )));
         };
         let db_id = db_id.parse::<u64>()?;
-        let table_id = match (self.name_to_id.entry(name_ident.clone()), create_option) {
+        let name_to_id = if as_dropped {
+            &mut self.dropped_name_to_id
+        } else {
+            &mut self.name_to_id
+        };
+        let table_id = match (name_to_id.entry(name_ident.clone()), create_option) {
             (Entry::Occupied(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
@@ -82,13 +91,24 @@ impl TempTblMgr {
         };
         Ok(CreateTableReply {
             table_id,
-            table_id_seq: None,
+            table_id_seq: Some(0),
             db_id,
             new_table: true,
             spec_vec: None,
             prev_table_id: None,
             orphan_table_name: None,
         })
+    }
+
+    pub fn commit_table_meta(&mut self, req: CommitTableMetaReq) -> Result<CommitTableMetaReply> {
+        let Some(id) = self.dropped_name_to_id.remove(&req.name_ident) else {
+            return Err(ErrorCode::Internal(format!(
+                "table {} doesn't exists, it's a bug",
+                req.name_ident
+            )));
+        };
+        self.name_to_id.insert(req.name_ident.clone(), id);
+        Ok(CommitTableMetaReply {})
     }
 }
 
