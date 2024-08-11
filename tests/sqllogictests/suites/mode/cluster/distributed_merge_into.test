@@ -1,4 +1,511 @@
 statement ok
+set enforce_broadcast_join = 0;
+
+statement ok
+set enforce_shuffle_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+set enforce_broadcast_join = 1;
+
+# matched only, target broadcast inner join source
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), t2.val (#1) + 1, t1.val (#3))]
+    └── RowFetch
+        ├── output columns: [t1.id (#2), t1._row_id (#4), t2.val (#1), t2.id (#0), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t1.id (#2), t1._row_id (#4), t2.val (#1), t2.id (#0)]
+            ├── join type: INNER
+            ├── build keys: [t2.id (#0)]
+            ├── probe keys: [t1.id (#2)]
+            ├── filters: []
+            ├── estimated rows: 25000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t2
+            │   ├── output columns: [id (#0), val (#1)]
+            │   ├── read rows: 25000
+            │   ├── read size: 50.98 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 25000.00
+            └── TableScan(Probe)
+                ├── table: default.default.t1
+                ├── output columns: [id (#2), _row_id (#4)]
+                ├── read rows: 50000
+                ├── read size: 50.28 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 50000.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_broadcast_join = 0;
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+set enforce_shuffle_join = 1;
+
+# matched only, target shuffle inner join source
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), t2.val (#1) + 1, t1.val (#3))]
+    └── RowFetch
+        ├── output columns: [t1.id (#2), t1._row_id (#4), t2.val (#1), t2.id (#0), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t1.id (#2), t1._row_id (#4), t2.val (#1), t2.id (#0)]
+            ├── join type: INNER
+            ├── build keys: [t2.id (#0)]
+            ├── probe keys: [t1.id (#2)]
+            ├── filters: []
+            ├── estimated rows: 25000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t2
+            │   ├── output columns: [id (#0), val (#1)]
+            │   ├── read rows: 25000
+            │   ├── read size: 50.98 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 25000.00
+            └── TableScan(Probe)
+                ├── table: default.default.t1
+                ├── output columns: [id (#2), _row_id (#4)]
+                ├── read rows: 50000
+                ├── read size: 50.28 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 50000.00
+
+# execute
+query I
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_shuffle_join = 0;
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+set enforce_broadcast_join = 1;
+
+# matched only, source broadcast inner join target
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), t2.val (#1) + 1, t1.val (#3))]
+    └── RowFetch
+        ├── output columns: [t2.id (#0), t2.val (#1), t1._row_id (#4), t1.id (#2), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t2.id (#0), t2.val (#1), t1._row_id (#4), t1.id (#2)]
+            ├── join type: INNER
+            ├── build keys: [t1.id (#2)]
+            ├── probe keys: [t2.id (#0)]
+            ├── filters: []
+            ├── estimated rows: 25000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t1
+            │   ├── output columns: [id (#2), _row_id (#4)]
+            │   ├── read rows: 25000
+            │   ├── read size: 25.49 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 25000.00
+            └── TableScan(Probe)
+                ├── table: default.default.t2
+                ├── output columns: [id (#0), val (#1)]
+                ├── read rows: 50000
+                ├── read size: 100.56 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 50000.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_broadcast_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+set enforce_shuffle_join = 1;
+
+# matched only, source shuffle inner join target
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), t2.val (#1) + 1, t1.val (#3))]
+    └── RowFetch
+        ├── output columns: [t2.id (#0), t2.val (#1), t1._row_id (#4), t1.id (#2), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t2.id (#0), t2.val (#1), t1._row_id (#4), t1.id (#2)]
+            ├── join type: INNER
+            ├── build keys: [t1.id (#2)]
+            ├── probe keys: [t2.id (#0)]
+            ├── filters: []
+            ├── estimated rows: 25000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t1
+            │   ├── output columns: [id (#2), _row_id (#4)]
+            │   ├── read rows: 25000
+            │   ├── read size: 25.49 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 25000.00
+            └── TableScan(Probe)
+                ├── table: default.default.t2
+                ├── output columns: [id (#0), val (#1)]
+                ├── read rows: 50000
+                ├── read size: 100.56 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 50000.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1;
+----
+25000
+
+statement ok
+set enforce_shuffle_join = 0;
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+16667
+
+# not matched only, target shuffle right-anti join source
+query I
+explain merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── unmatched insert: [condition: None, insert into (id,val) values(t2.id (#0),t2.val (#1))]
+    └── HashJoin
+        ├── output columns: [t2.id (#0), t2.val (#1)]
+        ├── join type: RIGHT ANTI
+        ├── build keys: [t2.id (#0)]
+        ├── probe keys: [t1.id (#2)]
+        ├── filters: []
+        ├── estimated rows: 25000.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t2
+        │   ├── output columns: [id (#0), val (#1)]
+        │   ├── read rows: 25000
+        │   ├── read size: 50.98 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 25000.00
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── output columns: [id (#2)]
+            ├── read rows: 33333
+            ├── read size: 33.73 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 33333.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+8334
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+8334
+
+# not matched only, source shuffle left-anti join target
+query I
+explain merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── unmatched insert: [condition: None, insert into (id,val) values(t2.id (#0),t2.val (#1))]
+    └── HashJoin
+        ├── output columns: [t2.id (#0), t2.val (#1)]
+        ├── join type: LEFT ANTI
+        ├── build keys: [t1.id (#2)]
+        ├── probe keys: [t2.id (#0)]
+        ├── filters: []
+        ├── estimated rows: 50000.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t1
+        │   ├── output columns: [id (#2)]
+        │   ├── read rows: 16666
+        │   ├── read size: 17.12 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 16666.00
+        └── TableScan(Probe)
+            ├── table: default.default.t2
+            ├── output columns: [id (#0), val (#1)]
+            ├── read rows: 50000
+            ├── read size: 100.56 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 50000.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+33334
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(50000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(25000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+16667
+
+# mixed matched, target shuffle right-outer join source
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t2.val (#1) + 1 AS UInt64 NULL), t1.val (#3))]
+    ├── unmatched insert: [condition: None, insert into (id,val) values(t2.id (#0),t2.val (#1))]
+    └── RowFetch
+        ├── output columns: [t1.id (#2), t1._row_id (#4), t2.id (#0), t2.val (#1), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t1.id (#2), t1._row_id (#4), t2.id (#0), t2.val (#1)]
+            ├── join type: RIGHT OUTER
+            ├── build keys: [CAST(t2.id (#0) AS UInt64 NULL)]
+            ├── probe keys: [t1.id (#2)]
+            ├── filters: []
+            ├── estimated rows: 25000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t2
+            │   ├── output columns: [id (#0), val (#1)]
+            │   ├── read rows: 25000
+            │   ├── read size: 50.98 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 25000.00
+            └── TableScan(Probe)
+                ├── table: default.default.t1
+                ├── output columns: [id (#2), _row_id (#4)]
+                ├── read rows: 33333
+                ├── read size: 33.73 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 33333.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+8334 16666
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0 25000
+
+
+statement ok
+create or replace table t1 as select number as id, number + 1 as val from numbers(25000);
+
+statement ok
+create or replace table t2 as select number as id, number + 1 as val from numbers(50000);
+
+query T
+delete from t1 where id % 3 = 0;
+----
+8334
+
+# mixed matched, source shuffle left-outer join target
+query I
+explain merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+CommitSink
+└── DataMutation
+    ├── target table: [catalog: default] [database: default] [table: t1]
+    ├── matched update: [condition: None, update set val = if(CAST(_predicate (#18446744073709551615) AS Boolean NULL), CAST(t2.val (#1) + 1 AS UInt64 NULL), t1.val (#3))]
+    ├── unmatched insert: [condition: None, insert into (id,val) values(t2.id (#0),t2.val (#1))]
+    └── RowFetch
+        ├── output columns: [t2.id (#0), t2.val (#1), t1.id (#2), t1._row_id (#4), t1.val (#3)]
+        ├── columns to fetch: [val]
+        └── HashJoin
+            ├── output columns: [t2.id (#0), t2.val (#1), t1.id (#2), t1._row_id (#4)]
+            ├── join type: LEFT OUTER
+            ├── build keys: [t1.id (#2)]
+            ├── probe keys: [CAST(t2.id (#0) AS UInt64 NULL)]
+            ├── filters: []
+            ├── estimated rows: 50000.00
+            ├── TableScan(Build)
+            │   ├── table: default.default.t1
+            │   ├── output columns: [id (#2), _row_id (#4)]
+            │   ├── read rows: 16666
+            │   ├── read size: 17.12 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 16666.00
+            └── TableScan(Probe)
+                ├── table: default.default.t2
+                ├── output columns: [id (#0), val (#1)]
+                ├── read rows: 50000
+                ├── read size: 100.56 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 50000.00
+
+# execute
+query II
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+33334 16666
+
+# execute again
+query III
+merge into t1 using t2 on t1.id = t2.id when matched then update set t1.val = t2.val + 1 when not matched then insert (id, val) values (t2.id, t2.val);
+----
+0 50000
+
+statement ok
 create or replace table t1 as select * from numbers(250000);
 
 statement ok
