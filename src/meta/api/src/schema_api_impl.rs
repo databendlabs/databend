@@ -54,7 +54,6 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
 use databend_common_meta_app::app_error::UnknownCatalog;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
-use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
@@ -109,7 +108,6 @@ use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropDictionaryReply;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -211,6 +209,7 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -4365,7 +4364,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn drop_dictionary(
         &self,
         dict_ident: TenantDictionaryIdent,
-    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaError> {
+    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError> {
         debug!(dict_ident :? =(&dict_ident); "SchemaApi: {}", func_name!());
 
         let dictionary_ident = DictionaryIdent {
@@ -4414,7 +4413,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(dictionary_meta);
+                let dict_meta_seqv = SeqV {
+                    seq: dictionary_meta_seq,
+                    meta: Some(KVMeta::new(None)),
+                    data: dictionary_meta.unwrap(),
+                };
+                return Ok(Some(dict_meta_seqv));
             }
         }
     }
