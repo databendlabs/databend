@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::any::Any;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
@@ -105,9 +104,10 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use log::debug;
 use log::info;
 use parking_lot::Mutex;
@@ -183,7 +183,7 @@ impl QueryContext {
         let catalog = self
             .shared
             .catalog_manager
-            .build_catalog(table_info.catalog_info.clone(), self.txn_mgr())?;
+            .build_catalog(table_info.catalog_info.clone(), self.session_state())?;
         match table_args {
             None => {
                 let table = catalog.get_table_by_info(table_info);
@@ -585,7 +585,7 @@ impl TableContext for QueryContext {
             .get_catalog(
                 self.get_tenant().tenant_name(),
                 catalog_name.as_ref(),
-                self.txn_mgr(),
+                self.session_state(),
             )
             .await
     }
@@ -593,7 +593,7 @@ impl TableContext for QueryContext {
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_default_catalog(self.txn_mgr())
+            .get_default_catalog(self.session_state())
     }
 
     fn get_id(&self) -> String {
@@ -1143,6 +1143,10 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.txn_mgr()
     }
 
+    fn session_state(&self) -> SessionState {
+        self.shared.session.session_ctx.session_state()
+    }
+
     fn get_read_block_thresholds(&self) -> BlockThresholds {
         *self.block_threshold.read()
     }
@@ -1319,6 +1323,10 @@ impl TableContext for QueryContext {
             LockTableOption::LockWithRetry => table_lock.try_lock(self, true).await,
             LockTableOption::NoLock => Ok(None),
         }
+    }
+
+    fn get_session_id(&self) -> String {
+        todo!()
     }
 }
 

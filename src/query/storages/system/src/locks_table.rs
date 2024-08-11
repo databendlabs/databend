@@ -60,7 +60,7 @@ impl AsyncSystemTable for LocksTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
-        let ctls = catalog_mgr.list_catalogs(&tenant, ctx.txn_mgr()).await?;
+        let ctls = catalog_mgr.list_catalogs(&tenant, ctx.session_state()).await?;
 
         let mut lock_table_id = Vec::new();
         let mut lock_revision = Vec::new();

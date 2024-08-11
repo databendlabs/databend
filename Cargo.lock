@@ -3267,8 +3267,8 @@ dependencies = [
  "databend-common-settings",
  "databend-common-storage",
  "databend-common-users",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -4308,8 +4308,8 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-pruner",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
  "fastrace",
  "futures",
@@ -5181,8 +5181,8 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-io",
+ "databend-storages-common-session",
  "databend-storages-common-table-meta",
- "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
  "fastrace",
@@ -5430,6 +5430,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-storages-common-session"
+version = "0.1.0"
+dependencies = [
+ "databend-common-exception",
+ "databend-common-meta-app",
+ "databend-common-meta-types",
+ "databend-storages-common-table-meta",
+ "parking_lot 0.12.1",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
@@ -5465,17 +5478,6 @@ dependencies = [
  "snap",
  "typetag",
  "zstd 0.12.4",
-]
-
-[[package]]
-name = "databend-storages-common-txn"
-version = "0.1.0"
-dependencies = [
- "databend-common-meta-app",
- "databend-common-meta-types",
- "parking_lot 0.12.1",
- "serde",
- "uuid",
 ]
 
 [[package]]

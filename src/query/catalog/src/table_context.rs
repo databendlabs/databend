@@ -58,9 +58,10 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -360,4 +361,8 @@ pub trait TableContext: Send + Sync {
         tbl_name: &str,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
+
+    fn get_session_id(&self) -> String;
+
+    fn session_state(&self) -> SessionState;
 }

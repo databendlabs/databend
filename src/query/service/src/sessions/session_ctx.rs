@@ -11,7 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
@@ -26,8 +25,11 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
-use databend_storages_common_txn::TxnManager;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TempTblMgr;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManager;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -73,6 +75,7 @@ pub struct SessionContext {
     variables: Arc<RwLock<HashMap<String, Scalar>>>,
     typ: SessionType,
     txn_mgr: Mutex<TxnManagerRef>,
+    temp_tbl_mgr: Mutex<TempTblMgrRef>,
 }
 
 impl SessionContext {
@@ -94,6 +97,7 @@ impl SessionContext {
             variables: Default::default(),
             typ,
             txn_mgr: Mutex::new(TxnManager::init()),
+            temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
         })
     }
 
@@ -301,8 +305,16 @@ impl SessionContext {
         self.txn_mgr.lock().clone()
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.temp_tbl_mgr.lock().clone()
+    }
+
     pub fn set_txn_mgr(&self, txn_mgr: TxnManagerRef) {
         *self.txn_mgr.lock() = txn_mgr;
+    }
+
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        *self.temp_tbl_mgr.lock() = temp_tbl_mgr;
     }
 
     pub fn set_variable(&self, key: String, value: Scalar) {
@@ -315,5 +327,12 @@ impl SessionContext {
 
     pub fn get_variable(&self, key: &str) -> Option<Scalar> {
         self.variables.read().get(key).cloned()
+    }
+
+    pub fn session_state(&self) -> SessionState {
+        SessionState {
+            txn_mgr: self.txn_mgr(),
+            temp_tbl_mgr: self.temp_tbl_mgr(),
+        }
     }
 }

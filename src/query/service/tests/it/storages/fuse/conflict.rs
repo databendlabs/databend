@@ -24,7 +24,7 @@ use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManager;
+use databend_storages_common_session::TxnManager;
 
 #[test]
 /// base snapshot contains segments 1, 2, 3,

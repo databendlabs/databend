@@ -16,6 +16,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use databend_common_arrow::parquet::read;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
@@ -95,8 +96,11 @@ use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
-use databend_storages_common_txn::TxnManagerRef;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_session::TxnState;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::catalog::Catalog;
 use crate::catalog::StorageDescription;
@@ -109,11 +113,20 @@ use crate::table_function::TableFunction;
 pub struct SessionCatalog {
     inner: Arc<dyn Catalog>,
     txn_mgr: TxnManagerRef,
+    temp_tbl_mgr: TempTblMgrRef,
 }
 
 impl SessionCatalog {
-    pub fn create(inner: Arc<dyn Catalog>, txn_mgr: TxnManagerRef) -> Self {
-        SessionCatalog { inner, txn_mgr }
+    pub fn create(inner: Arc<dyn Catalog>, session_state: SessionState) -> Self {
+        let SessionState {
+            txn_mgr,
+            temp_tbl_mgr,
+        } = session_state;
+        SessionCatalog {
+            inner,
+            txn_mgr,
+            temp_tbl_mgr,
+        }
     }
 }
 
@@ -326,7 +339,10 @@ impl Catalog for SessionCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
-        self.inner.create_table(req).await
+        match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
+            Some(_) => self.temp_tbl_mgr.lock().create_table(req),
+            None => self.inner.create_table(req).await,
+        }
     }
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {

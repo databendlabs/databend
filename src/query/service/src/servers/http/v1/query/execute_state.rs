@@ -24,7 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_settings::Settings;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use futures::StreamExt;
 use log::debug;
 use log::error;

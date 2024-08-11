@@ -71,7 +71,7 @@ impl Display for TableIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TableNameIdent {
     pub tenant: Tenant,
     pub db_name: String,

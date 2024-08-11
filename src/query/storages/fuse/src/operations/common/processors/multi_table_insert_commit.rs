@@ -34,7 +34,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use log::error;
 use log::info;

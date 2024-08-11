@@ -12,7 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod manager;
-pub use manager::TxnManager;
-pub use manager::TxnManagerRef;
-pub use manager::TxnState;
+use crate::TempTblMgr;
+use crate::TempTblMgrRef;
+use crate::TxnManager;
+use crate::TxnManagerRef;
+
+
+#[derive(Clone, Debug)]
+pub struct SessionState {
+    pub txn_mgr: TxnManagerRef,
+    pub temp_tbl_mgr: TempTblMgrRef,
+}
+
+impl Default for SessionState {
+    fn default() -> Self {
+        SessionState {
+            txn_mgr: TxnManager::init(),
+            temp_tbl_mgr: TempTblMgr::init(),
+        }
+    }
+}

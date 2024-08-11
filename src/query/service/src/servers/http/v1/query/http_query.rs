@@ -33,7 +33,7 @@ use databend_common_exception::Result;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::TxnState;
 use fastrace::prelude::*;
 use log::info;
 use log::warn;

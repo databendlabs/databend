@@ -37,7 +37,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::anyerror::func_name;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::SessionState;
 
 use super::Catalog;
 use super::CatalogCreator;
@@ -132,10 +132,10 @@ impl CatalogManager {
     ///
     /// There are some place that we don't have async context, so we provide
     /// `get_default_catalog` to allow users fetch default catalog without async.
-    pub fn get_default_catalog(&self, txn_mgr: TxnManagerRef) -> Result<Arc<dyn Catalog>> {
+    pub fn get_default_catalog(&self, session_state: SessionState) -> Result<Arc<dyn Catalog>> {
         Ok(Arc::new(SessionCatalog::create(
             self.default_catalog.clone(),
-            txn_mgr,
+            session_state,
         )))
     }
 
@@ -143,12 +143,12 @@ impl CatalogManager {
     pub fn build_catalog(
         &self,
         info: Arc<CatalogInfo>,
-        txn_mgr: TxnManagerRef,
+        session_state: SessionState,
     ) -> Result<Arc<dyn Catalog>> {
         let typ = info.meta.catalog_option.catalog_type();
 
         if typ == CatalogType::Default {
-            return self.get_default_catalog(txn_mgr);
+            return self.get_default_catalog(session_state);
         }
 
         let creator = self
@@ -171,10 +171,10 @@ impl CatalogManager {
         // TODO: use Tenant or NonEmptyString
         tenant: &str,
         catalog_name: &str,
-        txn_mgr: TxnManagerRef,
+        session_state: SessionState,
     ) -> Result<Arc<dyn Catalog>> {
         if catalog_name == CATALOG_DEFAULT {
-            return self.get_default_catalog(txn_mgr);
+            return self.get_default_catalog(session_state);
         }
 
         if let Some(ctl) = self.external_catalogs.get(catalog_name) {
@@ -187,7 +187,7 @@ impl CatalogManager {
         // Get catalog from metasrv.
         let info = self.meta.get_catalog(GetCatalogReq::new(ident)).await?;
 
-        self.build_catalog(info, txn_mgr)
+        self.build_catalog(info, session_state)
     }
 
     /// Create a new catalog.
@@ -244,9 +244,9 @@ impl CatalogManager {
     pub async fn list_catalogs(
         &self,
         tenant: &Tenant,
-        txn_mgr: TxnManagerRef,
+        session_state: SessionState,
     ) -> Result<Vec<Arc<dyn Catalog>>> {
-        let mut catalogs = vec![self.get_default_catalog(txn_mgr.clone())?];
+        let mut catalogs = vec![self.get_default_catalog(session_state.clone())?];
 
         // insert external catalogs.
         for ctl in self.external_catalogs.values() {
@@ -260,7 +260,7 @@ impl CatalogManager {
             .await?;
 
         for info in infos {
-            catalogs.push(self.build_catalog(info, txn_mgr.clone())?);
+            catalogs.push(self.build_catalog(info, session_state.clone())?);
         }
 
         Ok(catalogs)
