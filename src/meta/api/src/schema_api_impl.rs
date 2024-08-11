@@ -4277,7 +4277,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut condition = vec![];
             let mut if_then = vec![];
-            let dict_ident = DictionaryIdent {
+            let _dict_ident = DictionaryIdent {
                 db_id: dictionary_ident.db_id,
                 dictionary_name: dictionary_ident.dictionary_name.clone(),
             };
@@ -4428,11 +4428,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         let dictionary_ident = DictionaryIdent {
-            db_id: req.dictionary_ident.db_id(),
-            dictionary_name: req.dictionary_ident.dict_name().clone(),
+            db_id: req.db_id(),
+            dictionary_name: req.dict_name().clone(),
         };
 
-        let res = get_dictionary_or_err(self, &req.dictionary_ident).await?;
+        let res = get_dictionary_or_err(self, &req).await?;
         let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
         if dictionary_id_seq == 0 {

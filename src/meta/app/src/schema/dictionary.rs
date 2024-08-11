@@ -105,6 +105,14 @@ impl Display for DictionaryIdent {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetDictionaryReply {
+    pub dictionary_id: u64,
+    pub dictionary_meta: DictionaryMeta,
+    /// Any change to a dictionary causes the seq to increment
+    pub dictionary_meta_seq: u64,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct DictionaryId {
     pub dictionary_id: u64,
