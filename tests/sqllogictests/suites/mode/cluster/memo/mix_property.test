@@ -29,7 +29,7 @@ limit 10
 ----
 Memo
 ├── root group: #10
-├── estimated memory: 12.81 KiB
+├── estimated memory: 15.94 KiB
 ├── Group #0
 │   ├── Best properties
 │   │   ├── { dist: Any }: expr: #0, cost: 1000.000, children: []

@@ -10,7 +10,7 @@ remove @data/parquet/unload/uuid
 query
 copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
 ----
-1 64 377
+1 144 377
 
 query error column id doesn't exist
 copy into t_uuid from @data/parquet/unload/uuid file_format = (type = parquet) RETURN_FAILED_ONLY=TRUE
@@ -22,7 +22,7 @@ select * from t_uuid
 query
 copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
 ----
-1 64 377
+1 144 377
 
 statement ok
 truncate table t_uuid
