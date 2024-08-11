@@ -64,6 +64,7 @@ use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
+use databend_common_meta_app::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
 use databend_common_meta_app::schema::CatalogIdIdent;
@@ -109,7 +110,6 @@ use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropDictionaryReply;
-use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -125,7 +125,6 @@ use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
-use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
@@ -4282,7 +4281,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 db_id: dictionary_ident.db_id,
                 dictionary_name: dictionary_ident.dictionary_name.clone(),
             };
-            let res = get_dictionary_or_err(self, &dict_ident).await?;
+            let res = get_dictionary_or_err(self, &req.dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
@@ -4365,13 +4364,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn drop_dictionary(
         &self,
-        req: DropDictionaryReq,
-    ) -> Result<DropDictionaryReply, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        dict_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaError> {
+        debug!(dict_ident :? =(&dict_ident); "SchemaApi: {}", func_name!());
 
         let dictionary_ident = DictionaryIdent {
-            db_id: req.dictionary_ident.db_id(),
-            dictionary_name: req.dictionary_ident.dict_name().clone(),
+            db_id: dict_ident.db_id(),
+            dictionary_name: dict_ident.dict_name().clone(),
         };
         let mut trials = txn_backoff(None, func_name!());
 
@@ -4382,21 +4381,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![];
 
             let res: (u64, u64, u64, Option<DictionaryMeta>) =
-                get_dictionary_or_err(self, &dictionary_ident).await?;
-            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
-            let drop_if_exists = req.if_exists;
+                get_dictionary_or_err(self, &dict_ident).await?;
+            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
             if dictionary_id_seq == 0 {
-                if drop_if_exists {
-                    return Ok(DropDictionaryReply {});
-                } else {
-                    return Err(KVAppError::AppError(AppError::UnknownDictionary(
-                        UnknownDictionary::new(
-                            dictionary_ident.dictionary_name.clone(),
-                            "drop_dictionary",
-                        ),
-                    )));
-                }
+                return Ok(None);
             }
 
             // delete dictionary id
@@ -4425,17 +4414,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if succ {
-                break;
+                return Ok(dictionary_meta);
             }
         }
-        Ok(DropDictionaryReply {})
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
     async fn get_dictionary(
         &self,
-        req: GetDictionaryReq,
+        req: TenantDictionaryIdent,
     ) -> Result<Option<GetDictionaryReply>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
@@ -4444,7 +4432,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             dictionary_name: req.dictionary_ident.dict_name().clone(),
         };
 
-        let res = get_dictionary_or_err(self, &dictionary_ident).await?;
+        let res = get_dictionary_or_err(self, &req.dictionary_ident).await?;
         let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
         if dictionary_id_seq == 0 {
@@ -4485,28 +4473,32 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         if dict_id_list.is_empty() {
             return Ok(vec![]);
         }
-
-        let mut dict_meta_keys = Vec::with_capacity(dict_id_list.len());
-        for id in dict_id_list.into_iter() {
-            let dict_id = DictionaryId { dictionary_id: id };
-            dict_meta_keys.push(dict_id.to_string_key());
-        }
-
-        let seq_dict_metas = self.mget_kv(&dict_meta_keys).await?;
-        let mut dict_metas = Vec::with_capacity(seq_dict_metas.len());
-        for (i, (key, seq_meta_opt)) in dict_keys
-            .into_iter()
-            .zip(seq_dict_metas.into_iter())
-            .enumerate()
-        {
-            if let Some(seq_meta) = seq_meta_opt {
-                let dict_meta: DictionaryMeta = deserialize_struct(&seq_meta.data)?;
-                dict_metas.push((key.dictionary_name.clone(), dict_meta));
-            } else {
-                debug!(k = &dict_meta_keys[i]; "dict_meta not found");
+        let mut dict_metas = vec![];
+        let inner_keys: Vec<String> = dict_id_list
+            .iter()
+            .map(|dict_id| {
+                DictionaryId {
+                    dictionary_id: *dict_id,
+                }
+                .to_string_key()
+            })
+            .collect();
+        let mut dict_id_list_iter = dict_id_list.into_iter();
+        let mut dict_key_list_iter = dict_keys.into_iter();
+        for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
+            let dict_meta_seq_meta_vec: Vec<(u64, Option<DictionaryMeta>)> =
+                mget_pb_values(self, c).await?;
+            for (dict_meta_seq, dict_meta) in dict_meta_seq_meta_vec {
+                let dict_id = dict_id_list_iter.next().unwrap();
+                let dict_key = dict_key_list_iter.next().unwrap();
+                if dict_meta_seq == 0 || dict_meta.is_none() {
+                    error!("list_dictionaries cannot find {:?} dict_meta", dict_id);
+                    continue;
+                }
+                let dict_meta = dict_meta.unwrap();
+                dict_metas.push((dict_key.dictionary_name.clone(), dict_meta));
             }
         }
-
         Ok(dict_metas)
     }
 }
@@ -5451,7 +5443,7 @@ pub(crate) async fn get_index_or_err(
 /// Returns (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta)
 pub(crate) async fn get_dictionary_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &DictionaryIdent,
+    name_key: &TenantDictionaryIdent,
 ) -> Result<(u64, u64, u64, Option<DictionaryMeta>), KVAppError> {
     let (dictionary_id_seq, dictionary_id) = get_u64_value(kv_api, name_key).await?;
     if dictionary_id_seq == 0 {

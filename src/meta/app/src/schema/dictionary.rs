@@ -38,9 +38,9 @@ pub struct DictionaryMeta {
     /// Schema refers to an external table that corresponds to the dictionary.
     /// This is typically used to understand the layout and types of data within the dictionary.
     pub schema: Arc<TableSchema>,
-    /// A list of comments for each field in the dictionary.
-    /// For example, if we have `id, address` fields, then field_comments could be `[ 'student's number','home address']`
-    pub field_comments: Vec<String>,
+    /// A set of key-value pairs is used to represent the annotations for each field in the dictionary, the key being column_id.
+    /// For example, if we have `id, address` fields, then field_comments could be `[ '1=student's number','2=home address']`
+    pub field_comments: BTreeMap<u64, String>,
     /// A list of primary column IDs.
     /// For example, vec![1, 2] indicating the first and second columns are the primary keys.
     pub primary_column_ids: Vec<u32>,
@@ -73,7 +73,7 @@ impl Default for DictionaryMeta {
             created_on: Utc::now(),
             updated_on: None,
             comment: "".to_string(),
-            field_comments: Vec::new(),
+            field_comments: BTreeMap::new(),
         }
     }
 }
@@ -91,60 +91,7 @@ pub struct CreateDictionaryReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropDictionaryReq {
-    pub if_exists: bool,
-    pub dictionary_ident: TenantDictionaryIdent,
-}
-
-impl DropDictionaryReq {
-    pub fn new(
-        if_exists: bool,
-        db_id: u64,
-        dict_name: String,
-        tenant: impl ToTenant,
-    ) -> DropDictionaryReq {
-        let dictionary_ident = TenantDictionaryIdent::new_dict_db(tenant, dict_name, db_id);
-        DropDictionaryReq {
-            if_exists,
-            dictionary_ident,
-        }
-    }
-    pub fn dict_name(&self) -> String {
-        self.dictionary_ident.dict_name()
-    }
-
-    pub fn db_id(&self) -> u64 {
-        self.dictionary_ident.db_id()
-    }
-}
-
-impl Display for DropDictionaryReq {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(
-            f,
-            "drop_dictionary(if_exists={}):{}/{}",
-            self.if_exists,
-            self.db_id(),
-            self.dict_name(),
-        )
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryReply {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GetDictionaryReq {
-    pub dictionary_ident: TenantDictionaryIdent,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct GetDictionaryReply {
-    pub dictionary_id: u64,
-    pub dictionary_meta: DictionaryMeta,
-    /// Any change to a dictionary causes the seq to increment
-    pub dictionary_meta_seq: u64,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct DictionaryIdent {

@@ -68,7 +68,6 @@ use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropDictionaryReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
@@ -79,7 +78,6 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
-use databend_common_meta_app::schema::GetDictionaryReq;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
@@ -7412,7 +7410,7 @@ impl SchemaApiTestSuite {
         }
 
         let dict_ident =
-            TenantDictionaryIdent::new_dict_db(dict_tenant.clone(), dict_name.to_string(), db_id);
+            TenantDictionaryIdent::new_dict_db(dict_tenant.clone(), db_id, dict_name.to_string());
 
         {
             info!("--- create dictionary");
@@ -7452,19 +7450,15 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- get dictionary");
-            let req = GetDictionaryReq {
-                dictionary_ident: dict_ident.clone(),
-            };
+            let req = dict_ident.clone();
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_some());
 
-            let req = GetDictionaryReq {
-                dictionary_ident: TenantDictionaryIdent::new_dict_db(
-                    dict_tenant.clone(),
-                    "dummy_dict".to_string(),
-                    db_id,
-                ),
-            };
+            let req = TenantDictionaryIdent::new_dict_db(
+                dict_tenant.clone(),
+                db_id,
+                "dummy_dict".to_string(),
+            );
             let res = mt.get_dictionary(req).await?;
             assert!(res.is_none());
         }
@@ -7480,9 +7474,7 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- drop dictionary");
-            let req =
-                DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
-
+            let req = dict_ident.clone();
             let res = mt.drop_dictionary(req).await;
             assert!(res.is_ok());
         }
@@ -7492,22 +7484,6 @@ impl SchemaApiTestSuite {
             let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
             let res = mt.list_dictionaries(req).await?;
             assert_eq!(0, res.len());
-        }
-
-        {
-            info!("--- drop dictionary with if_exists = false");
-            let req =
-                DropDictionaryReq::new(false, db_id, dict_name.to_string(), dict_tenant.clone());
-            let res = mt.drop_dictionary(req).await;
-            assert!(res.is_err());
-        }
-
-        {
-            info!("--- drop dictionary with if_exists = true");
-            let req =
-                DropDictionaryReq::new(true, db_id, dict_name.to_string(), dict_tenant.clone());
-            let res = mt.drop_dictionary(req).await;
-            assert!(res.is_ok());
         }
 
         Ok(())

@@ -33,7 +33,7 @@ message DictionaryMeta {
  DataSchema schema = 3;
 
  // Comments of each field
- repeated string field_comments = 4;
+ repeated map<uint32, string> field_comments = 4;
 
  // ID of the primary key column
  repeated uint32 primary_column_ids = 5;

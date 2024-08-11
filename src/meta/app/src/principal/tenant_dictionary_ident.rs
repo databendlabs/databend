@@ -28,7 +28,7 @@ impl TenantDictionaryIdent {
         Self::new_generic(tenant, dictionary)
     }
 
-    pub fn new_dict_db(tenant: impl ToTenant, dict_name: impl ToString, db_id: u64) -> Self {
+    pub fn new_dict_db(tenant: impl ToTenant, db_id: u64, dict_name: impl ToString) -> Self {
         Self::new(tenant, DictionaryIdentity::new(db_id, dict_name))
     }
 

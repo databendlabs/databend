@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_meta_app::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -321,8 +322,8 @@ pub trait SchemaApi: Send + Sync {
 
     async fn drop_dictionary(
         &self,
-        req: DropDictionaryReq,
-    ) -> Result<DropDictionaryReply, KVAppError>;
+        dict_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, MetaError>;
 
     async fn get_dictionary(
         &self,
