@@ -67,9 +67,9 @@ fn test_decode_v105_dictionary_meta() -> anyhow::Result<()> {
             btreemap! {s("a") => s("b")},
         )),
         field_comments: btreemap! {
-            s("1") => s("user's number"),
-            s("2") => s("user's name"),
-            s("3") => s("user's home address"),
+            s(1) => s("user's number"),
+            s(2) => s("user's name"),
+            s(3) => s("user's home address"),
         },
         primary_column_ids: vec![0],
         comment: "comment_example".to_string(),

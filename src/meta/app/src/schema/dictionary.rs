@@ -40,7 +40,7 @@ pub struct DictionaryMeta {
     pub schema: Arc<TableSchema>,
     /// A set of key-value pairs is used to represent the annotations for each field in the dictionary, the key being column_id.
     /// For example, if we have `id, address` fields, then field_comments could be `[ '1=student's number','2=home address']`
-    pub field_comments: BTreeMap<u64, String>,
+    pub field_comments: BTreeMap<u32, String>,
     /// A list of primary column IDs.
     /// For example, vec![1, 2] indicating the first and second columns are the primary keys.
     pub primary_column_ids: Vec<u32>,
