@@ -64,9 +64,9 @@ use databend_common_meta_app::app_error::VirtualColumnAlreadyExists;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -104,6 +104,7 @@ use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryId;
 use databend_common_meta_app::schema::DictionaryIdent;
+use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
@@ -4268,22 +4269,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         req: CreateDictionaryReq,
     ) -> Result<CreateDictionaryReply, KVAppError> {
         debug!(req :? = (&req); "SchemaApi: {}", func_name!());
-        let dictionary_ident = DictionaryIdent {
-            db_id: req.dictionary_ident.db_id(),
-            dictionary_name: req.dictionary_ident.dict_name().to_string(),
-        };
         let mut trials = txn_backoff(None, func_name!());
-        let tenant_dictionary = &req.dictionary_ident;
+        let dictionary_ident = &req.dictionary_ident;
         loop {
             trials.next().unwrap()?.await;
 
             let mut condition = vec![];
             let mut if_then = vec![];
-            let _dict_ident = DictionaryIdent {
-                db_id: dictionary_ident.db_id,
-                dictionary_name: dictionary_ident.dictionary_name.clone(),
-            };
-            let res = get_dictionary_or_err(self, &req.dictionary_ident).await?;
+            let res = get_dictionary_or_err(self, &dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, _dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
@@ -4294,27 +4287,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             );
 
             if dictionary_id_seq > 0 {
-                match req.create_option {
-                    CreateOption::Create | CreateOption::CreateIfNotExists => {
-                        return Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
-                            DictionaryAlreadyExists::new(
-                                tenant_dictionary.dict_name(),
-                                format!(
-                                    "create dictionary with tenant: {}",
-                                    tenant_dictionary.tenant_name()
-                                ),
-                            ),
-                        )));
-                    }
-                    CreateOption::CreateOrReplace => {
-                        let update_req = UpdateDictionaryReq {
-                            dict_id: dictionary_id,
-                            dict_name: req.dictionary_ident.dict_name(),
-                            dict_meta: req.dictionary_meta.clone(),
-                        };
-                        self.update_dictionary(update_req);
-                    }
-                }
+                return Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
+                    DictionaryAlreadyExists::new(
+                        dictionary_ident.dict_name(),
+                        format!(
+                            "create dictionary with tenant: {} db_id: {}",
+                            dictionary_ident.tenant_name(),
+                            dictionary_ident.db_id()
+                        ),
+                    ),
+                )));
             }
             // Create dictionary by inserting these record:
             // (tenant, db_id, dict_name) -> dict_id
@@ -4324,17 +4306,17 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             debug!(
                 dictionary_id = dictionary_id,
-                dictionary_key :? = (tenant_dictionary);
-                "new dictionary id"
+                dictionary_key :? = (dictionary_ident);
+                "new dictionary"
             );
 
             {
                 condition.extend(vec![
-                    txn_cond_seq(&dictionary_ident, Eq, dictionary_id_seq),
+                    txn_cond_seq(dictionary_ident, Eq, 0),
                     txn_cond_seq(&id_key, Eq, 0),
                 ]);
                 if_then.extend(vec![
-                    txn_op_put(&dictionary_ident, serialize_u64(dictionary_id)?), /*(db_id, dict_name) -> dict_id */
+                    txn_op_put(dictionary_ident, serialize_u64(dictionary_id)?), /*(tenant, db_id, dict_name) -> dict_id */
                     txn_op_put(&id_key, serialize_struct(&req.dictionary_meta)?), /*(dict_id) -> dict_meta*/
                 ]);
 
@@ -4360,29 +4342,81 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
     }
 
+    #[logcall::logcall]
+    #[fastrace::trace]
     async fn update_dictionary(
         &self,
-        req: UpdateDictionaryReq
+        req: UpdateDictionaryReq,
     ) -> Result<UpdateDictionaryReply, KVAppError> {
-        let dict_id_key = DictionaryId {
-            dictionary_id: req.dict_id,
-        };
+        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
+        let mut trials = txn_backoff(None, func_name!());
+        let dictionary_ident = &req.dictionary_ident;
+        loop {
+            trials.next().unwrap()?.await;
 
-        let reply = self
-            .upsert_kv(UpsertKVReq::new(
-                dict_id_key.to_string_key(),
-                MatchSeq::GE(1),
-                Operation::Update(serialize_struct(&req.dict_meta)?),
-                None,
-            ))
-            .await?;
+            let mut condition = vec![];
+            let mut if_then = vec![];
+            let res = get_dictionary_or_err(self, &dictionary_ident).await?;
+            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
 
-        if !reply.is_changed() {
-            Err(KVAppError::AppError(AppError::UnknownDictionary(
-                UnknownDictionary::new(&req.dict_name, "update_dictionary"),
-            )))
-        } else {
-            Ok(UpdateDictionaryReply {})
+            debug!(
+                dictionary_id_seq = dictionary_id_seq,
+                dictionary_id = dictionary_id,
+                dictionary_ident :? = (dictionary_ident);
+                "get_dictionary_seq_id"
+            );
+
+            if dictionary_id_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                    UnknownDictionary::new(
+                        dictionary_ident.dict_name(),
+                        format!(
+                            "update dictionary with tenant: {} db_id: {}",
+                            dictionary_ident.tenant_name(),
+                            dictionary_ident.db_id()
+                        ),
+                    ),
+                )));
+            }
+            // Update dictionary by update dict_meta:
+            // (dict_id) -> dict_meta
+            let id_key = DictionaryId { dictionary_id };
+
+            debug!(
+                dictionary_id = dictionary_id,
+                dictionary_key :? = (dictionary_ident);
+                "update dictionary"
+            );
+
+            {
+                condition.extend(vec![
+                    txn_cond_seq(dictionary_ident, Eq, dictionary_id_seq),
+                    txn_cond_seq(&id_key, Eq, dictionary_meta_seq),
+                ]);
+                if_then.extend(vec![
+                    txn_op_put(dictionary_ident, serialize_u64(dictionary_id)?), /*(tenant, db_id, dict_name) -> dict_id */
+                    txn_op_put(&id_key, serialize_struct(&req.dictionary_meta)?), /*(dict_id) -> dict_meta*/
+                ]);
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    dictionary_ident :? = (dictionary_ident),
+                    id :? = (&id_key),
+                    succ = succ;
+                    "update_dictionary"
+                );
+
+                if succ {
+                    return Ok(UpdateDictionaryReply { dictionary_id });
+                }
+            }
         }
     }
 
@@ -4390,16 +4424,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn drop_dictionary(
         &self,
-        dict_ident: TenantDictionaryIdent,
+        dictionary_ident: TenantDictionaryIdent,
     ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError> {
-        debug!(dict_ident :? =(&dict_ident); "SchemaApi: {}", func_name!());
+        debug!(dict_ident :? =(&dictionary_ident); "SchemaApi: {}", func_name!());
 
-        let dictionary_ident = DictionaryIdent {
-            db_id: dict_ident.db_id(),
-            dictionary_name: dict_ident.dict_name().clone(),
-        };
         let mut trials = txn_backoff(None, func_name!());
-
         loop {
             trials.next().unwrap()?.await;
 
@@ -4407,7 +4436,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let mut if_then = vec![];
 
             let res: (u64, u64, u64, Option<DictionaryMeta>) =
-                get_dictionary_or_err(self, &dict_ident).await?;
+                get_dictionary_or_err(self, &dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
             if dictionary_id_seq == 0 {
@@ -4454,16 +4483,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn get_dictionary(
         &self,
-        req: TenantDictionaryIdent,
+        dictionary_ident: TenantDictionaryIdent,
     ) -> Result<Option<GetDictionaryReply>, KVAppError> {
-        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+        debug!(dict_ident :? =(&dictionary_ident); "SchemaApi: {}", func_name!());
 
-        let dictionary_ident = DictionaryIdent {
-            db_id: req.db_id(),
-            dictionary_name: req.dict_name().clone(),
-        };
-
-        let res = get_dictionary_or_err(self, &req).await?;
+        let res = get_dictionary_or_err(self, &dictionary_ident).await?;
         let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
 
         if dictionary_id_seq == 0 {
@@ -4476,7 +4500,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(
             dictionary_id = dictionary_id,
             name_key :? =(&dictionary_ident);
-            "drop_dictionary"
+            "get_dictionary"
         );
 
         Ok(Some(GetDictionaryReply {
@@ -4495,10 +4519,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // Using a empty dictionary name to to list all
-        let dictionary_ident = DictionaryIdent {
-            db_id: req.db_id,
-            dictionary_name: "".to_string(),
-        };
+        let dictionary_ident = TenantDictionaryIdent::new(
+            req.tenant.clone(),
+            DictionaryIdentity::new(req.db_id, "".to_string()),
+        );
 
         let (dict_keys, dict_id_list) = list_u64_value(self, &dictionary_ident).await?;
         if dict_id_list.is_empty() {
@@ -4527,7 +4551,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     continue;
                 }
                 let dict_meta = dict_meta.unwrap();
-                dict_metas.push((dict_key.dictionary_name.clone(), dict_meta));
+                dict_metas.push((dict_key.dict_name(), dict_meta));
             }
         }
         Ok(dict_metas)

@@ -30,7 +30,6 @@ where MT: FromToProto + PartialEq + Debug {
 
     let mut buf = vec![];
     prost::Message::encode(&p, &mut buf)?;
-    println!("BUFFER:{:?}", buf);
 
     let var_name = n.split("::").last().unwrap();
     // The encoded data should be saved for compatability test.

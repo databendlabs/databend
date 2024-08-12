@@ -22,8 +22,8 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableSchema;
 
+use super::tenant_dictionary_ident::TenantDictionaryIdent;
 use super::CreateOption;
-use crate::principal::tenant_dictionary_ident::TenantDictionaryIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
@@ -80,7 +80,6 @@ impl Default for DictionaryMeta {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
-    pub create_option: CreateOption,
     pub dictionary_ident: TenantDictionaryIdent,
     pub dictionary_meta: DictionaryMeta,
 }
@@ -158,10 +157,13 @@ pub struct UpdateDictionaryReq {
     pub dict_id: u64,
     pub dict_name: String,
     pub dict_meta: DictionaryMeta,
+    pub dictionary_ident: TenantDictionaryIdent,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateDictionaryReply {}
+pub struct UpdateDictionaryReply {
+    pub dictionary_id: u64,
+}
 
 mod kvapi_key_impl {
 

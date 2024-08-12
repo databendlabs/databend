@@ -28,10 +28,6 @@ impl TenantDictionaryIdent {
         Self::new_generic(tenant, dictionary)
     }
 
-    pub fn new_dict_db(tenant: impl ToTenant, db_id: u64, dict_name: impl ToString) -> Self {
-        Self::new(tenant, DictionaryIdentity::new(db_id, dict_name))
-    }
-
     pub fn dict_name(&self) -> String {
         self.name().dict_name.clone()
     }
@@ -49,6 +45,7 @@ mod kvapi_impl {
 
     use databend_common_meta_kvapi::kvapi;
 
+    use crate::schema::DictionaryId;
     use crate::schema::DictionaryMeta;
     use crate::tenant_key::resource::TenantResource;
 
@@ -57,10 +54,10 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_dictionaries";
         const TYPE: &'static str = "TenantDictionaryIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = DictionaryMeta;
+        type ValueType = DictionaryId;
     }
 
-    impl kvapi::Value for DictionaryMeta {
+    impl kvapi::Value for DictionaryId {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }
