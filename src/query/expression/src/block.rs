@@ -26,7 +26,6 @@ use databend_common_exception::Result;
 use crate::schema::DataSchema;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::ValueType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataSchemaRef;
@@ -587,7 +586,7 @@ impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
 impl BlockEntry {
     pub fn memory_size(&self) -> usize {
         match &self.value {
-            Value::Scalar(s) => AnyType::scalar_memory_size(&AnyType::to_scalar_ref(s)),
+            Value::Scalar(s) => s.as_ref().memory_size(),
             Value::Column(c) => c.memory_size(),
         }
     }
