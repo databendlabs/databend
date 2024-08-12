@@ -17,10 +17,17 @@ use std::time::Duration;
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use rand::rngs::OsRng;
+use rand::RngCore;
 use serde::Deserialize;
 use serde::Serialize;
 
 const TOKEN_PREFIX: &str = "bend-v1-";
+fn generate_secure_nonce() -> String {
+    let mut random_bytes = [0u8; 16];
+    OsRng.fill_bytes(&mut random_bytes);
+    hex::encode(&random_bytes)
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SessionClaim {
@@ -41,6 +48,22 @@ pub fn unix_ts() -> Duration {
 }
 
 impl SessionClaim {
+    pub fn new(
+        session_id: Option<String>,
+        tenant: &str,
+        user: &str,
+        auth_role: &Option<String>,
+        ttl: Duration,
+    ) -> Self {
+        SessionClaim {
+            tenant: tenant.to_string(),
+            user: user.to_string(),
+            auth_role: auth_role.clone(),
+            session_id: session_id.unwrap_or(uuid::Uuid::new_v4().to_string()),
+            nonce: generate_secure_nonce(),
+            expire_at_in_secs: (unix_ts() + ttl).as_secs(),
+        }
+    }
     pub fn is_databend_token(token: &str) -> bool {
         token.starts_with(TOKEN_PREFIX)
     }

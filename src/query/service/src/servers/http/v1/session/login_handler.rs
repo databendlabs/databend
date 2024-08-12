@@ -109,7 +109,7 @@ pub async fn login_handler(
             session_id,
             session_token: token_pair.session,
             refresh_token: token_pair.refresh,
-            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.whole_seconds() as u64,
+            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
         })),
         Err(e) => Ok(Json(LoginResponse::Error {
             error: QueryError::from_error_code(e),

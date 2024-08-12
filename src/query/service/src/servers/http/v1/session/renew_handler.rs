@@ -66,7 +66,7 @@ pub async fn renew_handler(
         Ok((_, token_pair)) => Ok(Json(RenewResponse::Ok {
             session_token: token_pair.session,
             refresh_token: token_pair.refresh,
-            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.whole_seconds() as u64,
+            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
         })),
         Err(e) => Ok(Json(RenewResponse::Error {
             error: QueryError::from_error_code(e),

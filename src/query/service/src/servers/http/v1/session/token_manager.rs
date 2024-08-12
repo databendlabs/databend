@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_cache::Cache;
@@ -27,7 +28,6 @@ use databend_common_users::UserApiProvider;
 use parking_lot::RwLock;
 use sha2::Digest;
 use sha2::Sha256;
-use time::Duration;
 
 use crate::servers::http::v1::session::token::unix_ts;
 use crate::servers::http::v1::SessionClaim;
@@ -35,14 +35,14 @@ use crate::sessions::Session;
 use crate::sessions::SessionPrivilegeManager;
 
 /// target TTL
-pub const REFRESH_TOKEN_VALIDITY: Duration = Duration::hours(4);
-pub const SESSION_TOKEN_VALIDITY: Duration = Duration::hours(1);
+pub const REFRESH_TOKEN_VALIDITY: Duration = Duration::from_hours(4);
+pub const SESSION_TOKEN_VALIDITY: Duration = Duration::from_hours(1);
 
 /// to cove network latency, retry and time skew
-const TOKEN_TTL_DELAY: Duration = Duration::seconds(300);
+const TOKEN_TTL_DELAY: Duration = Duration::from_secs(300);
 /// in case of client retry, shorted the ttl instead of drop at once
 /// only required for refresh token.
-const TOKEN_DROP_DELAY: Duration = Duration::seconds(90);
+const TOKEN_DROP_DELAY: Duration = Duration::from_secs(90);
 
 pub struct TokenPair {
     pub refresh: String,
@@ -102,15 +102,13 @@ impl TokenManager {
         let token_api = UserApiProvider::instance().token_api(&tenant);
 
         let now = unix_ts();
-        let mut claim = SessionClaim {
-            tenant: tenant_name.clone(),
-            user: user.to_owned(),
-            auth_role: auth_role.clone(),
-            session_id: client_session_id.to_string(),
-            nonce: uuid::Uuid::new_v4().to_string(),
-            expire_at_in_secs: (now + REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY)
-                .whole_seconds() as u64,
-        };
+        let mut claim = SessionClaim::new(
+            None,
+            &tenant_name,
+            &user,
+            &auth_role,
+            REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY,
+        );
         let refresh_token = if let Some(old) = &old_token_pair {
             old.refresh.clone()
         } else {
@@ -128,8 +126,7 @@ impl TokenManager {
             .upsert_token(
                 &refresh_token_hash,
                 token_info.clone(),
-                (REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds()
-                    as u64,
+                REFRESH_TOKEN_VALIDITY + SESSION_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
                 false,
             )
             .await?;
@@ -138,7 +135,7 @@ impl TokenManager {
                 .upsert_token(
                     &old.refresh,
                     token_info,
-                    (REFRESH_TOKEN_VALIDITY + TOKEN_DROP_DELAY).whole_seconds() as u64,
+                    REFRESH_TOKEN_VALIDITY + TOKEN_DROP_DELAY,
                     true,
                 )
                 .await?;
@@ -147,7 +144,7 @@ impl TokenManager {
             .write()
             .put(refresh_token_hash.clone(), ());
 
-        claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).whole_seconds() as u64;
+        claim.expire_at_in_secs = (now + SESSION_TOKEN_VALIDITY).as_secs();
         claim.nonce = uuid::Uuid::new_v4().to_string();
 
         let session_token = claim.encode();
@@ -160,7 +157,7 @@ impl TokenManager {
             .upsert_token(
                 &session_token_hash,
                 token_info,
-                (REFRESH_TOKEN_VALIDITY + TOKEN_TTL_DELAY).whole_seconds() as u64,
+                REFRESH_TOKEN_VALIDITY + TOKEN_TTL_DELAY,
                 false,
             )
             .await?;
