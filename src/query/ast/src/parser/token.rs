@@ -1666,6 +1666,7 @@ impl TokenKind {
             | TokenKind::OVER
             | TokenKind::PARTITION
             | TokenKind::QUALIFY
+            | TokenKind::ROWS
             | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
