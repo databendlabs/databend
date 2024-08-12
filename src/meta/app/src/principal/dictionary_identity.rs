@@ -33,7 +33,8 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::DictionaryIdentity;
-    use crate::schema::{DatabaseId, DictionaryId};
+    use crate::schema::DatabaseId;
+    use crate::schema::DictionaryId;
 
     impl kvapi::KeyCodec for DictionaryIdentity {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
@@ -41,13 +42,10 @@ mod kvapi_key_impl {
         }
 
         fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
+        where Self: Sized {
             let db_id = parser.next_u64()?;
             let dict_name = parser.next_str()?;
-            Ok(Self {
-                db_id,
-                dict_name,
-            })
+            Ok(Self { db_id, dict_name })
         }
     }
 
