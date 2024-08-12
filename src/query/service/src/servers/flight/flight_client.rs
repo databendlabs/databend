@@ -248,11 +248,11 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<std::result::Result<FlightData, Status>>,
+    tx: Sender<std::result::Result<Arc<FlightData>, Status>>,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
+    pub fn create(tx: Sender<std::result::Result<Arc<FlightData>, Status>>) -> FlightSender {
         FlightSender { tx }
     }
 
@@ -262,7 +262,11 @@ impl FlightSender {
 
     #[async_backtrace::framed]
     pub async fn send(&self, data: DataPacket) -> Result<()> {
-        if let Err(_cause) = self.tx.send(Ok(FlightData::try_from(data)?)).await {
+        if let Err(_cause) = self
+            .tx
+            .send(Ok(Arc::new(FlightData::try_from(data)?)))
+            .await
+        {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the remote flight channel is closed.",
             ));
@@ -282,12 +286,12 @@ pub enum FlightExchange {
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
-    Sender(Sender<std::result::Result<FlightData, Status>>),
+    Sender(Sender<std::result::Result<Arc<FlightData>, Status>>),
 }
 
 impl FlightExchange {
     pub fn create_sender(
-        sender: Sender<std::result::Result<FlightData, Status>>,
+        sender: Sender<std::result::Result<Arc<FlightData>, Status>>,
     ) -> FlightExchange {
         FlightExchange::Sender(sender)
     }
