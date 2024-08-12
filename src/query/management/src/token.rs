@@ -54,14 +54,14 @@ impl TokenMgr {
         &self,
         token_hash: &str,
         token_info: QueryTokenInfo,
-        ttl_in_secs: u64,
+        ttl: Duration,
         update_only: bool,
     ) -> Result<bool> {
         let ident = self.token_ident(token_hash);
         let seq = MatchSeq::GE(if update_only { 1 } else { 0 });
         let upsert = UpsertPB::update(ident, token_info)
             .with(seq)
-            .with_ttl(Duration::from_secs(ttl_in_secs));
+            .with_ttl(Duration::from_secs(ttl.as_secs()));
 
         let res = self.kv_api.upsert_pb(&upsert).await?;
 
