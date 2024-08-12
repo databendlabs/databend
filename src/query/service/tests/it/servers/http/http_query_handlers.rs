@@ -73,7 +73,7 @@ use wiremock::ResponseTemplate;
 
 use crate::tests::tls_constants::*;
 
-type EndpointType = HTTPSessionEndpoint<Route>;
+type EndpointType = Route;
 
 fn unwrap_data<'a>(data: &'a [Vec<Option<String>>], null_as: &'a str) -> Vec<Vec<&'a str>> {
     data.iter()
@@ -857,12 +857,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, EndpointKind::Query);
-
-    Ok(Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware))
+    Ok(Route::new().nest("/v1/query", query_route(HttpHandlerKind::Query)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {

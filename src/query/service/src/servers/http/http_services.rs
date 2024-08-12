@@ -35,6 +35,7 @@ use poem::IntoEndpoint;
 use poem::Route;
 
 use super::v1::upload_to_stage;
+use crate::servers::http::middleware::json_response;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
@@ -86,7 +87,7 @@ impl HttpHandler {
         })
     }
 
-    fn wrap_auth<E>(&self, ep: E, auth_type: EndpointKind) -> impl Endpoint
+    pub fn wrap_auth<E>(&self, ep: E, auth_type: EndpointKind) -> impl Endpoint
     where
         E: IntoEndpoint,
         E::Endpoint: 'static,
@@ -99,26 +100,43 @@ impl HttpHandler {
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
-            .nest("/query", self.wrap_auth(query_route(), EndpointKind::Query))
+            .nest("/query", query_route(self.kind))
             .at(
                 "/session/login",
-                self.wrap_auth(post(login_handler), EndpointKind::Login),
+                post(login_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Login,
+                )),
             )
             .at(
                 "/session/renew",
-                self.wrap_auth(post(renew_handler), EndpointKind::Refresh),
+                post(renew_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Refresh,
+                )),
             )
             .at(
                 "/upload_to_stage",
-                self.wrap_auth(put(upload_to_stage), EndpointKind::Query),
+                put(upload_to_stage).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::StartQuery,
+                )),
             )
             .at(
                 "/suggested_background_tasks",
-                self.wrap_auth(get(list_suggestions), EndpointKind::Query),
+                get(list_suggestions).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::StartQuery,
+                )),
             );
 
-        let ep_clickhouse = Route::new().nest("/", clickhouse_router());
-        let ep_clickhouse = self.wrap_auth(ep_clickhouse, EndpointKind::Clickhouse);
+        let ep_clickhouse =
+            Route::new()
+                .nest("/", clickhouse_router())
+                .with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Clickhouse,
+                ));
 
         let ep_usage = Route::new().at(
             "/",
@@ -140,6 +158,7 @@ impl HttpHandler {
         };
         ep.with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new().with_handler(PanicHandler::new()))
+            .around(json_response)
             .boxed()
     }
 

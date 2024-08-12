@@ -68,7 +68,8 @@ use crate::sessions::SessionType;
 pub enum EndpointKind {
     Login,
     Refresh,
-    Query,
+    StartQuery,
+    PollQuery,
     Clickhouse,
 }
 
@@ -207,10 +208,10 @@ fn auth_by_header(
                 let token = bearer.token().to_string();
                 if SessionClaim::is_databend_token(&token) {
                     let (token_type, set_user) = match endpoint_kind {
-                        EndpointKind::Login => (TokenType::Session, false),
                         EndpointKind::Refresh => (TokenType::Refresh, true),
-                        EndpointKind::Query => (TokenType::Session, true),
-                        EndpointKind::Clickhouse => {
+                        EndpointKind::StartQuery => (TokenType::Session, true),
+                        EndpointKind::PollQuery => (TokenType::Session, false),
+                        _ => {
                             return Err(ErrorCode::AuthenticateFailure(format!(
                                 "should not use databend auth when accessing {path}"
                             )));
@@ -367,10 +368,10 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async move {
-            let res = match self.auth(&req, query_id).await {
+            match self.auth(&req, query_id).await {
                 Ok(ctx) => {
                     req.extensions_mut().insert(ctx);
-                    self.ep.call(req).await
+                    self.ep.call(req).await.map(|v| v.into_response())
                 }
                 Err(err) => match err.code() {
                     ErrorCode::AUTHENTICATE_FAILURE
@@ -401,19 +402,6 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         ))
                     }
                 },
-            };
-            match res {
-                Err(err) => {
-                    let body = Body::from_json(serde_json::json!({
-                        "error": {
-                            "code": err.status().as_str(),
-                            "message": err.to_string(),
-                        }
-                    }))
-                    .unwrap();
-                    Ok(Response::builder().status(err.status()).body(body))
-                }
-                Ok(res) => Ok(res.into_response()),
             }
         })
         .await
@@ -496,5 +484,25 @@ impl poem::middleware::PanicHandler for PanicHandler {
     fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
         metrics_incr_http_response_panics_count();
         (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+    }
+}
+pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
+    let res = next.call(req).await;
+
+    match res {
+        Ok(resp) => {
+            let resp = resp.into_response();
+            Ok(resp)
+        }
+        Err(err) => {
+            let body = Body::from_json(serde_json::json!({
+                "error": {
+                    "code": err.status().as_str(),
+                    "message": err.to_string(),
+                }
+            }))
+            .unwrap();
+            Ok(Response::builder().status(err.status()).body(body))
+        }
     }
 }
