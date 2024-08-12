@@ -51,9 +51,9 @@ async fn check_stream_status(
         .await?;
     let stream = StreamTable::try_from_table(tbl.as_ref())?;
 
-    let (table_id, is_temp) = stream.source_table_id()?;
+    let table_id = stream.source_table_id()?;
     let seqv = catalog
-        .get_table_meta_by_id(table_id, is_temp)
+        .get_table_meta_by_id(table_id, false)
         .await?
         .ok_or_else(|| {
             let err = UnknownTableId::new(table_id, "check_stream_status");

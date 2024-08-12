@@ -42,7 +42,6 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_IS_SOURCE_TEMPORARY;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
@@ -107,7 +106,7 @@ impl StreamTable {
         };
 
         let desc = &source.get_table_info().desc;
-        if source.get_table_info().ident.table_id != self.source_table_id()?.0 {
+        if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
                 "Base table {} dropped, cannot read from stream {}",
                 desc, self.info.desc,
@@ -141,27 +140,20 @@ impl StreamTable {
         self.info.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
     }
 
-    pub fn source_table_id(&self) -> Result<(u64, bool)> {
+    pub fn source_table_id(&self) -> Result<u64> {
         let table_id = self
             .info
             .options()
             .get(OPT_KEY_SOURCE_TABLE_ID)
             .ok_or_else(|| ErrorCode::Internal("source table id must be set"))?
             .parse::<u64>()?;
-        let is_temp = self
-            .info
-            .options()
-            .get(OPT_KEY_IS_SOURCE_TEMPORARY)
-            .map(|s| s.parse::<bool>())
-            .transpose()?
-            .ok_or_else(|| ErrorCode::Internal("source table is_temp must be set"))?;
-        Ok((table_id, is_temp))
+        Ok(table_id)
     }
 
     pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let (source_table_id, source_table_is_temp) = self.source_table_id()?;
+        let source_table_id = self.source_table_id()?;
         catalog
-            .get_table_name_by_id(source_table_id, source_table_is_temp)
+            .get_table_name_by_id(source_table_id, false)
             .await
             .and_then(|opt| {
                 opt.ok_or(ErrorCode::UnknownTable(format!(
@@ -182,9 +174,9 @@ impl StreamTable {
         let source_db_id = match source_db_id_opt {
             Some(v) => v,
             None => {
-                let (source_table_id, source_table_is_temp) = self.source_table_id()?;
+                let source_table_id = self.source_table_id()?;
                 let source_table_meta = catalog
-                    .get_table_meta_by_id(source_table_id, source_table_is_temp)
+                    .get_table_meta_by_id(source_table_id, false)
                     .await?
                     .ok_or(ErrorCode::Internal("source database id must be set"))?;
                 source_table_meta
