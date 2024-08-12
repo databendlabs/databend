@@ -170,6 +170,12 @@ impl TempTblMgr {
     pub fn get_table_meta_by_id(&self, id: u64) -> Option<TableMeta> {
         self.id_to_meta.get(&TempTblId::new(id)).cloned()
     }
+
+    pub fn get_table_name_by_id(&self, id: u64) -> Option<String> {
+        self.id_to_name
+            .get(&TempTblId::new(id))
+            .map(|i| i.table_name.clone())
+    }
 }
 
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;

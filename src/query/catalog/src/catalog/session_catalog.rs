@@ -275,7 +275,10 @@ impl Catalog for SessionCatalog {
     }
 
     async fn get_table_name_by_id(&self, table_id: u64, is_temp: bool) -> Result<Option<String>> {
-        self.inner.get_table_name_by_id(table_id, is_temp).await
+        match is_temp {
+            true => Ok(self.temp_tbl_mgr.lock().get_table_name_by_id(table_id)),
+            false => self.inner.get_table_name_by_id(table_id, is_temp).await,
+        }
     }
 
     // Get the db name by meta id.
