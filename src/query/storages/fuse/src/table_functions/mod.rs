@@ -39,5 +39,4 @@ pub use fuse_encoding::FuseEncodingFunc;
 pub use fuse_segment::FuseSegmentFunc;
 pub use fuse_snapshot::FuseSnapshotFunc;
 pub use fuse_statistic::FuseStatisticsFunc;
-pub use set_cache_capacity::SetCacheCapacityFunc;
 pub use table_args::*;
