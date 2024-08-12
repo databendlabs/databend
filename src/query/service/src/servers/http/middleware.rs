@@ -64,17 +64,31 @@ use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
+#[derive(Copy, Clone)]
+pub enum EndpointKind {
+    Login,
+    Refresh,
+    Query,
+    Clickhouse,
+}
+
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl HTTPSessionMiddleware {
-    pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
-        HTTPSessionMiddleware { kind, auth_manager }
+    pub fn create(kind: HttpHandlerKind, endpoint_kind: EndpointKind) -> HTTPSessionMiddleware {
+        let auth_manager = AuthMgr::instance();
+        HTTPSessionMiddleware {
+            kind,
+            endpoint_kind,
+            auth_manager,
+        }
     }
 }
 
@@ -109,7 +123,11 @@ fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, Stri
     Some(result)
 }
 
-fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
+fn get_credential(
+    req: &Request,
+    kind: HttpHandlerKind,
+    endpoint_kind: EndpointKind,
+) -> Result<Credential> {
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
@@ -125,7 +143,12 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip, req.uri().path())
+        auth_by_header(
+            &std_auth_headers,
+            client_ip,
+            endpoint_kind,
+            req.uri().path(),
+        )
     }
 }
 
@@ -159,6 +182,7 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
 fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
+    endpoint_kind: EndpointKind,
     path: &str,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
@@ -182,18 +206,17 @@ fn auth_by_header(
             Some(bearer) => {
                 let token = bearer.token().to_string();
                 if SessionClaim::is_databend_token(&token) {
-                    let (token_type, set_user) = if path == "/query" {
-                        (TokenType::Session, true)
-                    } else if path == "/session/renew" {
-                        (TokenType::Refresh, true)
-                    } else if path != "/session/login" {
-                        (TokenType::Session, false)
-                    } else {
-                        return Err(ErrorCode::AuthenticateFailure(format!(
-                            "should not use databend auth when accessing {path}"
-                        )));
+                    let (token_type, set_user) = match endpoint_kind {
+                        EndpointKind::Login => (TokenType::Session, false),
+                        EndpointKind::Refresh => (TokenType::Refresh, true),
+                        EndpointKind::Query => (TokenType::Session, true),
+                        EndpointKind::Clickhouse => {
+                            return Err(ErrorCode::AuthenticateFailure(format!(
+                                "should not use databend auth when accessing {path}"
+                            )));
+                        }
                     };
-                    Ok(Credential::Databend {
+                    Ok(Credential::DatabendToken {
                         token,
                         token_type,
                         set_user,
@@ -246,6 +269,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
         HTTPSessionEndpoint {
             ep,
             kind: self.kind,
+            endpoint_kind: self.endpoint_kind,
             auth_manager: self.auth_manager.clone(),
         }
     }
@@ -254,13 +278,14 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
 pub struct HTTPSessionEndpoint<E> {
     ep: E,
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
-        let credential = get_credential(req, self.kind)?;
+        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
 
         let session_manager = SessionManager::instance();
 
@@ -274,7 +299,7 @@ impl<E> HTTPSessionEndpoint<E> {
 
         self.auth_manager.auth(&mut session, &credential).await?;
         let databend_token = match credential {
-            Credential::Databend { token, .. } => Some(token),
+            Credential::DatabendToken { token, .. } => Some(token),
             _ => None,
         };
 

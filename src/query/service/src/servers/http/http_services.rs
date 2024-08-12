@@ -31,10 +31,11 @@ use poem::post;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::IntoEndpoint;
 use poem::Route;
 
 use super::v1::upload_to_stage;
-use crate::auth::AuthMgr;
+use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::v1::clickhouse_router;
@@ -85,9 +86,12 @@ impl HttpHandler {
         })
     }
 
-    fn wrap_auth(&self, ep: Route) -> impl Endpoint {
-        let auth_manager = AuthMgr::instance();
-        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
+    fn wrap_auth<E>(&self, ep: E, auth_type: EndpointKind) -> impl Endpoint
+    where
+        E: IntoEndpoint,
+        E::Endpoint: 'static,
+    {
+        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_type);
         ep.with(session_middleware).boxed()
     }
 
@@ -95,15 +99,26 @@ impl HttpHandler {
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
-            .nest("/query", query_route())
-            .at("/session/login", post(login_handler))
-            .at("/session/renew", post(renew_handler))
-            .at("/upload_to_stage", put(upload_to_stage))
-            .at("/suggested_background_tasks", get(list_suggestions));
-        let ep_v1 = self.wrap_auth(ep_v1);
+            .nest("/query", self.wrap_auth(query_route(), EndpointKind::Query))
+            .at(
+                "/session/login",
+                self.wrap_auth(post(login_handler), EndpointKind::Login),
+            )
+            .at(
+                "/session/renew",
+                self.wrap_auth(post(renew_handler), EndpointKind::Refresh),
+            )
+            .at(
+                "/upload_to_stage",
+                self.wrap_auth(put(upload_to_stage), EndpointKind::Query),
+            )
+            .at(
+                "/suggested_background_tasks",
+                self.wrap_auth(get(list_suggestions), EndpointKind::Query),
+            );
 
         let ep_clickhouse = Route::new().nest("/", clickhouse_router());
-        let ep_clickhouse = self.wrap_auth(ep_clickhouse);
+        let ep_clickhouse = self.wrap_auth(ep_clickhouse, EndpointKind::Clickhouse);
 
         let ep_usage = Route::new().at(
             "/",

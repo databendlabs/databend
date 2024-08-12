@@ -36,7 +36,7 @@ pub struct AuthMgr {
 }
 
 pub enum Credential {
-    Databend {
+    DatabendToken {
         token: String,
         token_type: TokenType,
         set_user: bool,
@@ -75,7 +75,7 @@ impl AuthMgr {
     pub async fn auth(&self, session: &mut Session, credential: &Credential) -> Result<()> {
         let user_api = UserApiProvider::instance();
         match credential {
-            Credential::Databend {
+            Credential::DatabendToken {
                 token,
                 set_user,
                 token_type,

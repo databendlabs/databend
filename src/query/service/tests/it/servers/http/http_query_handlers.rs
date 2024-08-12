@@ -28,8 +28,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
-use databend_query::auth::AuthMgr;
 use databend_query::servers::http::middleware::get_client_ip;
+use databend_query::servers::http::middleware::EndpointKind;
 use databend_query::servers::http::middleware::HTTPSessionEndpoint;
 use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::make_page_uri;
@@ -98,12 +98,7 @@ struct TestHttpQueryRequest {
 
 impl TestHttpQueryRequest {
     fn new(json: serde_json::Value) -> Self {
-        let session_middleware =
-            HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-        let ep = Route::new()
-            .nest("/v1/query", query_route())
-            .with(session_middleware);
+        let ep = create_endpoint().unwrap();
 
         let root_auth_header = {
             let mut headers = HeaderMap::new();
@@ -280,7 +275,7 @@ async fn test_simple_sql() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sql = "select * from system.tables limit 10";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, 5, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -379,7 +374,7 @@ async fn test_return_when_finish() -> Result<()> {
 
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -414,7 +409,7 @@ async fn test_client_query_id() -> Result<()> {
 
     let wait_time_secs = 5;
     let sql = "select * from numbers(1)";
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let mut headers = HeaderMap::new();
     headers.insert("x-databend-query-id", "test-query-id".parse().unwrap());
     let (status, result) =
@@ -477,7 +472,7 @@ async fn test_active_sessions() -> Result<()> {
         .max_active_sessions(max_active_sessions)
         .build();
     let _fixture = TestFixture::setup_with_config(&conf).await?;
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select sleep(1)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1}});
 
@@ -501,7 +496,7 @@ async fn test_active_sessions() -> Result<()> {
 async fn test_wait_time_secs() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
@@ -575,7 +570,7 @@ async fn test_buffer_size() -> Result<()> {
 async fn test_pagination() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     let sql = "select * from numbers(10)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3, "max_rows_per_page": 2}, "session": { "settings": {}}});
 
@@ -660,11 +655,7 @@ async fn test_result_timeout() -> Result<()> {
 async fn test_system_tables() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "select name from system.tables where database='system' order by name";
 
@@ -712,7 +703,7 @@ async fn test_system_tables() -> Result<()> {
 async fn test_insert() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let route = create_endpoint().await?;
+    let route = create_endpoint()?;
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
@@ -740,13 +731,7 @@ async fn test_insert() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_query_log() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
-
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "create table t1(a int)";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
@@ -807,12 +792,7 @@ async fn test_query_log() -> Result<()> {
 async fn test_query_log_killed() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
@@ -876,9 +856,9 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
     post_json(&json).await
 }
 
-pub async fn create_endpoint() -> Result<EndpointType> {
+pub fn create_endpoint() -> Result<EndpointType> {
     let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
+        HTTPSessionMiddleware::create(HttpHandlerKind::Query, EndpointKind::Query);
 
     Ok(Route::new()
         .nest("/v1/query", query_route())
@@ -886,7 +866,7 @@ pub async fn create_endpoint() -> Result<EndpointType> {
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
-    let ep = create_endpoint().await?;
+    let ep = create_endpoint()?;
     post_json_to_endpoint(&ep, json, HeaderMap::default()).await
 }
 
@@ -963,12 +943,7 @@ async fn test_auth_jwt() -> Result<()> {
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let now = Clock::now_since_epoch();
     let claims = JWTClaims {
@@ -1154,11 +1129,7 @@ async fn test_auth_jwt_with_create_user() -> Result<()> {
         .build();
     let _fixture = TestFixture::setup_with_config(&config).await?;
 
-    let session_middleware =
-        HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
-    let ep = Route::new()
-        .nest("/v1/query", query_route())
-        .with(session_middleware);
+    let ep = create_endpoint()?;
 
     let now = Clock::now_since_epoch();
     let claims = JWTClaims {
@@ -1534,7 +1505,7 @@ async fn test_affect() -> Result<()> {
 async fn test_session_secondary_roles() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let route = create_endpoint().await?;
+    let route = create_endpoint()?;
 
     // failed input: only ALL or NONE is allowed
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
