@@ -103,7 +103,6 @@ use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryId;
-use databend_common_meta_app::schema::DictionaryIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropCatalogReply;
@@ -4276,7 +4275,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut condition = vec![];
             let mut if_then = vec![];
-            let res = get_dictionary_or_err(self, &dictionary_ident).await?;
+            let res = get_dictionary_or_err(self, dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, _dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
@@ -4356,7 +4355,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let mut condition = vec![];
             let mut if_then = vec![];
-            let res = get_dictionary_or_err(self, &dictionary_ident).await?;
+            let res = get_dictionary_or_err(self, dictionary_ident).await?;
             let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
