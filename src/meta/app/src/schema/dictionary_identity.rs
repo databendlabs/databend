@@ -13,7 +13,7 @@
 // limitations under the License.
 
 /// Uniquely identifies a dictionary with a db_id and a dict_name
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub struct DictionaryIdentity {
     pub db_id: u64,
     pub dict_name: String,

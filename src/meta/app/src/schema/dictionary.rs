@@ -23,7 +23,6 @@ use chrono::Utc;
 use databend_common_expression::TableSchema;
 
 use super::tenant_dictionary_ident::TenantDictionaryIdent;
-use super::CreateOption;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
@@ -152,7 +151,7 @@ impl ListDictionaryReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReq {
     pub dict_id: u64,
     pub dict_name: String,
@@ -160,7 +159,7 @@ pub struct UpdateDictionaryReq {
     pub dictionary_ident: TenantDictionaryIdent,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReply {
     pub dictionary_id: u64,
 }
@@ -168,7 +167,6 @@ pub struct UpdateDictionaryReply {
 mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;
-    use databend_common_meta_kvapi::kvapi::Key;
 
     use super::DictionaryId;
     use super::DictionaryIdent;
