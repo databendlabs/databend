@@ -24,8 +24,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_cache::Cache;
-use databend_common_cache::DefaultHashBuilder;
 use databend_common_cache::FileSize;
+use databend_common_cache::LruCache;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
 use log::error;
@@ -37,15 +37,13 @@ use rayon::ThreadPoolBuilder;
 
 use crate::DiskCacheKey;
 
-pub struct DiskCache<C> {
-    cache: C,
+pub struct DiskCache {
+    cache: LruCache<String, u64, FileSize>,
     root: PathBuf,
     sync_data: bool,
 }
 
-impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
-{
+impl DiskCache {
     /// Create an `DiskCache` with `hashbrown::hash_map::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
     ///
@@ -65,7 +63,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
         PathBuf: From<T>,
     {
         DiskCache {
-            cache: C::with_meter_and_hasher(size, FileSize, DefaultHashBuilder::default()),
+            cache: LruCache::with_meter(size, FileSize),
             root: PathBuf::from(path),
             sync_data,
         }
@@ -73,11 +71,9 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 }
 
-type CacheHolder<C> = Arc<RwLock<Option<DiskCache<C>>>>;
+type CacheHolder = Arc<RwLock<Option<DiskCache>>>;
 
-impl<C> DiskCache<C>
-where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static
-{
+impl DiskCache {
     /// Return the current size of all the files in the cache.
     pub fn size(&self) -> u64 {
         self.cache.size()
@@ -123,12 +119,11 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     fn parallel_scan<F>(
         cache_root: &Path,
         working_path: &PathBuf,
-        cache_holder: &CacheHolder<C>,
+        cache_holder: &CacheHolder,
         counter: &AtomicUsize,
         process_entry: F,
     ) where
-        C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'static,
-        F: Fn(&Path, &fs::DirEntry, &CacheHolder<C>, &AtomicUsize) + Clone + Send + Sync + 'static,
+        F: Fn(&Path, &fs::DirEntry, &CacheHolder, &AtomicUsize) + Clone + Send + Sync + 'static,
     {
         if let Ok(entries) = fs::read_dir(working_path) {
             let process_entry_clone = process_entry.clone();
@@ -179,7 +174,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize> + Send + Sync + 'stati
     }
 
     /// Reload cache keys from the cache directory.
-    fn fuzzy_restart(root: &PathBuf, me: CacheHolder<C>) -> io_result::Result<CacheHolder<C>> {
+    fn fuzzy_restart(root: &PathBuf, me: CacheHolder) -> io_result::Result<CacheHolder> {
         let counter = AtomicUsize::new(0);
         Self::parallel_scan(
             root,

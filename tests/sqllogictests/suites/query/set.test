@@ -22,7 +22,7 @@ select value, default = value  from system.settings where name in ('max_threads'
 56 0
 
 statement ok
-UNSET (max_threads, storage_io_min_bytes_for_seek);
+UNSET GLOBAL (max_threads, storage_io_min_bytes_for_seek);
 
 query TT
 select  default = value from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek');

@@ -1,0 +1,32 @@
+
+
+statement ok
+create or replace database snapshot_hint;
+
+statement ok
+use snapshot_hint;
+
+# Disable keeping snapshot location hint
+statement ok
+set enable_last_snapshot_location_hint = 0;
+
+statement ok
+create or replace table t (c int) 'fs:///tmp/snapshot_hint_disabled/' as select * from numbers(1);
+
+# create a stage that points to the same location of table `t`
+statement ok
+create or replace stage hint_stage url='fs:///tmp/snapshot_hint_disabled/';
+
+
+# Table created with CTAS, should have no snapshot hint file
+query T
+select name from list_stage(location => '@hint_stage') where name like '%last_snapshot_location_hint%';
+----
+
+statement ok
+insert into t values(2);
+
+# After insertion, there should be no snapshot hint file
+query T
+select name from list_stage(location => '@hint_stage') where name like '%last_snapshot_location_hint%';
+----

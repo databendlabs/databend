@@ -250,7 +250,7 @@ pub fn unset_type(i: Input) -> IResult<SetType> {
                 TokenKind::VARIABLE => SetType::Variable,
                 _ => unreachable!(),
             },
-            None => SetType::SettingsGlobal,
+            None => SetType::SettingsSession,
         },
     )(i)
 }
