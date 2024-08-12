@@ -302,8 +302,8 @@ impl Settings {
         Ok(self.try_get_u64("enforce_broadcast_join")? != 0)
     }
 
-    pub fn get_disable_merge_into_join_reorder(&self) -> Result<bool> {
-        Ok(self.try_get_u64("disable_merge_into_join_reorder")? != 0)
+    pub fn get_enforce_shuffle_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_shuffle_join")? != 0)
     }
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {

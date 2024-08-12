@@ -68,32 +68,26 @@ CommitSink
         ├── probe keys: []
         ├── filters: [t1.a (#1) > t.a (#0)]
         ├── estimated rows: 15.00
-        ├── Exchange(Build)
-        │   ├── output columns: [t2.a (#0)]
-        │   ├── exchange type: Merge
-        │   └── TableScan
-        │       ├── table: default.default.t2
-        │       ├── output columns: [a (#0)]
-        │       ├── read rows: 1
-        │       ├── read size: < 1 KiB
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 1.00
-        └── Exchange(Probe)
-            ├── output columns: [t1.a (#1), t1._row_id (#2)]
-            ├── exchange type: Merge
-            └── TableScan
-                ├── table: default.default.t1
-                ├── output columns: [a (#1), _row_id (#2)]
-                ├── read rows: 15
-                ├── read size: < 1 KiB
-                ├── partitions total: 3
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 15.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t2
+        │   ├── output columns: [a (#0)]
+        │   ├── read rows: 1
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── output columns: [a (#1), _row_id (#2)]
+            ├── read rows: 15
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 15.00
 
 ## check there is no add row_number.
 query T
@@ -111,32 +105,26 @@ CommitSink
         ├── probe keys: []
         ├── filters: [t1.a (#1) < t2.a (#0)]
         ├── estimated rows: 15.00
-        ├── Exchange(Build)
-        │   ├── output columns: [t2.a (#0)]
-        │   ├── exchange type: Merge
-        │   └── TableScan
-        │       ├── table: default.default.t2
-        │       ├── output columns: [a (#0)]
-        │       ├── read rows: 1
-        │       ├── read size: < 1 KiB
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       └── estimated rows: 1.00
-        └── Exchange(Probe)
-            ├── output columns: [t1.a (#1), t1._row_id (#2)]
-            ├── exchange type: Merge
-            └── TableScan
-                ├── table: default.default.t1
-                ├── output columns: [a (#1), _row_id (#2)]
-                ├── read rows: 15
-                ├── read size: < 1 KiB
-                ├── partitions total: 3
-                ├── partitions scanned: 3
-                ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 15.00
+        ├── TableScan(Build)
+        │   ├── table: default.default.t2
+        │   ├── output columns: [a (#0)]
+        │   ├── read rows: 1
+        │   ├── read size: < 1 KiB
+        │   ├── partitions total: 1
+        │   ├── partitions scanned: 1
+        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        │   ├── push downs: [filters: [], limit: NONE]
+        │   └── estimated rows: 1.00
+        └── TableScan(Probe)
+            ├── table: default.default.t1
+            ├── output columns: [a (#1), _row_id (#2)]
+            ├── read rows: 15
+            ├── read size: < 1 KiB
+            ├── partitions total: 3
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 15.00
 
 query TT
 merge into t1 using t2 on t1.a < t2.a when matched then update * when not matched then insert *;
