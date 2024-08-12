@@ -153,7 +153,6 @@ mod kvapi_key_impl {
 
     use super::DictionaryId;
     use super::DictionaryMeta;
-    use crate::schema::DatabaseId;
 
     impl kvapi::KeyCodec for DictionaryId {
         fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
