@@ -187,6 +187,9 @@ impl Display for DatabaseType {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct TableInfo {
+    /// For a temp table,
+    /// `ident.seq` is always 0.
+    /// `id.table_id` is set as value of `TempTblId`.
     pub ident: TableIdent,
 
     /// For a table it is `db_name.table_name`.

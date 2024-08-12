@@ -254,7 +254,11 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(
+        &self,
+        _table_id: MetaId,
+        _is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
         unimplemented!()
     }
 

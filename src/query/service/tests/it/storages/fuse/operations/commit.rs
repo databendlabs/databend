@@ -142,12 +142,12 @@ use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_session::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -906,8 +906,12 @@ impl Catalog for FakedCatalog {
         self.cat.get_table_by_info(table_info)
     }
 
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        self.cat.get_table_meta_by_id(table_id).await
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+        is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
+        self.cat.get_table_meta_by_id(table_id, is_temp).await
     }
 
     #[async_backtrace::framed]

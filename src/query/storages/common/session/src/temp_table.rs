@@ -34,17 +34,21 @@ use parking_lot::Mutex;
 ///
 /// It should **not** be used as `MetaId`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-pub struct TempTblId {
+struct TempTblId {
     inner: u64,
 }
 
 impl TempTblId {
-    pub fn zero() -> Self {
+    fn zero() -> Self {
         TempTblId { inner: 0 }
     }
 
-    pub fn increment(&mut self) {
+    fn increment(&mut self) {
         self.inner += 1;
+    }
+
+    fn new(inner: u64) -> Self {
+        Self { inner }
     }
 }
 
@@ -157,6 +161,10 @@ impl TempTblMgr {
             }
             None => Ok(None),
         }
+    }
+
+    pub fn get_table_meta_by_id(&self, id: u64) -> Option<TableMeta> {
+        self.id_to_meta.get(&TempTblId::new(id)).cloned()
     }
 }
 

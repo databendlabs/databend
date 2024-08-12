@@ -215,7 +215,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
     /// Get the table meta by table id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>>;
+    ///
+    /// `table_id` can be a temp table id or a meta id as long as `is_temp` is set properly.
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: u64,
+        is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>>;
 
     // List the tables name by meta ids.
     async fn mget_table_names_by_ids(

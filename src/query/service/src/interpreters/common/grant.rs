@@ -67,7 +67,11 @@ pub async fn validate_grant_object_exists(
         GrantObject::TableById(catalog_name, db_id, table_id) => {
             let catalog = ctx.get_catalog(catalog_name).await?;
 
-            if catalog.get_table_meta_by_id(*table_id).await?.is_none() {
+            if catalog
+                .get_table_meta_by_id(*table_id, false)
+                .await?
+                .is_none()
+            {
                 return Err(databend_common_exception::ErrorCode::UnknownTableId(
                     format!(
                         "table id `{}`.`{}` not exists in catalog '{}'",

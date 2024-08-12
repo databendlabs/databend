@@ -140,9 +140,9 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -412,8 +412,12 @@ impl Catalog for FakedCatalog {
         unimplemented!()
     }
 
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        self.cat.get_table_meta_by_id(table_id).await
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+        is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
+        self.cat.get_table_meta_by_id(table_id, is_temp).await
     }
 }
 

@@ -258,13 +258,22 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        let res = self.immutable_catalog.get_table_meta_by_id(table_id).await;
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+        is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
+        let res = self
+            .immutable_catalog
+            .get_table_meta_by_id(table_id, is_temp)
+            .await;
 
         if let Ok(x) = res {
             Ok(x)
         } else {
-            self.mutable_catalog.get_table_meta_by_id(table_id).await
+            self.mutable_catalog
+                .get_table_meta_by_id(table_id, is_temp)
+                .await
         }
     }
 

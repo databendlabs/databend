@@ -41,6 +41,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -413,6 +414,12 @@ pub trait Table: Sync + Send {
     fn is_read_only(&self) -> bool {
         false
     }
+
+    fn is_temp(&self) -> bool {
+        self.get_table_info()
+            .options()
+            .contains_key(OPT_KEY_TEMP_PREFIX)
+    }
 }
 
 #[async_trait::async_trait]
@@ -423,10 +430,13 @@ pub trait TableExt: Table {
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
 
-        let seqv = catalog.get_table_meta_by_id(tid).await?.ok_or_else(|| {
-            let err = UnknownTableId::new(tid, "TableExt::refresh");
-            AppError::from(err)
-        })?;
+        let seqv = catalog
+            .get_table_meta_by_id(tid, self.is_temp())
+            .await?
+            .ok_or_else(|| {
+                let err = UnknownTableId::new(tid, "TableExt::refresh");
+                AppError::from(err)
+            })?;
 
         self.refresh_with_seq_meta(ctx, seqv.seq, seqv.data).await
     }

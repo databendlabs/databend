@@ -354,7 +354,11 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, _table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(
+        &self,
+        _table_id: MetaId,
+        _is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get table by id in HIVE catalog",
         ))

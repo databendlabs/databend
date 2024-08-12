@@ -193,7 +193,11 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: MetaId,
+        _is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
         let table = self
             .sys_db_meta
             .get_by_id(&table_id)

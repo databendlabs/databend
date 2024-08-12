@@ -241,19 +241,28 @@ impl Catalog for SessionCatalog {
         self.inner.get_table_by_info(table_info)
     }
 
-    // Get the table meta by meta id.
-    async fn get_table_meta_by_id(&self, table_id: MetaId) -> Result<Option<SeqV<TableMeta>>> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::Active => {
-                let mutated_table = self.txn_mgr.lock().get_table_from_buffer_by_id(table_id);
-                if let Some(t) = mutated_table {
-                    Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())))
-                } else {
-                    self.inner.get_table_meta_by_id(table_id).await
-                }
+    async fn get_table_meta_by_id(
+        &self,
+        table_id: u64,
+        is_temp: bool,
+    ) -> Result<Option<SeqV<TableMeta>>> {
+        if let Some(t) = {
+            let guard = self.txn_mgr.lock();
+            if guard.is_active() {
+                guard.get_table_from_buffer_by_id(table_id)
+            } else {
+                None
             }
-            _ => self.inner.get_table_meta_by_id(table_id).await,
+        } {
+            return Ok(Some(SeqV::new(t.ident.seq, t.meta.clone())));
+        }
+        match is_temp {
+            true => Ok(self
+                .temp_tbl_mgr
+                .lock()
+                .get_table_meta_by_id(table_id)
+                .map(|m| SeqV::new(0, m))),
+            false => self.inner.get_table_meta_by_id(table_id, is_temp).await,
         }
     }
 
