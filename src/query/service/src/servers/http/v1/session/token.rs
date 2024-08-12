@@ -26,7 +26,7 @@ const TOKEN_PREFIX: &str = "bend-v1-";
 fn generate_secure_nonce() -> String {
     let mut random_bytes = [0u8; 16];
     OsRng.fill_bytes(&mut random_bytes);
-    hex::encode(&random_bytes)
+    hex::encode(random_bytes)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
