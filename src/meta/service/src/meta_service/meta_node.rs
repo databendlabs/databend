@@ -212,11 +212,19 @@ impl MetaNodeBuilder {
 
 impl MetaNode {
     pub fn builder(config: &RaftConfig) -> MetaNodeBuilder {
-        assert!(config.fake_ee_license);
         let ee_gate = if config.fake_ee_license {
             MetaServiceEnterpriseGate::new_testing()
         } else {
-            MetaServiceEnterpriseGate::new(config.databend_enterprise_license.clone())
+            // read env var QUERY_DATABEND_ENTERPRISE_LICENSE:
+            // - if it is set, use it as the license.
+            // - if it is not set, use the license in config.
+
+            let license = std::env::var("QUERY_DATABEND_ENTERPRISE_LICENSE");
+            if let Ok(token) = license {
+                MetaServiceEnterpriseGate::new(Some(token))
+            } else {
+                MetaServiceEnterpriseGate::new(config.databend_enterprise_license.clone())
+            }
         };
 
         let raft_config = MetaNode::new_raft_config(config);

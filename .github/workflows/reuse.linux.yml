@@ -120,6 +120,9 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
