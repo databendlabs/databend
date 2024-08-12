@@ -420,7 +420,6 @@ impl Binder {
         change_type: Option<ChangeType>,
         sample: &Option<Sample>,
     ) -> Result<(SExpr, BindContext)> {
-        dbg!(sample);
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
         let table = self.metadata.read().table(table_index).clone();

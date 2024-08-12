@@ -311,6 +311,7 @@ Return {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -1606,6 +1607,7 @@ Loop {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: Some(
