@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_meta_app::principal::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;

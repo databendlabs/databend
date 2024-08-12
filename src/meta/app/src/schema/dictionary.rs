@@ -153,9 +153,7 @@ impl ListDictionaryReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReq {
-    pub dict_id: u64,
-    pub dict_name: String,
-    pub dict_meta: DictionaryMeta,
+    pub dictionary_meta: DictionaryMeta,
     pub dictionary_ident: TenantDictionaryIdent,
 }
 
