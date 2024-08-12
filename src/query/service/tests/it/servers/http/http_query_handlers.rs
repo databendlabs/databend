@@ -28,10 +28,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
-use databend_query::servers::http::middleware::get_client_ip;
-use databend_query::servers::http::middleware::EndpointKind;
-use databend_query::servers::http::middleware::HTTPSessionEndpoint;
-use databend_query::servers::http::middleware::HTTPSessionMiddleware;
+use databend_query::servers::http::middleware::{get_client_ip, json_response};
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
@@ -572,7 +569,7 @@ async fn test_pagination() -> Result<()> {
 
     let ep = create_endpoint()?;
     let sql = "select * from numbers(10)";
-    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3, "max_rows_per_page": 2}, "session": { "settings": {}}});
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 6   , "max_rows_per_page": 2}, "session": { "settings": {}}});
 
     let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
@@ -857,7 +854,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest("/v1/query", query_route(HttpHandlerKind::Query)))
+    Ok(Route::new().nest("/v1/query", query_route(HttpHandlerKind::Query).around(json_response)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
