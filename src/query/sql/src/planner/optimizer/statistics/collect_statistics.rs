@@ -70,7 +70,6 @@ impl CollectStatisticsOptimizer {
                     .await?;
 
                 let sample_filter = scan.sample_filter(&table_stats)?;
-                dbg!(&sample_filter);
 
                 let mut column_stats = HashMap::new();
                 let mut histograms = HashMap::new();
