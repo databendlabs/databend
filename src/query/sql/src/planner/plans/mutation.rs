@@ -67,10 +67,10 @@ pub struct Mutation {
     pub field_index_map: HashMap<FieldIndex, String>,
     pub strategy: MutationStrategy,
     pub distributed: bool,
+    pub row_id_shuffle: bool,
     // when we use target table as build side or insert only, we will remove rowid columns.
     // also use for split
     pub row_id_index: IndexType,
-    pub change_join_order: bool,
     // an optimization:
     // if it's full_operation/mactehd only and we have only one update without condition here, we shouldn't run
     // evaluator, we can just do projection to get the right columns.But the limitation is below:
