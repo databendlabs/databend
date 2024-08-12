@@ -226,13 +226,13 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::Value for DictionaryId {
+    impl kvapi::Value for DictionaryIdent {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
+            []
         }
     }
 
-    impl kvapi::Value for DictionaryIdent {
+    impl kvapi::Value for DictionaryMeta {
         fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
             []
         }
