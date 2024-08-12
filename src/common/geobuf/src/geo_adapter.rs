@@ -61,6 +61,7 @@ impl<'a> geozero::GeozeroGeometry for GeometryRef<'a> {
         Self: Sized,
     {
         debug_assert!(self.column_x.len() == self.column_y.len());
+        processor.srid(self.srid())?;
         match self.kind()?.object_kind() {
             ObjectKind::Point => {
                 debug_assert!(self.column_x.len() == 1);

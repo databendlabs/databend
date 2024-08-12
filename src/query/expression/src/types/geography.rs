@@ -259,6 +259,10 @@ impl ValueType for GeographyType {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(a: Self::ScalarRef<'_>, b: Self::ScalarRef<'_>) -> Option<std::cmp::Ordering> {
+        a.partial_cmp(&b)
+    }
 }
 
 impl ArgType for GeographyType {
