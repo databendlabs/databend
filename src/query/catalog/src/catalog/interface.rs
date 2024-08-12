@@ -223,7 +223,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         is_temp: bool,
     ) -> Result<Option<SeqV<TableMeta>>>;
 
-    // List the tables name by meta ids.
+    /// List the tables name by meta ids.
+    /// 
+    /// **Do not** pass temp table id as meta id.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
