@@ -4284,7 +4284,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 dictionary_name: dictionary_ident.dictionary_name.clone(),
             };
             let res = get_dictionary_or_err(self, &req.dictionary_ident).await?;
-            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
+            let (dictionary_id_seq, dictionary_id, _dictionary_meta_seq, _dictionary_meta) = res;
 
             debug!(
                 dictionary_id_seq = dictionary_id_seq,
@@ -4363,7 +4363,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn update_dictionary(
         &self,
         req: UpdateDictionaryReq
-    ) -> Result<UpdateDictionaryReq, KVAppError> {
+    ) -> Result<UpdateDictionaryReply, KVAppError> {
         let dict_id_key = DictionaryId {
             dictionary_id: req.dict_id,
         };
