@@ -153,6 +153,16 @@ impl ListDictionaryReq {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateDictionaryReq {
+    pub dict_id: u64,
+    pub dict_name: String,
+    pub dict_meta: DictionaryMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateDictionaryReply {}
+
 mod kvapi_key_impl {
 
     use databend_common_meta_kvapi::kvapi;

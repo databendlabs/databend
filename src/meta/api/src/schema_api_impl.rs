@@ -54,6 +54,7 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
 use databend_common_meta_app::app_error::UnknownCatalog;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
+use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
@@ -179,6 +180,8 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -4292,7 +4295,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             if dictionary_id_seq > 0 {
                 match req.create_option {
-                    CreateOption::Create => {
+                    CreateOption::Create | CreateOption::CreateIfNotExists => {
                         return Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
                             DictionaryAlreadyExists::new(
                                 tenant_dictionary.dict_name(),
@@ -4303,15 +4306,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             ),
                         )));
                     }
-                    CreateOption::CreateIfNotExists => {
-                        return Ok(CreateDictionaryReply { dictionary_id });
-                    }
                     CreateOption::CreateOrReplace => {
-                        // delete old dictionary meta
-                        // (dictionary_id) -> dictionary_meta
-                        let old_id_key = DictionaryId { dictionary_id };
-                        condition.push(txn_cond_seq(&old_id_key, Eq, dictionary_meta_seq));
-                        if_then.push(txn_op_del(&old_id_key));
+                        let update_req = UpdateDictionaryReq {
+                            dict_id: dictionary_id,
+                            dict_name: req.dictionary_ident.dict_name(),
+                            dict_meta: req.dictionary_meta.clone(),
+                        };
+                        self.update_dictionary(update_req);
                     }
                 }
             }
@@ -4356,6 +4357,32 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     return Ok(CreateDictionaryReply { dictionary_id });
                 }
             }
+        }
+    }
+
+    async fn update_dictionary(
+        &self,
+        req: UpdateDictionaryReq
+    ) -> Result<UpdateDictionaryReq, KVAppError> {
+        let dict_id_key = DictionaryId {
+            dictionary_id: req.dict_id,
+        };
+
+        let reply = self
+            .upsert_kv(UpsertKVReq::new(
+                dict_id_key.to_string_key(),
+                MatchSeq::GE(1),
+                Operation::Update(serialize_struct(&req.dict_meta)?),
+                None,
+            ))
+            .await?;
+
+        if !reply.is_changed() {
+            Err(KVAppError::AppError(AppError::UnknownDictionary(
+                UnknownDictionary::new(&req.dict_name, "update_dictionary"),
+            )))
+        } else {
+            Ok(UpdateDictionaryReply {})
         }
     }
 
