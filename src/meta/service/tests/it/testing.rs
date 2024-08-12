@@ -40,6 +40,7 @@ where
     shutdown_test();
 }
 
+#[allow(dead_code)]
 pub fn meta_service_test_harness_sync<F>(test: F)
 where F: FnOnce() -> anyhow::Result<()> + 'static {
     setup_test();

@@ -618,18 +618,21 @@ impl Operator for Join {
                 | JoinType::RightSemi
                 | JoinType::LeftMark
         ) {
+            let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
             // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
             // where n is the number of servers in the cluster.
-            let broadcast_join_threshold = if ctx.get_settings().get_prefer_broadcast_join()? {
+            let broadcast_join_threshold = if settings.get_prefer_broadcast_join()? {
                 (ctx.get_cluster().nodes.len() - 1) as f64
             } else {
                 // Use a very large value to prevent broadcast join.
                 1000.0
             };
-            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality
-                || ctx.get_settings().get_enforce_broadcast_join()?
+            if !settings.get_enforce_shuffle_join()?
+                && (right_stat_info.cardinality * broadcast_join_threshold
+                    < left_stat_info.cardinality
+                    || settings.get_enforce_broadcast_join()?)
             {
                 if child_index == 1 {
                     required.distribution = Distribution::Broadcast;
@@ -668,7 +671,8 @@ impl Operator for Join {
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
 
-        if self.join_type != JoinType::Cross && !ctx.get_settings().get_enforce_broadcast_join()? {
+        let settings = ctx.get_settings();
+        if self.join_type != JoinType::Cross && !settings.get_enforce_broadcast_join()? {
             // (Hash, Hash)
             children_required.extend(self.equi_conditions.iter().map(|condition| {
                 vec![
@@ -690,7 +694,8 @@ impl Operator for Join {
                 | JoinType::RightSemi
                 | JoinType::LeftMark
                 | JoinType::RightSingle
-        ) {
+        ) && !settings.get_enforce_shuffle_join()?
+        {
             // (Any, Broadcast)
             let left_distribution = Distribution::Any;
             let right_distribution = Distribution::Broadcast;

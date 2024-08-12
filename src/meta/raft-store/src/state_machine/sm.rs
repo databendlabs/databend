@@ -17,8 +17,8 @@ use std::convert::TryInto;
 use std::fmt::Debug;
 use std::time::Duration;
 use std::time::Instant;
-use std::time::SystemTime;
 
+use databend_common_base::display::display_unix_epoch::DisplayUnixTimeStampExt;
 use databend_common_meta_sled_store::get_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::AsKeySpace;
@@ -336,8 +336,10 @@ impl StateMachine {
                     0
                 }
                 Some(x) => {
-                    let t = SystemTime::UNIX_EPOCH + Duration::from_millis(x);
-                    info!("apply: raft-log time: {:?}", t);
+                    info!(
+                        "apply: raft-log time: {}",
+                        Duration::from_millis(x).display_unix_timestamp()
+                    );
                     x
                 }
             },

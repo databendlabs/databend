@@ -812,7 +812,7 @@ impl AccessChecker for PrivilegeAccess {
                     }
                 }
             }
-            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => {
+            Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
             }
 

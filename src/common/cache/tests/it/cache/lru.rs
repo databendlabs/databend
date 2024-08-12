@@ -206,19 +206,3 @@ fn test_metered_cache_oversize() {
     assert!(!cache.contains("foo1"));
     assert!(!cache.contains("foo2"));
 }
-
-#[cfg(feature = "heapsize")]
-#[cfg(not(target_os = "macos"))]
-#[test]
-fn test_heapsize_cache() {
-    use databend_common_cache::HeapSize;
-
-    let mut cache = LruCache::<&str, (u8, u8, u8), _, _>::with_meter(8, HeapSize);
-    cache.put("foo1", (1, 2, 3));
-    cache.put("foo2", (4, 5, 6));
-    cache.put("foo3", (7, 8, 9));
-    assert!(!cache.contains("foo1"));
-    cache.put("foo2", (10, 11, 12));
-    cache.put("foo4", (13, 14, 15));
-    assert!(!cache.contains("foo3"));
-}

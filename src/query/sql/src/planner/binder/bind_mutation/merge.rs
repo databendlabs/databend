@@ -30,9 +30,9 @@ use crate::plans::Plan;
 use crate::BindContext;
 
 // Merge into strategies:
-// 1. Insert only: RIGHT ANTI join.
-// 2. Matched and unmatched: RIGHT OUTER join.
-// 3. Matched only: INNER join.
+// 1. Insert only: target right-anti join source.
+// 2. Matched and unmatched: target right-outer join source.
+// 3. Matched only: target inner join source.
 impl Binder {
     #[allow(warnings)]
     #[async_backtrace::framed]

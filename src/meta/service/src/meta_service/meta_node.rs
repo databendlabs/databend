@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
@@ -32,7 +31,6 @@ use databend_common_grpc::DNSResolver;
 use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
@@ -83,6 +81,7 @@ use crate::message::LeaveRequest;
 use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::meta_node_status::MetaNodeStatus;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::NetworkFactory;
@@ -96,66 +95,6 @@ use crate::watcher::EventDispatcherHandle;
 use crate::watcher::Watcher;
 use crate::watcher::WatcherSender;
 use crate::Opened;
-
-#[derive(serde::Serialize)]
-pub struct MetaNodeStatus {
-    pub id: NodeId,
-
-    /// The build version of meta-service binary.
-    pub binary_version: String,
-
-    /// The version of the data this meta-service is serving.
-    pub data_version: DataVersion,
-
-    /// The raft service endpoint for internal communication
-    pub endpoint: String,
-
-    /// The size in bytes of the on disk data.
-    pub db_size: u64,
-
-    /// key number of current snapshot
-    pub key_num: u64,
-
-    /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
-    pub state: String,
-
-    /// Is this node a leader.
-    pub is_leader: bool,
-
-    /// Current term.
-    pub current_term: u64,
-
-    /// Last received log index
-    pub last_log_index: u64,
-
-    /// Last log id that has been committed and applied to state machine.
-    pub last_applied: LogId,
-
-    /// The last log id contained in the last built snapshot.
-    pub snapshot_last_log_id: Option<LogId>,
-
-    /// The last log id that has been purged, inclusive.
-    pub purged: Option<LogId>,
-
-    /// The last known leader node.
-    pub leader: Option<Node>,
-
-    /// The replication state of all nodes.
-    ///
-    /// Only leader node has non-None data for this field, i.e., `is_leader` is true.
-    pub replication: Option<BTreeMap<NodeId, Option<LogId>>>,
-
-    /// Nodes that can vote in election can grant replication.
-    pub voters: Vec<Node>,
-
-    /// Also known as `learner`s.
-    pub non_voters: Vec<Node>,
-
-    /// The last `seq` used by GenericKV sub tree.
-    ///
-    /// `seq` is a monotonically incremental integer for every value that is inserted or updated.
-    pub last_seq: u64,
-}
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
@@ -184,8 +123,7 @@ pub struct MetaNodeBuilder {
     node_id: Option<NodeId>,
     raft_config: Option<Config>,
     sto: Option<RaftStore>,
-    monitor_metrics: bool,
-    endpoint: Option<Endpoint>,
+    raft_service_endpoint: Option<Endpoint>,
 }
 
 impl MetaNodeBuilder {
@@ -212,7 +150,6 @@ impl MetaNodeBuilder {
         let raft = MetaRaft::new(node_id, Arc::new(config), net, log_store, sm_store)
             .await
             .map_err(|e| MetaStartupError::MetaServiceError(e.to_string()))?;
-        let metrics_rx = raft.metrics();
 
         let (tx, rx) = watch::channel::<()>(());
 
@@ -222,22 +159,19 @@ impl MetaNodeBuilder {
             .await
             .set_subscriber(Box::new(DispatcherSender(dispatcher_tx.clone())));
 
-        let mn = Arc::new(MetaNode {
+        let meta_node = Arc::new(MetaNode {
             sto: sto.clone(),
             dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
-            raft,
+            raft: raft.clone(),
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
             joined_tasks: AtomicI32::new(1),
         });
 
-        if self.monitor_metrics {
-            info!("about to subscribe raft metrics");
-            MetaNode::subscribe_metrics(mn.clone(), metrics_rx).await;
-        }
+        MetaNode::subscribe_metrics(meta_node.clone(), raft.metrics()).await;
 
-        let endpoint = if let Some(a) = self.endpoint.take() {
+        let endpoint = if let Some(a) = self.raft_service_endpoint.take() {
             a
         } else {
             sto.get_node_raft_endpoint(&node_id).await.map_err(|e| {
@@ -248,11 +182,9 @@ impl MetaNodeBuilder {
             })?
         };
 
-        info!("about to start raft grpc on endpoint {}", endpoint);
+        MetaNode::start_raft_service(meta_node.clone(), &endpoint).await?;
 
-        MetaNode::start_grpc(mn.clone(), endpoint.addr(), endpoint.port()).await?;
-
-        Ok(mn)
+        Ok(meta_node)
     }
 
     #[must_use]
@@ -268,14 +200,8 @@ impl MetaNodeBuilder {
     }
 
     #[must_use]
-    pub fn endpoint(mut self, a: Endpoint) -> Self {
-        self.endpoint = Some(a);
-        self
-    }
-
-    #[must_use]
-    pub fn monitor_metrics(mut self, b: bool) -> Self {
-        self.monitor_metrics = b;
+    pub fn raft_service_endpoint(mut self, endpoint: Endpoint) -> Self {
+        self.raft_service_endpoint = Some(endpoint);
         self
     }
 }
@@ -288,8 +214,7 @@ impl MetaNode {
             node_id: None,
             raft_config: Some(raft_config),
             sto: None,
-            monitor_metrics: true,
-            endpoint: None,
+            raft_service_endpoint: None,
         }
     }
 
@@ -315,20 +240,24 @@ impl MetaNode {
 
     /// Start the grpc service for raft communication and meta operation API.
     #[fastrace::trace]
-    pub async fn start_grpc(
-        mn: Arc<MetaNode>,
-        host: &str,
-        port: u16,
+    pub async fn start_raft_service(
+        meta_node: Arc<MetaNode>,
+        endpoint: &Endpoint,
     ) -> Result<(), MetaNetworkError> {
-        let mut rx = mn.running_rx.clone();
+        info!("Start raft service listening on: {}", endpoint);
 
-        let meta_srv_impl = RaftServiceImpl::create(mn.clone());
-        let meta_srv = RaftServiceServer::new(meta_srv_impl)
+        let host = endpoint.addr();
+        let port = endpoint.port();
+
+        let mut running_rx = meta_node.running_rx.clone();
+
+        let raft_service_impl = RaftServiceImpl::create(meta_node.clone());
+        let raft_server = RaftServiceServer::new(raft_service_impl)
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let ipv4_addr = host.parse::<Ipv4Addr>();
-        let addr = match ipv4_addr {
+        let ip_port = match ipv4_addr {
             Ok(addr) => format!("{}:{}", addr, port),
             Err(_) => {
                 let resolver = DNSResolver::instance().map_err(|e| {
@@ -347,37 +276,30 @@ impl MetaNode {
             }
         };
 
-        info!("about to start raft grpc on resolved addr {}", addr);
+        info!("about to start raft grpc on: {}", ip_port);
 
-        let addr_str = addr.to_string();
-        let ret = addr.parse::<std::net::SocketAddr>();
-        let addr = match ret {
-            Ok(addr) => addr,
-            Err(e) => {
-                return Err(e.into());
-            }
-        };
-        let node_id = mn.sto.id;
+        let socket_addr = ip_port.parse::<std::net::SocketAddr>()?;
+        let node_id = meta_node.sto.id;
 
-        let srv = tonic::transport::Server::builder().add_service(meta_srv);
+        let srv = tonic::transport::Server::builder().add_service(raft_server);
 
         let h = databend_common_base::runtime::spawn(async move {
-            srv.serve_with_shutdown(addr, async move {
-                let _ = rx.changed().await;
+            srv.serve_with_shutdown(socket_addr, async move {
+                let _ = running_rx.changed().await;
                 info!(
                     "signal received, shutting down: id={} {} ",
-                    node_id, addr_str
+                    node_id, ip_port
                 );
             })
             .await
             .map_err(|e| {
-                AnyError::new(&e).add_context(|| "when serving meta-service grpc service")
+                AnyError::new(&e).add_context(|| "when serving meta-service raft service")
             })?;
 
             Ok::<(), AnyError>(())
         });
 
-        let mut jh = mn.join_handles.lock().await;
+        let mut jh = meta_node.join_handles.lock().await;
         jh.push(h);
         Ok(())
     }
@@ -415,7 +337,7 @@ impl MetaNode {
         let builder = MetaNode::builder(&config)
             .sto(sto.clone())
             .node_id(self_node_id)
-            .endpoint(config.raft_api_listen_host_endpoint());
+            .raft_service_endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
 
         info!("MetaNode started: {:?}", config);
@@ -489,6 +411,7 @@ impl MetaNode {
 
     /// Spawn a monitor to watch raft state changes and report metrics changes.
     pub async fn subscribe_metrics(mn: Arc<Self>, mut metrics_rx: watch::Receiver<RaftMetrics>) {
+        info!("Start a task subscribing raft metrics and forward to metrics API");
         let meta_node = mn.clone();
 
         let fut = async move {
@@ -971,7 +894,7 @@ impl MetaNode {
 
     #[fastrace::trace]
     pub async fn get_grpc_advertise_addrs(&self) -> Vec<String> {
-        // inconsistent get: from local state machine
+        // Maybe stale get: from local state machine
 
         let nodes = {
             let sm = self.sto.state_machine.read().await;

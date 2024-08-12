@@ -57,7 +57,7 @@ mod window;
 
 pub use aggregate::AggregateInfo;
 pub use bind_context::*;
-pub use bind_mutation::target_table_position;
+pub use bind_mutation::target_probe;
 pub use bind_mutation::MutationStrategy;
 pub use bind_mutation::MutationType;
 pub use bind_query::bind_values;

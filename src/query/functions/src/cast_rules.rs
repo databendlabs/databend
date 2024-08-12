@@ -21,6 +21,7 @@ use databend_common_expression::AutoCastRules;
 use databend_common_expression::FunctionRegistry;
 
 use crate::scalars::ALL_COMP_FUNC_NAMES;
+use crate::scalars::ALL_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
@@ -44,6 +45,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     for func_name in ALL_SIMPLE_CAST_FUNCTIONS {
         // Disable auto cast from strings or variants.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+    }
+
+    for func_name in ALL_STRING_FUNC_NAMES {
+        registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
+        registry.register_additional_cast_rules(func_name, CAST_INT_TO_UINT64.iter().cloned());
     }
 
     for func_name in ALL_COMP_FUNC_NAMES {
@@ -332,3 +340,22 @@ pub fn CAST_FROM_VARIANT_RULES() -> impl IntoIterator<Item = (DataType, DataType
         ),
     ]
 }
+
+pub const CAST_INT_TO_UINT64: AutoCastRules = &[
+    (
+        DataType::Number(NumberDataType::Int8),
+        DataType::Number(NumberDataType::UInt64),
+    ),
+    (
+        DataType::Number(NumberDataType::Int16),
+        DataType::Number(NumberDataType::UInt64),
+    ),
+    (
+        DataType::Number(NumberDataType::Int32),
+        DataType::Number(NumberDataType::UInt64),
+    ),
+    (
+        DataType::Number(NumberDataType::Int64),
+        DataType::Number(NumberDataType::UInt64),
+    ),
+];

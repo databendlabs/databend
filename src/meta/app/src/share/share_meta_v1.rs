@@ -151,6 +151,7 @@ impl ShareMetaV1 {
         match object {
             ShareGrantObject::Database(_db_id) => None,
             ShareGrantObject::Table(_table_id) => self.entries.get(&object.to_string()).cloned(),
+            _ => None,
         }
     }
 
@@ -181,6 +182,7 @@ impl ShareMetaV1 {
                     }
                 };
             }
+            _ => {}
         }
     }
 
@@ -202,7 +204,7 @@ impl ShareMetaV1 {
                             Ok(db.has_granted_privileges(privileges))
                         }
                     }
-                    ShareGrantObject::Table(_) => {
+                    ShareGrantObject::Table(_) | ShareGrantObject::View(_) => {
                         unreachable!("grant database CANNOT be a table");
                     }
                 },
@@ -214,6 +216,9 @@ impl ShareMetaV1 {
                     .entries
                     .get(&key)
                     .map_or(false, |entry| entry.has_granted_privileges(privileges)))
+            }
+            ShareGrantObjectSeqAndId::View(..) => {
+                unreachable!()
             }
         }
     }

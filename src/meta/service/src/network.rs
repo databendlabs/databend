@@ -24,7 +24,7 @@ use backon::ExponentialBuilder;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::Instant;
-use databend_common_base::future::TimingFutureExt;
+use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
 use databend_common_meta_sled_store::openraft;
@@ -38,10 +38,12 @@ use databend_common_meta_sled_store::openraft::ErrorVerb;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_sled_store::openraft::RaftNetworkFactory;
 use databend_common_meta_sled_store::openraft::ToStorageResult;
+use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::raft_types::TransferLeaderRequest;
 use databend_common_meta_types::AppendEntriesRequest;
 use databend_common_meta_types::AppendEntriesResponse;
 use databend_common_meta_types::Endpoint;
@@ -173,7 +175,7 @@ impl Network {
 
         let channel = tonic::transport::Endpoint::new(addr.to_string())?
             .connect()
-            .debug_elapsed(format!(
+            .log_elapsed_debug(format!(
                 "Raft NetworkConnection new_client: connect target: {}",
                 self.target
             ))
@@ -203,7 +205,7 @@ impl Network {
         for _i in 0..n {
             let endpoint = self
                 .lookup_target_address()
-                .debug_elapsed(format!(
+                .log_elapsed_debug(format!(
                     "Raft NetworkConnection take_client lookup_target_address: target: {}",
                     self.target
                 ))
@@ -483,12 +485,12 @@ impl Network {
 
         let mut client = self
             .take_client()
-            .debug_elapsed("Raft NetworkConnection install_snapshot take_client()")
+            .log_elapsed_debug("Raft NetworkConnection install_snapshot take_client()")
             .await?;
 
         let grpc_res = client
             .install_snapshot_v003(strm)
-            .timed(observe_snapshot_send_spent(target))
+            .with_timing(observe_snapshot_send_spent(target))
             .await;
 
         info!(
@@ -570,7 +572,7 @@ impl Network {
 
         let mut client = self
             .take_client()
-            .debug_elapsed("Raft NetworkConnection send_snapshot_via_v1 take_client()")
+            .log_elapsed_debug("Raft NetworkConnection send_snapshot_via_v1 take_client()")
             .await?;
 
         while let Some(ent) = strm.try_next().await.sto_res(subject_verb)? {
@@ -670,12 +672,12 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         let mut client = self
             .take_client()
-            .debug_elapsed("Raft NetworkConnection append_entries take_client()")
+            .log_elapsed_debug("Raft NetworkConnection append_entries take_client()")
             .await?;
 
         let grpc_res = client
             .append_entries(req)
-            .timed(observe_append_send_spent(self.target))
+            .with_timing(observe_append_send_spent(self.target))
             .await;
         debug!(
             "append_entries resp from: target={}: {:?}",
@@ -777,7 +779,7 @@ impl RaftNetworkV2<TypeConfig> for Network {
 
         let mut client = self
             .take_client()
-            .debug_elapsed("Raft NetworkConnection vote take_client()")
+            .log_elapsed_debug("Raft NetworkConnection vote take_client()")
             .await?;
 
         let grpc_res = client.vote(req).await;
@@ -793,6 +795,43 @@ impl RaftNetworkV2<TypeConfig> for Network {
         }
 
         self.parse_grpc_resp::<_, openraft::error::Infallible>(grpc_res)
+    }
+
+    async fn transfer_leader(
+        &mut self,
+        req: TransferLeaderRequest,
+        _option: RPCOption,
+    ) -> Result<(), RPCError> {
+        info!(id = self.id, target = self.target, req :? = req; "{}", func_name!());
+
+        let r = pb::TransferLeaderRequest::from(req);
+
+        let req = GrpcHelper::traced_req(r);
+
+        let mut client = self
+            .take_client()
+            .log_elapsed_debug("Raft NetworkConnection transfer_leader take_client()")
+            .await?;
+
+        let grpc_res = client.transfer_leader(req).await;
+        info!(
+            "{}: resp from target={} {:?}",
+            func_name!(),
+            self.target,
+            grpc_res
+        );
+
+        match &grpc_res {
+            Ok(_) => {
+                self.client.lock().await.replace(client);
+            }
+            Err(e) => {
+                warn!(target = self.target; "{} failed: {}", func_name!(), e);
+            }
+        }
+
+        grpc_res.map_err(|e| self.status_to_unreachable(e))?;
+        Ok(())
     }
 
     /// When a `Unreachable` error is returned from the `Network`,

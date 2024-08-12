@@ -18,9 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::JoinCondition;
-use databend_common_ast::ast::JoinOperator::Inner;
-use databend_common_ast::ast::JoinOperator::RightAnti;
-use databend_common_ast::ast::JoinOperator::RightOuter;
+use databend_common_ast::ast::JoinOperator;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -164,9 +162,9 @@ impl MutationExpression {
                         target_s_expr,
                         source_s_expr,
                         match mutation_strategy {
-                            MutationStrategy::MatchedOnly => Inner,
-                            MutationStrategy::NotMatchedOnly => RightAnti,
-                            MutationStrategy::MixedMatched => RightOuter,
+                            MutationStrategy::MatchedOnly => JoinOperator::Inner,
+                            MutationStrategy::NotMatchedOnly => JoinOperator::RightAnti,
+                            MutationStrategy::MixedMatched => JoinOperator::RightOuter,
                             MutationStrategy::Direct => unreachable!(),
                         },
                         JoinCondition::On(Box::new(match_expr.clone())),
@@ -568,10 +566,11 @@ pub struct MutationExpressionBindResult {
     pub direct_filter: Option<ScalarExpr>,
 }
 
-pub fn target_table_position(s_expr: &SExpr, target_table_index: usize) -> Result<usize> {
+pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
     if !matches!(s_expr.plan(), RelOperator::Join(_)) {
-        return Ok(0);
+        return Ok(false);
     }
+
     fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
         if let RelOperator::Scan(ref scan) = s_expr.plan() {
             scan.table_index == target_table_index
@@ -582,9 +581,5 @@ pub fn target_table_position(s_expr: &SExpr, target_table_index: usize) -> Resul
         }
     }
 
-    if contains_target_table(s_expr.child(0)?, target_table_index) {
-        Ok(0)
-    } else {
-        Ok(1)
-    }
+    Ok(contains_target_table(s_expr.child(0)?, target_table_index))
 }
