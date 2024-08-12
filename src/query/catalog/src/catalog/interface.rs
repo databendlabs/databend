@@ -240,8 +240,10 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>>;
 
-    // Get the table name by meta id.
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>>;
+    /// Get the table name by meta id.
+    ///
+    /// `table_id` can be a temp table id or a meta id as long as `is_temp` is set properly.
+    async fn get_table_name_by_id(&self, table_id: u64, is_temp: bool) -> Result<Option<String>>;
 
     // Get one table by db and table name.
     async fn get_table(

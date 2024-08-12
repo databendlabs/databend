@@ -55,6 +55,7 @@ impl TempTblId {
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
     name_to_id: HashMap<TableNameIdent, TempTblId>,
+    id_to_name: HashMap<TempTblId, TableNameIdent>,
     id_to_meta: HashMap<TempTblId, TableMeta>,
     next_id: TempTblId,
 }
@@ -63,6 +64,7 @@ impl TempTblMgr {
     pub fn init() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
+            id_to_name: HashMap::new(),
             id_to_meta: HashMap::new(),
             next_id: TempTblId::zero(),
         }))
@@ -98,6 +100,7 @@ impl TempTblMgr {
             (Entry::Occupied(mut e), CreateOption::CreateOrReplace) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
+                self.id_to_name.insert(table_id, name_ident.clone());
                 self.id_to_meta.insert(table_id, table_meta);
                 self.next_id.increment();
                 true
@@ -106,6 +109,7 @@ impl TempTblMgr {
             (Entry::Vacant(e), _) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
+                self.id_to_name.insert(table_id, name_ident.clone());
                 self.id_to_meta.insert(table_id, table_meta);
                 self.next_id.increment();
                 true

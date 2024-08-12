@@ -273,7 +273,11 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_name_by_id(&self, _table_id: MetaId) -> Result<Option<String>> {
+    async fn get_table_name_by_id(
+        &self,
+        _table_id: MetaId,
+        _is_temp: bool,
+    ) -> Result<Option<String>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get table name by id in ICEBERG catalog",
         ))

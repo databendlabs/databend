@@ -159,9 +159,9 @@ impl StreamTable {
     }
 
     pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let source_table_id = self.source_table_id()?.0;
+        let (source_table_id, source_table_is_temp) = self.source_table_id()?;
         catalog
-            .get_table_name_by_id(source_table_id)
+            .get_table_name_by_id(source_table_id, source_table_is_temp)
             .await
             .and_then(|opt| {
                 opt.ok_or(ErrorCode::UnknownTable(format!(

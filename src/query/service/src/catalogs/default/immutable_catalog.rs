@@ -250,7 +250,11 @@ impl Catalog for ImmutableCatalog {
         Ok(res)
     }
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
+    async fn get_table_name_by_id(
+        &self,
+        table_id: MetaId,
+        _is_temp: bool,
+    ) -> Result<Option<String>> {
         let table_name = self
             .sys_db_meta
             .get_by_id(&table_id)

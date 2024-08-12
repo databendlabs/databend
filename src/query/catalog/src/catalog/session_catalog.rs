@@ -266,7 +266,6 @@ impl Catalog for SessionCatalog {
         }
     }
 
-    // Mget the dbs name by meta ids.
     async fn mget_table_names_by_ids(
         &self,
         tenant: &Tenant,
@@ -275,8 +274,8 @@ impl Catalog for SessionCatalog {
         self.inner.mget_table_names_by_ids(tenant, table_ids).await
     }
 
-    async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
-        self.inner.get_table_name_by_id(table_id).await
+    async fn get_table_name_by_id(&self, table_id: u64, is_temp: bool) -> Result<Option<String>> {
+        self.inner.get_table_name_by_id(table_id, is_temp).await
     }
 
     // Get the db name by meta id.
