@@ -224,18 +224,4 @@ impl HttpQueryManager {
             None
         }
     }
-
-    #[async_backtrace::framed]
-    pub(crate) fn get_token_manager(
-        self: &Arc<Self>,
-        last_query_id: &str,
-    ) -> Option<TxnManagerRef> {
-        let mut txn_managers = self.txn_managers.lock();
-        if let Some((txn_mgr, task_handle)) = txn_managers.remove(last_query_id) {
-            task_handle.abort();
-            Some(txn_mgr)
-        } else {
-            None
-        }
-    }
 }
