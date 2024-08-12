@@ -131,6 +131,9 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
@@ -139,6 +142,9 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
@@ -147,6 +153,9 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
@@ -163,6 +172,9 @@ jobs:
     needs: [ build, check ]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
