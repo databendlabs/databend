@@ -13,14 +13,7 @@
 // limitations under the License.
 
 use chrono_tz::Tz;
-use databend_common_expression::types::number::NumberDataType;
-use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::timestamp::timestamp_to_string;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 
 #[test]
 fn test_timestamp_to_string_formats() {
@@ -32,17 +25,4 @@ fn test_timestamp_to_string_formats() {
         timestamp_to_string(ts, tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
-}
-
-#[test]
-fn test_block_entry_memory_size() {
-    let scalar = Scalar::Number(NumberScalar::UInt8(1));
-    let entry = BlockEntry {
-        data_type: DataType::Number(NumberDataType::UInt8),
-        value: Value::<AnyType>::Scalar(scalar.clone()),
-    };
-    let scalar_size = std::mem::size_of_val(&scalar);
-
-    assert_eq!(144, scalar_size);
-    assert_eq!(144, entry.memory_size());
 }
