@@ -89,21 +89,6 @@ pub struct CreateDictionaryReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropDictionaryReply {}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DictionaryIdent {
-    pub db_id: u64,
-    pub dictionary_name: String,
-}
-
-impl Display for DictionaryIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.'{}'", self.db_id, self.dictionary_name)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetDictionaryReply {
     pub dictionary_id: u64,
     pub dictionary_meta: DictionaryMeta,
@@ -167,7 +152,6 @@ mod kvapi_key_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use super::DictionaryId;
-    use super::DictionaryIdent;
     use super::DictionaryMeta;
     use crate::schema::DatabaseId;
 
@@ -193,38 +177,6 @@ mod kvapi_key_impl {
 
         fn parent(&self) -> Option<String> {
             None
-        }
-    }
-
-    impl kvapi::KeyCodec for DictionaryIdent {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.dictionary_name)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let db_id = parser.next_u64()?;
-            let dictionary_name = parser.next_str()?;
-            Ok(Self {
-                db_id,
-                dictionary_name,
-            })
-        }
-    }
-
-    impl kvapi::Key for DictionaryIdent {
-        const PREFIX: &'static str = "__fd_dictionary";
-
-        type ValueType = DictionaryId;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for DictionaryIdent {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 
