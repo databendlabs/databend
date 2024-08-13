@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -351,6 +353,14 @@ impl Session {
             None => vec![],
             Some(x) => x.get_query_profiles(),
         }
+    }
+
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.session_ctx.get_all_variables()
+    }
+
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        self.session_ctx.set_all_variables(variables)
     }
 }
 

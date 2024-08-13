@@ -1393,6 +1393,7 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1415,6 +1416,7 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1432,6 +1434,7 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1451,6 +1454,7 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
         (
@@ -1472,6 +1476,7 @@ async fn test_affect() -> Result<()> {
                 txn_state: Some(TxnState::AutoCommit),
                 last_server_info: None,
                 last_query_ids: vec![],
+                internal: None,
             }),
         ),
     ];
