@@ -323,9 +323,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-array"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d33238427c60271710695f17742f45b1a5dc5bcfc5c15331c25ddfe7abf70d97"
+checksum = "16f4a9468c882dc66862cef4e1fd8423d47e67972377d85d80e022786427768c"
 dependencies = [
  "ahash 0.8.10",
  "arrow-buffer",
@@ -340,9 +340,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-buffer"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe9b95e825ae838efaf77e366c00d3fc8cca78134c9db497d6bda425f2e7b7c1"
+checksum = "c975484888fc95ec4a632cdc98be39c085b1bb518531b0c80c5d462063e5daa1"
 dependencies = [
  "bytes",
  "half",
@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-cast"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cf8385a9d5b5fcde771661dd07652b79b9139fea66193eda6a88664400ccab"
+checksum = "da26719e76b81d8bc3faad1d4dbdc1bcc10d14704e63dc17fc9f3e7e1e567c8e"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -391,9 +391,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-data"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb29be98f987bcf217b070512bb7afba2f65180858bca462edf4a39d84a23e10"
+checksum = "dd9d6f18c65ef7a2573ab498c374d8ae364b4a4edf67105357491c031f716ca5"
 dependencies = [
  "arrow-buffer",
  "arrow-schema",
@@ -458,9 +458,9 @@ dependencies = [
 
 [[package]]
 name = "arrow-json"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2041380f94bd6437ab648e6c2085a045e45a0c44f91a1b9a4fe3fed3d379bfb1"
+checksum = "fb22284c5a2a01d73cebfd88a33511a3234ab45d66086b2ca2d1228c3498e445"
 dependencies = [
  "arrow-array",
  "arrow-buffer",
@@ -508,18 +508,18 @@ dependencies = [
 
 [[package]]
 name = "arrow-schema"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32aae6a60458a2389c0da89c9de0b7932427776127da1a738e2efc21d32f3393"
+checksum = "9e972cd1ff4a4ccd22f86d3e53e835c2ed92e0eea6a3e8eadb72b4f1ac802cf8"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "arrow-select"
-version = "52.0.0"
+version = "52.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de36abaef8767b4220d7b4a8c2fe5ffc78b47db81b03d77e2136091c3ba39102"
+checksum = "600bae05d43483d216fb3494f8c32fdbefd8aa4e1de237e790dbb3d9f44690a3"
 dependencies = [
  "ahash 0.8.10",
  "arrow-array",
@@ -11415,6 +11415,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "osm2parq"
+version = "0.1.0"
+dependencies = [
+ "arrow-json",
+ "osmpbf",
+ "parquet",
+ "serde",
+]
+
+[[package]]
+name = "osmpbf"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a32d502e10d65b4ef06819cd12a931570e590aa70472aab5eee2cfaa5841d19"
+dependencies = [
+ "byteorder",
+ "flate2",
+ "memmap2 0.5.10",
+ "protobuf 3.5.0",
+ "protobuf-codegen 3.5.0",
+ "rayon",
+]
+
+[[package]]
 name = "outref"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12056,7 +12080,7 @@ dependencies = [
  "nix 0.26.4",
  "once_cell",
  "parking_lot 0.12.1",
- "protobuf",
+ "protobuf 2.28.0",
  "protobuf-codegen-pure",
  "smallvec",
  "symbolic-demangle",
@@ -12430,12 +12454,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
+name = "protobuf"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df67496db1a89596beaced1579212e9b7c53c22dca1d9745de00ead76573d514"
+dependencies = [
+ "once_cell",
+ "protobuf-support",
+ "thiserror",
+]
+
+[[package]]
 name = "protobuf-codegen"
 version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "033460afb75cf755fcfc16dfaed20b86468082a2ea24e05ac35ab4a099a017d6"
 dependencies = [
- "protobuf",
+ "protobuf 2.28.0",
+]
+
+[[package]]
+name = "protobuf-codegen"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eab09155fad2d39333d3796f67845d43e29b266eea74f7bc93f153f707f126dc"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "protobuf 3.5.0",
+ "protobuf-parse",
+ "regex",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -12444,8 +12494,33 @@ version = "2.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95a29399fc94bcd3eeaa951c715f7bea69409b2445356b00519740bcd6ddd865"
 dependencies = [
- "protobuf",
- "protobuf-codegen",
+ "protobuf 2.28.0",
+ "protobuf-codegen 2.28.0",
+]
+
+[[package]]
+name = "protobuf-parse"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a16027030d4ec33e423385f73bb559821827e9ec18c50e7874e4d6de5a4e96f"
+dependencies = [
+ "anyhow",
+ "indexmap 2.2.5",
+ "log",
+ "protobuf 3.5.0",
+ "protobuf-support",
+ "tempfile",
+ "thiserror",
+ "which",
+]
+
+[[package]]
+name = "protobuf-support"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70e2d30ab1878b2e72d1e2fc23ff5517799c9929e2cf81a8516f9f4dcf2b9cf3"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]

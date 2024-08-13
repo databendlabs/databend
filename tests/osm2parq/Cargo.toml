@@ -1,0 +1,21 @@
+[package]
+authors = ["Databend Authors <opensource@datafuselabs.com>"]
+categories = ["command-line-utilities", "development-tools::build-utils"]
+edition = "2021"
+license = "Apache-2.0"
+name = "osm2parq"
+readme = "README.md"
+repository = "https://github.com/datafuselabs/databend/"
+version = "0.1.0"
+
+[[bin]]
+name = "osm2parq"
+
+[dependencies]
+arrow-json = "52.2.0"
+osmpbf = "0.3"
+parquet = { workspace = true }
+serde = { workspace = true }
+
+[lints]
+workspace = true
