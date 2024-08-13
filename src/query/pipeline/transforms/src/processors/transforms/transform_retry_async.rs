@@ -30,12 +30,16 @@ pub struct RetryStrategy {
 }
 
 pub struct AsyncRetryWrapper<T: AsyncRetry + 'static> {
+    retries: usize,
     t: T,
 }
 
 impl<T: AsyncRetry + 'static> AsyncRetryWrapper<T> {
     pub fn create(inner: T) -> Self {
-        Self { t: inner }
+        Self {
+            t: inner,
+            retries: 0,
+        }
     }
 }
 
@@ -45,14 +49,14 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
 
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let strategy = self.t.retry_strategy();
-        for i in 0..strategy.retry_times {
+        while self.retries <= strategy.retry_times {
             match self.t.transform(data.clone()).await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
                     // Add log to know which error is retrying
                     info!(
                         "Retry {} times for transform {} error: {:?}",
-                        i,
+                        self.retries,
                         Self::NAME,
                         e
                     );
@@ -62,6 +66,7 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
                     if let Some(duration) = strategy.retry_sleep_duration {
                         tokio::time::sleep(duration).await;
                     }
+                    self.retries += 1;
                 }
             }
         }
