@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_common_meta_types::NodeId;
@@ -127,22 +126,4 @@ pub async fn trigger_transfer_leader(
         to,
         voter_ids,
     }))
-}
-
-#[poem::handler]
-pub async fn block_write_snapshot(
-    meta_node: Data<&Arc<MetaNode>>,
-) -> poem::Result<impl IntoResponse> {
-    let mut sm = meta_node.sto.get_state_machine().await;
-    sm.blocking_config_mut().write_snapshot = Duration::from_millis(1_000_000);
-    Ok(Json(()))
-}
-
-#[poem::handler]
-pub async fn block_compact_snapshot(
-    meta_node: Data<&Arc<MetaNode>>,
-) -> poem::Result<impl IntoResponse> {
-    let mut sm = meta_node.sto.get_state_machine().await;
-    sm.blocking_config_mut().compact_snapshot = Duration::from_millis(1_000_000);
-    Ok(Json(()))
 }

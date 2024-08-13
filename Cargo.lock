@@ -5395,7 +5395,6 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
