@@ -1503,6 +1503,7 @@ impl SchemaApiTestSuite {
             db_id,
             table_name: table_name.to_string(),
             tb_id: table_id,
+            is_temp: false,
         })
         .await?;
 
@@ -1833,6 +1834,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
+                    is_temp: false,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
 
@@ -1863,6 +1865,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
+                    is_temp: false,
                 };
                 let res = mt.drop_table_by_id(plan).await;
                 let err = res.unwrap_err();
@@ -1882,6 +1885,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
+                    is_temp: false,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
             }
@@ -4136,6 +4140,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
+                    is_temp: false,
                 })
                 .await?;
             }
@@ -4161,6 +4166,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
+                    is_temp: false,
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4235,6 +4241,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
+                    is_temp: false,
                 })
                 .await?;
             }
@@ -4261,6 +4268,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
+                    is_temp: false,
                 })
                 .await?;
                 let table_id = resp.table_id;
@@ -4435,6 +4443,7 @@ impl SchemaApiTestSuite {
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
+                    is_temp: false,
                 })
                 .await?;
             }
@@ -4675,6 +4684,7 @@ impl SchemaApiTestSuite {
                 db_id: old_db.ident.db_id,
                 table_name: tbl_name_ident.table_name.clone(),
                 tb_id,
+                is_temp: false,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4726,6 +4736,7 @@ impl SchemaApiTestSuite {
                 db_id: old_db.ident.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id,
+                is_temp: false,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4783,6 +4794,7 @@ impl SchemaApiTestSuite {
                 db_id: old_db.ident.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
+                is_temp: false,
             })
             .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -4884,6 +4896,7 @@ impl SchemaApiTestSuite {
                 db_id: cur_db.ident.db_id,
                 table_name: tbl_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
+                is_temp: false,
             };
 
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
@@ -7478,6 +7491,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             if_exists: false,
             db_id: self.db_id,
             tb_id: self.table_id,
+            is_temp: false,
         };
         self.mt.drop_table_by_id(req.clone()).await?;
 

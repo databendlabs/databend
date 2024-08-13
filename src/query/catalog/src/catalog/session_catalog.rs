@@ -364,7 +364,10 @@ impl Catalog for SessionCatalog {
     }
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        self.inner.drop_table_by_id(req).await
+        match req.is_temp {
+            true => self.temp_tbl_mgr.lock().drop_table_by_id(req),
+            false => self.inner.drop_table_by_id(req).await,
+        }
     }
 
     async fn undrop_table(&self, req: UndropTableReq) -> Result<UndropTableReply> {

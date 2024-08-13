@@ -23,6 +23,8 @@ use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableIdent;
@@ -218,6 +220,10 @@ impl TempTblMgr {
         };
         let table_info = TableInfo::new(database_name, table_name, ident, meta.clone());
         Ok(Some(table_info))
+    }
+
+    pub fn drop_table_by_id(&mut self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        todo!()
     }
 }
 

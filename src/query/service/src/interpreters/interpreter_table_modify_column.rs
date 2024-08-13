@@ -82,7 +82,7 @@ impl ModifyTableColumnInterpreter {
             .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         if table.is_temp() {
-            return Err(ErrorCode::UnsupportedDataMask(format!(
+            return Err(ErrorCode::StorageOther(format!(
                 "Table {} is temporary table, setting data mask policy not allowed",
                 table.name()
             )));

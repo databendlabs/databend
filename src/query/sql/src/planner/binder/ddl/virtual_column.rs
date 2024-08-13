@@ -66,7 +66,7 @@ impl Binder {
             ));
         }
         if table_info.is_temp() {
-            return Err(ErrorCode::UnsupportedVirtualColumn(format!(
+            return Err(ErrorCode::SemanticError(format!(
                 "Table {} is temporary table, creating virtual column not allowed",
                 table_info.name()
             )));
