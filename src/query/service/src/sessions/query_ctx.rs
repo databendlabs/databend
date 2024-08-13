@@ -1328,6 +1328,10 @@ impl TableContext for QueryContext {
     fn get_session_id(&self) -> String {
         todo!()
     }
+
+    fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
+        todo!()
+    }
 }
 
 impl TrySpawn for QueryContext {

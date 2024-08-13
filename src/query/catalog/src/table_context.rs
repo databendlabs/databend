@@ -365,4 +365,6 @@ pub trait TableContext: Send + Sync {
     fn get_session_id(&self) -> String;
 
     fn session_state(&self) -> SessionState;
+
+    fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool;
 }
