@@ -28,7 +28,8 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
-use databend_query::servers::http::middleware::{get_client_ip, json_response};
+use databend_query::servers::http::middleware::get_client_ip;
+use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
@@ -854,7 +855,10 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest("/v1/query", query_route(HttpHandlerKind::Query).around(json_response)))
+    Ok(Route::new().nest(
+        "/v1/query",
+        query_route(HttpHandlerKind::Query).around(json_response),
+    ))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
