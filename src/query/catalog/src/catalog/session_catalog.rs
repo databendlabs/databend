@@ -302,28 +302,36 @@ impl Catalog for SessionCatalog {
         db_name: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Table>> {
-        let state = self.txn_mgr.lock().state();
-        match state {
-            TxnState::Active => {
-                let mutated_table = self
-                    .txn_mgr
-                    .lock()
-                    .get_table_from_buffer(tenant, db_name, table_name)
-                    .map(|table_info| self.get_table_by_info(&table_info));
-                if let Some(t) = mutated_table {
-                    t
-                } else {
-                    let table = self.inner.get_table(tenant, db_name, table_name).await?;
-                    if table.engine() == "STREAM" {
-                        self.txn_mgr
-                            .lock()
-                            .upsert_table_desc_to_id(table.get_table_info().clone());
-                    }
-                    Ok(table)
-                }
+        let (table_in_txn, is_active) = {
+            let guard = self.txn_mgr.lock();
+            if guard.is_active() {
+                (
+                    guard
+                        .get_table_from_buffer(tenant, db_name, table_name)
+                        .map(|table_info| self.get_table_by_info(&table_info)),
+                    true,
+                )
+            } else {
+                (None, false)
             }
-            _ => self.inner.get_table(tenant, db_name, table_name).await,
+        };
+        if let Some(table) = table_in_txn {
+            return table;
         }
+        if let Some(table) = self
+            .temp_tbl_mgr
+            .lock()
+            .get_table(tenant, db_name, table_name)?
+        {
+            return self.get_table_by_info(&table);
+        }
+        let table = self.inner.get_table(tenant, db_name, table_name).await?;
+        if table.engine() == "STREAM" && is_active {
+            self.txn_mgr
+                .lock()
+                .upsert_table_desc_to_id(table.get_table_info().clone());
+        }
+        Ok(table)
     }
 
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>> {

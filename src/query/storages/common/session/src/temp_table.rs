@@ -25,6 +25,8 @@ use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -50,6 +52,10 @@ impl TempTblId {
 
     fn new(inner: u64) -> Self {
         Self { inner }
+    }
+
+    fn get_inner(&self) -> u64 {
+        self.inner
     }
 }
 
@@ -184,6 +190,34 @@ impl TempTblMgr {
             db_name: database_name.to_string(),
             tenant: tenant.clone(),
         })
+    }
+
+    pub fn get_table(
+        &self,
+        tenant: &Tenant,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<Option<TableInfo>> {
+        let id = self.name_to_id.get(&TableNameIdent {
+            table_name: table_name.to_string(),
+            db_name: database_name.to_string(),
+            tenant: tenant.clone(),
+        });
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let Some(meta) = self.id_to_meta.get(id) else {
+            return Err(ErrorCode::Internal(format!(
+                "Got table id {:?} but not found meta in temp table manager {:?}",
+                id, self
+            )));
+        };
+        let ident = TableIdent {
+            table_id: id.get_inner(),
+            ..Default::default()
+        };
+        let table_info = TableInfo::new(database_name, table_name, ident, meta.clone());
+        Ok(Some(table_info))
     }
 }
 
