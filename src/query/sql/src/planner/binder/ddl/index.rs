@@ -437,6 +437,12 @@ impl Binder {
                 table.engine()
             )));
         }
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating inverted index not allowed",
+                table.name()
+            )));
+        }
         let table_schema = table.schema();
         let table_id = table.get_id();
         let index_name = self.normalize_object_identifier(index_name);
