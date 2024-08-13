@@ -383,6 +383,10 @@ build_exceptions! {
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
     WrongSharePrivileges(3112),
+
+    // dictionary
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
 }
 
 // Storage errors [3001, 4000].

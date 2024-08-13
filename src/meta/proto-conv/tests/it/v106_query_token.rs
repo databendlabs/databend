@@ -28,10 +28,10 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_v105_query_token_info() -> anyhow::Result<()> {
-    let query_token_info_v105 = vec![
+fn test_v106_query_token_info() -> anyhow::Result<()> {
+    let query_token_info_v106 = vec![
         8, 1, 18, 17, 112, 97, 114, 101, 110, 116, 95, 116, 111, 107, 101, 110, 95, 104, 97, 115,
-        104, 160, 6, 105, 168, 6, 24,
+        104, 160, 6, 106, 168, 6, 24,
     ];
 
     let want = || databend_common_meta_app::principal::user_token::QueryTokenInfo {
@@ -40,5 +40,5 @@ fn test_v105_query_token_info() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), query_token_info_v105.as_slice(), 105, want())
+    common::test_load_old(func_name!(), query_token_info_v106.as_slice(), 106, want())
 }

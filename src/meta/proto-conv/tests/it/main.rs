@@ -108,4 +108,5 @@ mod v101_database_meta;
 mod v102_user_must_change_password;
 mod v103_share_meta_v2;
 mod v104_share_catalog;
-mod v105_query_token;
+mod v105_dictionary_meta;
+mod v106_query_token;

@@ -39,7 +39,6 @@ use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
-use crate::storages::fuse::table_functions::SetCacheCapacityFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
 use crate::table_functions::cloud::TaskDependentsTable;
@@ -132,14 +131,6 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseAmendTable>::create),
-            ),
-        );
-
-        creators.insert(
-            "set_cache_capacity".to_string(),
-            (
-                next_id(),
-                Arc::new(TableFunctionTemplate::<SetCacheCapacityFunc>::create),
             ),
         );
 
