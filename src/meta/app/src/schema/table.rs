@@ -585,7 +585,7 @@ impl Display for DropTableByIdReq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct DropTableReply {
     // db id, share spec vector
     pub spec_vec: Option<(u64, Vec<ShareSpec>)>,

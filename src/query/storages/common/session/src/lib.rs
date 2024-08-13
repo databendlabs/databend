@@ -21,3 +21,4 @@ pub use transaction::TxnManagerRef;
 pub use transaction::TxnState;
 mod session_state;
 pub use session_state::SessionState;
+pub use temp_table::drop_table_by_id;

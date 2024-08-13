@@ -60,18 +60,17 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::table::table_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -158,7 +157,7 @@ impl FuseTable {
     }
 
     pub fn do_create(table_info: TableInfo) -> Result<Box<FuseTable>> {
-        let storage_prefix = Self::parse_storage_prefix(&table_info)?;
+        let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
         let (mut operator, table_type) = match table_info.db_type.clone() {
@@ -275,27 +274,9 @@ impl FuseTable {
         }
     }
 
-    pub fn parse_storage_prefix(table_info: &TableInfo) -> Result<String> {
-        // if OPT_KE_STORAGE_PREFIX is specified, use it as storage prefix
-        if let Some(prefix) = table_info.options().get(OPT_KEY_STORAGE_PREFIX) {
-            return Ok(prefix.clone());
-        }
-
-        // otherwise, use database id and table id as storage prefix
-
-        let table_id = table_info.ident.table_id;
-        let db_id = table_info
-            .options()
-            .get(OPT_KEY_DATABASE_ID)
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Invalid fuse table, table option {} not found",
-                    OPT_KEY_DATABASE_ID
-                ))
-            })?;
-        Ok(table_storage_prefix(db_id, table_id))
+    pub fn parse_storage_prefix_from_table_info(table_info: &TableInfo) -> Result<String> {
+        parse_storage_prefix(table_info.options(), table_info.ident.table_id)
     }
-
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn read_table_snapshot_statistics(

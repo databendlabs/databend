@@ -5436,6 +5436,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-types",
+ "databend-common-storage",
  "databend-storages-common-table-meta",
  "parking_lot 0.12.1",
  "serde",

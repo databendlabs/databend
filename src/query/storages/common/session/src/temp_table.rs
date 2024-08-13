@@ -32,9 +32,10 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_storage::DataOperator;
+use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use parking_lot::Mutex;
-
 /// `TempTblId` is an unique identifier for a temporary table.
 ///
 /// It should **not** be used as `MetaId`.
@@ -221,10 +222,50 @@ impl TempTblMgr {
         let table_info = TableInfo::new(database_name, table_name, ident, meta.clone());
         Ok(Some(table_info))
     }
+}
 
-    pub fn drop_table_by_id(&mut self, req: DropTableByIdReq) -> Result<DropTableReply> {
-        todo!()
-    }
+pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Result<DropTableReply> {
+    let DropTableByIdReq {
+        if_exists, tb_id, ..
+    } = req;
+    let dir = {
+        let mut guard = mgr.lock();
+        let entry = guard.id_to_meta.entry(TempTblId::new(tb_id));
+        match (entry, if_exists) {
+            (Entry::Occupied(e), _) => {
+                let dir = parse_storage_prefix(&e.get().options, tb_id)?;
+                e.remove();
+                let name = guard
+                    .id_to_name
+                    .remove(&TempTblId::new(tb_id))
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Table not found in temp table manager {:?}, drop table request: {:?}",
+                            *guard, req
+                        ))
+                    })?;
+                guard.name_to_id.remove(&name).ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Table not found in temp table manager {:?}, drop table request: {:?}",
+                        guard, req
+                    ))
+                })?;
+                dir
+            }
+            (Entry::Vacant(_), true) => {
+                return Err(ErrorCode::UnknownTable(format!(
+                    "Table not found in temp table manager {:?}, drop table request: {:?}",
+                    *guard, req
+                )));
+            }
+            (Entry::Vacant(_), false) => {
+                return Ok(Default::default());
+            }
+        }
+    };
+    let op = DataOperator::instance().operator();
+    op.remove_all(&dir).await?;
+    Ok(Default::default())
 }
 
 pub type TempTblMgrRef = Arc<Mutex<TempTblMgr>>;

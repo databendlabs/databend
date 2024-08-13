@@ -365,7 +365,10 @@ impl Catalog for SessionCatalog {
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         match req.is_temp {
-            true => self.temp_tbl_mgr.lock().drop_table_by_id(req),
+            true => {
+                databend_storages_common_session::drop_table_by_id(self.temp_tbl_mgr.clone(), req)
+                    .await
+            }
             false => self.inner.drop_table_by_id(req).await,
         }
     }
