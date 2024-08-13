@@ -156,6 +156,7 @@ Insert(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         ],
                         selection: None,

@@ -22,7 +22,6 @@ mod fuse_encoding;
 mod fuse_segment;
 mod fuse_snapshot;
 mod fuse_statistic;
-mod set_cache_capacity;
 mod table_args;
 
 pub use clustering_information::ClusteringInformationFunc;
@@ -39,5 +38,4 @@ pub use fuse_encoding::FuseEncodingFunc;
 pub use fuse_segment::FuseSegmentFunc;
 pub use fuse_snapshot::FuseSnapshotFunc;
 pub use fuse_statistic::FuseStatisticsFunc;
-pub use set_cache_capacity::SetCacheCapacityFunc;
 pub use table_args::*;

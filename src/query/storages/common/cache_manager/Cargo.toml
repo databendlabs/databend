@@ -20,7 +20,6 @@ databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 log = { workspace = true }
-parking_lot = { workspace = true }
 
 [lints]
 workspace = true
