@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
@@ -24,9 +25,6 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::NumberScalar;
-use databend_common_expression::types::F64;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
@@ -112,7 +110,7 @@ pub struct Scan {
     pub inverted_index: Option<InvertedIndexInfo>,
     // Lazy row fetch.
     pub is_lazy_table: bool,
-    pub sample_conf: Option<SampleConfig>,
+    pub sample: Option<Sample>,
 
     pub statistics: Arc<Statistics>,
 }
@@ -152,7 +150,7 @@ impl Scan {
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
             is_lazy_table: self.is_lazy_table,
-            sample_conf: self.sample_conf.clone(),
+            sample: self.sample.clone(),
         }
     }
 
@@ -175,9 +173,9 @@ impl Scan {
         used_columns
     }
 
-    pub fn sample_filter(&self, stats: &Option<TableStatistics>) -> Result<Option<ScalarExpr>> {
-        if let Some(sample_conf) = &self.sample_conf {
-            let rand = match sample_conf {
+    pub fn sample_probability(&self, stats: &Option<TableStatistics>) -> Result<Option<f64>> {
+        if let Some(sample) = &self.sample {
+            let rand = match &sample.sample_conf {
                 SampleConfig::Probability(probability) => probability.as_double()? / 100.0,
                 SampleConfig::RowsNum(rows) => {
                     let rows = if let Literal::UInt64(rows) = rows {
@@ -204,24 +202,7 @@ impl Scan {
                     }
                 }
             };
-            let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "rand".to_string(),
-                params: vec![],
-                arguments: vec![],
-            });
-            return Ok(Some(ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "lte".to_string(),
-                params: vec![],
-                arguments: vec![
-                    rand_expr,
-                    ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: None,
-                        value: Scalar::Number(NumberScalar::Float64(F64::from(rand))),
-                    }),
-                ],
-            })));
+            return Ok(Some(rand));
         }
         Ok(None)
     }

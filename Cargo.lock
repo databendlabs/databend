@@ -4200,6 +4200,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "prqlc",
+ "rand 0.8.5",
  "recursive",
  "regex",
  "roaring",
@@ -5395,7 +5396,6 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
- "parking_lot 0.12.1",
 ]
 
 [[package]]

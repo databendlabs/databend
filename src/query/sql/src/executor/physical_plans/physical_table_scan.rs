@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
@@ -40,6 +41,8 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
+use rand::thread_rng;
+use rand::Rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
@@ -234,6 +237,27 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
+        // If enable block level table sample, filter parts by probability.
+        if let Some(sample) = &scan.sample {
+            match sample.sample_level {
+                SampleLevel::ROW => {}
+                SampleLevel::BLOCK => {
+                    let probability = scan.sample_probability(&None)?;
+                    if let Some(probability) = probability {
+                        let mut sample_parts = Vec::with_capacity(source.parts.partitions.len());
+                        let mut rng = thread_rng();
+                        for part in source.parts.partitions.iter() {
+                            let rng = rng.gen::<f64>();
+                            if rng < probability {
+                                sample_parts.push(part.clone());
+                            }
+                        }
+                        source.parts.partitions = sample_parts;
+                    }
+                }
+            }
+        }
+
         source.table_index = scan.table_index;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
