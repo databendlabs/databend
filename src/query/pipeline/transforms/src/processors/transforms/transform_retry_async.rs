@@ -49,7 +49,7 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
 
     async fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let strategy = self.t.retry_strategy();
-        while self.retries <= strategy.retry_times {
+        while self.retries < strategy.retry_times {
             match self.t.transform(data.clone()).await {
                 Ok(v) => return Ok(v),
                 Err(e) => {
