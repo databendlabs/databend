@@ -17,7 +17,6 @@ use crate::TempTblMgrRef;
 use crate::TxnManager;
 use crate::TxnManagerRef;
 
-
 #[derive(Clone, Debug)]
 pub struct SessionState {
     pub txn_mgr: TxnManagerRef,

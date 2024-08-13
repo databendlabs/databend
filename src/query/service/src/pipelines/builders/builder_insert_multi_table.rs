@@ -288,8 +288,10 @@ impl PipelineBuilder {
         self.main_pipeline
             .add_transforms_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
-        let catalog = CatalogManager::instance()
-            .build_catalog(targets[0].target_catalog_info.clone(), self.ctx.session_state())?;
+        let catalog = CatalogManager::instance().build_catalog(
+            targets[0].target_catalog_info.clone(),
+            self.ctx.session_state(),
+        )?;
         self.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,

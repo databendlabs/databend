@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use parking_lot::Mutex;
 
@@ -150,7 +151,7 @@ impl TempTblMgr {
             new_db_name,
             new_table_name,
         } = req;
-        match self.name_to_id.remove(&name_ident) {
+        match self.name_to_id.remove(name_ident) {
             Some(id) => {
                 let new_name_ident = TableNameIdent {
                     table_name: new_table_name.clone(),
@@ -175,6 +176,14 @@ impl TempTblMgr {
         self.id_to_name
             .get(&TempTblId::new(id))
             .map(|i| i.table_name.clone())
+    }
+
+    pub fn is_temp_table(&self, tenant: Tenant, database_name: &str, table_name: &str) -> bool {
+        self.name_to_id.contains_key(&TableNameIdent {
+            table_name: table_name.to_string(),
+            db_name: database_name.to_string(),
+            tenant: tenant.clone(),
+        })
     }
 }
 

@@ -37,6 +37,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -1329,8 +1330,15 @@ impl TableContext for QueryContext {
         todo!()
     }
 
-    fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
-        todo!()
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {
+        catalog_name == CATALOG_DEFAULT
+            && self
+                .shared
+                .session
+                .session_ctx
+                .temp_tbl_mgr()
+                .lock()
+                .is_temp_table(self.get_tenant(), database_name, table_name)
     }
 }
 

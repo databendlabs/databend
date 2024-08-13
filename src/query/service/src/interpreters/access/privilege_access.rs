@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -293,7 +292,7 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
-        if catalog_name == CATALOG_DEFAULT && self.ctx.is_temp_table(db_name, table_name) {
+        if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
         }
 
@@ -755,7 +754,7 @@ impl AccessChecker for PrivilegeAccess {
                         check_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
-                        if catalog_name = CATALOG_DEFAULT && self.ctx.is_temp_table(database,table){
+                        if self.ctx.is_temp_table(catalog_name,database,table){
                             return Ok(());
                         }
                         let session = self.ctx.get_current_session();
@@ -949,7 +948,7 @@ impl AccessChecker for PrivilegeAccess {
 
             }
             Plan::RenameTable(plan) => {
-                if plan.options.contains_key(OPT_KEY_TEMP_PREFIX){
+                if  self.ctx.is_temp_table(&plan.catalog,&plan.database, &plan.table) {
                     return Ok(());
                 }
                 // You must have ALTER and DROP privileges for the original table,

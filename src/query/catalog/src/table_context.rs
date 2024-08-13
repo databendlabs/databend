@@ -366,5 +366,5 @@ pub trait TableContext: Send + Sync {
 
     fn session_state(&self) -> SessionState;
 
-    fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool;
+    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 }

@@ -72,6 +72,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
@@ -205,21 +206,23 @@ impl CreateTableInterpreter {
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
-        // grant the ownership of the table to the current role.
-        let current_role = self.ctx.get_current_role();
-        if let Some(current_role) = current_role {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role.
+            let current_role = self.ctx.get_current_role();
+            if let Some(current_role) = current_role {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -359,24 +362,26 @@ impl CreateTableInterpreter {
 
         let reply = catalog.create_table(req.clone()).await?;
 
-        // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let tenant = self.ctx.get_tenant();
-            let db = catalog.get_database(&tenant, &self.plan.database).await?;
-            let db_id = db.get_db_info().ident.db_id;
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let tenant = self.ctx.get_tenant();
+                let db = catalog.get_database(&tenant, &self.plan.database).await?;
+                let db_id = db.get_db_info().ident.db_id;
 
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id: reply.table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id: reply.table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
         }
 
         // update share spec if needed

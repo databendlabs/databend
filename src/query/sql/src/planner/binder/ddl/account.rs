@@ -152,6 +152,15 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{} is a temporary table, cannot grant privileges on it",
+                        table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
@@ -197,6 +206,15 @@ impl Binder {
                 let database_name = database_name
                     .clone()
                     .unwrap_or_else(|| self.ctx.get_current_database());
+                if self
+                    .ctx
+                    .is_temp_table(&catalog_name, &database_name, table_name)
+                {
+                    return Err(ErrorCode::StorageOther(format!(
+                        "{} is a temporary table, cannot revoke privileges on it",
+                        table_name
+                    )));
+                }
                 let db_id = catalog
                     .get_database(&tenant, &database_name)
                     .await?
