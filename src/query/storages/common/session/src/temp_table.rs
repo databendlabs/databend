@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -27,6 +28,7 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
+use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -36,47 +38,27 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use parking_lot::Mutex;
-/// `TempTblId` is an unique identifier for a temporary table.
-///
-/// It should **not** be used as `MetaId`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Copy)]
-struct TempTblId {
-    inner: u64,
-}
-
-impl TempTblId {
-    fn zero() -> Self {
-        TempTblId { inner: 0 }
-    }
-
-    fn increment(&mut self) {
-        self.inner += 1;
-    }
-
-    fn new(inner: u64) -> Self {
-        Self { inner }
-    }
-
-    fn get_inner(&self) -> u64 {
-        self.inner
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
-    name_to_id: HashMap<TableNameIdent, TempTblId>,
-    id_to_name: HashMap<TempTblId, TableNameIdent>,
-    id_to_meta: HashMap<TempTblId, TableMeta>,
-    next_id: TempTblId,
+    name_to_id: HashMap<TableNameIdent, u64>,
+    id_to_table: HashMap<u64, TempTable>,
+    next_id: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct TempTable {
+    name: TableNameIdent,
+    meta: TableMeta,
+    _copied_files: BTreeMap<String, TableCopiedFileInfo>,
 }
 
 impl TempTblMgr {
     pub fn init() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(TempTblMgr {
             name_to_id: HashMap::new(),
-            id_to_name: HashMap::new(),
-            id_to_meta: HashMap::new(),
-            next_id: TempTblId::zero(),
+            id_to_table: HashMap::new(),
+            next_id: 0,
         }))
     }
 
@@ -110,18 +92,24 @@ impl TempTblMgr {
             (Entry::Occupied(mut e), CreateOption::CreateOrReplace) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
-                self.id_to_name.insert(table_id, name_ident.clone());
-                self.id_to_meta.insert(table_id, table_meta);
-                self.next_id.increment();
+                self.id_to_table.insert(table_id, TempTable {
+                    name: name_ident,
+                    meta: table_meta,
+                    _copied_files: BTreeMap::new(),
+                });
+                self.next_id += 1;
                 true
             }
             (Entry::Occupied(_), CreateOption::CreateIfNotExists) => false,
             (Entry::Vacant(e), _) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
-                self.id_to_name.insert(table_id, name_ident.clone());
-                self.id_to_meta.insert(table_id, table_meta);
-                self.next_id.increment();
+                self.id_to_table.insert(table_id, TempTable {
+                    name: name_ident,
+                    meta: table_meta,
+                    _copied_files: BTreeMap::new(),
+                });
+                self.next_id += 1;
                 true
             }
         };
@@ -167,7 +155,9 @@ impl TempTblMgr {
                     db_name: new_db_name.clone(),
                     ..name_ident.clone()
                 };
-                self.name_to_id.insert(new_name_ident, id);
+                self.name_to_id.insert(new_name_ident.clone(), id);
+                let table = self.id_to_table.get_mut(&id).unwrap();
+                table.name = new_name_ident;
                 Ok(Some(RenameTableReply {
                     table_id: 0,
                     share_table_info: None,
@@ -178,13 +168,11 @@ impl TempTblMgr {
     }
 
     pub fn get_table_meta_by_id(&self, id: u64) -> Option<TableMeta> {
-        self.id_to_meta.get(&TempTblId::new(id)).cloned()
+        self.id_to_table.get(&id).map(|t| t.meta.clone())
     }
 
     pub fn get_table_name_by_id(&self, id: u64) -> Option<String> {
-        self.id_to_name
-            .get(&TempTblId::new(id))
-            .map(|i| i.table_name.clone())
+        self.id_to_table.get(&id).map(|t| t.name.table_name.clone())
     }
 
     pub fn is_temp_table(&self, tenant: Tenant, database_name: &str, table_name: &str) -> bool {
@@ -209,17 +197,17 @@ impl TempTblMgr {
         let Some(id) = id else {
             return Ok(None);
         };
-        let Some(meta) = self.id_to_meta.get(id) else {
+        let Some(table) = self.id_to_table.get(id) else {
             return Err(ErrorCode::Internal(format!(
                 "Got table id {:?} but not found meta in temp table manager {:?}",
                 id, self
             )));
         };
         let ident = TableIdent {
-            table_id: id.get_inner(),
+            table_id: *id,
             ..Default::default()
         };
-        let table_info = TableInfo::new(database_name, table_name, ident, meta.clone());
+        let table_info = TableInfo::new(database_name, table_name, ident, table.meta.clone());
         Ok(Some(table_info))
     }
 }
@@ -230,21 +218,12 @@ pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Resu
     } = req;
     let dir = {
         let mut guard = mgr.lock();
-        let entry = guard.id_to_meta.entry(TempTblId::new(tb_id));
+        let entry = guard.id_to_table.entry(tb_id);
         match (entry, if_exists) {
             (Entry::Occupied(e), _) => {
-                let dir = parse_storage_prefix(&e.get().options, tb_id)?;
-                e.remove();
-                let name = guard
-                    .id_to_name
-                    .remove(&TempTblId::new(tb_id))
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "Table not found in temp table manager {:?}, drop table request: {:?}",
-                            *guard, req
-                        ))
-                    })?;
-                guard.name_to_id.remove(&name).ok_or_else(|| {
+                let dir = parse_storage_prefix(&e.get().meta.options, tb_id)?;
+                let table = e.remove();
+                guard.name_to_id.remove(&table.name).ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "Table not found in temp table manager {:?}, drop table request: {:?}",
                         guard, req
