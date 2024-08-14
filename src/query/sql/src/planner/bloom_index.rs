@@ -55,7 +55,8 @@ impl FromStr for BloomIndexColumns {
         let idents = parse_comma_separated_idents(&tokens, sql_dialect)?;
 
         let settings = Settings::create(Tenant::new_literal("dummy"));
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let name_resolution_ctx =
+            NameResolutionContext::try_new(settings.as_ref(), Default::default())?;
 
         let mut cols = Vec::with_capacity(idents.len());
         idents
@@ -81,7 +82,8 @@ impl BloomIndexColumns {
         }
 
         let settings = Settings::create(Tenant::new_literal("dummy"));
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let name_resolution_ctx =
+            NameResolutionContext::try_new(settings.as_ref(), Default::default())?;
 
         let sql_dialect = Dialect::default();
         let tokens = tokenize_sql(definition)?;

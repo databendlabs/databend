@@ -72,6 +72,7 @@ impl Planner {
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let start = Instant::now();
         let settings = self.ctx.get_settings();
+        let variables = self.ctx.get_all_variables();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
         let mut prql_converted = false;
@@ -152,7 +153,8 @@ impl Planner {
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let name_resolution_ctx =
+                    NameResolutionContext::try_new(settings.as_ref(), variables.clone())?;
                 let binder = Binder::new(
                     self.ctx.clone(),
                     CatalogManager::instance(),

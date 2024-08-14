@@ -316,9 +316,11 @@ impl SessionContext {
     pub fn get_variable(&self, key: &str) -> Option<Scalar> {
         self.variables.read().get(key).cloned()
     }
+
     pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
         self.variables.read().clone()
     }
+
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         *self.variables.write() = variables
     }

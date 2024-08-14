@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::hash::Hash;
+
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
@@ -22,6 +28,7 @@ pub struct NameResolutionContext {
     pub unquoted_ident_case_sensitive: bool,
     pub quoted_ident_case_sensitive: bool,
     pub deny_column_reference: bool,
+    pub variables: HashMap<String, Scalar>,
 }
 
 pub enum NameResolutionSuggest {
@@ -30,6 +37,16 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
+    pub fn try_new(settings: &Settings, variables: HashMap<String, Scalar>) -> Result<Self> {
+        let s = Self {
+            unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
+            quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
+            deny_column_reference: false,
+            variables,
+        };
+        Ok(s)
+    }
+
     pub fn not_found_suggest(&self, ident: &Identifier) -> Option<NameResolutionSuggest> {
         if !ident.name.chars().any(|c| c.is_ascii_uppercase()) {
             return None;
@@ -54,22 +71,8 @@ impl Default for NameResolutionContext {
             unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: true,
             deny_column_reference: false,
+            variables: HashMap::new(),
         }
-    }
-}
-
-impl TryFrom<&Settings> for NameResolutionContext {
-    type Error = databend_common_exception::ErrorCode;
-
-    fn try_from(settings: &Settings) -> databend_common_exception::Result<Self> {
-        let unquoted_ident_case_sensitive = settings.get_unquoted_ident_case_sensitive()?;
-        let quoted_ident_case_sensitive = settings.get_quoted_ident_case_sensitive()?;
-
-        Ok(Self {
-            unquoted_ident_case_sensitive,
-            quoted_ident_case_sensitive,
-            deny_column_reference: false,
-        })
     }
 }
 

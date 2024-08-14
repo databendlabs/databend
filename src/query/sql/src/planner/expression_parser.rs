@@ -118,7 +118,8 @@ pub fn parse_exprs(
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -211,7 +212,8 @@ pub fn parse_computed_expr(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect()?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -245,7 +247,8 @@ pub fn parse_default_expr_to_string(
     let mut bind_context = BindContext::new();
     let metadata = Metadata::default();
 
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
@@ -301,7 +304,8 @@ pub fn parse_computed_expr_to_string(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,
@@ -358,7 +362,8 @@ pub fn parse_lambda_expr(
         );
     }
 
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx.clone(),
@@ -378,7 +383,8 @@ pub fn parse_cluster_keys(
 ) -> Result<Vec<Expr>> {
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -465,7 +471,8 @@ pub fn analyze_cluster_keys(
 
     let (mut bind_context, metadata) = bind_one_table(table_meta)?;
     let settings = Settings::create(Tenant::new_literal("dummy"));
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx =
+        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
         ctx,

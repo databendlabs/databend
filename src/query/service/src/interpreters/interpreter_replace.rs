@@ -205,8 +205,10 @@ impl ReplaceInterpreter {
                 ));
             }
             let mut bind_context = bind_context.unwrap();
-            let name_resolution_ctx =
-                NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+            let name_resolution_ctx = NameResolutionContext::try_new(
+                self.ctx.get_settings().as_ref(),
+                self.ctx.get_all_variables(),
+            )?;
             let metadata = Arc::new(RwLock::new(Metadata::default()));
             let mut scalar_binder = ScalarBinder::new(
                 &mut bind_context,

@@ -842,6 +842,10 @@ impl TableContext for CtxDelegation {
         None
     }
 
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
+    }
+
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
