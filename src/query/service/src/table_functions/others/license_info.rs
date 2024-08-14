@@ -191,7 +191,10 @@ impl LicenseInfoSource {
                     DataType::String,
                     Value::Scalar(Scalar::String(human_readable_available_time)),
                 ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(feature_str))),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(feature_str.to_string())),
+                ),
             ],
             1,
         ))
