@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
-use databend_common_cache::Cache;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -34,6 +33,7 @@ use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
+use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::Unit;
@@ -183,7 +183,6 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         cache_number as u64,
     );
     {
-        let mut c = cache.write();
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
             let block_metas = segment_info
@@ -193,7 +192,7 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
                 .collect::<Vec<_>>();
             let statistics = segment_info.summary.clone();
             let segment_info = SegmentInfo::new(block_metas, statistics);
-            (*c).put(format!("{}", uuid.simple()), Arc::new(segment_info));
+            cache.put(format!("{}", uuid.simple()), Arc::new(segment_info));
         }
     }
     show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
@@ -226,16 +225,14 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
     );
 
     let cache = InMemoryCacheBuilder::new_item_cache::<Vec<u8>>(cache_number as u64);
-    {
-        let mut c = cache.write();
-        for _ in 0..cache_number {
-            let uuid = Uuid::new_v4();
-            (*c).put(
-                format!("{}", uuid.simple()),
-                Arc::new(segment_info_bytes.clone()),
-            );
-        }
+    for _ in 0..cache_number {
+        let uuid = Uuid::new_v4();
+        cache.put(
+            format!("{}", uuid.simple()),
+            Arc::new(segment_info_bytes.clone()),
+        );
     }
+
     show_memory_usage(
         "SegmentInfoCache(raw bytes Vec<u8>)",
         base_memory_usage,
@@ -271,12 +268,9 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
     );
 
     let cache = InMemoryCacheBuilder::new_item_cache::<CompactSegmentInfo>(cache_number as u64);
-    {
-        let mut c = cache.write();
-        for _ in 0..cache_number {
-            let uuid = Uuid::new_v4();
-            (*c).put(format!("{}", uuid.simple()), Arc::new(segment_raw.clone()));
-        }
+    for _ in 0..cache_number {
+        let uuid = Uuid::new_v4();
+        cache.put(format!("{}", uuid.simple()), Arc::new(segment_raw.clone()));
     }
     show_memory_usage(
         "SegmentInfoCache (compact repr)",
@@ -368,10 +362,9 @@ fn build_test_segment_info(
 #[allow(dead_code)]
 fn populate_cache<T>(cache: &InMemoryItemCacheHolder<T>, item: T, num_cache: usize)
 where T: Clone {
-    let mut c = cache.write();
     for _ in 0..num_cache {
         let uuid = Uuid::new_v4();
-        (*c).put(
+        cache.put(
             format!("{}", uuid.simple()),
             std::sync::Arc::new(item.clone()),
         );

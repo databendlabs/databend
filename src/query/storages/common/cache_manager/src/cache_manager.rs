@@ -267,9 +267,8 @@ impl CacheManager {
         name: impl Into<String>,
     ) -> Option<InMemoryItemCacheHolder<V>> {
         if capacity > 0 {
-            let name = name.into();
             Some(InMemoryCacheBuilder::new_item_cache(
-                name,
+                name.into(),
                 Unit::Count,
                 capacity,
             ))
@@ -288,7 +287,6 @@ impl CacheManager {
         M: CountableMeter<String, Arc<V>>,
     {
         if capacity > 0 {
-            let name = name.into();
             Some(InMemoryCacheBuilder::new_in_memory_cache(
                 name.into(),
                 unit,

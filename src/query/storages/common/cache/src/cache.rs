@@ -14,12 +14,10 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_cache::Count;
 use databend_common_cache::CountableMeter;
-use databend_common_metrics::cache::*;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Unit {

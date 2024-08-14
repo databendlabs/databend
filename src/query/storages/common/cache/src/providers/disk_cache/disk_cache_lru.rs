@@ -18,12 +18,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use databend_common_cache::Count;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_metrics::cache::metrics_inc_cache_miss_bytes;
-use databend_common_metrics::cache::metrics_inc_cache_miss_count;
 use log::error;
 use log::warn;
 use parking_lot::RwLock;
