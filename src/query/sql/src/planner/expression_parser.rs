@@ -23,16 +23,19 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::hilbert_compact_state_list;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt16Type;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -446,6 +449,144 @@ pub fn parse_cluster_keys(
         exprs.push(expr);
     }
     Ok(exprs)
+}
+
+pub fn parse_hilbert_cluster_key(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    cluster_key_str: &str,
+) -> Result<Expr> {
+    let (mut bind_context, metadata) = bind_one_table(table_meta)?;
+    let settings = Settings::create(Tenant::new_literal("dummy"));
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let sql_dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let tokens = tokenize_sql(cluster_key_str)?;
+    let mut ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    // unwrap tuple.
+    if ast_exprs.len() == 1 {
+        if let AExpr::Tuple { exprs, .. } = &ast_exprs[0] {
+            ast_exprs = exprs.clone();
+        }
+    } else {
+        unreachable!("invalid cluster key ast expression, {:?}", ast_exprs);
+    }
+
+    let mut max_size = 0;
+    let dimension = ast_exprs.len();
+    let mut exprs = Vec::with_capacity(dimension);
+    for ast in ast_exprs {
+        let (scalar, _) = *type_checker.resolve(&ast)?;
+        let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+        let inner_type = expr.data_type().remove_nullable();
+        max_size = max_size.max(hilbert_byte_size(&inner_type)?);
+        let expr = if matches!(
+            inner_type,
+            DataType::String
+                | DataType::Number(NumberDataType::Float32)
+                | DataType::Number(NumberDataType::Float64)
+        ) {
+            check_function(None, "hilbert_key", &[], &[expr], &BUILTIN_FUNCTIONS)?
+        } else {
+            expr
+        };
+        exprs.push(expr);
+    }
+
+    let (hilbert_key_type, scalar) = match max_size {
+        1 => (
+            DataType::Number(NumberDataType::UInt8),
+            Scalar::Number(u8::MAX.into()),
+        ),
+        2 => (
+            DataType::Number(NumberDataType::UInt16),
+            Scalar::Number(u16::MAX.into()),
+        ),
+        4 => (
+            DataType::Number(NumberDataType::UInt32),
+            Scalar::Number(u32::MAX.into()),
+        ),
+        8 => (
+            DataType::Number(NumberDataType::UInt64),
+            Scalar::Number(u64::MAX.into()),
+        ),
+        _ => unreachable!(),
+    };
+
+    for expr in exprs.iter_mut() {
+        let data_type = expr.data_type();
+        let is_nullable = data_type.is_nullable();
+        let inner_type = data_type.remove_nullable();
+        if inner_type != hilbert_key_type {
+            let dest_type = if is_nullable {
+                hilbert_key_type.wrap_nullable()
+            } else {
+                hilbert_key_type.clone()
+            };
+            *expr = Expr::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type,
+            };
+        }
+
+        if is_nullable {
+            let coalesce = check_function(
+                None,
+                "coalesce",
+                &[],
+                &[expr.clone(), Expr::Constant {
+                    span: None,
+                    scalar: scalar.clone(),
+                    data_type: hilbert_key_type.clone(),
+                }],
+                &BUILTIN_FUNCTIONS,
+            )?;
+            *expr = check_function(
+                None,
+                "remove_nullable",
+                &[],
+                &[coalesce],
+                &BUILTIN_FUNCTIONS,
+            )?;
+        }
+    }
+
+    let hilbert_states = hilbert_compact_state_list(dimension)?;
+    let array = check_function(None, "array", &[], &exprs, &BUILTIN_FUNCTIONS)?;
+    let result = check_function(
+        None,
+        "hilbert_index",
+        &[],
+        &[array, Expr::Constant {
+            span: None,
+            scalar: Scalar::Array(UInt16Type::from_data(hilbert_states)),
+            data_type: DataType::Array(Box::new(DataType::Number(NumberDataType::UInt16))),
+        }],
+        &BUILTIN_FUNCTIONS,
+    )?;
+    Ok(result)
+}
+
+fn hilbert_byte_size(data_type: &DataType) -> Result<usize> {
+    match data_type {
+        DataType::Nullable(inner) => hilbert_byte_size(inner),
+        DataType::Number(_) | DataType::Date | DataType::Timestamp => {
+            Ok(data_type.numeric_byte_size().unwrap())
+        }
+        DataType::Boolean => Ok(1),
+        DataType::String => Ok(8),
+        _ => Err(ErrorCode::Internal("unsupported data type for hilbert")),
+    }
 }
 
 pub fn analyze_cluster_keys(
