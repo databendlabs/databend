@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use databend_common_license::display_jwt_claims::DisplayJWTClaimsExt;
 use databend_common_meta_sled_store::openraft::async_runtime::watch::WatchReceiver;
 use databend_common_meta_types::NodeId;
 use http::StatusCode;
@@ -126,4 +128,53 @@ pub async fn trigger_transfer_leader(
         to,
         voter_ids,
     }))
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct UpdateLicenseQuery {
+    pub(crate) license: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct UpdateLicenseResponse {
+    pub from: NodeId,
+    pub to: NodeId,
+    pub voter_ids: Vec<NodeId>,
+}
+
+/// Update the `databend_enterprise_license` of this meta node.
+#[poem::handler]
+pub async fn update_license(
+    meta_node: Data<&Arc<MetaNode>>,
+    query: Option<Query<UpdateLicenseQuery>>,
+) -> poem::Result<impl IntoResponse> {
+    let Some(query) = query else {
+        return Err(poem::Error::from_string(
+            "Invalid license",
+            StatusCode::BAD_REQUEST,
+        ));
+    };
+
+    let metrics = meta_node.raft.metrics().borrow_watched().clone();
+    let id = metrics.id;
+
+    let saved = meta_node
+        .ee_gate
+        .parse_jwt_token(query.license.as_str())
+        .map_err(|e| {
+            poem::Error::from_string(format!("Invalid license: {}", e), StatusCode::BAD_REQUEST)
+        })?;
+
+    meta_node
+        .ee_gate
+        .update_license(query.license.clone())
+        .map_err(|e| poem::Error::from_string(e.to_string(), StatusCode::BAD_REQUEST))?;
+
+    let claim_str = saved.display_jwt_claims().to_string();
+    info!("id={} Updated license: {}", id, claim_str);
+
+    let mut resp = BTreeMap::new();
+    resp.insert("Success", claim_str);
+
+    Ok(Json(resp))
 }

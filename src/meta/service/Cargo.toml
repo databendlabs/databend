@@ -31,6 +31,7 @@ databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }
+databend-common-license = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }

@@ -70,7 +70,7 @@ pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
     }
 
     /// Parse the JWT token and restore the claims.
-    fn parse_jwt_token(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>, anyhow::Error> {
+    pub fn parse_jwt_token(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>, anyhow::Error> {
         let public_key = ES256PublicKey::from_pem(&self.public_key)?;
 
         let claim = public_key.verify_token::<LicenseInfo>(raw, None)?;
@@ -115,6 +115,15 @@ pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
             log::error!("Check license failed: {}", e);
             return Err(e);
         }
+
+        Ok(())
+    }
+
+    pub fn update_license(&self, license: String) -> Result<(), anyhow::Error> {
+        self.check_license(&license)?;
+
+        let mut x = self.license_token.lock().unwrap();
+        *x = Some(license);
 
         Ok(())
     }

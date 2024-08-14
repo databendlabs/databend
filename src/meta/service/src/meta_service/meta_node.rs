@@ -108,6 +108,7 @@ pub struct MetaNode {
     pub sto: RaftStore,
     pub dispatcher_handle: EventDispatcherHandle,
     pub raft: MetaRaft,
+    pub(crate) ee_gate: MetaServiceEnterpriseGate,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
     pub join_handles: Mutex<Vec<JoinHandle<Result<(), AnyError>>>>,
@@ -146,7 +147,7 @@ impl MetaNodeBuilder {
 
         let ee_gate = self.ee_gate.clone();
 
-        let net = NetworkFactory::new(sto.clone(), ee_gate);
+        let net = NetworkFactory::new(sto.clone(), ee_gate.clone());
 
         let log_store = sto.clone();
         let sm_store = sto.clone();
@@ -167,6 +168,7 @@ impl MetaNodeBuilder {
             sto: sto.clone(),
             dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
             raft: raft.clone(),
+            ee_gate,
             running_tx: tx,
             running_rx: rx,
             join_handles: Mutex::new(Vec::new()),
