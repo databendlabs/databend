@@ -318,11 +318,7 @@ impl Catalog for SessionCatalog {
         if let Some(table) = table_in_txn {
             return table;
         }
-        if let Some(table) = self
-            .temp_tbl_mgr
-            .lock()
-            .get_table(tenant, db_name, table_name)?
-        {
+        if let Some(table) = self.temp_tbl_mgr.lock().get_table(db_name, table_name)? {
             return self.get_table_by_info(&table);
         }
         let table = self.inner.get_table(tenant, db_name, table_name).await?;
@@ -408,11 +404,18 @@ impl Catalog for SessionCatalog {
 
     async fn retryable_update_multi_table_meta(
         &self,
-        req: UpdateMultiTableMetaReq,
+        mut req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult> {
         let state = self.txn_mgr.lock().state();
         match state {
-            TxnState::AutoCommit => self.inner.retryable_update_multi_table_meta(req).await,
+            TxnState::AutoCommit => {
+                let update_temp_tables = std::mem::take(&mut req.update_temp_tables);
+                let reply = self.inner.retryable_update_multi_table_meta(req).await?;
+                self.temp_tbl_mgr
+                    .lock()
+                    .update_multi_table_meta(update_temp_tables);
+                Ok(reply)
+            }
             TxnState::Active => {
                 self.txn_mgr.lock().update_multi_table_meta(req);
                 Ok(Ok(Default::default()))

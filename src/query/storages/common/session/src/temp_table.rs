@@ -32,8 +32,7 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_meta_app::schema::TableNameIdent;
-use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_storage::DataOperator;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -41,22 +40,23 @@ use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
 pub struct TempTblMgr {
-    name_to_id: HashMap<TableNameIdent, u64>,
+    desc_to_id: HashMap<String, u64>,
     id_to_table: HashMap<u64, TempTable>,
     next_id: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct TempTable {
-    name: TableNameIdent,
-    meta: TableMeta,
-    _copied_files: BTreeMap<String, TableCopiedFileInfo>,
+    pub db_name: String,
+    pub table_name: String,
+    pub meta: TableMeta,
+    pub _copied_files: BTreeMap<String, TableCopiedFileInfo>,
 }
 
 impl TempTblMgr {
     pub fn init() -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(TempTblMgr {
-            name_to_id: HashMap::new(),
+            desc_to_id: HashMap::new(),
             id_to_table: HashMap::new(),
             next_id: 0,
         }))
@@ -82,18 +82,20 @@ impl TempTblMgr {
             )));
         };
         let db_id = db_id.parse::<u64>()?;
-        let new_table = match (self.name_to_id.entry(name_ident.clone()), create_option) {
+        let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        let new_table = match (self.desc_to_id.entry(desc.clone()), create_option) {
             (Entry::Occupied(_), CreateOption::Create) => {
                 return Err(ErrorCode::TableAlreadyExists(format!(
                     "Temporary table {} already exists",
-                    name_ident
+                    desc
                 )));
             }
             (Entry::Occupied(mut e), CreateOption::CreateOrReplace) => {
                 let table_id = self.next_id;
                 e.insert(table_id);
                 self.id_to_table.insert(table_id, TempTable {
-                    name: name_ident,
+                    db_name: name_ident.db_name,
+                    table_name: name_ident.table_name,
                     meta: table_meta,
                     _copied_files: BTreeMap::new(),
                 });
@@ -105,7 +107,8 @@ impl TempTblMgr {
                 let table_id = self.next_id;
                 e.insert(table_id);
                 self.id_to_table.insert(table_id, TempTable {
-                    name: name_ident,
+                    db_name: name_ident.db_name,
+                    table_name: name_ident.table_name,
                     meta: table_meta,
                     _copied_files: BTreeMap::new(),
                 });
@@ -128,13 +131,15 @@ impl TempTblMgr {
         &mut self,
         req: &CommitTableMetaReq,
     ) -> Result<Option<CommitTableMetaReply>> {
-        let orhan_name_ident = TableNameIdent {
-            table_name: req.orphan_table_name.clone().unwrap(),
-            ..req.name_ident.clone()
-        };
-        match self.name_to_id.remove(&orhan_name_ident) {
+        let orphan_desc = format!(
+            "{}.{}",
+            req.name_ident.db_name,
+            req.orphan_table_name.as_ref().unwrap()
+        );
+        let desc = format!("{}.{}", req.name_ident.db_name, req.name_ident.table_name);
+        match self.desc_to_id.remove(&orphan_desc) {
             Some(id) => {
-                self.name_to_id.insert(req.name_ident.clone(), id);
+                self.desc_to_id.insert(desc, id);
                 Ok(Some(CommitTableMetaReply {}))
             }
             None => Ok(None),
@@ -148,16 +153,14 @@ impl TempTblMgr {
             new_db_name,
             new_table_name,
         } = req;
-        match self.name_to_id.remove(name_ident) {
+        let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        match self.desc_to_id.remove(&desc) {
             Some(id) => {
-                let new_name_ident = TableNameIdent {
-                    table_name: new_table_name.clone(),
-                    db_name: new_db_name.clone(),
-                    ..name_ident.clone()
-                };
-                self.name_to_id.insert(new_name_ident.clone(), id);
+                let new_desc = format!("{}.{}", new_db_name, new_table_name);
+                self.desc_to_id.insert(new_desc, id);
                 let table = self.id_to_table.get_mut(&id).unwrap();
-                table.name = new_name_ident;
+                table.db_name = new_db_name.clone();
+                table.table_name = new_table_name.clone();
                 Ok(Some(RenameTableReply {
                     table_id: 0,
                     share_table_info: None,
@@ -172,28 +175,17 @@ impl TempTblMgr {
     }
 
     pub fn get_table_name_by_id(&self, id: u64) -> Option<String> {
-        self.id_to_table.get(&id).map(|t| t.name.table_name.clone())
+        self.id_to_table.get(&id).map(|t| t.table_name.clone())
     }
 
-    pub fn is_temp_table(&self, tenant: Tenant, database_name: &str, table_name: &str) -> bool {
-        self.name_to_id.contains_key(&TableNameIdent {
-            table_name: table_name.to_string(),
-            db_name: database_name.to_string(),
-            tenant: tenant.clone(),
-        })
+    pub fn is_temp_table(&self, database_name: &str, table_name: &str) -> bool {
+        let desc = format!("{}.{}", database_name, table_name);
+        self.desc_to_id.contains_key(&desc)
     }
 
-    pub fn get_table(
-        &self,
-        tenant: &Tenant,
-        database_name: &str,
-        table_name: &str,
-    ) -> Result<Option<TableInfo>> {
-        let id = self.name_to_id.get(&TableNameIdent {
-            table_name: table_name.to_string(),
-            db_name: database_name.to_string(),
-            tenant: tenant.clone(),
-        });
+    pub fn get_table(&self, database_name: &str, table_name: &str) -> Result<Option<TableInfo>> {
+        let desc = format!("{}.{}", database_name, table_name);
+        let id = self.desc_to_id.get(&desc);
         let Some(id) = id else {
             return Ok(None);
         };
@@ -210,6 +202,20 @@ impl TempTblMgr {
         let table_info = TableInfo::new(database_name, table_name, ident, table.meta.clone());
         Ok(Some(table_info))
     }
+
+    pub fn update_multi_table_meta(&mut self, req: Vec<UpdateTempTableReq>) {
+        for r in req {
+            let UpdateTempTableReq {
+                table_id,
+                new_table_meta,
+                copied_files,
+                ..
+            } = r;
+            let table = self.id_to_table.get_mut(&table_id).unwrap();
+            table.meta = new_table_meta;
+            table._copied_files = copied_files;
+        }
+    }
 }
 
 pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Result<DropTableReply> {
@@ -223,7 +229,8 @@ pub async fn drop_table_by_id(mgr: TempTblMgrRef, req: DropTableByIdReq) -> Resu
             (Entry::Occupied(e), _) => {
                 let dir = parse_storage_prefix(&e.get().meta.options, tb_id)?;
                 let table = e.remove();
-                guard.name_to_id.remove(&table.name).ok_or_else(|| {
+                let desc = format!("{}.{}", table.db_name, table.table_name);
+                guard.desc_to_id.remove(&desc).ok_or_else(|| {
                     ErrorCode::Internal(format!(
                         "Table not found in temp table manager {:?}, drop table request: {:?}",
                         guard, req

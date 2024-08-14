@@ -1338,7 +1338,7 @@ impl TableContext for QueryContext {
                 .session_ctx
                 .temp_tbl_mgr()
                 .lock()
-                .is_temp_table(self.get_tenant(), database_name, table_name)
+                .is_temp_table(database_name, table_name)
     }
 }
 

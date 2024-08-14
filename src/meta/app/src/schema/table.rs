@@ -724,12 +724,21 @@ pub struct UpdateTableMetaReq {
     pub new_table_meta: TableMeta,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UpdateTempTableReq {
+    pub table_id: u64,
+    pub desc: String,
+    pub new_table_meta: TableMeta,
+    pub copied_files: BTreeMap<String, TableCopiedFileInfo>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct UpdateMultiTableMetaReq {
     pub update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
     pub copied_files: Vec<(u64, UpsertTableCopiedFileReq)>,
     pub update_stream_metas: Vec<UpdateStreamMetaReq>,
     pub deduplicated_labels: Vec<String>,
+    pub update_temp_tables: Vec<UpdateTempTableReq>,
 }
 
 /// The result of updating multiple table meta
