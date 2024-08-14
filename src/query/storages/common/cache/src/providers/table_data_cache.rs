@@ -96,22 +96,6 @@ impl TableDataCacheBuilder {
     }
 }
 
-// impl CacheAccessorExt<String, Bytes, Count> for TableDataCache {
-//     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
-//         let r = self.get(k);
-//         if r.is_none() {
-//             metrics_inc_cache_miss_count(len, DISK_TABLE_DATA_CACHE_NAME);
-//         }
-//         r
-//     }
-// }
-
-// impl CacheAccessorExt<String, Bytes, Count> for Option<TableDataCache> {
-//     fn get_with_len<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Bytes>> {
-//         self.as_ref().and_then(|cache| cache.get_with_len(k, len))
-//     }
-// }
-
 impl CacheAccessor for TableDataCache {
     type V = Bytes;
 
