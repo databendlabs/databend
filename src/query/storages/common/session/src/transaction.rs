@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -211,17 +212,28 @@ impl TxnManager {
             .cloned()
     }
 
-    pub fn get_table_from_buffer_by_id(&self, table_id: u64) -> Option<TableInfo> {
-        self.txn_buffer
-            .mutated_tables
-            .get(&table_id)
-            .cloned()
-            .or_else(|| {
-                self.txn_buffer
-                    .stream_tables
-                    .get(&table_id)
-                    .map(|snapshot| snapshot.stream.clone())
+    pub fn get_table_from_buffer_by_id(&self, table_id: u64, is_temp: bool) -> Option<TableInfo> {
+        if is_temp {
+            self.txn_buffer.mutated_temp_tables.get(&table_id).map(|t| {
+                TableInfo::new(
+                    &t.db_name,
+                    &t.table_name,
+                    TableIdent { table_id, seq: 0 },
+                    t.meta.clone(),
+                )
             })
+        } else {
+            self.txn_buffer
+                .mutated_tables
+                .get(&table_id)
+                .cloned()
+                .or_else(|| {
+                    self.txn_buffer
+                        .stream_tables
+                        .get(&table_id)
+                        .map(|snapshot| snapshot.stream.clone())
+                })
+        }
     }
 
     pub fn req(&self) -> UpdateMultiTableMetaReq {

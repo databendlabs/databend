@@ -249,7 +249,7 @@ impl Catalog for SessionCatalog {
         if let Some(t) = {
             let guard = self.txn_mgr.lock();
             if guard.is_active() {
-                guard.get_table_from_buffer_by_id(table_id)
+                guard.get_table_from_buffer_by_id(table_id, is_temp)
             } else {
                 None
             }
