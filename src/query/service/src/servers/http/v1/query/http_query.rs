@@ -187,7 +187,40 @@ pub struct ServerInfo {
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct HttpSessionStateInternal {
-    variables: HashMap<String, Scalar>,
+    /// value is JSON of Scalar
+    variables: Vec<(String, String)>,
+}
+
+impl HttpSessionStateInternal {
+    fn new(variables: &HashMap<String, Scalar>) -> Self {
+        let variables = variables
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    serde_json::to_string(&v).expect("fail to serialize Scalar"),
+                )
+            })
+            .collect();
+        Self { variables }
+    }
+
+    pub fn get_variables(&self) -> Result<HashMap<String, Scalar>> {
+        let mut vars = HashMap::with_capacity(self.variables.len());
+        for (k, v) in self.variables.iter() {
+            match serde_json::from_str::<Scalar>(v) {
+                Ok(s) => {
+                    vars.insert(k.to_string(), s);
+                }
+                Err(e) => {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "fail decode scalar from string '{v}', error: {e}"
+                    )));
+                }
+            }
+        }
+        Ok(vars)
+    }
 }
 
 fn serialize_as_json_string<S>(
@@ -242,6 +275,9 @@ pub struct HttpSessionConf {
     /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+    /// hide state not useful to clients
+    /// so client only need to know there is a String field `internal`,
+    /// which need to carry with session/conn
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(
@@ -410,7 +446,7 @@ impl HttpQuery {
             }
             if let Some(state) = &session_conf.internal {
                 if !state.variables.is_empty() {
-                    session.set_all_variables(state.variables.clone())
+                    session.set_all_variables(state.get_variables()?)
                 }
             }
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
@@ -588,7 +624,7 @@ impl HttpQuery {
         // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
         // - settings: updated by SET XXX = YYY;
         let executor = self.state.read().await;
-        let mut session_state = executor.get_session_state();
+        let session_state = executor.get_session_state();
 
         let settings = session_state
             .settings
@@ -602,9 +638,7 @@ impl HttpQuery {
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
         let internal = if !session_state.variables.is_empty() {
-            Some(HttpSessionStateInternal {
-                variables: std::mem::take(&mut session_state.variables),
-            })
+            Some(HttpSessionStateInternal::new(&session_state.variables))
         } else {
             None
         };
