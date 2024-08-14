@@ -1388,6 +1388,13 @@ impl<'a> TypeChecker<'a> {
                     }
                 });
             }
+            WindowFuncType::CumeDist => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Range,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
+                });
+            }
             _ => {}
         }
         if let Some(frame) = window_frame {
