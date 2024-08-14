@@ -158,7 +158,8 @@ impl AuthInfo {
         AuthInfo::new(auth_type, auth_string, need_change)
     }
 
-    pub fn create_set_need_change(&self, need_change: bool) -> AuthInfo {
+    // create `AuthInfo` and only modify `need_change` field.
+    pub fn create_with_need_change(&self, need_change: bool) -> AuthInfo {
         match self {
             AuthInfo::Password {
                 hash_value,
