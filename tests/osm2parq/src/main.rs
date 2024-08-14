@@ -74,7 +74,7 @@ fn main() {
         .unwrap();
 
     let path = Path::new("hong-kong.parquet");
-    let file = fs::File::create(&path).unwrap();
+    let file = fs::File::create(path).unwrap();
 
     let props = WriterProperties::builder()
         .set_column_encoding(ColumnPath::from("refs"), Encoding::DELTA_BINARY_PACKED)
@@ -160,17 +160,15 @@ fn main() {
             }
         };
         if row > 0 && row % 1000 == 0 {
-            match decoder.flush().unwrap() {
-                Some(batch) => writer.write(&batch).unwrap(),
-                _ => {}
+            if let Some(batch) = decoder.flush().unwrap() {
+                writer.write(&batch).unwrap()
             }
         };
         row += 1;
     });
 
-    match decoder.flush().unwrap() {
-        Some(batch) => writer.write(&batch).unwrap(),
-        _ => {}
+    if let Some(batch) = decoder.flush().unwrap() {
+        writer.write(&batch).unwrap()
     }
 
     let meta = writer.finish().unwrap();
