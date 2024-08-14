@@ -4807,7 +4807,6 @@ dependencies = [
  "opentelemetry-otlp",
  "opentelemetry_sdk",
  "serde",
- "serde_json",
  "strip-ansi-escapes",
  "tonic 0.11.0",
 ]
