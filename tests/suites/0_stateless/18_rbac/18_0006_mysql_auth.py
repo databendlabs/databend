@@ -46,7 +46,6 @@ try:
         "alter user u5 with must_change_password = true;"
     )
 except mysql.connector.errors.OperationalError:
-except mysql.connector.errors.OperationalError:
     print("root@127.0.0.1 is timeout")
 
 try:
