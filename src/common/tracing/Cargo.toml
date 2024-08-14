@@ -22,7 +22,7 @@ fastrace-opentelemetry = { workspace = true }
 itertools = { workspace = true }
 libc = "0.2.153"
 log = { workspace = true }
-logforth = { version = "0.10", features = ['json', 'rolling_file', 'opentelemetry', 'fastrace'] }
+logforth = { version = "0.11", features = ['json', 'rolling_file', 'opentelemetry', 'fastrace'] }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }

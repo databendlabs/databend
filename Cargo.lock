@@ -3216,7 +3216,7 @@ dependencies = [
  "enum-as-inner 0.5.1",
  "ethnum",
  "fast-float",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "goldenfile",
  "indent",
  "itertools 0.10.5",
@@ -3276,7 +3276,7 @@ dependencies = [
  "databend-common-building",
  "databend-common-exception",
  "enquote",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "libc",
  "log",
@@ -3709,7 +3709,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-storage",
  "enumflags2",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "log",
  "mockall",
@@ -3736,7 +3736,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "enumflags2",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "log",
  "logcall",
@@ -3800,7 +3800,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "derive_more",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "itertools 0.10.5",
  "log",
@@ -3828,7 +3828,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "log",
  "tempfile",
 ]
@@ -3840,7 +3840,7 @@ dependencies = [
  "anyhow",
  "async-trait-fn",
  "databend-common-meta-types",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures-util",
  "log",
  "serde",
@@ -3887,7 +3887,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "derive_more",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "futures-async-stream",
  "futures-util",
@@ -3921,7 +3921,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-tracing",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "log",
  "openraft",
  "pretty_assertions",
@@ -4044,7 +4044,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "log",
  "petgraph",
@@ -4117,7 +4117,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "maplit",
  "num",
  "pretty_assertions",
@@ -4146,7 +4146,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-exception",
  "derive-visitor",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "goldenfile",
  "tokio",
  "unindent",
@@ -4244,7 +4244,7 @@ dependencies = [
  "derive-visitor",
  "educe",
  "enum-as-inner 0.5.1",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "globiter",
  "indexmap 2.2.5",
  "itertools 0.10.5",
@@ -4313,7 +4313,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "deltalake",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "maplit",
  "match-template",
  "object_store_opendal",
@@ -4392,7 +4392,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "databend-storages-common-txn",
  "enum-as-inner 0.5.1",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "futures-util",
  "indexmap 2.2.5",
@@ -4441,7 +4441,7 @@ dependencies = [
  "databend-storages-common-cache-manager",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "faststr",
  "futures",
  "hive_metastore",
@@ -4476,7 +4476,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "iceberg",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
@@ -4726,7 +4726,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
 ]
 
 [[package]]
@@ -4797,7 +4797,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "defer",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "fastrace-opentelemetry",
  "itertools 0.10.5",
  "libc",
@@ -5106,7 +5106,7 @@ dependencies = [
  "deepsize",
  "derive_more",
  "env_logger",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "feature-set",
  "futures",
  "futures-async-stream",
@@ -5155,7 +5155,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "log",
  "rand 0.8.5",
@@ -5264,7 +5264,7 @@ dependencies = [
  "databend-storages-common-txn",
  "derive-visitor",
  "ethnum",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "flatbuffers",
  "futures",
  "futures-util",
@@ -5466,7 +5466,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "jsonb",
  "log",
  "match-template",
@@ -5488,7 +5488,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "log",
  "opendal",
 ]
@@ -6656,12 +6656,13 @@ dependencies = [
 
 [[package]]
 name = "fastrace"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86a55fca52bd8fc3edc3e3d698aa2880c5e5b30cc0f3cef0603ccd863a5e5ca2"
+checksum = "01bdb5c59912525f75feba878196c9aa5c3e41bfb3f3566e103e39bd39651a33"
 dependencies = [
- "fastrace-macro 0.7.0",
+ "fastrace-macro 0.7.1",
  "minstant",
+ "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.8.5",
@@ -6682,9 +6683,9 @@ dependencies = [
 
 [[package]]
 name = "fastrace-macro"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebb9bcb2d4b6c702ad3fccd92211f9dffd1c618277941226e554b62bb8fd7111"
+checksum = "809c42c4001c2a46b4b755deb1500f369b1598246624a1ea7aaf34e677886390"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -6698,7 +6699,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "182891935d486463df0c54aa16e15c76df32fc599c5b88fcc5223dd7d7f24074"
 dependencies = [
- "fastrace 0.7.0",
+ "fastrace 0.7.1",
  "futures",
  "log",
  "opentelemetry",
@@ -10269,14 +10270,14 @@ dependencies = [
 
 [[package]]
 name = "logforth"
-version = "0.10.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23edb974d29b67e00bf46eb37f02c03605b02626288d7be1d58cbfc0532d2d9c"
+checksum = "07adcf27d23e97f201114ec3c6bb4e1176f12f01d950a5ca9e70e76cc0b6e87b"
 dependencies = [
  "anyhow",
  "colored",
  "crossbeam-channel",
- "fastrace 0.6.8",
+ "fastrace 0.7.1",
  "jiff",
  "log",
  "opentelemetry",
