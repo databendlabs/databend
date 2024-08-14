@@ -541,10 +541,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let tables_type: Vec<String> = database_tables
             .iter()
             .map(|v| {
-                if v.engine().to_uppercase() == "FUSE" {
-                    "BASE TABLE".to_string()
-                } else {
+                if v.engine().to_uppercase() == "VIEW" {
                     "VIEW".to_string()
+                } else {
+                    "BASE TABLE".to_string()
                 }
             })
             .collect();
