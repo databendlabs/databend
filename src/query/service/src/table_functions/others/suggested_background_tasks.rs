@@ -195,7 +195,7 @@ impl SuggestedBackgroundTasksSource {
         info!(
             background = true,
             tenant = ctx.get_tenant().tenant_name().to_string();
-            "list all lsuggestions"
+            "list all suggestions"
         );
         Self::get_suggested_compaction_tasks(ctx).await
     }

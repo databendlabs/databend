@@ -24,6 +24,7 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_request_count;
 use databend_common_metrics::http::metrics_incr_http_response_panics_count;
@@ -56,23 +57,39 @@ use poem::Response;
 use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
+use super::v1::SessionClaim;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
+#[derive(Copy, Clone)]
+pub enum EndpointKind {
+    Login,
+    Refresh,
+    StartQuery,
+    PollQuery,
+    Clickhouse,
+}
+
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl HTTPSessionMiddleware {
-    pub fn create(kind: HttpHandlerKind, auth_manager: Arc<AuthMgr>) -> HTTPSessionMiddleware {
-        HTTPSessionMiddleware { kind, auth_manager }
+    pub fn create(kind: HttpHandlerKind, endpoint_kind: EndpointKind) -> HTTPSessionMiddleware {
+        let auth_manager = AuthMgr::instance();
+        HTTPSessionMiddleware {
+            kind,
+            endpoint_kind,
+            auth_manager,
+        }
     }
 }
 
@@ -107,7 +124,11 @@ fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, Stri
     Some(result)
 }
 
-fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
+fn get_credential(
+    req: &Request,
+    kind: HttpHandlerKind,
+    endpoint_kind: EndpointKind,
+) -> Result<Credential> {
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
         let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
@@ -123,7 +144,12 @@ fn get_credential(req: &Request, kind: HttpHandlerKind) -> Result<Credential> {
             ))
         }
     } else {
-        auth_by_header(&std_auth_headers, client_ip)
+        auth_by_header(
+            &std_auth_headers,
+            client_ip,
+            endpoint_kind,
+            req.uri().path(),
+        )
     }
 }
 
@@ -157,6 +183,8 @@ pub fn get_client_ip(req: &Request) -> Option<String> {
 fn auth_by_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
+    endpoint_kind: EndpointKind,
+    path: &str,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -176,10 +204,28 @@ fn auth_by_header(
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
-            Some(bearer) => Ok(Credential::Jwt {
-                token: bearer.token().to_string(),
-                client_ip,
-            }),
+            Some(bearer) => {
+                let token = bearer.token().to_string();
+                if SessionClaim::is_databend_token(&token) {
+                    let (token_type, set_user) = match endpoint_kind {
+                        EndpointKind::Refresh => (TokenType::Refresh, true),
+                        EndpointKind::StartQuery => (TokenType::Session, true),
+                        EndpointKind::PollQuery => (TokenType::Session, false),
+                        _ => {
+                            return Err(ErrorCode::AuthenticateFailure(format!(
+                                "should not use databend auth when accessing {path}"
+                            )));
+                        }
+                    };
+                    Ok(Credential::DatabendToken {
+                        token,
+                        token_type,
+                        set_user,
+                    })
+                } else {
+                    Ok(Credential::Jwt { token, client_ip })
+                }
+            }
             None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
         }
     } else {
@@ -224,6 +270,7 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
         HTTPSessionEndpoint {
             ep,
             kind: self.kind,
+            endpoint_kind: self.endpoint_kind,
             auth_manager: self.auth_manager.clone(),
         }
     }
@@ -232,13 +279,14 @@ impl<E: Endpoint> Middleware<E> for HTTPSessionMiddleware {
 pub struct HTTPSessionEndpoint<E> {
     ep: E,
     pub kind: HttpHandlerKind,
+    pub endpoint_kind: EndpointKind,
     pub auth_manager: Arc<AuthMgr>,
 }
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
-        let credential = get_credential(req, self.kind)?;
+        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
 
         let session_manager = SessionManager::instance();
 
@@ -251,6 +299,10 @@ impl<E> HTTPSessionEndpoint<E> {
         }
 
         self.auth_manager.auth(&mut session, &credential).await?;
+        let databend_token = match credential {
+            Credential::DatabendToken { token, .. } => Some(token),
+            _ => None,
+        };
 
         let session = session_manager.register_session(session)?;
 
@@ -291,6 +343,7 @@ impl<E> HTTPSessionEndpoint<E> {
             http_method: req.method().to_string(),
             uri: req.uri().to_string(),
             client_host,
+            databend_token,
         })
     }
 }
@@ -315,13 +368,18 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async move {
-            let res = match self.auth(&req, query_id).await {
+            match self.auth(&req, query_id).await {
                 Ok(ctx) => {
                     req.extensions_mut().insert(ctx);
-                    self.ep.call(req).await
+                    self.ep.call(req).await.map(|v| v.into_response())
                 }
                 Err(err) => match err.code() {
-                    ErrorCode::AUTHENTICATE_FAILURE | ErrorCode::UNKNOWN_USER => {
+                    ErrorCode::AUTHENTICATE_FAILURE
+                    | ErrorCode::SESSION_TOKEN_EXPIRED
+                    | ErrorCode::SESSION_TOKEN_NOT_FOUND
+                    | ErrorCode::REFRESH_TOKEN_EXPIRED
+                    | ErrorCode::REFRESH_TOKEN_NOT_FOUND
+                    | ErrorCode::UNKNOWN_USER => {
                         warn!(
                             "http auth failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
@@ -344,19 +402,6 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         ))
                     }
                 },
-            };
-            match res {
-                Err(err) => {
-                    let body = Body::from_json(serde_json::json!({
-                        "error": {
-                            "code": err.status().as_str(),
-                            "message": err.to_string(),
-                        }
-                    }))
-                    .unwrap();
-                    Ok(Response::builder().status(err.status()).body(body))
-                }
-                Ok(res) => Ok(res.into_response()),
             }
         })
         .await
@@ -439,5 +484,25 @@ impl poem::middleware::PanicHandler for PanicHandler {
     fn get_response(&self, _err: Box<dyn Any + Send + 'static>) -> Self::Response {
         metrics_incr_http_response_panics_count();
         (StatusCode::INTERNAL_SERVER_ERROR, "internal server error")
+    }
+}
+pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Response> {
+    let res = next.call(req).await;
+
+    match res {
+        Ok(resp) => {
+            let resp = resp.into_response();
+            Ok(resp)
+        }
+        Err(err) => {
+            let body = Body::from_json(serde_json::json!({
+                "error": {
+                    "code": err.status().as_str(),
+                    "message": err.to_string(),
+                }
+            }))
+            .unwrap();
+            Ok(Response::builder().status(err.status()).body(body))
+        }
     }
 }
