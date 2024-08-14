@@ -41,8 +41,10 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
+use log::info;
+use rand::distributions::Bernoulli;
+use rand::distributions::Distribution;
 use rand::thread_rng;
-use rand::Rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
@@ -244,14 +246,20 @@ impl PhysicalPlanBuilder {
                 SampleLevel::BLOCK => {
                     let probability = scan.sample_probability(&None)?;
                     if let Some(probability) = probability {
-                        let mut sample_parts = Vec::with_capacity(source.parts.partitions.len());
+                        let original_parts = source.parts.partitions.len();
+                        let mut sample_parts = Vec::with_capacity(original_parts);
                         let mut rng = thread_rng();
+                        let bernoulli = Bernoulli::new(probability).unwrap();
                         for part in source.parts.partitions.iter() {
-                            let rng = rng.gen::<f64>();
-                            if rng < probability {
+                            if bernoulli.sample(&mut rng) {
                                 sample_parts.push(part.clone());
                             }
                         }
+                        info!(
+                            "sample parts from {} to {}",
+                            original_parts,
+                            sample_parts.len()
+                        );
                         source.parts.partitions = sample_parts;
                     }
                 }

@@ -45,8 +45,6 @@ use crate::optimizer::SelectivityEstimator;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics as OpStatistics;
 use crate::optimizer::MAX_SELECTIVITY;
-use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;

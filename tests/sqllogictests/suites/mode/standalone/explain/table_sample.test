@@ -40,3 +40,15 @@ Filter
 
 statement ok
 drop table t;
+
+statement ok
+create or replace table t as select number as a from numbers(20000000);
+
+query 
+select count(distinct a) < 20000000 from t sample block(50);
+----
+1
+
+
+statement ok
+drop table t;
