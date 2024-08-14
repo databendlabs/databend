@@ -18,5 +18,6 @@ echo "set data_retention_time_in_days=0;vacuum drop table from issue_16121;" | $
 echo "expects no error(nothing outputs)"
 echo "drop table issue_16121.attach_read_only" | $BENDSQL_CLIENT_CONNECT
 
-echo "expects ai_to_sql works"
-echo "SELECT* FROM  ai_to_sql ('current time') IGNORE_RESULT" | $BENDSQL_CLIENT_CONNECT
+# AI configurations (provider url, ak/sk) are not ready for CI, thus the following test case is commented out
+#echo "expects ai_to_sql works"
+#echo "SELECT* FROM  ai_to_sql ('current time') IGNORE_RESULT" | $BENDSQL_CLIENT_CONNECT
