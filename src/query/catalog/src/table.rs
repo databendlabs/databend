@@ -297,6 +297,15 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
+    async fn accurate_columns_ranges(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _column_ids: &[ColumnId],
+    ) -> Result<HashMap<ColumnId, ColumnRange>> {
+        Ok(HashMap::default())
+    }
+
+    #[async_backtrace::framed]
     async fn navigate_to(
         &self,
         navigation: &TimeNavigation,
@@ -607,4 +616,13 @@ impl CompactionLimits {
             block_limit: v,
         }
     }
+}
+
+pub struct Bound {
+    pub value: Scalar,
+    pub may_be_truncated: bool,
+}
+pub struct ColumnRange {
+    pub min: Bound,
+    pub max: Bound,
 }
