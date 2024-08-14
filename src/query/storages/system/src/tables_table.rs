@@ -197,6 +197,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     TableDataType::Nullable(Box::new(TableDataType::String)),
                 ),
                 TableField::new("comment", TableDataType::String),
+                TableField::new("table_type", TableDataType::String),
             ])
         } else {
             TableSchemaRefExt::create(vec![
@@ -462,7 +463,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                         .map(|role| role.to_string()),
                                 );
                             }
-                        } else if WITHOUT_VIEW && table.get_table_info().engine() != "VIEW" {
+                        } else if WITHOUT_VIEW {
+                            // system.tables store view name but not store view query
+                            // decrease information_schema.tables union.
                             catalogs.push(ctl_name.as_str());
                             databases.push(db_name.to_owned());
                             database_tables.push(table);
@@ -534,6 +537,16 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let engines: Vec<String> = database_tables
             .iter()
             .map(|v| v.engine().to_string())
+            .collect();
+        let tables_type: Vec<String> = database_tables
+            .iter()
+            .map(|v| {
+                if v.engine().to_uppercase() == "FUSE" {
+                    "BASE TABLE".to_string()
+                } else {
+                    "VIEW".to_string()
+                }
+            })
             .collect();
         let engines_full: Vec<String> = engines.clone();
         let created_on: Vec<i64> = database_tables
@@ -628,6 +641,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 UInt64Type::from_opt_data(number_of_blocks),
                 StringType::from_opt_data(owner),
                 StringType::from_data(comment),
+                StringType::from_data(tables_type),
             ]))
         } else {
             Ok(DataBlock::new_from_columns(vec![
