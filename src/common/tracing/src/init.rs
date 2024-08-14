@@ -14,7 +14,6 @@
 
 use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::io::Write;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
@@ -22,29 +21,30 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
-use log::Log;
 use log::Metadata;
+use logforth::filter::CustomFilter;
+use logforth::filter::FilterResult;
+use logforth::filter::TargetFilter;
+use logforth::Dispatch;
+use logforth::Logger;
 use opentelemetry_otlp::WithExportConfig;
 
 use crate::config::OTLPProtocol;
-use crate::loggers::formatter;
-use crate::loggers::new_file_log_writer;
-use crate::loggers::FastraceLogger;
-use crate::loggers::OpenTelemetryLogger;
+use crate::loggers::get_layout;
+use crate::loggers::new_rolling_file_appender;
 use crate::structlog::StructLogReporter;
 use crate::Config;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
 
-#[allow(dyn_drop)]
 pub struct GlobalLogger {
-    _guards: Vec<Box<dyn Drop + Send + Sync + 'static>>,
+    _drop_guards: Vec<Box<dyn Send + Sync + 'static>>,
 }
 
 impl GlobalLogger {
     pub fn init(name: &str, cfg: &Config, labels: BTreeMap<String, String>) {
-        let _guards = init_logging(name, cfg, labels);
-        GlobalInstance::set(Self { _guards });
+        let _drop_guards = init_logging(name, cfg, labels);
+        GlobalInstance::set(Self { _drop_guards });
     }
 }
 
@@ -71,13 +71,12 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
     request
 }
 
-#[allow(dyn_drop)]
 pub fn init_logging(
     log_name: &str,
     cfg: &Config,
     mut labels: BTreeMap<String, String>,
-) -> Vec<Box<dyn Drop + Send + Sync + 'static>> {
-    let mut guards: Vec<Box<dyn Drop + Send + Sync + 'static>> = Vec::new();
+) -> Vec<Box<dyn Send + Sync + 'static>> {
+    let mut _drop_guards: Vec<Box<dyn Send + Sync + 'static>> = Vec::new();
     if !labels.contains_key("service") {
         labels.insert("service".to_string(), log_name.to_string());
     }
@@ -94,7 +93,7 @@ pub fn init_logging(
         ),
     };
 
-    // Initialize tracing reporter
+    // initialize tracing reporter
     if cfg.tracing.on {
         let endpoint = cfg.tracing.otlp.endpoint.clone();
         let mut kvs = cfg
@@ -132,7 +131,7 @@ pub fn init_logging(
                 .expect("initialize oltp http exporter"),
         };
         let (reporter_rt, otlp_reporter) = Thread::spawn(|| {
-            // Init runtime with 2 threads.
+            // init runtime with 2 threads
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
                 .enable_all()
@@ -158,8 +157,8 @@ pub fn init_logging(
             fastrace::set_reporter(otlp_reporter, fastrace::collector::Config::default());
         }
 
-        guards.push(Box::new(defer::defer(fastrace::flush)));
-        guards.push(Box::new(defer::defer(|| {
+        _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
+        _drop_guards.push(Box::new(defer::defer(|| {
             Thread::spawn(move || std::mem::drop(reporter_rt))
                 .join()
                 .unwrap()
@@ -167,47 +166,88 @@ pub fn init_logging(
     } else if cfg.structlog.on {
         let reporter = StructLogReporter::new();
         fastrace::set_reporter(reporter, fastrace::collector::Config::default());
-        guards.push(Box::new(defer::defer(fastrace::flush)));
+        _drop_guards.push(Box::new(defer::defer(fastrace::flush)));
     }
 
-    // Initialize logging
-    let mut normal_logger = fern::Dispatch::new();
-    let mut query_logger = fern::Dispatch::new();
-    let mut profile_logger = fern::Dispatch::new();
-    let mut structlog_logger = fern::Dispatch::new();
+    // initialize logging
+    let mut logger = Logger::new();
 
-    // File logger
+    // file logger
     if cfg.file.on {
         let (normal_log_file, flush_guard) =
-            new_file_log_writer(&cfg.file.dir, log_name, cfg.file.limit);
-        guards.push(Box::new(flush_guard));
-        let dispatch = fern::Dispatch::new()
-            .level(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
-            .format(formatter(&cfg.file.format))
-            .chain(Box::new(normal_log_file) as Box<dyn Write + Send>);
-        normal_logger = normal_logger.chain(dispatch);
+            new_rolling_file_appender(&cfg.file.dir, log_name, cfg.file.limit);
+        _drop_guards.push(flush_guard);
+
+        let dispatch = Dispatch::new()
+            .filter(TargetFilter::level_for(
+                "databend::log::query",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::profile",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::structlog",
+                LevelFilter::Off,
+            ))
+            .filter(cfg.file.level.parse().unwrap_or(LevelFilter::Info))
+            .filter(make_log_filter(&cfg.file.prefix_filter))
+            .layout(get_layout(&cfg.file.format))
+            .append(normal_log_file);
+        logger = logger.dispatch(dispatch);
     }
 
-    // Console logger
+    // console logger
     if cfg.stderr.on {
-        let dispatch = fern::Dispatch::new()
-            .level(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
-            .format(formatter(&cfg.stderr.format))
-            .chain(std::io::stderr());
-        normal_logger = normal_logger.chain(dispatch)
+        let dispatch = Dispatch::new()
+            .filter(TargetFilter::level_for(
+                "databend::log::query",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::profile",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::structlog",
+                LevelFilter::Off,
+            ))
+            .filter(cfg.stderr.level.parse().unwrap_or(LevelFilter::Info))
+            .layout(get_layout(&cfg.stderr.format))
+            .append(logforth::append::Stderr);
+        logger = logger.dispatch(dispatch);
     }
 
-    // OpenTelemetry logger
+    // opentelemetry logger
     if cfg.otlp.on {
-        let logger = OpenTelemetryLogger::new(log_name, "system", &cfg.otlp.endpoint, &labels);
-        let dispatch = fern::Dispatch::new()
-            .level(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
-            .format(formatter("json"))
-            .chain(Box::new(logger) as Box<dyn Log>);
-        normal_logger = normal_logger.chain(dispatch);
+        let otel = logforth::append::OpentelemetryLog::new(
+            log_name,
+            "system",
+            &cfg.otlp.endpoint.endpoint,
+            cfg.otlp.endpoint.protocol.into(),
+        )
+        .expect("initialize opentelemetry logger");
+        let dispatch = Dispatch::new()
+            .filter(TargetFilter::level_for(
+                "databend::log::query",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::profile",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::structlog",
+                LevelFilter::Off,
+            ))
+            .filter(cfg.otlp.level.parse().unwrap_or(LevelFilter::Info))
+            .layout(get_layout("json"))
+            .append(otel);
+        logger = logger.dispatch(dispatch);
     }
 
-    // Log to fastrace
+    // log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
         let level = cfg
             .tracing
@@ -215,110 +255,138 @@ pub fn init_logging(
             .parse()
             .ok()
             .unwrap_or(LevelFilter::Info);
-        normal_logger = normal_logger.chain(
-            fern::Dispatch::new()
-                .level(level)
-                .chain(Box::new(FastraceLogger) as Box<dyn Log>),
-        );
+        let dispatch = Dispatch::new()
+            .filter(TargetFilter::level_for(
+                "databend::log::query",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::profile",
+                LevelFilter::Off,
+            ))
+            .filter(TargetFilter::level_for(
+                "databend::log::structlog",
+                LevelFilter::Off,
+            ))
+            .filter(level)
+            .append(logforth::append::FastraceEvent);
+        logger = logger.dispatch(dispatch);
     }
 
-    // Query logger
+    // query logger
     if cfg.query.on {
         if !cfg.query.dir.is_empty() {
             let (query_log_file, flush_guard) =
-                new_file_log_writer(&cfg.query.dir, log_name, cfg.file.limit);
-            guards.push(Box::new(flush_guard));
-            query_logger = query_logger.chain(Box::new(query_log_file) as Box<dyn Write + Send>);
+                new_rolling_file_appender(&cfg.query.dir, log_name, cfg.file.limit);
+            _drop_guards.push(flush_guard);
+
+            let dispatch = Dispatch::new()
+                .filter(TargetFilter::level_for_not(
+                    "databend::log::query",
+                    LevelFilter::Off,
+                ))
+                .layout(get_layout(&cfg.file.format))
+                .append(query_log_file);
+            logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.query.otlp {
-            let logger = OpenTelemetryLogger::new(log_name, "query", endpoint, &labels);
-            query_logger = query_logger.chain(Box::new(logger) as Box<dyn Log>);
+            let otel = logforth::append::OpentelemetryLog::new(
+                log_name,
+                "query",
+                &endpoint.endpoint,
+                endpoint.protocol.into(),
+            )
+            .expect("initialize opentelemetry logger");
+            let dispatch = Dispatch::new()
+                .filter(TargetFilter::level_for_not(
+                    "databend::log::query",
+                    LevelFilter::Off,
+                ))
+                .append(otel);
+            logger = logger.dispatch(dispatch);
         }
     }
 
-    // Profile logger
+    // profile logger
     if cfg.profile.on {
         if !cfg.profile.dir.is_empty() {
             let (profile_log_file, flush_guard) =
-                new_file_log_writer(&cfg.profile.dir, log_name, cfg.file.limit);
-            guards.push(Box::new(flush_guard));
-            profile_logger =
-                profile_logger.chain(Box::new(profile_log_file) as Box<dyn Write + Send>);
+                new_rolling_file_appender(&cfg.profile.dir, log_name, cfg.file.limit);
+            _drop_guards.push(flush_guard);
+
+            let dispatch = Dispatch::new()
+                .filter(TargetFilter::level_for_not(
+                    "databend::log::profile",
+                    LevelFilter::Off,
+                ))
+                .layout(get_layout(&cfg.file.format))
+                .append(profile_log_file);
+            logger = logger.dispatch(dispatch);
         }
         if let Some(endpoint) = &cfg.profile.otlp {
-            let logger = OpenTelemetryLogger::new(log_name, "profile", endpoint, &labels);
-            profile_logger = profile_logger.chain(Box::new(logger) as Box<dyn Log>);
+            let otel = logforth::append::OpentelemetryLog::new(
+                log_name,
+                "profile",
+                &endpoint.endpoint,
+                endpoint.protocol.into(),
+            )
+            .expect("initialize opentelemetry logger");
+            let dispatch = Dispatch::new()
+                .filter(TargetFilter::level_for_not(
+                    "databend::log::profile",
+                    LevelFilter::Off,
+                ))
+                .append(otel);
+            logger = logger.dispatch(dispatch);
         }
     }
 
-    // Error logger
+    // structured logger
     if cfg.structlog.on && !cfg.structlog.dir.is_empty() {
         let (structlog_log_file, flush_guard) =
-            new_file_log_writer(&cfg.structlog.dir, log_name, cfg.file.limit);
-        guards.push(Box::new(flush_guard));
-        structlog_logger =
-            structlog_logger.chain(Box::new(structlog_log_file) as Box<dyn Write + Send>);
+            new_rolling_file_appender(&cfg.structlog.dir, log_name, cfg.file.limit);
+        _drop_guards.push(flush_guard);
+
+        let dispatch = Dispatch::new()
+            .filter(TargetFilter::level_for_not(
+                "databend::log::structlog",
+                LevelFilter::Off,
+            ))
+            .append(structlog_log_file);
+        logger = logger.dispatch(dispatch);
     }
 
-    let logger = fern::Dispatch::new()
-        .chain(
-            fern::Dispatch::new()
-                .level_for("databend::log::query", LevelFilter::Off)
-                .level_for("databend::log::profile", LevelFilter::Off)
-                .level_for("databend::log::structlog", LevelFilter::Off)
-                .filter(make_log_filter(&cfg.file.prefix_filter))
-                .chain(normal_logger),
-        )
-        .chain(
-            fern::Dispatch::new()
-                .level(LevelFilter::Off)
-                .level_for("databend::log::query", LevelFilter::Info)
-                .chain(query_logger),
-        )
-        .chain(
-            fern::Dispatch::new()
-                .level(LevelFilter::Off)
-                .level_for("databend::log::profile", LevelFilter::Info)
-                .chain(profile_logger),
-        )
-        .chain(
-            fern::Dispatch::new()
-                .level(LevelFilter::Off)
-                .level_for("databend::log::structlog", LevelFilter::Info)
-                .chain(structlog_logger),
-        );
-
-    // Set global logger
+    // set global logger
     if logger.apply().is_err() {
         eprintln!("logger has already been set");
         return Vec::new();
     }
 
-    guards
+    _drop_guards
 }
 
 /// Creates a log filter that matches log entries based on specified target prefixes or severity.
-fn make_log_filter(prefix_filter: &str) -> impl Fn(&Metadata) -> bool {
-    let filters = prefix_filter
+fn make_log_filter(prefix_filter: &str) -> CustomFilter {
+    let prefixes = prefix_filter
         .split(',')
         .map(|x| x.to_string())
         .collect::<Vec<_>>();
 
-    move |meta| match_prefix_many(meta, &filters)
+    CustomFilter::new(move |meta| match_prefix(meta, &prefixes))
 }
 
-fn match_prefix_many(meta: &Metadata, prefixes: &[String]) -> bool {
+fn match_prefix(meta: &Metadata, prefixes: &[String]) -> FilterResult {
     if is_severe(meta) {
-        return true;
+        return FilterResult::Neutral;
     }
 
     for p in prefixes {
         if meta.target().starts_with(p) {
-            return true;
+            return FilterResult::Accept;
         }
     }
 
-    false
+    FilterResult::Neutral
 }
 
 /// Return true if the log level is considered severe.

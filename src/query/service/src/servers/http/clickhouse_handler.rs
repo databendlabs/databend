@@ -28,7 +28,7 @@ use databend_common_formats::ClickhouseFormatType;
 use databend_common_formats::FileFormatOptionsExt;
 use databend_common_formats::FileFormatTypeExt;
 use databend_common_sql::Planner;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -227,7 +227,7 @@ pub async fn clickhouse_handler_get(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<WithContentType<Body>> {
-    let root = Span::root(full_name!(), SpanContext::random());
+    let root = Span::root(func_path!(), SpanContext::random());
     async {
         let session = ctx.upgrade_session(SessionType::ClickHouseHttpHandler)?;
         if let Some(db) = &params.database {
@@ -288,7 +288,7 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<impl IntoResponse> {
-    let root = Span::root(full_name!(), SpanContext::random());
+    let root = Span::root(func_path!(), SpanContext::random());
 
     async {
         info!(

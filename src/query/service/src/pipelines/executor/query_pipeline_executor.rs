@@ -34,7 +34,7 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
@@ -369,7 +369,7 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(full_name!())
+            let span = Span::enter_with_local_parent(func_path!())
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();

@@ -326,19 +326,19 @@ walkdir = "2.3.2"
 xorfilter-rs = "0.5"
 
 # Observability
-fastrace = { version = "0.6", features = ["enable"] }
-fastrace-opentelemetry = "0.6"
+fastrace = { version = "0.7", features = ["enable"] }
+fastrace-opentelemetry = "0.7"
 log = { version = "0.4.21", features = ["serde", "kv_unstable_std"] }
 logcall = "0.1.9"
-opentelemetry = { version = "0.23", features = ["trace", "logs"] }
-opentelemetry-otlp = { version = "0.16", features = [
+opentelemetry = { version = "0.24", features = ["trace", "logs"] }
+opentelemetry-otlp = { version = "0.17", features = [
     "trace",
     "logs",
     "grpc-tonic",
     "http-proto",
     "reqwest-client",
 ] }
-opentelemetry_sdk = { version = "0.23", features = ["trace", "logs", "rt-tokio"] }
+opentelemetry_sdk = { version = "0.24", features = ["trace", "logs", "rt-tokio"] }
 tracing = "0.1.40"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }

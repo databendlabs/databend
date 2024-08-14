@@ -19,10 +19,10 @@ databend-common-exception = { workspace = true }
 defer = "0.2"
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
-fern = "0.6.2"
 itertools = { workspace = true }
 libc = "0.2.153"
 log = { workspace = true }
+logforth = { version = "0.10", features = ['json', 'rolling_file', 'opentelemetry', 'fastrace'] }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }
@@ -30,7 +30,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strip-ansi-escapes = "0.2"
 tonic = { workspace = true }
-tracing-appender = { workspace = true }
 
 [dev-dependencies]
 

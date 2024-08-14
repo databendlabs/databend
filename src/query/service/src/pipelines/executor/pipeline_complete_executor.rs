@@ -22,7 +22,7 @@ use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
@@ -108,7 +108,7 @@ impl PipelineCompleteExecutor {
     }
 
     fn thread_function(&self) -> impl Fn() -> Result<()> {
-        let span = Span::enter_with_local_parent(full_name!());
+        let span = Span::enter_with_local_parent(func_path!());
         let executor = self.executor.clone();
 
         move || {

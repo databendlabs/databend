@@ -37,8 +37,8 @@ use databend_common_meta_types::TxnPutResponse;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
-use fastrace::full_name;
 use fastrace::func_name;
+use fastrace::func_path;
 use log::debug;
 use log::info;
 
@@ -339,7 +339,7 @@ impl kvapi::TestSuite {
     pub async fn kv_upsert_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add with ttl
 
-        info!("--- {}", full_name!());
+        info!("--- {}", func_path!());
 
         let _res = kv
             .upsert_kv(
@@ -914,7 +914,7 @@ impl kvapi::TestSuite {
     pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add a record via transaction with ttl
 
-        info!("--- {}", full_name!());
+        info!("--- {}", func_path!());
 
         let txn = TxnRequest {
             condition: vec![],

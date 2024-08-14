@@ -25,7 +25,7 @@ use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use futures::StreamExt;
@@ -195,7 +195,7 @@ impl FlightClient {
                 tx.close();
             }
         }
-        .in_span(Span::enter_with_local_parent(full_name!()));
+        .in_span(Span::enter_with_local_parent(func_path!()));
 
         databend_common_base::runtime::spawn(fut);
 

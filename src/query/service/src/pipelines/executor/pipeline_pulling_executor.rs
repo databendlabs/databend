@@ -33,7 +33,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -217,7 +217,7 @@ impl PipelinePullingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
-        let span = Span::enter_with_local_parent(full_name!());
+        let span = Span::enter_with_local_parent(func_path!());
         move || {
             let _g = span.set_local_parent();
             state.finished(executor.execute());

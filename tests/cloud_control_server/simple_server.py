@@ -466,8 +466,8 @@ def serve():
     )
     # Add reflection service
     SERVICE_NAMES = (
-        task_pb2.DESCRIPTOR.services_by_name["TaskService"].full_name,
-        notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].full_name,
+        task_pb2.DESCRIPTOR.services_by_name["TaskService"].func_path,
+        notification_pb2.DESCRIPTOR.services_by_name["NotificationService"].func_path,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(SERVICE_NAMES, server)

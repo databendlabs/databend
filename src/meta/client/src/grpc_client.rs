@@ -65,7 +65,7 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt as MTFutureExt;
 use fastrace::Span;
 use futures::stream::StreamExt;
@@ -498,7 +498,7 @@ impl MetaGrpcClient {
             debug!(worker_request :? =(&worker_request); "MetaGrpcClient worker handle request");
 
             let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
-            let span = Span::enter_with_parent(full_name!(), &worker_request.span);
+            let span = Span::enter_with_parent(func_path!(), &worker_request.span);
 
             if worker_request.resp_tx.is_closed() {
                 info!(
