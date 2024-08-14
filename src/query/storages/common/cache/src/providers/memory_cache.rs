@@ -22,8 +22,6 @@ use parking_lot::RwLock;
 
 use crate::Unit;
 
-pub struct InMemoryCacheBuilder;
-
 pub struct InMemoryItemCacheHolder<V, M: CountableMeter<String, Arc<V>> = Count> {
     unit: Unit,
     name: String,
@@ -55,30 +53,6 @@ impl<V, M: CountableMeter<String, Arc<V>>> InMemoryItemCacheHolder<V, M> {
 
     pub fn unit(&self) -> Unit {
         self.unit
-    }
-}
-
-impl InMemoryCacheBuilder {
-    // new cache that cache `V`, and metered by the given `meter`
-    pub fn new_in_memory_cache<V, M>(
-        name: String,
-        unit: Unit,
-        capacity: u64,
-        meter: M,
-    ) -> InMemoryItemCacheHolder<V, M>
-    where
-        M: CountableMeter<String, Arc<V>>,
-    {
-        InMemoryItemCacheHolder::create(name, unit, LruCache::with_meter(capacity, meter))
-    }
-
-    // new cache that caches `V` and meter by counting
-    pub fn new_item_cache<V>(
-        name: String,
-        unit: Unit,
-        capacity: u64,
-    ) -> InMemoryItemCacheHolder<V> {
-        InMemoryItemCacheHolder::create(name, unit, LruCache::new(capacity))
     }
 }
 

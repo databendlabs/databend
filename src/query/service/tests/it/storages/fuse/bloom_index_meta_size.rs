@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
+use databend_common_cache::LruCache;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -34,7 +35,6 @@ use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::Unit;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -177,10 +177,10 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<SegmentInfo>(
+    let cache = InMemoryItemCacheHolder::create(
         String::from(""),
         Unit::Count,
-        cache_number as u64,
+        LruCache::new(cache_number as u64),
     );
     {
         for _ in 0..cache_number {
@@ -224,7 +224,12 @@ async fn test_segment_raw_bytes_size() -> databend_common_exception::Result<()> 
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<Vec<u8>>(cache_number as u64);
+    let cache = InMemoryItemCacheHolder::create(
+        String::from(""),
+        Unit::Count,
+        LruCache::new(cache_number as u64),
+    );
+
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
         cache.put(
@@ -267,7 +272,12 @@ async fn test_segment_raw_repr_bytes_size() -> databend_common_exception::Result
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<CompactSegmentInfo>(cache_number as u64);
+    let cache = InMemoryItemCacheHolder::create(
+        String::from(""),
+        Unit::Count,
+        LruCache::new(cache_number as u64),
+    );
+
     for _ in 0..cache_number {
         let uuid = Uuid::new_v4();
         cache.put(format!("{}", uuid.simple()), Arc::new(segment_raw.clone()));

@@ -25,7 +25,6 @@ pub use databend_common_cache::CountableMeter;
 pub use providers::DiskCacheError;
 pub use providers::DiskCacheKey;
 pub use providers::DiskCacheResult;
-pub use providers::InMemoryCacheBuilder;
 pub use providers::InMemoryItemCacheHolder;
 pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;

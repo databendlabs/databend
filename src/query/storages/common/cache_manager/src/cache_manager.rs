@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_cache::CountableMeter;
+use databend_common_cache::LruCache;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
 use databend_common_exception::Result;
-use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
 use databend_storages_common_cache::TableDataCache;
 use databend_storages_common_cache::TableDataCacheBuilder;
@@ -267,10 +267,10 @@ impl CacheManager {
         name: impl Into<String>,
     ) -> Option<InMemoryItemCacheHolder<V>> {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_item_cache(
+            Some(InMemoryItemCacheHolder::create(
                 name.into(),
                 Unit::Count,
-                capacity,
+                LruCache::new(capacity),
             ))
         } else {
             None
@@ -287,11 +287,10 @@ impl CacheManager {
         M: CountableMeter<String, Arc<V>>,
     {
         if capacity > 0 {
-            Some(InMemoryCacheBuilder::new_in_memory_cache(
+            Some(InMemoryItemCacheHolder::create(
                 name.into(),
                 unit,
-                capacity,
-                meter,
+                LruCache::with_meter(capacity, meter),
             ))
         } else {
             None
