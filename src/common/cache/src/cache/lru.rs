@@ -211,26 +211,6 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         self.map.front()
     }
 
-    /// Checks if the map contains the given key.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    ///
-    /// let mut cache = LruCache::new(1);
-    ///
-    /// cache.put(1, "a");
-    /// assert!(cache.contains(&1));
-    /// ```
-    fn contains<Q>(&self, key: &Q) -> bool
-    where
-        K: Borrow<Q>,
-        Q: Hash + Eq + ?Sized,
-    {
-        self.map.contains_key(key)
-    }
-
     /// Inserts a key-value pair into the cache. If the key already existed, the old value is
     /// returned.
     ///
@@ -314,6 +294,50 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         })
     }
 
+    /// Checks if the map contains the given key.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use databend_common_cache::{Cache, LruCache};
+    ///
+    /// let mut cache = LruCache::new(1);
+    ///
+    /// cache.put(1, "a");
+    /// assert!(cache.contains(&1));
+    /// ```
+    fn contains<Q>(&self, key: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq + ?Sized,
+    {
+        self.map.contains_key(key)
+    }
+
+    /// Returns the number of key-value pairs in the cache.
+    fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    /// Returns `true` if the cache contains no key-value pairs.
+    fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
+    /// `Meter` used by the cache.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,ignore
+    /// use databend_common_cache::{Cache, LruCache};
+    /// let mut cache: LruCache<i32, &str> = LruCache::new(2);
+    /// assert_eq!(cache.capacity(), 2);
+    /// ```
+    fn capacity(&self) -> u64 {
+        self.max_capacity
+    }
+
     /// Sets the size of the key-value pairs the cache can hold, as measured by the `Meter` used by
     /// the cache.
     ///
@@ -355,36 +379,12 @@ impl<K: Eq + Hash, V, M: CountableMeter<K, V>> Cache<K, V, M> for LruCache<K, V,
         self.max_capacity = capacity;
     }
 
-    /// Returns the number of key-value pairs in the cache.
-    fn len(&self) -> usize {
-        self.map.len()
-    }
-
     /// Returns the size of all the key-value pairs in the cache, as measured by the `Meter` used
     /// by the cache.
     fn size(&self) -> u64 {
         self.meter
             .size(self.current_measure)
             .unwrap_or_else(|| self.map.len() as u64)
-    }
-
-    /// Returns the maximum size of the key-value pairs the cache can hold, as measured by the
-    /// `Meter` used by the cache.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,ignore
-    /// use databend_common_cache::{Cache, LruCache};
-    /// let mut cache: LruCache<i32, &str> = LruCache::new(2);
-    /// assert_eq!(cache.capacity(), 2);
-    /// ```
-    fn capacity(&self) -> u64 {
-        self.max_capacity
-    }
-
-    /// Returns `true` if the cache contains no key-value pairs.
-    fn is_empty(&self) -> bool {
-        self.map.is_empty()
     }
 
     /// Removes all key-value pairs from the cache.

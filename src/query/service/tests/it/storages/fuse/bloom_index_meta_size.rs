@@ -36,6 +36,7 @@ use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::InMemoryCacheBuilder;
 use databend_storages_common_cache::InMemoryItemCacheHolder;
+use databend_storages_common_cache::Unit;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -176,7 +177,11 @@ async fn test_segment_info_size() -> databend_common_exception::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<SegmentInfo>(cache_number as u64);
+    let cache = InMemoryCacheBuilder::new_item_cache::<SegmentInfo>(
+        String::from(""),
+        Unit::Count,
+        cache_number as u64,
+    );
     {
         let mut c = cache.write();
         for _ in 0..cache_number {

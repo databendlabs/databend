@@ -23,7 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
-use databend_storages_common_cache::CacheAccessorExt;
+use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::TableDataCacheKey;
 use databend_storages_common_cache_manager::CacheManager;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -114,7 +114,7 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(||ErrorCode::Internal(format!(
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(|| ErrorCode::Internal(format!(
                 "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
                 column_range, location, merged_ranges
             )))?;
@@ -161,14 +161,15 @@ impl BlockReader {
                 let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
 
                 // first, check in memory table data cache
-                if let Some(cache_array) = column_array_cache.get_with_len(&column_cache_key, len) {
+                // column_array_cache
+                if let Some(cache_array) = column_array_cache.get_sized(&column_cache_key, len) {
                     cached_column_array.push((*column_id, cache_array));
                     continue;
                 }
 
                 // and then, check on disk table data cache
                 if let Some(cached_column_raw_data) =
-                    column_data_cache.get_with_len(&column_cache_key, len)
+                    column_data_cache.get_sized(&column_cache_key, len)
                 {
                     cached_column_data.push((*column_id, cached_column_raw_data));
                     continue;
