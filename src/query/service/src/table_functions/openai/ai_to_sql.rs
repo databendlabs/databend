@@ -168,7 +168,6 @@ impl GPT2SQLSource {
 impl AsyncSource for GPT2SQLSource {
     const NAME: &'static str = "gpt_to_sql";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.finished {

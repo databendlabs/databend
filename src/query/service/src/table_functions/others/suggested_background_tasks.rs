@@ -241,7 +241,6 @@ impl SuggestedBackgroundTasksSource {
 impl AsyncSource for SuggestedBackgroundTasksSource {
     const NAME: &'static str = "suggested_background_tasks";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.done {
