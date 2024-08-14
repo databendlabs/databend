@@ -12,8 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod meta_node_kv_api;
-pub(crate) mod meta_node_kv_api_expire;
-pub(crate) mod meta_node_lifecycle;
-pub(crate) mod meta_node_replication;
-pub(crate) mod meta_node_request_forwarding;
+// The identifier of a database by name. Names can be changed.
+// There is no guarantee that two get-database request by name will return the
+// same instance.
+
+syntax = "proto3";
+
+package databend_proto;
+
+message TokenInfo {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  enum TokenType {
+    Session = 0;
+    Refresh = 2;
+  }
+  TokenType token_type = 1;
+  optional string parent = 2;
+}

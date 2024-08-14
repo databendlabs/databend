@@ -43,12 +43,15 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::servers::http::middleware::EndpointKind;
+use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::StringBlock;
+use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
@@ -396,7 +399,7 @@ pub(crate) async fn query_handler(
         .await
 }
 
-pub fn query_route() -> Route {
+pub fn query_route(http_handler_kind: HttpHandlerKind) -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
     let rules = [
         ("/", post(query_handler)),
@@ -414,7 +417,17 @@ pub fn query_route() -> Route {
 
     let mut route = Route::new();
     for (path, endpoint) in rules.into_iter() {
-        route = route.at(path, endpoint.with(MetricsMiddleware::new(path)));
+        let kind = if path == "/" {
+            EndpointKind::StartQuery
+        } else {
+            EndpointKind::PollQuery
+        };
+        route = route.at(
+            path,
+            endpoint
+                .with(MetricsMiddleware::new(path))
+                .with(HTTPSessionMiddleware::create(http_handler_kind, kind)),
+        );
     }
     route
 }
