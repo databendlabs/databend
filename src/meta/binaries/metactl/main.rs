@@ -354,19 +354,19 @@ async fn main() -> anyhow::Result<()> {
     match app.command {
         Some(ref cmd) => match cmd {
             CtlCommand::Status(args) => {
-                app.show_status(&args).await?;
+                app.show_status(args).await?;
             }
             CtlCommand::BenchClientNumConn(args) => {
-                app.bench_client_num_conn(&args).await?;
+                app.bench_client_num_conn(args).await?;
             }
             CtlCommand::TransferLeader(args) => {
-                app.transfer_leader(&args).await?;
+                app.transfer_leader(args).await?;
             }
             CtlCommand::Export(args) => {
-                app.export(&args).await?;
+                app.export(args).await?;
             }
             CtlCommand::Import(args) => {
-                app.import(&args).await?;
+                app.import(args).await?;
             }
         },
         // for backward compatibility

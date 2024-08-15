@@ -36,13 +36,9 @@ pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::E
     eprintln!("    Export Chunk Size: {:?}", args.chunk_size);
 
     let grpc_api_addr = get_available_socket_addr(args.grpc_api_address.as_str()).await?;
+    let addr = grpc_api_addr.to_string();
 
-    export_from_grpc(
-        args.grpc_api_address.as_str(),
-        args.db.clone(),
-        args.chunk_size,
-    )
-    .await?;
+    export_from_grpc(addr.as_str(), args.db.clone(), args.chunk_size).await?;
     Ok(())
 }
 
