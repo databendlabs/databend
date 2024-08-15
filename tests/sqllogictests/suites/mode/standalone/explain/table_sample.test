@@ -42,13 +42,12 @@ statement ok
 drop table t;
 
 statement ok
-create or replace table t as select number as a from numbers(20000000);
+create or replace table t as select number as a from numbers(10000000);
 
 query 
-select count(distinct a) < 20000000 from t sample block(50);
+select count(distinct a) < 10000000 from t sample block(50);
 ----
 1
-
 
 statement ok
 drop table t;

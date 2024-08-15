@@ -116,8 +116,9 @@ impl CollectStatisticsOptimizer {
                 if let Some(sample) = &scan.sample {
                     match sample.sample_level {
                         SampleLevel::ROW => {
-                            let sample_probability = scan.sample_probability(&table_stats)?;
-                            if let Some(probability) = sample_probability {
+                            if let Some(stats) = &table_stats
+                                && let Some(probability) = sample.sample_probability(stats.num_rows)
+                            {
                                 let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
                                     span: None,
                                     func_name: "rand".to_string(),

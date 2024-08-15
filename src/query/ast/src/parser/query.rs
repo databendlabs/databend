@@ -766,12 +766,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
                     },
                     None => SampleLevel::ROW,
                 };
-                let mut default_sample_conf = SampleConfig::Probability(Literal::Float64(100.0));
+                let mut default_sample_conf = SampleConfig::Probability(100.0);
                 if let Some((_, Expr::Literal { value, .. }, rows, _)) = sample_conf {
                     default_sample_conf = if rows.is_some() {
-                        SampleConfig::RowsNum(value)
+                        SampleConfig::RowsNum(value.as_double().unwrap_or_default())
                     } else {
-                        SampleConfig::Probability(value)
+                        SampleConfig::Probability(value.as_double().unwrap_or_default())
                     };
                 }
                 table_sample = Some(Sample {

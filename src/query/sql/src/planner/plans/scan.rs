@@ -16,9 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Sample;
-use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
@@ -169,40 +167,6 @@ impl Scan {
 
         used_columns.extend(self.columns.iter());
         used_columns
-    }
-
-    pub fn sample_probability(&self, stats: &Option<TableStatistics>) -> Result<Option<f64>> {
-        if let Some(sample) = &self.sample {
-            let rand = match &sample.sample_conf {
-                SampleConfig::Probability(probability) => probability.as_double()? / 100.0,
-                SampleConfig::RowsNum(rows) => {
-                    let rows = if let Literal::UInt64(rows) = rows {
-                        *rows
-                    } else {
-                        return Err(ErrorCode::SyntaxException(
-                            "Sample rows should be a positive integer".to_string(),
-                        ));
-                    };
-                    if let Some(stats) = stats {
-                        if let Some(row_num) = stats.num_rows
-                            && row_num > 0
-                        {
-                            rows as f64 / row_num as f64
-                        } else {
-                            return Err(ErrorCode::Internal(
-                                "Number of rows in stats is invalid".to_string(),
-                            ));
-                        }
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Table statistics is not available".to_string(),
-                        ));
-                    }
-                }
-            };
-            return Ok(Some(rand));
-        }
-        Ok(None)
     }
 }
 

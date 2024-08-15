@@ -19,7 +19,6 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use super::Lambda;
-use super::Literal;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
@@ -609,22 +608,44 @@ impl Display for TemporalClause {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum SampleLevel {
     ROW,
     BLOCK,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SampleConfig {
-    Probability(Literal),
-    RowsNum(Literal),
+    Probability(f64),
+    RowsNum(f64),
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+impl Eq for SampleConfig {}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct Sample {
     pub sample_level: SampleLevel,
     pub sample_conf: SampleConfig,
+}
+
+impl Sample {
+    pub fn sample_probability(&self, stats_rows: Option<u64>) -> Option<f64> {
+        let rand = match &self.sample_conf {
+            SampleConfig::Probability(probability) => probability / 100.0,
+            SampleConfig::RowsNum(rows) => {
+                if let Some(row_num) = stats_rows {
+                    if row_num > 0 {
+                        rows / row_num as f64
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+        };
+        Some(rand)
+    }
 }
 
 impl Display for Sample {

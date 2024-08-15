@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+use databend_common_ast::ast::Sample;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::DataSchema;
@@ -123,6 +124,8 @@ pub struct PushDownInfo {
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
     pub inverted_index: Option<InvertedIndexInfo>,
+    /// Used by table sample
+    pub sample: Option<Sample>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
