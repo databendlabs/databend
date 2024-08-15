@@ -329,9 +329,9 @@ impl GrantObjectVisibilityChecker {
         &self,
         catalog: &str,
         database: &str,
-        dict: &str,
+        _dict: &str,
         db_id: u64,
-        dict_id: u64,
+        _dict_id: u64,
     ) -> bool {
         if database.to_lowercase() == "information_schema" || database.to_lowercase() == "system" {
             return true;

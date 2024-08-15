@@ -16,15 +16,9 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
-use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
-use databend_common_meta_app::schema::CreateDictionaryReq;
-use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateDictionaryPlan;
-use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;

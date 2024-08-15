@@ -100,7 +100,7 @@ impl Interpreter for ShowCreateDictionaryInterpreter {
 
 impl ShowCreateDictionaryInterpreter {
     pub async fn show_create_query(
-        catalog: &dyn Catalog,
+        _catalog: &dyn Catalog,
         dictionary: &DictionaryMeta,
         dict_name: &str,
         settings: &ShowCreateQuerySettings,
@@ -146,7 +146,7 @@ impl ShowCreateDictionaryInterpreter {
                 };
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment =
-                    if field_comments.len() == n_fields && !field_comments[idx as u32].is_empty() {
+                    if field_comments.len() == n_fields && !field_comments[&(idx as u32)].is_empty() {
                         // make the display more readable.
                         // can not use debug print, will add double quote
                         format!(" COMMENT '{}'", comment.as_str(),)
@@ -172,10 +172,10 @@ impl ShowCreateDictionaryInterpreter {
         // Append primary keys.
         {
             dict_create_sql.push_str(")\nPRIMARY KEY(");
-            let fields = schema.fields;
+            let fields = schema.fields.clone();
             for pk_id in pk_id_list {
                 let field: &TableField = &fields[pk_id as usize];
-                let name = field.name;
+                let name = field.name.clone();
                 dict_create_sql.push_str(&format!("{},", name));
             }
             dict_create_sql.pop();

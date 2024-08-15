@@ -15,13 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_sql::plans::DropDictionaryPlan;
-use databend_common_users::RoleCacheManager;
-use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -60,13 +56,13 @@ impl Interpreter for DropDictionaryInterpreter {
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        let reply = catalog.drop_dictionary(dict_ident.clone()).await?;
+        let _reply = catalog.drop_dictionary(dict_ident.clone()).await?;
 
         let get_resp = catalog.get_dictionary(dict_ident.clone()).await?;
-        let dict_id;
+        let _dict_id;
         match get_resp {
             Some(reply) => {
-                dict_id = reply.dictionary_id;
+                _dict_id = reply.dictionary_id;
             }
             None => {
                 return Ok(PipelineBuildResult::create());
