@@ -28,6 +28,7 @@ use admin::MetaAdminClient;
 use clap::Args;
 use clap::CommandFactory;
 use clap::Parser;
+use clap::Subcommand;
 use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -343,7 +344,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let _guards = init_logging("metactl", &log_config, BTreeMap::new());
 
-    match &args.command {
+    match app.command {
         Some(cmd) => match cmd {
             Command::Status => {
                 app.show_status().await?;
