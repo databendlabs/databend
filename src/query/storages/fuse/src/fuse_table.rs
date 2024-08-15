@@ -825,20 +825,20 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         column_ids: &[ColumnId],
-    ) -> Result<HashMap<ColumnId, ColumnRange>> {
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
         if column_ids.is_empty() {
-            return Ok(HashMap::new());
+            return Ok(Some(HashMap::new()));
         }
 
         let Some(snapshot) = self.read_table_snapshot().await? else {
-            return Ok(HashMap::new());
+            return Ok(Some(HashMap::new()));
         };
 
         let segment_locations = &snapshot.segments;
         let num_segments = snapshot.segments.len();
 
         if num_segments == 0 {
-            return Ok(HashMap::new());
+            return Ok(Some(HashMap::new()));
         }
 
         let column_ids: HashSet<&ColumnId, RandomState> = HashSet::from_iter(column_ids);
@@ -894,7 +894,7 @@ impl Table for FuseTable {
                 })
             })
             .collect();
-        Ok(r)
+        Ok(Some(r))
     }
 
     #[fastrace::trace]

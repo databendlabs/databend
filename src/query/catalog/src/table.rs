@@ -301,8 +301,8 @@ pub trait Table: Sync + Send {
         &self,
         _ctx: Arc<dyn TableContext>,
         _column_ids: &[ColumnId],
-    ) -> Result<HashMap<ColumnId, ColumnRange>> {
-        Ok(HashMap::default())
+    ) -> Result<Option<HashMap<ColumnId, ColumnRange>>> {
+        Ok(None)
     }
 
     #[async_backtrace::framed]
