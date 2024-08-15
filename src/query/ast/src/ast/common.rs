@@ -54,7 +54,8 @@ impl Identifier {
 
     pub fn normalized_name(&self) -> String {
         self.normalized_name
-            .map(|s| s.as_ref().to_owned())
+            .as_ref()
+            .map(|s| *s.to_owned())
             .unwrap_or_else(|| self.name.clone())
     }
 
