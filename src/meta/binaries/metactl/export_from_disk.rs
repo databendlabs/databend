@@ -30,12 +30,11 @@ use crate::ExportArgs;
 /// E.g.:
 /// `["state_machine/0",{"GenericKV":{"key":"wow","value":{"seq":3,"meta":null,"data":[119,111,119]}}}`
 pub async fn export_from_dir(args: &ExportArgs) -> anyhow::Result<()> {
-    upgrade::upgrade(args).await?;
+    let raft_config: RaftConfig = args.clone().into();
+    upgrade::upgrade(&raft_config).await?;
 
     eprintln!();
     eprintln!("Export:");
-
-    let raft_config: RaftConfig = args.clone().into();
 
     let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
     let mut lines = Arc::new(sto_inn).export();

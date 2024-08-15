@@ -273,7 +273,8 @@ impl App {
         let mut i = 0;
         loop {
             i += 1;
-            let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
+            let client =
+                MetaGrpcClient::try_create(vec![addr.clone()], "root", "xxx", None, None, None)?;
             let res = client.get_kv("foo").await;
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
