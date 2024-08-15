@@ -2178,6 +2178,88 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, action)| Statement::System(SystemStmt { action }),
     );
 
+    pub fn procedure_table_return(i: Input) -> IResult<ProcedureReturnType> {
+        map(rule! { #ident ~ #type_name }, |(name, data_type)| {
+            ProcedureReturnType {
+                name: Some(name.to_string()),
+                data_type,
+            }
+        })(i)
+    }
+
+    fn procedure_return(i: Input) -> IResult<Vec<ProcedureReturnType>> {
+        let procedure_table_return = map(
+            rule! {
+                TABLE ~ "(" ~ #comma_separated_list1(procedure_table_return) ~ ")"
+            },
+            |(_, _, test, _)| test,
+        );
+        let procedure_single_return = map(rule! { #type_name }, |data_type| {
+            vec![ProcedureReturnType {
+                name: None,
+                data_type,
+            }]
+        });
+        rule!(#procedure_single_return: "<type_name>"
+            | #procedure_table_return: "TABLE(<var_name> <type_name>, ...)")(i)
+    }
+
+    // CREATE [ OR REPLACE ] PROCEDURE <name> ()
+    // RETURNS { <result_data_type> }[ NOT NULL ]
+    // LANGUAGE SQL
+    // [ COMMENT = '<string_literal>' ] AS <procedure_definition>
+    let create_procedure = map_res(
+        rule! {
+            CREATE ~ ( OR ~ ^REPLACE )? ~ PROCEDURE ~ #ident ~ "(" ~ ")" ~ RETURNS ~ #procedure_return ~ LANGUAGE ~ SQL  ~ (COMMENT ~ "=" ~ #literal_string)? ~ AS ~ #code_string
+        },
+        |(_, opt_or_replace, _, name, _, _, _, return_type, _, _, opt_comment, _, script)| {
+            let create_option = parse_create_option(opt_or_replace.is_some(), false)?;
+            let stmt = CreateProcedureStmt {
+                create_option,
+                name: name.to_string(),
+                args: None,
+                return_type,
+                language: ProcedureLanguage::SQL,
+                comment: match opt_comment {
+                    Some(opt) => Some(opt.2),
+                    None => None,
+                },
+                script,
+            };
+            Ok(Statement::CreateProcedure(stmt))
+        },
+    );
+
+    let drop_procedure = map(
+        rule! {
+            DROP ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+        },
+        |(_, _, name, _, _)| {
+            Statement::DropProcedure(DropProcedureStmt {
+                name: name.to_string(),
+                args: None,
+            })
+        },
+    );
+    let show_procedures = map(
+        rule! {
+            SHOW ~ PROCEDURES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowProcedures { show_options },
+    );
+
+    let describe_procedure = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ PROCEDURE ~ #ident ~ "(" ~ ")"
+        },
+        |(_, _, name, _, _)| {
+            Statement::DescProcedure(DescProcedureStmt {
+                name: name.to_string(),
+                args: None,
+            })
+        },
+    );
+
     alt((
         // query, explain,show
         rule!(
@@ -2394,6 +2476,10 @@ AS
             | #desc_connection: "`DESC | DESCRIBE CONNECTION  <connection_name>`"
             | #show_connections: "`SHOW CONNECTIONS`"
             | #execute_immediate : "`EXECUTE IMMEDIATE $$ <script> $$`"
+            | #create_procedure : "`CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`"
+            | #drop_procedure : "`DROP PROCEDURE <procedure_name>()`"
+            | #show_procedures : "`SHOW PROCEDURES [<show_options>]()`"
+            | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
         ),
     ))(i)
 }
