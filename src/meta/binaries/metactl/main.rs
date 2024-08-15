@@ -68,42 +68,42 @@ struct GlobalArgs {
     #[clap(long)]
     pub export: bool,
 
+    /// DEPRECATED
     /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[deprecated]
     #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
     pub raft_dir: Option<String>,
 
+    /// DEPRECATED
     /// The N.O. json strings in a export stream item.
     ///
     /// Set this to a smaller value if you get gRPC message body too large error.
     /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
     ///
     /// By default it is 32.
-    #[deprecated]
     #[clap(long)]
     pub export_chunk_size: Option<u64>,
 
+    /// DEPRECATED
     /// When export raft data, this is the name of the save db file.
     /// If `db` is empty, output the exported data as json to stdout instead.
     /// When import raft data, this is the name of the restored db file.
     /// If `db` is empty, the restored data is from stdin instead.
-    #[deprecated]
     #[clap(long, default_value = "")]
     pub db: String,
 
+    /// DEPRECATED
     /// initial_cluster format: node_id=endpoint,grpc_api_addr
-    #[deprecated]
     #[clap(long)]
     pub initial_cluster: Vec<String>,
 
+    /// DEPRECATED
     /// The node id. Used in these cases:
     ///
     /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
     /// 2. --initial_cluster with new cluster node id.
     ///
     /// Otherwise this argument is ignored.
-    #[deprecated]
     #[clap(long, default_value = "0")]
     #[serde(alias = "kvsrv_id")]
     pub id: u64,
