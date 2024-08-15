@@ -35,17 +35,14 @@ impl MetaAdminClient {
             .get(format!("{}/v1/cluster/status", self.endpoint))
             .send()
             .await?;
-        if resp.status().is_success() {
+        let status = resp.status();
+        if status.is_success() {
             let result = resp.json::<AdminStatusResponse>().await?;
             Ok(result)
         } else {
             let data = resp.bytes().await?;
             let msg = String::from_utf8_lossy(&data);
-            Err(anyhow::anyhow!(
-                "status code: {}, msg: {}",
-                resp.status(),
-                msg
-            ))
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
         }
     }
 
