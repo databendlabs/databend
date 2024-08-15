@@ -383,6 +383,10 @@ build_exceptions! {
     // Share error codes(continue).
     ErrorShareEndpointCredential(3111),
     WrongSharePrivileges(3112),
+
+    // dictionary
+    DictionaryAlreadyExists(3113),
+    UnknownDictionary(3114),
 }
 
 // Storage errors [3001, 4000].
@@ -413,4 +417,9 @@ build_exceptions! {
 build_exceptions! {
     // A task that already stopped and can not stopped twice.
     AlreadyStopped(5002),
+
+    SessionTokenExpired(5100),
+    RefreshTokenExpired(5101),
+    SessionTokenNotFound(5102),
+    RefreshTokenNotFound(5103)
 }

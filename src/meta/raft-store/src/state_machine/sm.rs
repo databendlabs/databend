@@ -107,8 +107,6 @@ pub struct StateMachine {
     /// - Every other state is store in its own keyspace such as `Nodes`.
     pub sm_tree: SledTree,
 
-    blocking_config: BlockingConfig,
-
     /// subscriber of state machine data
     pub subscriber: Option<Box<dyn StateMachineSubscriber>>,
 }
@@ -135,23 +133,7 @@ impl SerializableSnapshot {
     }
 }
 
-/// Configuration of what operation to block for testing purpose.
-#[derive(Debug, Clone, Default)]
-pub struct BlockingConfig {
-    pub write_snapshot: Duration,
-    pub compact_snapshot: Duration,
-}
-
 impl StateMachine {
-    /// Return a Arc of the blocking config. It is only used for testing.
-    pub fn blocking_config_mut(&mut self) -> &mut BlockingConfig {
-        &mut self.blocking_config
-    }
-
-    pub fn blocking_config(&self) -> &BlockingConfig {
-        &self.blocking_config
-    }
-
     pub fn tree_name(config: &RaftConfig, sm_id: u64) -> String {
         config.tree_name(format!("{}/{}", TREE_STATE_MACHINE, sm_id))
     }
@@ -167,7 +149,6 @@ impl StateMachine {
 
         let sm = StateMachine {
             sm_tree,
-            blocking_config: BlockingConfig::default(),
             subscriber: None,
         };
 

@@ -33,13 +33,11 @@ use databend_common_exception::Result;
 use databend_storages_common_txn::TxnManagerRef;
 use parking_lot::Mutex;
 
-use super::expiring_map::ExpiringMap;
 use super::HttpQueryContext;
 use crate::servers::http::v1::query::http_query::ExpireResult;
 use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
-use crate::sessions::Session;
 
 #[derive(Clone, Debug, Copy)]
 pub(crate) enum RemoveReason {
@@ -85,7 +83,6 @@ pub struct HttpQueryManager {
     pub(crate) removed_queries: Arc<parking_lot::Mutex<LimitedQueue<String>>>,
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
-    pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
 }
 
 impl HttpQueryManager {
@@ -98,8 +95,7 @@ impl HttpQueryManager {
                 start_time: chrono::Local::now().to_rfc3339_opts(SecondsFormat::Millis, false),
             },
             queries: Arc::new(DashMap::new()),
-            sessions: Mutex::new(ExpiringMap::default()),
-            removed_queries: Arc::new(parking_lot::Mutex::new(LimitedQueue::new(1000))),
+            removed_queries: Arc::new(Mutex::new(LimitedQueue::new(1000))),
             txn_managers: Arc::new(Mutex::new(HashMap::new())),
         }));
 
@@ -227,22 +223,5 @@ impl HttpQueryManager {
         } else {
             None
         }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn get_session(self: &Arc<Self>, session_id: &str) -> Option<Arc<Session>> {
-        let sessions = self.sessions.lock();
-        sessions.get(session_id)
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn add_session(self: &Arc<Self>, session: Arc<Session>, timeout: Duration) {
-        let mut sessions = self.sessions.lock();
-        sessions.insert(session.get_id(), session, Some(timeout));
-    }
-
-    pub(crate) fn kill_session(self: &Arc<Self>, session_id: &str) {
-        let mut sessions = self.sessions.lock();
-        sessions.remove(session_id);
     }
 }

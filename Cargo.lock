@@ -5261,6 +5261,7 @@ dependencies = [
  "serde_json",
  "serde_stacker",
  "serde_urlencoded",
+ "sha2",
  "socket2 0.5.6",
  "strength_reduce",
  "sysinfo",
@@ -5395,7 +5396,6 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
  "log",
- "parking_lot 0.12.1",
 ]
 
 [[package]]

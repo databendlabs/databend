@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -35,7 +37,6 @@ use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
-use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
 use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
@@ -120,9 +121,6 @@ impl Session {
                 shutdown_fun();
             }
         }
-
-        let http_queries_manager = HttpQueryManager::instance();
-        http_queries_manager.kill_session(&self.id);
     }
 
     pub fn kill(&self) {
@@ -219,7 +217,7 @@ impl Session {
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. restricted_role represents the role
-    // granted by external authenticator, it will over write the current user's granted roles, and
+    // granted by external authenticator, it will overwrite the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
     pub async fn set_authed_user(
@@ -355,6 +353,14 @@ impl Session {
             None => vec![],
             Some(x) => x.get_query_profiles(),
         }
+    }
+
+    pub fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.session_ctx.get_all_variables()
+    }
+
+    pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
+        self.session_ctx.set_all_variables(variables)
     }
 }
 
