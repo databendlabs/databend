@@ -14,9 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CreateOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::CreateDictionaryPlan;
 use databend_common_users::UserApiProvider;
@@ -55,19 +59,55 @@ impl Interpreter for CreateDictionaryInterpreter {
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        if quota.max_dictionaries_per_database > 0 {
-            let req = ListDictionaryReq {
-                tenant: self.plan.tenant.clone(),
-                db_id: self.plan.database_id,
-            };
-            let dictionaries = catalog.list_dictionaries(req).await?;
-            if dictionaries.len() >= quota.max_dictionaries_per_database as usize {
-                return Err(ErrorCode::TenantQuotaExceeded(format!(
-                    "Max dictionaries per database quota exceeded: {}",
-                    quota.max_dictionaries_per_database
-                )));
+        // if quota.max_dictionaries_per_database > 0 {
+        let req = ListDictionaryReq {
+            tenant: self.plan.tenant.clone(),
+            db_id: self.plan.database_id,
+        };
+        let dictionaries = catalog.list_dictionaries(req).await?;
+        if dictionaries.len() >= quota.max_dictionaries_per_database as usize {
+            match self.plan.create_option {
+                CreateOption::Create => {
+                    return Err(ErrorCode::TenantQuotaExceeded(format!(
+                        "Max dictionaries per database quota exceeded: {}",
+                        quota.max_dictionaries_per_database
+                    )));
+                }
+                CreateOption::CreateIfNotExists => {
+                    let dictionary_meta = self.plan.meta.clone();
+                    let dict_ident =
+                        DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+                    let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
+                    let req = CreateDictionaryReq {
+                        dictionary_ident: dictionary_ident.clone(),
+                        dictionary_meta: dictionary_meta.clone(),
+                    };
+                    let reply = catalog.create_dictionary(req).await;
+                    if reply.is_ok() {
+                        return Ok(PipelineBuildResult::create());
+                    } else {
+                        return Err(ErrorCode::UnknownDictionary(format!(
+                            "Create dictionary {} fail.",
+                            self.plan.dictionary.clone(),
+                        )));
+                    }
+                }
+                CreateOption::CreateOrReplace => {
+                    let dictionary_meta = self.plan.meta.clone();
+                    let dictionary_ident = TenantDictionaryIdent::new(
+                        tenant,
+                        DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone()),
+                    );
+                    let req = UpdateDictionaryReq {
+                        dictionary_meta: dictionary_meta.clone(),
+                        dictionary_ident: dictionary_ident.clone(),
+                    };
+                    let _reply = catalog.update_dictionary(req).await?;
+                    return Ok(PipelineBuildResult::create());
+                }
             }
         }
+        // }
 
         // let dictionary_meta = self.plan.meta.clone();
         // let dict_ident =

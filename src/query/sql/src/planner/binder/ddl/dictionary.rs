@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use databend_common_ast::ast::CreateDictionaryStmt;
 use databend_common_ast::ast::DropDictionaryStmt;
 use databend_common_ast::ast::ShowCreateDictionaryStmt;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -59,10 +60,28 @@ impl Binder {
         }
 
         let source = self.normalize_object_identifier(source_name);
+
+        if source.to_lowercase() != "mysql".to_string() {
+            return Err(ErrorCode::UnknownDictionary(
+                format!(
+                    "Source {} is not supported.",
+                    source.to_lowercase(),
+                )
+            ));
+        }
+
         let options: BTreeMap<String, String> = source_options
             .into_iter()
             .map(|(k, v)| (k.to_lowercase(), v.to_string().to_lowercase()))
             .collect();
+        let required_options = ["host", "port", "username", "password", "db"];
+        for option in required_options {
+            if !options.contains_key(&option.to_string()) {
+                return Err(ErrorCode::UnsupportedOption(
+                    "The required key is missing.".to_string()
+                ));
+            }
+        }
 
         let mut field_comments = BTreeMap::new();
         for (index, column) in columns.iter().enumerate() {
