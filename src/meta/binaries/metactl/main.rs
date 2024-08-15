@@ -57,7 +57,7 @@ pub struct GlobalArgs {
     #[clap(long)]
     pub import: bool,
 
-    /// DEPRECATED
+    /// DEPRECATE: use subcommand instead.
     #[clap(long)]
     pub export: bool,
 
