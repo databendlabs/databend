@@ -33,14 +33,14 @@ pub async fn export_from_running_node(addr: &str, args: &ExportArgs) -> Result<(
     eprintln!("Export:");
     eprintln!("    From: online meta-service: {}", addr);
     eprintln!("    Export To: {}", args.db);
-    eprintln!("    Export Chunk Size: {:?}", args.export_chunk_size);
+    eprintln!("    Export Chunk Size: {:?}", args.chunk_size);
 
     let grpc_api_addr = get_available_socket_addr(addr).await?;
 
     export_from_grpc(
         grpc_api_addr.to_string().as_str(),
         args.db.clone(),
-        args.export_chunk_size,
+        args.chunk_size,
     )
     .await?;
     Ok(())

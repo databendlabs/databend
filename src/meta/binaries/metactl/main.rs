@@ -214,10 +214,9 @@ impl App {
     }
 
     pub async fn show_status(&self) -> anyhow::Result<()> {
-        let addr = self.globals.grpc_api_address;
+        let addr = self.globals.grpc_api_address.clone();
 
-        let client =
-            MetaGrpcClient::try_create(vec![addr.to_string()], "root", "xxx", None, None, None)?;
+        let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
 
         let res = client.get_cluster_status().await?;
         println!("BinaryVersion: {}", res.binary_version);
@@ -265,7 +264,7 @@ impl App {
     }
 
     async fn bench_client_num_conn(&self) -> anyhow::Result<()> {
-        let addr = self.globals.grpc_api_address;
+        let addr = self.globals.grpc_api_address.clone();
         println!(
             "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
             addr
@@ -274,14 +273,7 @@ impl App {
         let mut i = 0;
         loop {
             i += 1;
-            let client = MetaGrpcClient::try_create(
-                vec![addr.to_string()],
-                "root",
-                "xxx",
-                None,
-                None,
-                None,
-            )?;
+            let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
             let res = client.get_kv("foo").await;
             println!("{}-th: get_kv(foo): {:?}", i, res);
             clients.push(client);
@@ -289,8 +281,7 @@ impl App {
     }
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
-        let addr = self.globals.grpc_api_address;
-        let client = MetaAdminClient::new(&addr);
+        let client = MetaAdminClient::new(self.globals.admin_api_address.as_str());
         client.transfer_leader(args.to).await?;
         Ok(())
     }
@@ -362,13 +353,13 @@ async fn main() -> anyhow::Result<()> {
                 app.bench_client_num_conn().await?;
             }
             Command::TransferLeader(args) => {
-                app.transfer_leader(args).await?;
+                app.transfer_leader(&args).await?;
             }
             Command::Export(args) => {
-                app.export(args).await?;
+                app.export(&args).await?;
             }
             Command::Import(args) => {
-                app.import(args).await?;
+                app.import(&args).await?;
             }
             _ => {
                 app.print_help()?;
