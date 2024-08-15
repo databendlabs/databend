@@ -40,6 +40,8 @@ pub struct GrantObjectVisibilityChecker {
     granted_udfs: HashSet<String>,
     granted_write_stages: HashSet<String>,
     granted_read_stages: HashSet<String>,
+    granted_dictionaries: HashSet<(String, String, String)>,
+    granted_dictionaries_id: HashSet<(String, u64, u64)>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -61,6 +63,8 @@ impl GrantObjectVisibilityChecker {
         let mut granted_databases_id = HashSet::new();
         let mut extra_databases_id = HashSet::new();
         let mut granted_tables_id = HashSet::new();
+        let mut granted_dictionaries = HashSet::new();
+        let mut granted_dictionaries_id = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
         for role in available_roles {
@@ -197,6 +201,8 @@ impl GrantObjectVisibilityChecker {
             granted_udfs,
             granted_write_stages,
             granted_read_stages,
+            granted_dictionaries,
+            granted_dictionaries_id,
         }
     }
 
@@ -318,6 +324,49 @@ impl GrantObjectVisibilityChecker {
         if self
             .granted_tables_id
             .contains(&(catalog.to_string(), db_id, table_id))
+        {
+            return true;
+        }
+
+        false
+    }
+
+    pub fn check_dictionary_visibility(
+        &self,
+        catalog: &str,
+        database: &str,
+        dict: &str,
+        db_id: u64,
+        dict_id: u64,
+    ) -> bool {
+        if database.to_lowercase() == "information_schema" || database.to_lowercase() == "system" {
+            return true;
+        }
+        if self
+            .granted_databases
+            .contains(&(catalog.to_string(), database.to_string()))
+        {
+            return true;
+        }
+
+        if self
+            .granted_databases_id
+            .contains(&(catalog.to_string(), db_id))
+        {
+            return true;
+        }
+
+        if self.granted_dictionaries.contains(&(
+            catalog.to_string(),
+            database.to_string(),
+            dict.to_string(),
+        )) {
+            return true;
+        }
+
+        if self
+            .granted_dictionaries_id
+            .contains(&(catalog.to_string(), db_id, dict_id))
         {
             return true;
         }

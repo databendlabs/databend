@@ -387,6 +387,7 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
+    UnknownDictionaryId(3115),
 }
 
 // Storage errors [3001, 4000].

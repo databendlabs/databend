@@ -46,9 +46,9 @@ pub enum UserPrivilegeType {
     Update = 1 << 5,
     // Privilege to delete rows in a table
     Delete = 1 << 6,
-    // Privilege to create databases or tables.
+    // Privilege to create databases or tables or dictionaries.
     Create = 1 << 1,
-    // Privilege to drop databases or tables.
+    // Privilege to drop databases or tables or dictionaries.
     Drop = 1 << 7,
     // Privilege to alter databases or tables.
     Alter = 1 << 8,
@@ -68,7 +68,7 @@ pub enum UserPrivilegeType {
     DropUser = 1 << 15,
     // Privilege to Create/Drop DataMask.
     CreateDataMask = 1 << 16,
-    // Privilege to Own a databend object such as database/table.
+    // Privilege to Own a databend object such as database/table/dictionary.
     Ownership = 1 << 17,
     // Privilege to Read stage
     Read = 1 << 18,
@@ -237,6 +237,14 @@ impl UserPrivilegeSet {
             make_bitflags!(UserPrivilegeType::{ Usage | Ownership }).into()
         } else {
             make_bitflags!(UserPrivilegeType::{ Usage }).into()
+        }
+    }
+
+    pub fn available_privileges_on_dictionary(available_ownership: bool) -> Self {
+        if available_ownership {
+            make_bitflags!(UserPrivilegeType::{ Create | Drop | Ownership }).into()
+        } else {
+            make_bitflags!(UserPrivilegeType::{ Create | Update | Drop }).into()
         }
     }
 

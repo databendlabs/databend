@@ -380,6 +380,7 @@ async fn show_account_grants(
     // It will re-write the exists key.
     let mut catalog_db_ids: HashMap<String, Vec<(u64, String)>> = HashMap::new();
     let mut catalog_table_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
+    let mut catalog_dict_ids: HashMap<String, Vec<(u64, u64, String)>> = HashMap::new();
 
     for grant_entry in grant_entries {
         let object = grant_entry.object();

@@ -29,6 +29,9 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
@@ -80,6 +83,7 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
     "user_functions",
     "functions",
     "indexes",
+    "dictionaries",
 ];
 
 // table functions that need `Super` privilege
@@ -998,6 +1002,13 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::AnalyzeTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
+            }
+            // Dictionary
+            Plan::ShowCreateDictionary(_)
+            | Plan::CreateDictionary(_)
+            | Plan::DropDictionary(_) => {
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await?;
             }
             // Others.
             Plan::Insert(plan) => {
