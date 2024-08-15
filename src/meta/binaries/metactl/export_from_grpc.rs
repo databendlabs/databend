@@ -28,7 +28,7 @@ use tokio_stream::StreamExt;
 use crate::ExportArgs;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
-pub async fn export_from_running_node(addr: &str, args: &ExportArgs) -> Result<(), anyhow::Error> {
+pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::Error> {
     eprintln!();
     eprintln!("Export:");
     eprintln!("    From: online meta-service: {}", addr);
@@ -38,7 +38,7 @@ pub async fn export_from_running_node(addr: &str, args: &ExportArgs) -> Result<(
     let grpc_api_addr = get_available_socket_addr(addr).await?;
 
     export_from_grpc(
-        grpc_api_addr.to_string().as_str(),
+        args.grpc_api_addr.as_str(),
         args.db.clone(),
         args.chunk_size,
     )

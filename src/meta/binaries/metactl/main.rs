@@ -45,19 +45,13 @@ pub struct GlobalArgs {
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
 
+    /// DEPRECATED
     #[clap(
         long,
         env = "METASRV_GRPC_API_ADDRESS",
         default_value = "127.0.0.1:9191"
     )]
     pub grpc_api_address: String,
-
-    #[clap(
-        long,
-        env = "METASRV_ADMIN_API_ADDRESS",
-        default_value = "127.0.0.1:28002"
-    )]
-    pub admin_api_address: String,
 
     /// DEPRECATED
     #[clap(long)]
@@ -109,7 +103,16 @@ pub struct GlobalArgs {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
+pub struct StatusArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
 pub struct ExportArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
@@ -193,6 +196,15 @@ impl From<ImportArgs> for RaftConfig {
 pub struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,
+
+    #[clap(long, default_value = "127.0.0.1:28002")]
+    pub admin_api_address: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct BenchArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
 }
 
 #[derive(Debug, Deserialize, Parser)]
@@ -212,8 +224,8 @@ impl App {
         Ok(())
     }
 
-    async fn show_status(&self) -> anyhow::Result<()> {
-        let addr = self.globals.grpc_api_address.clone();
+    async fn show_status(&self, args: &StatusArgs) -> anyhow::Result<()> {
+        let addr = args.grpc_api_address.clone();
         let client = MetaGrpcClient::try_create(vec![addr], "root", "xxx", None, None, None)?;
 
         let res = client.get_cluster_status().await?;
@@ -261,8 +273,8 @@ impl App {
         Ok(())
     }
 
-    async fn bench_client_num_conn(&self) -> anyhow::Result<()> {
-        let addr = self.globals.grpc_api_address.clone();
+    async fn bench_client_num_conn(&self, args: &BenchArgs) -> anyhow::Result<()> {
+        let addr = args.grpc_api_address.clone();
         println!(
             "loop: connect to metasrv {}, get_kv('foo'), do not drop the connection",
             addr
@@ -280,7 +292,7 @@ impl App {
     }
 
     async fn transfer_leader(&self, args: &TransferLeaderArgs) -> anyhow::Result<()> {
-        let client = MetaAdminClient::new(self.globals.admin_api_address.as_str());
+        let client = MetaAdminClient::new(args.admin_api_address.as_str());
         client.transfer_leader(args.to).await?;
         Ok(())
     }
@@ -288,11 +300,7 @@ impl App {
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
-                export_from_grpc::export_from_running_node(
-                    self.globals.grpc_api_address.as_str(),
-                    args,
-                )
-                .await?;
+                export_from_grpc::export_from_running_node(args).await?;
             }
             Some(ref dir) => {
                 init_sled_db(dir.clone(), 64 * 1024 * 1024 * 1024);
@@ -310,11 +318,11 @@ impl App {
 
 #[derive(Debug, Clone, Deserialize, Subcommand)]
 enum CtlCommand {
-    Status,
+    Status(StatusArgs),
     Export(ExportArgs),
     Import(ImportArgs),
     TransferLeader(TransferLeaderArgs),
-    BenchClientNumConn,
+    BenchClientNumConn(BenchArgs),
 }
 
 /// Usage:
@@ -345,11 +353,11 @@ async fn main() -> anyhow::Result<()> {
 
     match app.command {
         Some(ref cmd) => match cmd {
-            CtlCommand::Status => {
-                app.show_status().await?;
+            CtlCommand::Status(args) => {
+                app.show_status(&args).await?;
             }
-            CtlCommand::BenchClientNumConn => {
-                app.bench_client_num_conn().await?;
+            CtlCommand::BenchClientNumConn(args) => {
+                app.bench_client_num_conn(&args).await?;
             }
             CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(&args).await?;
@@ -365,6 +373,7 @@ async fn main() -> anyhow::Result<()> {
         None => {
             if app.globals.export {
                 let args = ExportArgs {
+                    grpc_api_address: app.globals.grpc_api_address.clone(),
                     raft_dir: app.globals.raft_dir.clone(),
                     db: app.globals.db.clone(),
                     id: app.globals.id,
