@@ -205,6 +205,20 @@ impl TxnManager {
         table_name: &str,
     ) -> Option<TableInfo> {
         let desc = format!("'{}'.'{}'", db_name, table_name);
+        let temp_table_id = self.txn_buffer.temp_table_desc_to_id.get(&desc);
+        if let Some(id) = temp_table_id {
+            let table = self.txn_buffer.mutated_temp_tables.get(id).unwrap();
+            return Some(TableInfo::new(
+                &table.db_name,
+                &table.table_name,
+                TableIdent {
+                    table_id: *id,
+                    seq: 0,
+                },
+                table.meta.clone(),
+            ));
+        }
+
         self.txn_buffer
             .table_desc_to_id
             .get(&desc)
