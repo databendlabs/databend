@@ -29,7 +29,4 @@ pub struct TenantQuota {
 
     // The max number of users can be created in the tenant.
     pub max_users: u32,
-
-    // The max dictionaries per database can be created in the tenant.
-    pub max_dictionaries_per_database: u32,
 }

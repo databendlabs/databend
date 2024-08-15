@@ -124,7 +124,7 @@ impl Binder {
         stmt: &DropDictionaryStmt,
     ) -> Result<Plan> {
         let DropDictionaryStmt {
-            if_exists: _,
+            if_exists,
             catalog,
             database,
             dictionary_name,
@@ -141,6 +141,7 @@ impl Binder {
             database_id = db.get_db_info().ident.db_id;
         }
         Ok(Plan::DropDictionary(Box::new(DropDictionaryPlan {
+            if_exists,
             tenant,
             catalog,
             database_id,

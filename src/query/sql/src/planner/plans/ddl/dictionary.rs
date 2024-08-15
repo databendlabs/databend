@@ -29,6 +29,7 @@ pub struct CreateDictionaryPlan {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDictionaryPlan {
+    pub if_exists: bool,
     pub tenant: Tenant,
     pub catalog: String,
     pub database_id: u64,

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -56,30 +57,19 @@ impl Interpreter for DropDictionaryInterpreter {
             tenant,
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        let _reply = catalog.drop_dictionary(dict_ident.clone()).await?;
+        let reply = catalog.drop_dictionary(dict_ident.clone()).await;
 
-        let get_resp = catalog.get_dictionary(dict_ident.clone()).await?;
-        let _dict_id;
-        match get_resp {
-            Some(reply) => {
-                _dict_id = reply.dictionary_id;
-            }
-            None => {
+        if reply.is_ok() {
+            return Ok(PipelineBuildResult::create());
+        } else {
+            if self.plan.if_exists {
                 return Ok(PipelineBuildResult::create());
+            } else {
+                return Err(ErrorCode::DictionaryAlreadyExists(format!(
+                    "Dictionary {} already exists.",
+                    dict_name.to_string(),
+                )));
             }
         }
-
-        // // drop the ownership
-        // let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-        // let owner_object = OwnershipObject::Dictionary {
-        //     catalog_name: catalog_name.to_string(),
-        //     db_id,
-        //     dict_id,
-        // };
-
-        // role_api.revoke_ownership(&owner_object).await?;
-        // RoleCacheManager::instance().invalidate_cache(&tenant);
-
-        Ok(PipelineBuildResult::create())
     }
 }

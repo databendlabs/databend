@@ -60,7 +60,7 @@ enum ObjectId {
 // some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
 // rewritten to the queries on the system tables, we need to skip the privilege check on
 // these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 20] = [
+const SYSTEM_TABLES_ALLOW_LIST: [&str; 19] = [
     "catalogs",
     "columns",
     "databases",
@@ -80,7 +80,6 @@ const SYSTEM_TABLES_ALLOW_LIST: [&str; 20] = [
     "user_functions",
     "functions",
     "indexes",
-    "dictionaries",
 ];
 
 // table functions that need `Super` privilege

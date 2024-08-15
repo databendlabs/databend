@@ -60,13 +60,24 @@ impl Interpreter for CreateDictionaryInterpreter {
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
-        // if quota.max_dictionaries_per_database > 0 {
         let req = ListDictionaryReq {
             tenant: self.plan.tenant.clone(),
             db_id: self.plan.database_id,
         };
         let dictionaries = catalog.list_dictionaries(req).await?;
-        if dictionaries.len() >= quota.max_dictionaries_per_database as usize {
+
+        let dictionary_meta = self.plan.meta.clone();
+        let dict_ident =
+            DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
+        let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
+        let req = CreateDictionaryReq {
+            dictionary_ident: dictionary_ident.clone(),
+            dictionary_meta: dictionary_meta.clone(),
+        };
+        let reply = catalog.create_dictionary(req).await;
+        if reply.is_ok() {
+            return Ok(PipelineBuildResult::create());
+        } else {
             match self.plan.create_option {
                 CreateOption::Create => {
                     return Err(ErrorCode::TenantQuotaExceeded(format!(
@@ -75,30 +86,9 @@ impl Interpreter for CreateDictionaryInterpreter {
                     )));
                 }
                 CreateOption::CreateIfNotExists => {
-                    let dictionary_meta = self.plan.meta.clone();
-                    let dict_ident =
-                        DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-                    let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
-                    let req = CreateDictionaryReq {
-                        dictionary_ident: dictionary_ident.clone(),
-                        dictionary_meta: dictionary_meta.clone(),
-                    };
-                    let reply = catalog.create_dictionary(req).await;
-                    if reply.is_ok() {
-                        return Ok(PipelineBuildResult::create());
-                    } else {
-                        return Err(ErrorCode::UnknownDictionary(format!(
-                            "Create dictionary {} fail.",
-                            self.plan.dictionary.clone(),
-                        )));
-                    }
+                    return Ok(PipelineBuildResult::create());
                 }
                 CreateOption::CreateOrReplace => {
-                    let dictionary_meta = self.plan.meta.clone();
-                    let dictionary_ident = TenantDictionaryIdent::new(
-                        tenant,
-                        DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone()),
-                    );
                     let req = UpdateDictionaryReq {
                         dictionary_meta: dictionary_meta.clone(),
                         dictionary_ident: dictionary_ident.clone(),
@@ -108,35 +98,5 @@ impl Interpreter for CreateDictionaryInterpreter {
                 }
             }
         }
-        // }
-
-        // let dictionary_meta = self.plan.meta.clone();
-        // let dict_ident =
-        //     DictionaryIdentity::new(self.plan.database_id, self.plan.dictionary.clone());
-        // let dictionary_ident = TenantDictionaryIdent::new(tenant, dict_ident);
-        // let req = CreateDictionaryReq {
-        //     dictionary_ident,
-        //     dictionary_meta,
-        // };
-        // let reply = catalog.create_dictionary(req).await?;
-
-        // // Grant the ownership of the dictionary to the current role.
-        // if let Some(current_role) = self.ctx.get_current_role() {
-        //     let tenant = self.ctx.get_tenant();
-        //     let role_api = UserApiProvider::instance().role_api(&tenant);
-        //     role_api
-        //         .grant_ownership(
-        //             &OwnershipObject::Dictionary {
-        //                 catalog_name: self.plan.catalog.clone(),
-        //                 db_id: self.plan.database_id,
-        //                 dict_id: reply.dictionary_id,
-        //             },
-        //             &current_role.name,
-        //         )
-        //         .await?;
-        //     RoleCacheManager::instance().invalidate_cache(&tenant);
-        // }
-
-        Ok(PipelineBuildResult::create())
     }
 }

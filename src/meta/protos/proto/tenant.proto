@@ -47,7 +47,4 @@ message TenantQuota {
 
   // The max number of users can be created in the tenant.
   uint32 max_users = 5;
-
-  // The max dictionaries per database can be created in the tenant.
-  uint32 max_dictionaries_per_database = 6;
 }
