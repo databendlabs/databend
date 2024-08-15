@@ -109,7 +109,7 @@ struct GlobalArgs {
     pub id: u64,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 struct ExportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
@@ -152,7 +152,7 @@ impl From<ExportArgs> for RaftConfig {
     }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 struct ImportArgs {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
@@ -190,7 +190,7 @@ impl From<ImportArgs> for RaftConfig {
     }
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, Clone, Args)]
 struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,
@@ -315,7 +315,7 @@ impl App {
     }
 }
 
-#[derive(Debug, Subcommand)]
+#[derive(Debug, Clone, Subcommand)]
 enum Command {
     Status,
     Export(ExportArgs),
