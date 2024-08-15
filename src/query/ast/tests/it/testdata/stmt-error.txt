@@ -132,7 +132,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, `CONNECTION`, or `PROCEDURE`
 
 
 ---------- Input ----------
@@ -198,7 +198,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -238,7 +238,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -950,5 +950,50 @@ error:
   |             |         |      
   |             |         while parsing type name
   |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+
+
+---------- Input ----------
+desc procedure p1
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | desc procedure p1
+  | ----             ^ unexpected end of input, expecting `(`
+  | |                
+  | while parsing `DESC PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+drop procedure p1
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | drop procedure p1
+  | ----             ^ unexpected end of input, expecting `(`
+  | |                
+  | while parsing `DROP PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;
+---------- Output ---------
+error: 
+  --> SQL:1:44
+  |
+1 | create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+  | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `BOOLEAN`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `SMALLINT`, `BIGINT`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
+  | |                             |             
+  | |                             while parsing TABLE(<var_name> <type_name>, ...)
+  | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
 
 
