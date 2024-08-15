@@ -45,7 +45,7 @@ pub struct GlobalArgs {
     #[clap(long, default_value = "INFO")]
     pub log_level: String,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
     #[clap(
         long,
         env = "METASRV_GRPC_API_ADDRESS",
@@ -53,7 +53,7 @@ pub struct GlobalArgs {
     )]
     pub grpc_api_address: String,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
     #[clap(long)]
     pub import: bool,
 
@@ -61,13 +61,15 @@ pub struct GlobalArgs {
     #[clap(long)]
     pub export: bool,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
+    ///
     /// The dir to store persisted meta state, including raft logs, state machine etc.
     #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
     pub raft_dir: Option<String>,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
+    ///
     /// The N.O. json strings in a export stream item.
     ///
     /// Set this to a smaller value if you get gRPC message body too large error.
@@ -77,7 +79,8 @@ pub struct GlobalArgs {
     #[clap(long)]
     pub export_chunk_size: Option<u64>,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
+    ///
     /// When export raft data, this is the name of the save db file.
     /// If `db` is empty, output the exported data as json to stdout instead.
     /// When import raft data, this is the name of the restored db file.
@@ -85,12 +88,14 @@ pub struct GlobalArgs {
     #[clap(long, default_value = "")]
     pub db: String,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
+    ///
     /// initial_cluster format: node_id=endpoint,grpc_api_addr
     #[clap(long)]
     pub initial_cluster: Vec<String>,
 
-    /// DEPRECATED
+    /// DEPRECATED use subcommand instead.
+    ///
     /// The node id. Used in these cases:
     ///
     /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
