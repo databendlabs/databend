@@ -46,10 +46,7 @@ pub struct BlockingDatabendConnection(Box<dyn databend_driver::Connection>);
 impl BlockingDatabendConnection {
     pub fn info(&self, py: Python) -> PyResult<ConnectionInfo> {
         let this = self.0.clone();
-        let ret = wait_for_future(py, async move {
-            let info = this.info().await;
-            info
-        });
+        let ret = wait_for_future(py, async move { this.info().await });
         Ok(ConnectionInfo::new(ret))
     }
 

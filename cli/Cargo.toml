@@ -17,6 +17,7 @@ databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 tokio-stream = { workspace = true }
 
 anyhow = "1.0"
+arrow = { workspace = true }
 async-recursion = "1.1.0"
 async-trait = "0.1"
 clap = { version = "4.4", features = ["derive", "env"] }

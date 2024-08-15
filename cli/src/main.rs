@@ -330,6 +330,7 @@ pub async fn main() -> Result<()> {
         }
     }
 
+    let user = conn_args.user.clone();
     let dsn = conn_args.get_dsn()?;
     let mut settings = Settings::default();
     let is_terminal = stdin().is_terminal();
@@ -365,7 +366,32 @@ pub async fn main() -> Result<()> {
     }
     settings.time = args.time;
 
-    let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
+    let mut session = match session::Session::try_new(dsn, settings, is_repl).await {
+        Ok(session) => session,
+        Err(err) => {
+            // Exit client if user login failed.
+            if let Some(error) = err.downcast_ref::<databend_driver::Error>() {
+                match error {
+                    databend_driver::Error::Api(
+                        databend_client::error::Error::InvalidResponse(resp_err),
+                    ) => {
+                        if resp_err.code == 401 {
+                            println!("Authenticate failed wrong password user {}", user);
+                            return Ok(());
+                        }
+                    }
+                    databend_driver::Error::Arrow(arrow::error::ArrowError::IpcError(ipc_err)) => {
+                        if ipc_err.contains("Unauthenticated") {
+                            println!("Authenticate failed wrong password user {}", user);
+                            return Ok(());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return Err(err);
+        }
+    };
 
     let log_dir = format!(
         "{}/.bendsql",

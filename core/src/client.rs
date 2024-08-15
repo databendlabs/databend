@@ -317,6 +317,14 @@ impl APIClient {
             resp = builder.headers(headers.clone()).send().await?;
         }
         if resp.status() != 200 {
+            if resp.status() == 401 {
+                let resp_err = QueryError {
+                    code: resp.status().as_u16(),
+                    message: resp.text().await.unwrap_or_default(),
+                    detail: None,
+                };
+                return Err(Error::InvalidResponse(resp_err));
+            }
             return Err(Error::Request(format!(
                 "Start Query failed with status {}: {}",
                 resp.status(),
@@ -356,6 +364,14 @@ impl APIClient {
             // TODO(liyz): currently it's not possible to distinguish between session timeout and server crashed
             if resp.status() == 404 {
                 return Err(Error::SessionTimeout(resp.text().await?));
+            }
+            if resp.status() == 401 {
+                let resp_err = QueryError {
+                    code: resp.status().as_u16(),
+                    message: resp.text().await.unwrap_or_default(),
+                    detail: None,
+                };
+                return Err(Error::InvalidResponse(resp_err));
             }
             return Err(Error::Request(format!(
                 "Query Page failed with status {}: {}",

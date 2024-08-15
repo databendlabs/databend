@@ -162,10 +162,7 @@ impl RowIterator {
 impl RowIterator {
     pub fn schema(&self, py: Python) -> PyResult<Schema> {
         let streamer = self.0.clone();
-        let ret = wait_for_future(py, async move {
-            let schema = streamer.lock().await.schema();
-            schema
-        });
+        let ret = wait_for_future(py, async move { streamer.lock().await.schema() });
         Ok(Schema(ret))
     }
 
@@ -208,11 +205,7 @@ pub struct Schema(databend_driver::SchemaRef);
 #[pymethods]
 impl Schema {
     pub fn fields<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyList>> {
-        let fields = self
-            .0
-            .fields()
-            .into_iter()
-            .map(|f| Field(f.clone()).into_py(py));
+        let fields = self.0.fields().iter().map(|f| Field(f.clone()).into_py(py));
         Ok(PyList::new_bound(py, fields))
     }
 }

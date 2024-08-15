@@ -185,6 +185,7 @@ impl RowIterator {
     /// Fetch next row.
     /// Returns `None` if there are no more rows.
     #[napi]
+    #[allow(clippy::missing_safety_doc)]
     pub async unsafe fn next(&mut self) -> Option<Result<Row>> {
         self.0
             .next()
@@ -206,6 +207,7 @@ impl RowIteratorExt {
     /// Fetch next row or stats.
     /// Returns `None` if there are no more rows.
     #[napi]
+    #[allow(clippy::missing_safety_doc)]
     pub async unsafe fn next(&mut self) -> Option<Result<RowOrStats>> {
         match self.0.next().await {
             None => None,
@@ -322,7 +324,7 @@ impl Client {
         self.0
             .get_conn()
             .await
-            .map(|conn| Connection(conn))
+            .map(Connection)
             .map_err(format_napi_error)
     }
 }
@@ -366,7 +368,7 @@ impl Connection {
             .await
             .map_err(format_napi_error)?
             .into_iter()
-            .map(|row| Row(row))
+            .map(Row)
             .collect())
     }
 

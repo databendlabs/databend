@@ -97,7 +97,29 @@ impl Session {
                     );
                 }
             }
-            let version = conn.version().await.unwrap_or_default();
+            let version = match conn.version().await {
+                Ok(version) => version,
+                Err(err) => {
+                    match err {
+                        databend_driver::Error::Api(
+                            databend_client::error::Error::InvalidResponse(ref resp_err),
+                        ) => {
+                            if resp_err.code == 401 {
+                                return Err(err.into());
+                            }
+                        }
+                        databend_driver::Error::Arrow(arrow::error::ArrowError::IpcError(
+                            ref ipc_err,
+                        )) => {
+                            if ipc_err.contains("Unauthenticated") {
+                                return Err(err.into());
+                            }
+                        }
+                        _ => {}
+                    }
+                    "".to_string()
+                }
+            };
             println!("Connected to {}", version);
 
             let config = sled::Config::new().temporary(true);
