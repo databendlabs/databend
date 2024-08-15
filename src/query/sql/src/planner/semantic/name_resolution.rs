@@ -14,21 +14,23 @@
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::Identifier;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_settings::Settings;
 use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct NameResolutionContext {
     pub unquoted_ident_case_sensitive: bool,
     pub quoted_ident_case_sensitive: bool,
     pub deny_column_reference: bool,
-    pub variables: HashMap<String, Scalar>,
+    pub ctx: Option<Arc<dyn TableContext>>,
 }
 
 pub enum NameResolutionSuggest {
@@ -37,12 +39,13 @@ pub enum NameResolutionSuggest {
 }
 
 impl NameResolutionContext {
-    pub fn try_new(settings: &Settings, variables: HashMap<String, Scalar>) -> Result<Self> {
+    pub fn try_from_context(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let settings = ctx.get_settings();
         let s = Self {
             unquoted_ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             deny_column_reference: false,
-            variables,
+            ctx: Some(ctx),
         };
         Ok(s)
     }
@@ -71,7 +74,7 @@ impl Default for NameResolutionContext {
             unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: true,
             deny_column_reference: false,
-            variables: HashMap::new(),
+            ctx: None,
         }
     }
 }
@@ -103,11 +106,51 @@ pub fn compare_table_name(
 #[visitor(Identifier(enter))]
 pub struct IdentifierNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
+    pub error: Option<ErrorCode>,
+}
+
+impl<'a> IdentifierNormalizer<'a> {
+    pub fn new(ctx: &'a NameResolutionContext) -> Self {
+        Self { ctx, error: None }
+    }
+
+    pub fn render_error(&self) -> Result<()> {
+        match &self.error {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
+        }
+    }
 }
 
 impl<'a> IdentifierNormalizer<'a> {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
-        let normalized_ident = normalize_identifier(ident, self.ctx);
+        if ident.is_hole {
+            self.error = Some(ErrorCode::SemanticError(format!(
+                "invalid hole identifier {}, maybe you want to use ${}",
+                ident.name, ident.name,
+            )));
+            return;
+        }
+
+        let mut normalized_ident = normalize_identifier(ident, self.ctx);
+        if ident.is_variable {
+            let scalar = self
+                .ctx
+                .ctx
+                .as_ref()
+                .and_then(|c| c.get_variable(&normalized_ident.name));
+
+            if let Some(Scalar::String(s)) = scalar {
+                normalized_ident.name = s;
+                normalized_ident.is_variable = false;
+            } else {
+                self.error = Some(ErrorCode::SemanticError(format!(
+                    "invalid variable identifier {} in session",
+                    normalized_ident.name
+                )));
+                return;
+            }
+        }
         *ident = normalized_ident;
     }
 }

@@ -127,7 +127,7 @@ impl Binder {
             .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
-            Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+            Some(table_alias.name.name())
         } else {
             None
         };
@@ -230,7 +230,7 @@ impl Binder {
         }
         let alias_table_name = alias
             .as_ref()
-            .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+            .map(|alias| alias.name.name())
             .unwrap_or_else(|| table_name.to_string());
         for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
@@ -278,8 +278,8 @@ impl Binder {
             // Resolve the alias name for the bound cte.
             let alias_table_name = alias
                 .as_ref()
-                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
-                .unwrap_or_else(|| table_name.to_string());
+                .map(|alias| alias.name.name())
+                .unwrap_or_else(|| table_name.clone());
             for column in bound_ctx.columns.iter_mut() {
                 column.database_name = None;
                 column.table_name = Some(alias_table_name.clone());
@@ -362,9 +362,7 @@ impl Binder {
             new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
 
-        let table_alias_name = alias
-            .as_ref()
-            .map(|table_alias| self.normalize_identifier(&table_alias.name).name);
+        let table_alias_name = alias.as_ref().map(|table_alias| table_alias.name.name());
         let table_name = if let Some(table_alias_name) = table_alias_name {
             table_alias_name
         } else {

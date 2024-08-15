@@ -39,7 +39,6 @@ use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindRes
 use crate::binder::util::TableIdentifier;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
@@ -402,11 +401,9 @@ impl Binder {
                         )
                         .set_span(scalar_expr.span()));
                     }
-                    let col_name =
-                        normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
+                    let col_name = update_expr.name.clone();
                     if let Some(tbl_identify) = &update_expr.table {
-                        let update_table_name =
-                            normalize_identifier(tbl_identify, &self.name_resolution_ctx).name;
+                        let update_table_name = tbl_identify.clone();
                         if update_table_name != target_name {
                             return Err(ErrorCode::BadArguments(format!(
                                 "Update Identify's `{}` should be `{}`",

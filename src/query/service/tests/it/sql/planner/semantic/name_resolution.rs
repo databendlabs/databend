@@ -59,6 +59,7 @@ fn test_normalize_identifier_quoted_case_insensitive() {
         unquoted_ident_case_sensitive: false,
         quoted_ident_case_sensitive: false,
         deny_column_reference: false,
+        ctx: None,
     };
 
     {
@@ -82,6 +83,7 @@ fn test_normalize_identifier_unquoted_case_sensitive() {
         unquoted_ident_case_sensitive: true,
         quoted_ident_case_sensitive: true,
         deny_column_reference: false,
+        ctx: None,
     };
 
     {
@@ -104,7 +106,7 @@ fn test_normalize_identifiers_in_expr() {
     let mut expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
 
     let ctx = NameResolutionContext::default();
-    let mut normalizer = IdentifierNormalizer { ctx: &ctx };
+    let mut normalizer = IdentifierNormalizer::new(&ctx);
 
     expr.drive_mut(&mut normalizer);
 

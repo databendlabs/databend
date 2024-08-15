@@ -574,12 +574,7 @@ impl<'a> JoinConditionResolver<'a> {
             JoinCondition::Using(identifiers) => {
                 let using_columns = identifiers
                     .iter()
-                    .map(|ident| {
-                        (
-                            ident.span,
-                            normalize_identifier(ident, self.name_resolution_ctx).name,
-                        )
-                    })
+                    .map(|ident| (ident.span, ident.name()))
                     .collect();
                 self.resolve_using(
                     using_columns,

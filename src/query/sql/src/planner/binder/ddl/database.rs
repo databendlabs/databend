@@ -61,7 +61,7 @@ impl Binder {
         let mut select_builder = SelectBuilder::from("system.databases");
 
         let ctl = if let Some(ctl) = catalog {
-            normalize_identifier(ctl, &self.name_resolution_ctx).name
+            ctl.name()
         } else {
             self.ctx.get_current_catalog().to_string()
         };
@@ -102,9 +102,9 @@ impl Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .map(|catalog| catalog.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+        let database = database.name();
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Database", DataType::String),
             DataField::new("Create Database", DataType::String),
@@ -132,9 +132,9 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .map(|catalog| catalog.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+        let database = database.name();
 
         match &action {
             AlterDatabaseAction::RenameDatabase { new_db } => {
@@ -168,9 +168,9 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .map(|catalog| catalog.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+        let database = database.name();
 
         Ok(Plan::DropDatabase(Box::new(DropDatabasePlan {
             if_exists: *if_exists,
@@ -190,9 +190,9 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .map(|catalog| catalog.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+        let database = database.name();
 
         Ok(Plan::UndropDatabase(Box::new(UndropDatabasePlan {
             tenant,
@@ -216,9 +216,9 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let catalog = catalog
             .as_ref()
-            .map(|catalog| normalize_identifier(catalog, &self.name_resolution_ctx).name)
+            .map(|catalog| catalog.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
-        let database = normalize_identifier(database, &self.name_resolution_ctx).name;
+        let database = database.name();
 
         let meta = self.database_meta(engine, options)?;
 

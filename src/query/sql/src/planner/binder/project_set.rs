@@ -27,7 +27,6 @@ use derive_visitor::Visitor;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall as ScalarExprFunctionCall;
@@ -127,7 +126,7 @@ impl Binder {
                     func: FunctionCall { name, args, .. },
                     ..
                 } => {
-                    let name = normalize_identifier(name, &self.name_resolution_ctx).to_string();
+                    let name = name.name();
 
                     let original_context = bind_context.expr_context.clone();
                     bind_context.set_expr_context(ExprContext::InSetReturningFunction);

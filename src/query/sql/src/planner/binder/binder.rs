@@ -46,7 +46,6 @@ use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
@@ -240,9 +239,8 @@ impl<'a> Binder {
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
-                let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database,
+                    database: database.name.clone(),
                 }))
             }
             // Columns
@@ -638,10 +636,6 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    pub(crate) fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
-        normalize_identifier(ident, &self.name_resolution_ctx)
-    }
-
     pub(crate) fn opt_hints_set_var(
         &mut self,
         bind_context: &mut BindContext,
@@ -741,19 +735,14 @@ impl<'a> Binder {
     ) -> (String, String, String) {
         let catalog_name = catalog
             .as_ref()
-            .map(|ident| self.normalize_identifier(ident).name)
+            .map(|ident| ident.name.clone())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database_name = database
             .as_ref()
-            .map(|ident| self.normalize_identifier(ident).name)
+            .map(|ident| ident.name.clone())
             .unwrap_or_else(|| self.ctx.get_current_database());
-        let object_name = self.normalize_identifier(object).name;
+        let object_name = object.name.clone();
         (catalog_name, database_name, object_name)
-    }
-
-    /// Normalize <identifier>
-    pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
-        normalize_identifier(ident, &self.name_resolution_ctx).name
     }
 
     pub(crate) fn check_allowed_scalar_expr_with_udf(&self, scalar: &ScalarExpr) -> Result<bool> {

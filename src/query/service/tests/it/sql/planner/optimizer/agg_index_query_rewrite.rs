@@ -562,10 +562,8 @@ async fn plan_sql(
     sql: &str,
     optimize: bool,
 ) -> Result<(SExpr, Box<BindContext>, MetadataRef)> {
-    let settings = ctx.get_settings();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let name_resolution_ctx =
-        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
+    let name_resolution_ctx = NameResolutionContext::try_from_context(ctx.clone())?;
     let binder = Binder::new(
         ctx.clone(),
         CatalogManager::instance(),

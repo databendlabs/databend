@@ -25,7 +25,6 @@ use databend_common_expression::TableSchemaRefExt;
 
 use super::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
@@ -50,9 +49,7 @@ impl Binder {
             columns
                 .iter()
                 .map(|ident| {
-                    let field = schema.field_with_name(
-                        &normalize_identifier(ident, &self.name_resolution_ctx).name,
-                    )?;
+                    let field = schema.field_with_name(&ident.name)?;
                     if field.computed_expr().is_some() {
                         Err(ErrorCode::BadArguments(format!(
                             "The value specified for computed column '{}' is not allowed",

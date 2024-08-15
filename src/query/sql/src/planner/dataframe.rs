@@ -68,10 +68,8 @@ impl Dataframe {
             sample: None,
         };
 
-        let settings = query_ctx.get_settings();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let name_resolution_ctx =
-            NameResolutionContext::try_new(settings.as_ref(), query_ctx.get_all_variables())?;
+        let name_resolution_ctx = NameResolutionContext::try_from_context(query_ctx.clone())?;
 
         let mut binder = Binder::new(
             query_ctx.clone(),

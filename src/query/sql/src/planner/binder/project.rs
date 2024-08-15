@@ -52,7 +52,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
 use crate::planner::semantic::compare_table_name;
-use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -277,10 +276,8 @@ impl Binder {
                                 ..
                             },
                             None,
-                        ) => normalize_identifier(column, &self.name_resolution_ctx).name,
-                        (_, Some(alias)) => {
-                            normalize_identifier(alias, &self.name_resolution_ctx).name
-                        }
+                        ) => column.name.clone(),
+                        (_, Some(alias)) => alias.name.clone(),
                         _ => {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
@@ -353,7 +350,7 @@ impl Binder {
         let mut to_exclude_columns = HashSet::new();
         if let Some(excludes) = excludes {
             for ex in excludes.iter() {
-                let exclude = normalize_identifier(ex, &self.name_resolution_ctx).name;
+                let exclude = ex.name.clone();
                 if to_exclude_columns.contains(&exclude) {
                     return Err(ErrorCode::SemanticError(format!(
                         "Duplicate entry `{exclude}` in EXCLUDE list"
@@ -371,14 +368,14 @@ impl Binder {
         let mut table = None;
         if names.len() == 2 {
             if let Indirection::Identifier(ident) = &names[0] {
-                table = Some(normalize_identifier(ident, &self.name_resolution_ctx).name);
+                table = Some(ident.name.clone());
             }
         } else if names.len() == 3 {
             if let Indirection::Identifier(ident) = &names[0] {
-                database = Some(normalize_identifier(ident, &self.name_resolution_ctx).name);
+                database = Some(ident.name.clone());
             }
             if let Indirection::Identifier(ident) = &names[1] {
-                table = Some(normalize_identifier(ident, &self.name_resolution_ctx).name);
+                table = Some(ident.name.clone());
             }
         }
 

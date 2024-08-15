@@ -283,7 +283,7 @@ impl Binder {
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let catalog = ident.name();
                 self.ctx.get_catalog(&catalog).await?;
                 catalog
             }
@@ -292,7 +292,7 @@ impl Binder {
         let database = match database {
             None => self.ctx.get_current_database(),
             Some(ident) => {
-                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let database = ident.name();
                 catalog
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
@@ -308,7 +308,7 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
         if let Some(table) = table {
-            let table = normalize_identifier(table, &self.name_resolution_ctx).name;
+            let table = table.name();
             select_builder.with_filter(format!("table = '{table}'"));
         }
 

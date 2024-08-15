@@ -197,7 +197,7 @@ impl Binder {
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let catalog = ident.name();
                 self.ctx.get_catalog(&catalog).await?;
                 catalog
             }
@@ -394,7 +394,7 @@ impl Binder {
         match database {
             None => Ok(self.ctx.get_current_database()),
             Some(ident) => {
-                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let database = ident.name();
                 self.ctx
                     .get_catalog(&ctl_name)
                     .await?
@@ -828,7 +828,7 @@ impl Binder {
                     tenant,
                     if_exists: *if_exists,
                     new_database: database.clone(),
-                    new_table: normalize_identifier(new_table, &self.name_resolution_ctx).name,
+                    new_table: new_table.name(),
                     catalog,
                     database,
                     table,
@@ -877,9 +877,7 @@ impl Binder {
                     self.analyze_add_column(column, schema).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
-                    AstAddColumnOption::After(ident) => AddColumnOption::After(
-                        normalize_identifier(ident, &self.name_resolution_ctx).name,
-                    ),
+                    AstAddColumnOption::After(ident) => AddColumnOption::After(ident.name()),
                     AstAddColumnOption::End => AddColumnOption::End,
                 };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
@@ -1232,11 +1230,11 @@ impl Binder {
 
         let catalog = catalog
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| ident.name())
             .unwrap_or_else(|| self.ctx.get_current_catalog());
         let database = database
             .as_ref()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .map(|ident| ident.name())
             .unwrap_or_else(|| "".to_string());
 
         let option = {
@@ -1315,8 +1313,8 @@ impl Binder {
         new_column: &Identifier,
         table_schema: TableSchemaRef,
     ) -> Result<(TableSchema, String, String)> {
-        let old_name = normalize_identifier(old_column, &self.name_resolution_ctx).name;
-        let new_name = normalize_identifier(new_column, &self.name_resolution_ctx).name;
+        let old_name = old_column.name();
+        let new_name = new_column.name();
 
         if old_name == new_name {
             return Err(ErrorCode::SemanticError(
@@ -1350,7 +1348,7 @@ impl Binder {
         column: &ColumnDefinition,
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String, bool)> {
-        let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+        let name = column.name.name();
         let not_null = self.is_column_not_null();
         let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut is_deterministic = true;
@@ -1394,7 +1392,7 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         for column in columns.iter() {
-            let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
+            let name = column.name.name();
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
@@ -1645,9 +1643,7 @@ impl Binder {
             }
 
             let mut cluster_by = cluster_by.clone();
-            let mut normalizer = IdentifierNormalizer {
-                ctx: &self.name_resolution_ctx,
-            };
+            let mut normalizer = IdentifierNormalizer::new(&self.name_resolution_ctx);
             cluster_by.drive_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_by));
         }

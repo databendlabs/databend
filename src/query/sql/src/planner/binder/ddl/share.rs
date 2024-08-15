@@ -77,7 +77,7 @@ impl Binder {
             comment,
         } = stmt;
 
-        let endpoint = normalize_identifier(endpoint, &self.name_resolution_ctx).name;
+        let endpoint = endpoint.name();
 
         let credential = try_convert_share_credential(credential_options)?;
 
@@ -131,7 +131,7 @@ impl Binder {
             comment,
         } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = CreateSharePlan {
             if_not_exists: *if_not_exists,
@@ -149,7 +149,7 @@ impl Binder {
     ) -> Result<Plan> {
         let DropShareStmt { if_exists, share } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = DropSharePlan {
             if_exists: *if_exists,
@@ -170,7 +170,7 @@ impl Binder {
             privilege,
         } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = GrantShareObjectPlan {
             share,
@@ -191,7 +191,7 @@ impl Binder {
             privilege,
         } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = RevokeShareObjectPlan {
             share,
@@ -213,7 +213,7 @@ impl Binder {
             is_add,
         } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = AlterShareTenantsPlan {
             share,
@@ -231,7 +231,7 @@ impl Binder {
     ) -> Result<Plan> {
         let DescShareStmt { share } = stmt;
 
-        let share = normalize_identifier(share, &self.name_resolution_ctx).name;
+        let share = share.name();
 
         let plan = DescSharePlan { share };
         Ok(Plan::DescShare(Box::new(plan)))

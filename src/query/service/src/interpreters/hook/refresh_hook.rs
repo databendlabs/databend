@@ -231,10 +231,8 @@ async fn build_refresh_index_plan(
     index_meta: IndexMeta,
     segment_locs: Vec<Location>,
 ) -> Result<RefreshIndexPlan> {
-    let settings = ctx.get_settings();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let name_resolution_ctx =
-        NameResolutionContext::try_new(settings.as_ref(), ctx.get_all_variables())?;
+    let name_resolution_ctx = NameResolutionContext::try_from_context(ctx.clone())?;
 
     let mut binder = Binder::new(
         ctx.clone(),

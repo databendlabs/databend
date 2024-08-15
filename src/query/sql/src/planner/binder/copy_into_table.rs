@@ -497,7 +497,6 @@ impl<'a> Binder {
         source_schema: &DataSchemaRef,
     ) -> Result<(DataSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
-        let variables = self.ctx.get_all_variables();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
         let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
@@ -522,7 +521,6 @@ impl<'a> Binder {
                 None => attachment_fields.push(source_schema.fields()[i].clone()),
             }
         }
-        let name_resolution_ctx = NameResolutionContext::try_new(settings.as_ref(), variables)?;
         let mut bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
         let const_schema = Arc::new(DataSchema::new(const_fields));
@@ -531,7 +529,7 @@ impl<'a> Binder {
                 &exprs,
                 &const_schema,
                 self.ctx.clone(),
-                &name_resolution_ctx,
+                &self.name_resolution_ctx,
                 metadata,
             )
             .await?;

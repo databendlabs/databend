@@ -30,6 +30,7 @@ pub struct Identifier {
     pub name: String,
     pub quote: Option<char>,
     pub is_hole: bool,
+    pub is_variable: bool,
 }
 
 impl Identifier {
@@ -43,7 +44,12 @@ impl Identifier {
             name: name.into(),
             quote: None,
             is_hole: false,
+            is_variable: false,
         }
+    }
+
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn from_name_with_quoted(span: Span, name: impl Into<String>, quote: Option<char>) -> Self {
@@ -52,6 +58,7 @@ impl Identifier {
             name: name.into(),
             quote,
             is_hole: false,
+            is_variable: false,
         }
     }
 }
@@ -60,6 +67,8 @@ impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.is_hole {
             write!(f, "IDENTIFIER(:{})", self.name)
+        } else if self.is_variable {
+            write!(f, "IDENTIFIER(${})", self.name)
         } else if let Some(quote) = self.quote {
             write!(f, "{}", QuotedIdent(&self.name, quote))
         } else {

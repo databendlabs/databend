@@ -75,10 +75,8 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.main_pipeline.add_source(
             |output| {
-                let name_resolution_ctx = NameResolutionContext::try_new(
-                    self.settings.as_ref(),
-                    self.ctx.get_all_variables(),
-                )?;
+                let name_resolution_ctx =
+                    NameResolutionContext::try_from_context(self.ctx.clone())?;
                 match &async_sourcer.source {
                     InsertValue::Values { rows } => {
                         let inner = ValueSource::new(rows.clone(), async_sourcer.schema.clone());

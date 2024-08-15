@@ -21,7 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::Operator;
 use crate::plans::RelOperator;
@@ -126,12 +125,14 @@ impl TableIdentifier {
             name: ctx.get_current_catalog(),
             quote: Some(dialect.default_ident_quote()),
             is_hole: false,
+            is_variable: false,
         });
         let database = database.to_owned().unwrap_or(Identifier {
             span: None,
             name: ctx.get_current_database(),
             quote: Some(dialect.default_ident_quote()),
             is_hole: false,
+            is_variable: false,
         });
         let database = Identifier {
             span: merge_span(catalog.span, database.span),
@@ -153,21 +154,21 @@ impl TableIdentifier {
     }
 
     pub fn catalog_name(&self) -> String {
-        normalize_identifier(&self.catalog, &self.name_resolution_ctx).name
+        self.catalog.name()
     }
 
     pub fn database_name(&self) -> String {
-        normalize_identifier(&self.database, &self.name_resolution_ctx).name
+        self.database.name()
     }
 
     pub fn table_name(&self) -> String {
-        normalize_identifier(&self.table, &self.name_resolution_ctx).name
+        self.table.name()
     }
 
     pub fn table_name_alias(&self) -> Option<String> {
-        self.table_alias.as_ref().map(|table_alias| {
-            normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name
-        })
+        self.table_alias
+            .as_ref()
+            .map(|table_alias| table_alias.name.name())
     }
 
     pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {

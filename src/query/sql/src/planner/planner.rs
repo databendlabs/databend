@@ -44,6 +44,7 @@ use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
+use crate::IdentifierNormalizer;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -72,7 +73,6 @@ impl Planner {
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let start = Instant::now();
         let settings = self.ctx.get_settings();
-        let variables = self.ctx.get_all_variables();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
         let mut prql_converted = false;
@@ -154,7 +154,7 @@ impl Planner {
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
                 let metadata = Arc::new(RwLock::new(Metadata::default()));
                 let name_resolution_ctx =
-                    NameResolutionContext::try_new(settings.as_ref(), variables.clone())?;
+                    NameResolutionContext::try_from_context(self.ctx.clone())?;
                 let binder = Binder::new(
                     self.ctx.clone(),
                     CatalogManager::instance(),
@@ -243,6 +243,11 @@ impl Planner {
     }
 
     fn replace_stmt(&self, stmt: &mut Statement) -> Result<()> {
+        let name_resolution_ctx = NameResolutionContext::try_from_context(self.ctx.clone())?;
+        let mut identifier_normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
+        stmt.drive_mut(&mut identifier_normalizer);
+        identifier_normalizer.render_error()?;
+
         stmt.drive_mut(&mut DistinctToGroupBy::default());
         stmt.drive_mut(&mut AggregateRewriter);
         let mut set_ops_counter = CountSetOps::default();

@@ -883,7 +883,7 @@ error:
   --> SQL:1:23
   |
 1 | drop table IDENTIFIER(a)
-  | ----                  ^ unexpected `a`, expecting `:`
+  | ----                  ^ unexpected `a`, expecting `VariableAccess`
   | |                      
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
@@ -895,7 +895,7 @@ error:
   --> SQL:1:23
   |
 1 | drop table IDENTIFIER(:a)
-  | ----                  ^ variable is only available in SQL template
+  | ----                  ^ unexpected `:`, expecting `VariableAccess`
   | |                      
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 

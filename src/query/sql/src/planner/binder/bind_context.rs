@@ -42,7 +42,6 @@ use super::INTERNAL_COLUMN_FACTORY;
 use crate::binder::column_binding::ColumnBinding;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
-use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
@@ -613,11 +612,11 @@ impl Default for BindContext {
 pub fn apply_alias_for_columns(
     columns: &mut [ColumnBinding],
     alias: &TableAlias,
-    name_resolution_ctx: &NameResolutionContext,
+    _name_resolution_ctx: &NameResolutionContext,
 ) -> Result<()> {
     for column in columns.iter_mut() {
         column.database_name = None;
-        column.table_name = Some(normalize_identifier(&alias.name, name_resolution_ctx).name);
+        column.table_name = Some(alias.name);
     }
 
     if alias.columns.len() > columns.len() {
@@ -628,13 +627,8 @@ pub fn apply_alias_for_columns(
         ))
         .set_span(alias.name.span));
     }
-    for (index, column_name) in alias
-        .columns
-        .iter()
-        .map(|ident| normalize_identifier(ident, name_resolution_ctx).name)
-        .enumerate()
-    {
-        columns[index].column_name = column_name;
+    for (index, column_name) in alias.columns.iter().enumerate() {
+        columns[index].column_name = column_name.name;
     }
     Ok(())
 }

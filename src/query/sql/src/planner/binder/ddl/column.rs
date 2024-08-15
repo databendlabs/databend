@@ -39,33 +39,10 @@ impl Binder {
             limit,
         } = stmt;
 
-        let catalog_name = match catalog {
-            None => self.ctx.get_current_catalog(),
-            Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog).await?;
-                catalog
-            }
-        };
-        let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let database = match database {
-            None => self.ctx.get_current_database(),
-            Some(ident) => {
-                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                catalog
-                    .get_database(&self.ctx.get_tenant(), &database)
-                    .await?;
-                database
-            }
-        };
+        let (catalog_name, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
 
-        let table = {
-            let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-            catalog
-                .get_table(&self.ctx.get_tenant(), database.as_str(), &table)
-                .await?;
-            table
-        };
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let mut select_builder = SelectBuilder::from("information_schema.columns");
 

@@ -69,18 +69,13 @@ impl Binder {
         };
 
         for (idx, cte) in with.ctes.iter().enumerate() {
-            let table_name = self.normalize_identifier(&cte.alias.name).name;
+            let table_name = cte.alias.name.name();
             if bind_context.cte_map_ref.contains_key(&table_name) {
                 return Err(ErrorCode::SemanticError(format!(
                     "Duplicate common table expression: {table_name}"
                 )));
             }
-            let column_name = cte
-                .alias
-                .columns
-                .iter()
-                .map(|ident| self.normalize_identifier(ident).name)
-                .collect();
+            let column_name = cte.alias.columns.iter().map(|ident| ident.name()).collect();
             let cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),

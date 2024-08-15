@@ -21,7 +21,6 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::Result;
 
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
@@ -73,20 +72,14 @@ impl Binder {
             let schema = table.schema();
             let field_indexes = columns
                 .iter()
-                .map(|ident| {
-                    schema.index_of(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                })
+                .map(|ident| schema.index_of(&ident.name))
                 .collect::<Result<Vec<_>>>()?;
             Arc::new(schema.project(&field_indexes))
         };
 
         let on_conflict_fields = on_conflict_columns
             .iter()
-            .map(|ident| {
-                schema
-                    .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .cloned()
-            })
+            .map(|ident| schema.field_with_name(&ident.name).cloned())
             .collect::<Result<Vec<_>>>()?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {

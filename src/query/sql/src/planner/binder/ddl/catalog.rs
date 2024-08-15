@@ -81,7 +81,7 @@ impl Binder {
         stmt: &ShowCreateCatalogStmt,
     ) -> Result<Plan> {
         let ShowCreateCatalogStmt { catalog } = stmt;
-        let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+        let catalog = catalog.name();
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Catalog", DataType::String),
             DataField::new("Type", DataType::String),
@@ -126,7 +126,8 @@ impl Binder {
     ) -> Result<Plan> {
         let DropCatalogStmt { if_exists, catalog } = stmt;
         let tenant = self.ctx.get_tenant();
-        let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+        let catalog = catalog.name();
+
         Ok(Plan::DropCatalog(Box::new(DropCatalogPlan {
             if_exists: *if_exists,
             tenant,

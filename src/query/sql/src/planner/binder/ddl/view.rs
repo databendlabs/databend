@@ -55,10 +55,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
-        let column_names = columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .collect::<Vec<_>>();
+        let column_names = columns.iter().map(|ident| ident.name()).collect::<Vec<_>>();
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
@@ -94,10 +91,7 @@ impl Binder {
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
-        let column_names = columns
-            .iter()
-            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
-            .collect::<Vec<_>>();
+        let column_names = columns.iter().map(|ident| ident.name()).collect::<Vec<_>>();
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
@@ -189,7 +183,7 @@ impl Binder {
         let catalog_name = match catalog {
             None => self.ctx.get_current_catalog(),
             Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
+                let catalog = ident.name();
                 self.ctx.get_catalog(&catalog).await?;
                 catalog
             }

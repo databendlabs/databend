@@ -224,11 +224,8 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let ast_expr =
                                     parse_expr(&tokens, ctx.get_settings().get_sql_dialect()?)?;
                                 let mut bind_context = BindContext::new();
-                                let settings = Settings::create(Tenant::new_literal("dummy"));
-                                let name_resolution_ctx = NameResolutionContext::try_new(
-                                    settings.as_ref(),
-                                    ctx.get_all_variables(),
-                                )?;
+                                let name_resolution_ctx =
+                                    NameResolutionContext::try_from_context(ctx.clone())?;
                                 let metadata = Arc::new(RwLock::new(Metadata::default()));
                                 let mut type_checker = TypeChecker::try_create(
                                     &mut bind_context,

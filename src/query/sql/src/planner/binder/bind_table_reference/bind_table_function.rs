@@ -64,7 +64,7 @@ impl Binder {
         named_params: &[(Identifier, Expr)],
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+        let func_name = name.name();
 
         if BUILTIN_FUNCTIONS
             .get_property(&func_name.name)
@@ -136,7 +136,7 @@ impl Binder {
                 .get_table_function(&func_name.name, table_args)?;
             let table = table_meta.as_table();
             let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                Some(table_alias.name.name())
             } else {
                 None
             };
@@ -203,7 +203,7 @@ impl Binder {
             let table = ResultScan::try_create(table_schema, query_id, block_raw_data)?;
 
             let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
+                Some(table_alias.name.name())
             } else {
                 None
             };
@@ -333,7 +333,7 @@ impl Binder {
                 ..
             } => {
                 let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
-                let func_name = normalize_identifier(name, &self.name_resolution_ctx);
+                let func_name = name.name();
 
                 if BUILTIN_FUNCTIONS
                     .get_property(&func_name.name)
