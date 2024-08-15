@@ -390,9 +390,7 @@ async fn main() -> anyhow::Result<()> {
                     chunk_size: app.globals.export_chunk_size,
                 };
                 app.export(&args).await?;
-            }
-
-            if app.globals.import {
+            } else if app.globals.import {
                 let args = ImportArgs {
                     raft_dir: app.globals.raft_dir.clone(),
                     db: app.globals.db.clone(),
@@ -400,9 +398,9 @@ async fn main() -> anyhow::Result<()> {
                     initial_cluster: app.globals.initial_cluster.clone(),
                 };
                 app.import(&args).await?;
+            } else {
+                app.print_help()?;
             }
-
-            app.print_help()?;
         }
     }
 
