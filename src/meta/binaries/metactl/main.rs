@@ -347,19 +347,19 @@ async fn main() -> anyhow::Result<()> {
 
     match app.command {
         Some(ref cmd) => match cmd {
-            Command::Status => {
+            CtlCommand::Status => {
                 app.show_status().await?;
             }
-            Command::BenchClientNumConn => {
+            CtlCommand::BenchClientNumConn => {
                 app.bench_client_num_conn().await?;
             }
-            Command::TransferLeader(args) => {
+            CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(&args).await?;
             }
-            Command::Export(args) => {
+            CtlCommand::Export(args) => {
                 app.export(&args).await?;
             }
-            Command::Import(args) => {
+            CtlCommand::Import(args) => {
                 app.import(&args).await?;
             }
         },
