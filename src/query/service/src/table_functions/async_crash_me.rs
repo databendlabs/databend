@@ -155,7 +155,6 @@ impl AsyncCrashMeSource {
 impl AsyncSource for AsyncCrashMeSource {
     const NAME: &'static str = "async_crash_me";
 
-    #[async_trait::unboxed_simple]
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
         match &self.message {

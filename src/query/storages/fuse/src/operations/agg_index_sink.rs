@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use async_trait::unboxed_simple;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::BlockRowIndex;
@@ -122,7 +121,6 @@ impl AsyncSink for AggIndexSink {
         Ok(())
     }
 
-    #[unboxed_simple]
     #[async_backtrace::framed]
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
         let mut block = data_block;

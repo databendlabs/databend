@@ -135,7 +135,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add async backtrace
         .layer(AsyncBacktraceLayer)
         // Add logging
-        .layer(LoggingLayer::default().with_backtrace_output(true))
+        .layer(LoggingLayer::default())
         // Add tracing
         .layer(FastraceLayer)
         // Add PrometheusClientLayer
