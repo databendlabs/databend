@@ -197,12 +197,12 @@ pub struct TransferLeaderArgs {
 
 #[derive(Debug, Deserialize, Parser)]
 #[clap(name = "databend-metactl", about, version = &**METASRV_COMMIT_VERSION, author)]
-pub struct App {
+struct App {
     #[clap(subcommand)]
-    pub command: Option<CtlCommand>,
+    command: Option<CtlCommand>,
 
     #[clap(flatten)]
-    pub globals: GlobalArgs,
+    globals: GlobalArgs,
 }
 
 impl App {
