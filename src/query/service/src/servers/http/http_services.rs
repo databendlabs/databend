@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::net::SocketAddr;
-use std::path::Path;
 use std::time::Duration;
 
 use databend_common_config::GlobalConfig;
@@ -24,8 +23,7 @@ use databend_common_http::HttpShutdownHandler;
 use databend_common_meta_types::anyerror::AnyError;
 use log::info;
 use poem::get;
-use poem::listener::RustlsCertificate;
-use poem::listener::RustlsConfig;
+use poem::listener::OpensslTlsConfig;
 use poem::middleware::CatchPanic;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
@@ -33,16 +31,19 @@ use poem::post;
 use poem::put;
 use poem::Endpoint;
 use poem::EndpointExt;
+use poem::IntoEndpoint;
 use poem::Route;
 
 use super::v1::upload_to_stage;
-use crate::auth::AuthMgr;
+use crate::servers::http::middleware::json_response;
+use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
 use crate::servers::http::v1::query_route;
+use crate::servers::http::v1::renew_handler;
 use crate::servers::Server;
 
 #[derive(Copy, Clone)]
@@ -86,9 +87,12 @@ impl HttpHandler {
         })
     }
 
-    fn wrap_auth(&self, ep: Route) -> impl Endpoint {
-        let auth_manager = AuthMgr::instance();
-        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_manager);
+    pub fn wrap_auth<E>(&self, ep: E, auth_type: EndpointKind) -> impl Endpoint
+    where
+        E: IntoEndpoint,
+        E::Endpoint: 'static,
+    {
+        let session_middleware = HTTPSessionMiddleware::create(self.kind, auth_type);
         ep.with(session_middleware).boxed()
     }
 
@@ -96,14 +100,43 @@ impl HttpHandler {
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
-            .nest("/query", query_route())
-            .at("/login", post(login_handler))
-            .at("/upload_to_stage", put(upload_to_stage))
-            .at("/suggested_background_tasks", get(list_suggestions));
-        let ep_v1 = self.wrap_auth(ep_v1);
+            .nest("/query", query_route(self.kind))
+            .at(
+                "/session/login",
+                post(login_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Login,
+                )),
+            )
+            .at(
+                "/session/renew",
+                post(renew_handler).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Refresh,
+                )),
+            )
+            .at(
+                "/upload_to_stage",
+                put(upload_to_stage).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::StartQuery,
+                )),
+            )
+            .at(
+                "/suggested_background_tasks",
+                get(list_suggestions).with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::StartQuery,
+                )),
+            );
 
-        let ep_clickhouse = Route::new().nest("/", clickhouse_router());
-        let ep_clickhouse = self.wrap_auth(ep_clickhouse);
+        let ep_clickhouse =
+            Route::new()
+                .nest("/", clickhouse_router())
+                .with(HTTPSessionMiddleware::create(
+                    self.kind,
+                    EndpointKind::Clickhouse,
+                ));
 
         let ep_usage = Route::new().at(
             "/",
@@ -125,23 +158,20 @@ impl HttpHandler {
         };
         ep.with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new().with_handler(PanicHandler::new()))
+            .around(json_response)
             .boxed()
     }
 
-    fn build_tls(config: &InnerConfig) -> Result<RustlsConfig, std::io::Error> {
-        let certificate = RustlsCertificate::new()
-            .cert(std::fs::read(
-                config.query.http_handler_tls_server_cert.as_str(),
-            )?)
-            .key(std::fs::read(
-                config.query.http_handler_tls_server_key.as_str(),
-            )?);
-        let mut cfg = RustlsConfig::new().fallback(certificate);
-        if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
-            cfg = cfg.client_auth_required(std::fs::read(
-                config.query.http_handler_tls_server_root_ca_cert.as_str(),
-            )?);
-        }
+    fn build_tls(config: &InnerConfig) -> Result<OpensslTlsConfig, std::io::Error> {
+        let cfg = OpensslTlsConfig::new()
+            .cert_from_file(config.query.http_handler_tls_server_cert.as_str())
+            .key_from_file(config.query.http_handler_tls_server_key.as_str());
+
+        // if Path::new(&config.query.http_handler_tls_server_root_ca_cert).exists() {
+        //     cfg = cfg.client_auth_required(std::fs::read(
+        //         config.query.http_handler_tls_server_root_ca_cert.as_str(),
+        //     )?);
+        // }
         Ok(cfg)
     }
 

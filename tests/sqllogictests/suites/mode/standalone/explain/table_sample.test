@@ -1,0 +1,42 @@
+statement ok
+create or replace table t as select number as a from numbers(1000);
+
+query T
+explain select * from t sample row (10 rows);
+----
+Filter
+├── output columns: [t.a (#0)]
+├── filters: [rand() <= 0.01]
+├── estimated rows: 200.00
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [a (#0)]
+    ├── read rows: 1000
+    ├── read size: 1.40 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [rand() <= 0.01], limit: NONE]
+    └── estimated rows: 1000.00
+
+query T
+explain select * from t sample row (99.1);
+----
+Filter
+├── output columns: [t.a (#0)]
+├── filters: [rand() <= 0.991]
+├── estimated rows: 200.00
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [a (#0)]
+    ├── read rows: 1000
+    ├── read size: 1.40 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [rand() <= 0.991], limit: NONE]
+    └── estimated rows: 1000.00
+
+
+statement ok
+drop table t;

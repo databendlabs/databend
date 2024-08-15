@@ -630,6 +630,7 @@ Replace(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         ],
                         selection: None,
@@ -740,6 +741,7 @@ Explain {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -878,6 +880,7 @@ Explain {
                                     consume: false,
                                     pivot: None,
                                     unpivot: None,
+                                    sample: None,
                                 },
                             ],
                             selection: None,
@@ -989,6 +992,7 @@ Explain {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -1065,6 +1069,7 @@ Explain {
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: Some(
@@ -1280,6 +1285,7 @@ CreateIndex(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: Some(
@@ -1474,6 +1480,7 @@ CreateIndex(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: Some(
@@ -2008,6 +2015,7 @@ CreateTable(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         ],
                         selection: None,
@@ -4995,6 +5003,7 @@ CreateTable(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         ],
                         selection: None,
@@ -5346,6 +5355,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -5570,6 +5580,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -5640,6 +5651,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -5717,6 +5729,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -5785,6 +5798,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                     Table {
                         span: Some(
@@ -5805,6 +5819,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                     Table {
                         span: Some(
@@ -5825,6 +5840,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -5893,6 +5909,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                     Table {
                         span: Some(
@@ -5913,6 +5930,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                     Table {
                         span: Some(
@@ -5933,6 +5951,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -6119,6 +6138,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6139,6 +6159,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -6279,6 +6300,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6299,6 +6321,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -6439,6 +6462,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6459,6 +6483,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -6599,6 +6624,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6619,6 +6645,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -6759,6 +6786,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6779,6 +6807,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -6919,6 +6948,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -6939,6 +6969,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7079,6 +7110,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7099,6 +7131,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7239,6 +7272,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7259,6 +7293,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7399,6 +7434,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7419,6 +7455,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7559,6 +7596,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7579,6 +7617,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7719,6 +7758,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7739,6 +7779,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7827,6 +7868,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7847,6 +7889,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -7935,6 +7978,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -7955,6 +7999,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -8043,6 +8088,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -8063,6 +8109,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -8151,6 +8198,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                             right: Table {
                                 span: Some(
@@ -8171,6 +8219,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -8241,6 +8290,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -8350,6 +8400,7 @@ Query(
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -8432,6 +8483,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -8541,6 +8593,7 @@ Query(
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -8623,6 +8676,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -8732,6 +8786,7 @@ Query(
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -8814,6 +8869,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -8921,6 +8977,7 @@ Query(
                                                 consume: false,
                                                 pivot: None,
                                                 unpivot: None,
+                                                sample: None,
                                             },
                                         ],
                                         selection: None,
@@ -9453,6 +9510,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -9541,6 +9599,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: Some(
@@ -9768,6 +9827,318 @@ Query(
 
 
 ---------- Input ----------
+select * from t sample row (99);
+---------- Output ---------
+SELECT * FROM t SAMPLE ROW (99)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..31,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        consume: false,
+                        pivot: None,
+                        unpivot: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: ROW,
+                                sample_conf: Probability(
+                                    UInt64(
+                                        99,
+                                    ),
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from t sample block (99);
+---------- Output ---------
+SELECT * FROM t SAMPLE BLOCK (99)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..33,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..33,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..33,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        consume: false,
+                        pivot: None,
+                        unpivot: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: BLOCK,
+                                sample_conf: Probability(
+                                    UInt64(
+                                        99,
+                                    ),
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from t sample row (10 rows);
+---------- Output ---------
+SELECT * FROM t SAMPLE ROW (10 ROWS)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..36,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..36,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..36,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        consume: false,
+                        pivot: None,
+                        unpivot: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: ROW,
+                                sample_conf: RowsNum(
+                                    UInt64(
+                                        10,
+                                    ),
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * from t sample block (10 rows);
+---------- Output ---------
+SELECT * FROM t SAMPLE BLOCK (10 ROWS)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..38,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..38,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..38,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            is_hole: false,
+                        },
+                        alias: None,
+                        temporal: None,
+                        consume: false,
+                        pivot: None,
+                        unpivot: None,
+                        sample: Some(
+                            Sample {
+                                sample_level: BLOCK,
+                                sample_conf: RowsNum(
+                                    UInt64(
+                                        10,
+                                    ),
+                                ),
+                            },
+                        ),
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
@@ -9979,6 +10350,7 @@ Insert(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         ],
                         selection: None,
@@ -10829,6 +11201,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: AlterTableClusterKey {
             cluster_by: [
@@ -10884,6 +11257,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyTableComment {
             new_comment: "t1-commnet",
@@ -10919,6 +11293,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: DropTableClusterKey,
     },
@@ -10952,6 +11327,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ReclusterTable {
             is_final: true,
@@ -11025,6 +11401,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -11075,6 +11452,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -11125,6 +11503,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -11188,6 +11567,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: AddColumn {
             column: ColumnDefinition {
@@ -11256,6 +11636,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: RenameColumn {
             old_column: Identifier {
@@ -11306,6 +11687,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: DropColumn {
             column: Identifier {
@@ -11348,6 +11730,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: DropColumn {
             column: Identifier {
@@ -11390,6 +11773,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: SetMaskingPolicy(
@@ -11435,6 +11819,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: UnsetMaskingPolicy(
@@ -11479,6 +11864,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: SetDataType(
@@ -11554,6 +11940,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: SetDataType(
@@ -11635,6 +12022,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: SetDataType(
@@ -11686,6 +12074,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: SetDataType(
@@ -11737,6 +12126,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: ModifyColumn {
             action: ConvertStoredComputedColumn(
@@ -11781,6 +12171,7 @@ AlterTable(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         action: SetOptions {
             set_options: {
@@ -15510,6 +15901,7 @@ Update(
             consume: false,
             pivot: None,
             unpivot: None,
+            sample: None,
         },
         update_list: [
             UpdateExpr {
@@ -15854,10 +16246,10 @@ SetStmt {
 ---------- Input ----------
 UNSET max_threads;
 ---------- Output ---------
-UNSET max_threads
+UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsGlobal,
+    unset_type: SettingsSession,
     identifiers: [
         Identifier {
             span: Some(
@@ -15894,10 +16286,10 @@ UnSetStmt {
 ---------- Input ----------
 UNSET (max_threads, sql_dialect);
 ---------- Output ---------
-UNSET (max_threads, sql_dialect)
+UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
-    unset_type: SettingsGlobal,
+    unset_type: SettingsSession,
     identifiers: [
         Identifier {
             span: Some(
@@ -16492,6 +16884,7 @@ Query(
                                 consume: false,
                                 pivot: None,
                                 unpivot: None,
+                                sample: None,
                             },
                         },
                     },
@@ -16737,6 +17130,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -16894,6 +17288,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -17049,6 +17444,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -17223,6 +17619,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -17377,6 +17774,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -17507,6 +17905,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -18403,6 +18802,7 @@ CreateDynamicTable(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -18548,6 +18948,7 @@ CreateDynamicTable(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -18746,6 +19147,7 @@ CreateDynamicTable(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -18950,6 +19352,7 @@ CreateDynamicTable(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -19186,6 +19589,7 @@ CreateDynamicTable(
                             consume: false,
                             pivot: None,
                             unpivot: None,
+                            sample: None,
                         },
                     ],
                     selection: None,
@@ -20824,6 +21228,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -20946,6 +21351,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -21070,6 +21476,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -21194,6 +21601,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -21318,6 +21726,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -21435,6 +21844,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,
@@ -22356,6 +22766,7 @@ Query(
                                                                 consume: false,
                                                                 pivot: None,
                                                                 unpivot: None,
+                                                                sample: None,
                                                             },
                                                         ],
                                                         selection: Some(
@@ -22584,6 +22995,7 @@ Query(
                         consume: false,
                         pivot: None,
                         unpivot: None,
+                        sample: None,
                     },
                 ],
                 selection: None,

@@ -7,11 +7,10 @@ select value, default = value  from system.settings where name in ('max_threads'
 4 0
 56 0
 
-onlyif mysql
 statement ok
 set variable (a, b) = (select 3, 55)
 
-onlyif mysql
+
 statement ok
 SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = select $a + 1, $b + 1;
 
@@ -22,7 +21,7 @@ select value, default = value  from system.settings where name in ('max_threads'
 56 0
 
 statement ok
-UNSET (max_threads, storage_io_min_bytes_for_seek);
+UNSET GLOBAL (max_threads, storage_io_min_bytes_for_seek);
 
 query TT
 select  default = value from system.settings where name in ('max_threads', 'storage_io_min_bytes_for_seek');
@@ -30,25 +29,20 @@ select  default = value from system.settings where name in ('max_threads', 'stor
 1
 1
 
-onlyif mysql
 statement ok
 set variable a = 1;
 
-onlyif mysql
 statement ok
 set variable (b, c) = ('yy', 'zz');
 
-onlyif mysql
 query ITT
 select $a + getvariable('a') + $a, getvariable('b'), getvariable('c'), getvariable('d')  
 ----
 3 yy zz NULL
 
-onlyif mysql
 statement ok
 unset variable (a, b)
 
-onlyif mysql
 query ITT
 select getvariable('a'), getvariable('b'), 'xx' || 'yy' || getvariable('c') , getvariable('d')  
 ----

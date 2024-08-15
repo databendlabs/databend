@@ -32,6 +32,7 @@ use databend_common_meta_app::app_error::CreateDatabaseWithDropTime;
 use databend_common_meta_app::app_error::CreateIndexWithDropTime;
 use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::DatabaseAlreadyExists;
+use databend_common_meta_app::app_error::DictionaryAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropIndexWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
@@ -53,6 +54,7 @@ use databend_common_meta_app::app_error::UndropTableHasNoHistory;
 use databend_common_meta_app::app_error::UndropTableWithNoDropTime;
 use databend_common_meta_app::app_error::UnknownCatalog;
 use databend_common_meta_app::app_error::UnknownDatabaseId;
+use databend_common_meta_app::app_error::UnknownDictionary;
 use databend_common_meta_app::app_error::UnknownIndex;
 use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
@@ -64,6 +66,7 @@ use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -75,6 +78,8 @@ use databend_common_meta_app::schema::CreateCatalogReply;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
@@ -97,6 +102,9 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryId;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropCatalogReply;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -115,6 +123,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GcDroppedTableResp;
 use databend_common_meta_app::schema::GetCatalogReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetLVTReply;
@@ -131,6 +140,7 @@ use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::LeastVisibleTimeKey;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableResp;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -170,6 +180,8 @@ use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
@@ -200,6 +212,7 @@ use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response::Response;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidReply;
+use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
@@ -4247,6 +4260,302 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
+
+    // dictionary
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn create_dictionary(
+        &self,
+        req: CreateDictionaryReq,
+    ) -> Result<CreateDictionaryReply, KVAppError> {
+        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
+        let mut trials = txn_backoff(None, func_name!());
+        let dictionary_ident = &req.dictionary_ident;
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+            let res = get_dictionary_or_err(self, dictionary_ident).await?;
+            let (dictionary_id_seq, dictionary_id, _dictionary_meta_seq, _dictionary_meta) = res;
+
+            debug!(
+                dictionary_id_seq = dictionary_id_seq,
+                dictionary_id = dictionary_id,
+                dictionary_ident :? = (dictionary_ident);
+                "get_dictionary_seq_id"
+            );
+
+            if dictionary_id_seq > 0 {
+                return Err(KVAppError::AppError(AppError::DictionaryAlreadyExists(
+                    DictionaryAlreadyExists::new(
+                        dictionary_ident.dict_name(),
+                        format!(
+                            "create dictionary with tenant: {} db_id: {}",
+                            dictionary_ident.tenant_name(),
+                            dictionary_ident.db_id()
+                        ),
+                    ),
+                )));
+            }
+            // Create dictionary by inserting these record:
+            // (tenant, db_id, dict_name) -> dict_id
+            // (dict_id) -> dict_meta
+            let dictionary_id = fetch_id(self, IdGenerator::dictionary_id()).await?;
+            let id_key = DictionaryId { dictionary_id };
+
+            debug!(
+                dictionary_id = dictionary_id,
+                dictionary_key :? = (dictionary_ident);
+                "new dictionary"
+            );
+
+            {
+                condition.extend(vec![
+                    txn_cond_seq(dictionary_ident, Eq, 0),
+                    txn_cond_seq(&id_key, Eq, 0),
+                ]);
+                if_then.extend(vec![
+                    txn_op_put(dictionary_ident, serialize_u64(dictionary_id)?), /*(tenant, db_id, dict_name) -> dict_id */
+                    txn_op_put(&id_key, serialize_struct(&req.dictionary_meta)?), /*(dict_id) -> dict_meta*/
+                ]);
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    dictionary_ident :? = (dictionary_ident),
+                    id :? = (&id_key),
+                    succ = succ;
+                    "create_dictionary"
+                );
+
+                if succ {
+                    return Ok(CreateDictionaryReply { dictionary_id });
+                }
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn update_dictionary(
+        &self,
+        req: UpdateDictionaryReq,
+    ) -> Result<UpdateDictionaryReply, KVAppError> {
+        debug!(req :? = (&req); "SchemaApi: {}", func_name!());
+        let mut trials = txn_backoff(None, func_name!());
+        let dictionary_ident = &req.dictionary_ident;
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+            let res = get_dictionary_or_err(self, dictionary_ident).await?;
+            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, _dictionary_meta) = res;
+
+            debug!(
+                dictionary_id_seq = dictionary_id_seq,
+                dictionary_id = dictionary_id,
+                dictionary_ident :? = (dictionary_ident);
+                "get_dictionary_seq_id"
+            );
+
+            if dictionary_id_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UnknownDictionary(
+                    UnknownDictionary::new(
+                        dictionary_ident.dict_name(),
+                        format!(
+                            "update dictionary with tenant: {} db_id: {}",
+                            dictionary_ident.tenant_name(),
+                            dictionary_ident.db_id()
+                        ),
+                    ),
+                )));
+            }
+            // Update dictionary by update dict_meta:
+            // (dict_id) -> dict_meta
+            let id_key = DictionaryId { dictionary_id };
+
+            debug!(
+                dictionary_id = dictionary_id,
+                dictionary_key :? = (dictionary_ident);
+                "update dictionary"
+            );
+
+            {
+                condition.extend(vec![
+                    txn_cond_seq(dictionary_ident, Eq, dictionary_id_seq),
+                    txn_cond_seq(&id_key, Eq, dictionary_meta_seq),
+                ]);
+                if_then.extend(vec![
+                    txn_op_put(dictionary_ident, serialize_u64(dictionary_id)?), /*(tenant, db_id, dict_name) -> dict_id */
+                    txn_op_put(&id_key, serialize_struct(&req.dictionary_meta)?), /*(dict_id) -> dict_meta*/
+                ]);
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    dictionary_ident :? = (dictionary_ident),
+                    id :? = (&id_key),
+                    succ = succ;
+                    "update_dictionary"
+                );
+
+                if succ {
+                    return Ok(UpdateDictionaryReply { dictionary_id });
+                }
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn drop_dictionary(
+        &self,
+        dictionary_ident: TenantDictionaryIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>, KVAppError> {
+        debug!(dict_ident :? =(&dictionary_ident); "SchemaApi: {}", func_name!());
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let mut condition = vec![];
+            let mut if_then = vec![];
+
+            let res: (u64, u64, u64, Option<DictionaryMeta>) =
+                get_dictionary_or_err(self, &dictionary_ident).await?;
+            let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
+
+            if dictionary_id_seq == 0 {
+                return Ok(None);
+            }
+
+            // delete dictionary id
+            // (tenant, db_id, dict_name) -> dict_id
+            condition.push(txn_cond_seq(&dictionary_ident, Eq, dictionary_id_seq));
+            if_then.push(txn_op_del(&dictionary_ident));
+            // delete dictionary meta
+            // (dictionary_id) -> dictionary_meta
+            let id_key = DictionaryId { dictionary_id };
+            condition.push(txn_cond_seq(&id_key, Eq, dictionary_meta_seq));
+            if_then.push(txn_op_del(&id_key));
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name :? = (&dictionary_ident),
+                id :? = (&id_key),
+                succ = succ;
+                "drop_dictionary"
+            );
+
+            if succ {
+                let dict_meta_seqv = SeqV {
+                    seq: dictionary_meta_seq,
+                    meta: Some(KVMeta::new(None)),
+                    data: dictionary_meta.unwrap(),
+                };
+                return Ok(Some(dict_meta_seqv));
+            }
+        }
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn get_dictionary(
+        &self,
+        dictionary_ident: TenantDictionaryIdent,
+    ) -> Result<Option<GetDictionaryReply>, KVAppError> {
+        debug!(dict_ident :? =(&dictionary_ident); "SchemaApi: {}", func_name!());
+
+        let res = get_dictionary_or_err(self, &dictionary_ident).await?;
+        let (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta) = res;
+
+        if dictionary_id_seq == 0 {
+            return Ok(None);
+        }
+
+        // Safe unwrap(): dictionary_meta_seq > 0 implies dictionary_meta is not None.
+        let dictionary_meta = dictionary_meta.unwrap();
+
+        debug!(
+            dictionary_id = dictionary_id,
+            name_key :? =(&dictionary_ident);
+            "get_dictionary"
+        );
+
+        Ok(Some(GetDictionaryReply {
+            dictionary_id,
+            dictionary_meta,
+            dictionary_meta_seq,
+        }))
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn list_dictionaries(
+        &self,
+        req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError> {
+        debug!(req :? =(&req); "SchemaApi: {}", func_name!());
+
+        // Using a empty dictionary name to to list all
+        let dictionary_ident = TenantDictionaryIdent::new(
+            req.tenant.clone(),
+            DictionaryIdentity::new(req.db_id, "".to_string()),
+        );
+
+        let (dict_keys, dict_id_list) = list_u64_value(self, &dictionary_ident).await?;
+        if dict_id_list.is_empty() {
+            return Ok(vec![]);
+        }
+        let mut dict_metas = vec![];
+        let inner_keys: Vec<String> = dict_id_list
+            .iter()
+            .map(|dict_id| {
+                DictionaryId {
+                    dictionary_id: *dict_id,
+                }
+                .to_string_key()
+            })
+            .collect();
+        let mut dict_id_list_iter = dict_id_list.into_iter();
+        let mut dict_key_list_iter = dict_keys.into_iter();
+        for c in inner_keys.chunks(DEFAULT_MGET_SIZE) {
+            let dict_meta_seq_meta_vec: Vec<(u64, Option<DictionaryMeta>)> =
+                mget_pb_values(self, c).await?;
+            for (dict_meta_seq, dict_meta) in dict_meta_seq_meta_vec {
+                let dict_id = dict_id_list_iter.next().unwrap();
+                let dict_key = dict_key_list_iter.next().unwrap();
+                if dict_meta_seq == 0 || dict_meta.is_none() {
+                    error!("list_dictionaries cannot find {:?} dict_meta", dict_id);
+                    continue;
+                }
+                let dict_meta = dict_meta.unwrap();
+                dict_metas.push((dict_key.dict_name(), dict_meta));
+            }
+        }
+        Ok(dict_metas)
+    }
 }
 
 async fn construct_drop_virtual_column_txn_operations(
@@ -5184,6 +5493,26 @@ pub(crate) async fn get_index_or_err(
     let (index_meta_seq, index_meta) = get_pb_value(kv_api, &id_key).await?;
 
     Ok((index_id_seq, index_id, index_meta_seq, index_meta))
+}
+
+/// Returns (dictionary_id_seq, dictionary_id, dictionary_meta_seq, dictionary_meta)
+pub(crate) async fn get_dictionary_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &TenantDictionaryIdent,
+) -> Result<(u64, u64, u64, Option<DictionaryMeta>), KVAppError> {
+    let (dictionary_id_seq, dictionary_id) = get_u64_value(kv_api, name_key).await?;
+    if dictionary_id_seq == 0 {
+        return Ok((0, 0, 0, None));
+    }
+    let id_key = DictionaryId { dictionary_id };
+    let (dictionary_meta_seq, dictionary_meta) = get_pb_value(kv_api, &id_key).await?;
+
+    Ok((
+        dictionary_id_seq,
+        dictionary_id,
+        dictionary_meta_seq,
+        dictionary_meta,
+    ))
 }
 
 async fn gc_dropped_db_by_id(

@@ -306,7 +306,7 @@ impl Binder {
             field_index_map,
             strategy: mutation_strategy.clone(),
             distributed: false,
-            change_join_order: false,
+            row_id_shuffle: true,
             row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,

@@ -41,6 +41,7 @@ use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::data_mask::MaskpolicyTableIdList;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdentRaw;
+use databend_common_meta_app::schema::tenant_dictionary_ident::TenantDictionaryIdent;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
@@ -48,6 +49,7 @@ use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
@@ -63,6 +65,8 @@ use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropCatalogReq;
 use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
@@ -91,6 +95,7 @@ use databend_common_meta_app::schema::IndexNameIdentRaw;
 use databend_common_meta_app::schema::IndexType;
 use databend_common_meta_app::schema::ListCatalogReq;
 use databend_common_meta_app::schema::ListDatabaseReq;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
@@ -119,6 +124,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
@@ -362,6 +368,8 @@ impl SchemaApiTestSuite {
         suite.get_table_name_by_id(&b.build().await).await?;
         suite.get_db_name_by_id(&b.build().await).await?;
         suite.test_sequence(&b.build().await).await?;
+
+        suite.dictionary_create_list_drop(&b.build().await).await?;
 
         Ok(())
     }
@@ -1385,9 +1393,12 @@ impl SchemaApiTestSuite {
     #[fastrace::trace]
     async fn catalog_create_get_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant_name = "tenant1";
-        let tenant = Tenant::new_literal(tenant_name);
 
         let catalog_name = "catalog1";
+
+        let tenant = Tenant {
+            tenant: tenant_name.to_string(),
+        };
 
         let ident = CatalogNameIdent::new(tenant.clone(), catalog_name);
 
@@ -7358,6 +7369,174 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.file_info.len(), 2);
             let resp_stage_info = resp.file_info.get("file");
             assert_eq!(resp_stage_info.unwrap(), &stage_info);
+        }
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    async fn dictionary_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        let tenant_name = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb2";
+        let dict_name1 = "dict1";
+        let dict_name2 = "dict2";
+        let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
+
+        let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
+        let dict_id;
+
+        info!("--- prepare db");
+        {
+            util.create_db().await?;
+        }
+
+        let db_name_ident =
+            DatabaseNameIdent::new(Tenant::new_literal(tenant_name), db_name.to_string());
+        let get_db_req = GetDatabaseReq {
+            inner: db_name_ident.clone(),
+        };
+        let db_info = mt.get_database(get_db_req).await?;
+        let db_id = db_info.ident.db_id;
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![
+                TableField::new("id", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("name", TableDataType::String),
+            ]))
+        };
+        let options = || {
+            maplit::btreemap! {
+                "host".into() => "0.0.0.0".into(),
+                "port".into() => "3306".into(),
+                "username".into() => "root".into(),
+                "password".into() => "1234".into(),
+                "db".into() => "test".into()
+            }
+        };
+
+        let dictionary_meta = |source: &str| DictionaryMeta {
+            source: source.to_string(),
+            schema: schema(),
+            options: options(),
+            created_on: Utc::now(),
+            ..DictionaryMeta::default()
+        };
+
+        {
+            info!("--- list dictionary with no create before");
+            let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
+            let res = mt.list_dictionaries(req).await?;
+            assert!(res.is_empty());
+        }
+
+        let dict_ident1 = TenantDictionaryIdent::new(
+            dict_tenant.clone(),
+            DictionaryIdentity::new(db_id, dict_name1.to_string()),
+        );
+        let dict_ident2 = TenantDictionaryIdent::new(
+            dict_tenant.clone(),
+            DictionaryIdentity::new(db_id, dict_name2.to_string()),
+        );
+
+        {
+            info!("--- create dictionary");
+            let req = CreateDictionaryReq {
+                dictionary_ident: dict_ident1.clone(),
+                dictionary_meta: dictionary_meta("mysql"),
+            };
+            let res = mt.create_dictionary(req).await;
+            assert!(res.is_ok());
+            dict_id = res.unwrap().dictionary_id;
+        }
+
+        {
+            info!("--- create dictionary again");
+            let req = CreateDictionaryReq {
+                dictionary_ident: dict_ident1.clone(),
+                dictionary_meta: dictionary_meta("mysql"),
+            };
+            let res = mt.create_dictionary(req).await;
+            assert!(res.is_err());
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::DICTIONARY_ALREADY_EXISTS, err_code.code());
+        }
+
+        {
+            info!("--- get dictionary");
+            let req = dict_ident1.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+            let dict_reply = res.unwrap();
+            assert_eq!(dict_reply.dictionary_id, dict_id);
+            assert_eq!(dict_reply.dictionary_meta.source, "mysql".to_string());
+
+            let req = dict_ident2.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_none());
+        }
+
+        {
+            info!("--- update dictionary");
+            let req = UpdateDictionaryReq {
+                dictionary_ident: dict_ident1.clone(),
+                dictionary_meta: dictionary_meta("postgresql"),
+            };
+            let res = mt.update_dictionary(req).await;
+            assert!(res.is_ok());
+
+            let req = dict_ident1.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+            let dict_reply = res.unwrap();
+            assert_eq!(dict_reply.dictionary_id, dict_id);
+            assert_eq!(dict_reply.dictionary_meta.source, "postgresql".to_string());
+        }
+
+        {
+            info!("--- update unknown dictionary");
+            let req = UpdateDictionaryReq {
+                dictionary_ident: dict_ident2.clone(),
+                dictionary_meta: dictionary_meta("postgresql"),
+            };
+            let res = mt.update_dictionary(req).await;
+            assert!(res.is_err());
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::UNKNOWN_DICTIONARY, err_code.code());
+        }
+
+        {
+            info!("--- list dictionary");
+            let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
+            let res = mt.list_dictionaries(req).await?;
+
+            assert_eq!(1, res.len());
+        }
+
+        {
+            info!("--- drop dictionary");
+            let req = dict_ident1.clone();
+            let res = mt.drop_dictionary(req).await?;
+            assert!(res.is_some());
+        }
+
+        {
+            info!("--- drop unknown dictionary");
+            let req = dict_ident2.clone();
+            let res = mt.drop_dictionary(req).await?;
+            assert!(res.is_none());
+        }
+
+        {
+            info!("--- list dictionary after drop one");
+            let req = ListDictionaryReq::new(dict_tenant.clone(), db_id);
+            let res = mt.list_dictionaries(req).await?;
+            assert_eq!(0, res.len());
         }
 
         Ok(())
