@@ -442,7 +442,7 @@ impl Processor for TransformHashJoinProbe {
                     .await?;
                 self.data_blocks_need_to_spill.clear();
                 if self.is_left_related_join_type() {
-                    Self::add_splitted_data_blocks(
+                    Self::add_split_data_blocks(
                         &mut self.unspilled_data_blocks_need_to_probe,
                         unspilled_data_blocks,
                         self.max_block_size,
@@ -450,7 +450,7 @@ impl Processor for TransformHashJoinProbe {
                 }
             }
             Step::Async(AsyncStep::Restore) => {
-                Self::add_splitted_data_blocks(
+                Self::add_split_data_blocks(
                     &mut self.restored_data_blocks,
                     self.spiller.restore(self.partition_id_to_restore).await?,
                     self.max_block_size,
@@ -544,7 +544,7 @@ impl TransformHashJoinProbe {
             self.data_blocks_need_to_spill.push(data_block);
         } else {
             // Split data to `block_size` rows per sub block.
-            Self::add_splitted_data_blocks(
+            Self::add_split_data_blocks(
                 &mut self.input_data_blocks,
                 vec![data_block],
                 self.max_block_size,
@@ -552,7 +552,7 @@ impl TransformHashJoinProbe {
         }
     }
 
-    fn add_splitted_data_blocks(
+    fn add_split_data_blocks(
         data_blocks: &mut VecDeque<DataBlock>,
         data_blocks_to_split: Vec<DataBlock>,
         max_block_size: usize,
