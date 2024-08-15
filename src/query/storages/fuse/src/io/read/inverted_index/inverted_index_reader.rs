@@ -14,6 +14,7 @@
 
 use std::time::Instant;
 
+use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_exception::Result;
 use databend_common_expression::types::F32;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_search_milliseconds;
@@ -32,35 +33,21 @@ use crate::io::read::inverted_index::inverted_index_loader::InvertedIndexFileRea
 
 #[derive(Clone)]
 pub struct InvertedIndexReader {
-    has_score: bool,
-    query_fields: Vec<Field>,
-    query_field_boosts: Vec<(Field, Score)>,
     directory: InvertedIndexDirectory,
-    tokenizer_manager: TokenizerManager,
 }
 
 impl InvertedIndexReader {
     pub async fn try_create(
         dal: Operator,
         field_nums: usize,
-        has_score: bool,
         need_position: bool,
-        query_fields: Vec<Field>,
-        query_field_boosts: Vec<(Field, Score)>,
-        tokenizer_manager: TokenizerManager,
         index_loc: &str,
     ) -> Result<Self> {
         let directory =
             load_inverted_index_directory(dal.clone(), need_position, field_nums, index_loc)
                 .await?;
 
-        Ok(Self {
-            has_score,
-            query_fields,
-            query_field_boosts,
-            directory,
-            tokenizer_manager,
-        })
+        Ok(Self { directory })
     }
 
     // Filter the rows and scores in the block that can match the query text,
@@ -69,22 +56,51 @@ impl InvertedIndexReader {
     pub fn do_filter(
         self,
         query: &str,
+        has_score: bool,
+        query_fields: &Vec<Field>,
+        query_field_boosts: &Vec<(Field, Score)>,
+        tokenizer_manager: TokenizerManager,
+        inverted_index_option: &Option<InvertedIndexOption>,
         row_count: u64,
     ) -> Result<Option<Vec<(usize, Option<F32>)>>> {
         let start = Instant::now();
         let mut index = Index::open(self.directory)?;
-        index.set_tokenizers(self.tokenizer_manager);
+        index.set_tokenizers(tokenizer_manager);
         let reader = index.reader()?;
         let searcher = reader.searcher();
 
-        let mut query_parser = QueryParser::for_index(&index, self.query_fields);
+        let mut query_parser = QueryParser::for_index(&index, query_fields.clone());
         // set optional boost value for the field
-        for (field, boost) in &self.query_field_boosts {
+        for (field, boost) in query_field_boosts {
             query_parser.set_field_boost(*field, *boost);
         }
-        let query = query_parser.parse_query(query)?;
+        let fuzziness = inverted_index_option
+            .as_ref()
+            .and_then(|o| o.fuzziness.as_ref());
+        if let Some(fuzziness) = fuzziness {
+            for field in query_fields {
+                query_parser.set_field_fuzzy(*field, true, *fuzziness, true);
+            }
+        }
+        let operator = inverted_index_option
+            .as_ref()
+            .map(|o| o.operator)
+            .unwrap_or_default();
+        if operator {
+            query_parser.set_conjunction_by_default();
+        }
+        let lenient = inverted_index_option
+            .as_ref()
+            .map(|o| o.lenient)
+            .unwrap_or_default();
+        let query = if lenient {
+            let (query, _) = query_parser.parse_query_lenient(query);
+            query
+        } else {
+            query_parser.parse_query(query)?
+        };
 
-        let matched_rows = if self.has_score {
+        let matched_rows = if has_score {
             let collector = TopDocs::with_limit(row_count as usize);
             let docs = searcher.search(&query, &collector)?;
 

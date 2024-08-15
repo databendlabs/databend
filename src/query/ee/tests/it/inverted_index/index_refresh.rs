@@ -151,22 +151,21 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
         .build();
     tokenizer_manager.register("english", english_analyzer);
 
-    let index_reader = InvertedIndexReader::try_create(
-        dal.clone(),
-        field_nums,
-        has_score,
-        need_position,
-        query_fields,
-        query_field_boosts,
-        tokenizer_manager,
-        &index_loc,
-    )
-    .await?;
+    let inverted_index_option = None;
+
+    let index_reader =
+        InvertedIndexReader::try_create(dal.clone(), field_nums, need_position, &index_loc).await?;
 
     let query = "rust";
-    let matched_rows = index_reader
-        .clone()
-        .do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader.clone().do_filter(
+        query,
+        has_score,
+        &query_fields,
+        &query_field_boosts,
+        tokenizer_manager.clone(),
+        &inverted_index_option,
+        block_meta.row_count,
+    )?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 2);
@@ -174,16 +173,30 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     assert_eq!(matched_rows[1].0, 1);
 
     let query = "java";
-    let matched_rows = index_reader
-        .clone()
-        .do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader.clone().do_filter(
+        query,
+        has_score,
+        &query_fields,
+        &query_field_boosts,
+        tokenizer_manager.clone(),
+        &inverted_index_option,
+        block_meta.row_count,
+    )?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 1);
     assert_eq!(matched_rows[0].0, 2);
 
     let query = "data";
-    let matched_rows = index_reader.do_filter(query, block_meta.row_count)?;
+    let matched_rows = index_reader.do_filter(
+        query,
+        has_score,
+        &query_fields,
+        &query_field_boosts,
+        tokenizer_manager.clone(),
+        &inverted_index_option,
+        block_meta.row_count,
+    )?;
     assert!(matched_rows.is_some());
     let matched_rows = matched_rows.unwrap();
     assert_eq!(matched_rows.len(), 3);

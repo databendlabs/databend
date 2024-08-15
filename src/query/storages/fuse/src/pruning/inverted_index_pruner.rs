@@ -125,17 +125,20 @@ impl InvertedIndexPruner {
         let inverted_index_reader = InvertedIndexReader::try_create(
             self.dal.clone(),
             self.field_nums,
-            self.has_score,
             self.need_position,
-            self.query_fields.clone(),
-            self.query_field_boosts.clone(),
-            self.tokenizer_manager.clone(),
             &index_loc,
         )
         .await?;
 
-        let matched_rows =
-            inverted_index_reader.do_filter(&self.inverted_index_info.query_text, row_count)?;
+        let matched_rows = inverted_index_reader.do_filter(
+            &self.inverted_index_info.query_text,
+            self.has_score,
+            &self.query_fields,
+            &self.query_field_boosts,
+            self.tokenizer_manager.clone(),
+            &self.inverted_index_info.inverted_index_option,
+            row_count,
+        )?;
 
         Ok(matched_rows)
     }

@@ -51,6 +51,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::InvertedIndexOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -2107,10 +2108,10 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // TODO: support options field
-        if args.len() != 2 {
+        // The optional third argument is search option.
+        if args.len() != 2 && args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 2 arguments, but got {}",
+                "invalid arguments for search function, {} expects 2 or 3 arguments, but got {}",
                 func_name,
                 args.len()
             ))
@@ -2119,6 +2120,7 @@ impl<'a> TypeChecker<'a> {
 
         let field_arg = args[0];
         let query_arg = args[1];
+        let option_arg = if args.len() == 3 { Some(args[2]) } else { None };
 
         let box (field_scalar, _) = self.resolve(field_arg)?;
         let column_refs = match field_scalar {
@@ -2133,7 +2135,7 @@ impl<'a> TypeChecker<'a> {
                         "invalid arguments for search function, field must be a column or constant string, but got {}",
                         constant_expr.value
                     ))
-                        .set_span(constant_expr.span));
+                    .set_span(constant_expr.span));
                 };
 
                 // fields are separated by commas and boost is separated by ^
@@ -2146,7 +2148,7 @@ impl<'a> TypeChecker<'a> {
                             "invalid arguments for search function, field string must have only one boost, but got {}",
                             constant_field
                         ))
-                            .set_span(constant_expr.span));
+                        .set_span(constant_expr.span));
                     }
                     let column_expr = Expr::ColumnRef {
                         span: constant_expr.span,
@@ -2175,7 +2177,7 @@ impl<'a> TypeChecker<'a> {
                                     "invalid arguments for search function, boost must be a float value, but got {}",
                                     field_boosts[1]
                                 ))
-                                    .set_span(constant_expr.span));
+                                .set_span(constant_expr.span));
                             }
                         }
                     } else {
@@ -2189,7 +2191,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "invalid arguments for search function, field must be a column or constant string".to_string(),
                 )
-                    .set_span(span));
+                .set_span(span));
             }
         };
 
@@ -2199,27 +2201,19 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
 
-        // match function didn't support query syntax,
-        // convert query text to lowercase and remove punctuation characters,
-        // so that tantivy query parser can parse the query text as plain text
-        // without syntax
-        let formatted_query_text: String = query_text
-            .to_lowercase()
-            .chars()
-            .map(|v| if v.is_ascii_punctuation() { ' ' } else { v })
-            .collect();
+        let inverted_index_option = self.resolve_search_option(option_arg)?;
 
-        self.resolve_search_function(span, column_refs, &formatted_query_text)
+        self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
     }
 
     /// Resolve query search function.
@@ -2244,8 +2238,8 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        // TODO: support options field
-        if args.len() != 1 {
+        // The optional second argument is search option.
+        if args.len() != 1 && args.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, {} expects 1 argument, but got {}",
                 func_name,
@@ -2255,6 +2249,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let query_arg = args[0];
+        let option_arg = if args.len() == 2 { Some(args[1]) } else { None };
 
         let box (query_scalar, _) = self.resolve(query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
@@ -2262,14 +2257,14 @@ impl<'a> TypeChecker<'a> {
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
                 query_arg
             ))
-                .set_span(query_scalar.span()));
+            .set_span(query_scalar.span()));
         };
 
         let field_strs: Vec<&str> = query_text.split(' ').collect();
@@ -2305,8 +2300,103 @@ impl<'a> TypeChecker<'a> {
             };
             column_refs.push((column_ref, None));
         }
+        let inverted_index_option = self.resolve_search_option(option_arg)?;
 
-        self.resolve_search_function(span, column_refs, query_text)
+        self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
+    }
+
+    fn resolve_search_option(
+        &mut self,
+        option_arg: Option<&Expr>,
+    ) -> Result<Option<InvertedIndexOption>> {
+        if let Some(option_arg) = option_arg {
+            let box (option_scalar, _) = self.resolve(option_arg)?;
+            let Ok(option_expr) = ConstantExpr::try_from(option_scalar.clone()) else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, option must be a constant string, but got {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            };
+            let Some(option_text) = option_expr.value.as_string() else {
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, option text must be a constant string, but got {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            };
+
+            let mut lenient = None;
+            let mut operator = None;
+            let mut fuzziness = None;
+
+            let option_strs: Vec<&str> = option_text.split(';').collect();
+            for option_str in option_strs {
+                if option_str.trim().is_empty() {
+                    continue;
+                }
+                let option_vals: Vec<&str> = option_str.split('=').collect();
+                if option_vals.len() != 2 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, each option must have key and value joined by equal sign, but got {}",
+                        option_arg
+                    ))
+                    .set_span(option_scalar.span()));
+                }
+                let option_key = option_vals[0].trim().to_lowercase();
+                let option_val = option_vals[1].trim().to_lowercase();
+                match option_key.as_str() {
+                    "fuzziness" => {
+                        if fuzziness.is_none() {
+                            if option_val == "1" {
+                                fuzziness = Some(1);
+                                continue;
+                            } else if option_val == "2" {
+                                fuzziness = Some(2);
+                                continue;
+                            }
+                        }
+                    }
+                    "operator" => {
+                        if operator.is_none() {
+                            if option_val == "or" {
+                                operator = Some(false);
+                                continue;
+                            } else if option_val == "and" {
+                                operator = Some(true);
+                                continue;
+                            }
+                        }
+                    }
+                    "lenient" => {
+                        if lenient.is_none() {
+                            if option_val == "false" {
+                                lenient = Some(false);
+                                continue;
+                            } else if option_val == "true" {
+                                lenient = Some(true);
+                                continue;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                return Err(ErrorCode::SemanticError(format!(
+                    "invalid arguments for search function, unsupported option: {}",
+                    option_arg
+                ))
+                .set_span(option_scalar.span()));
+            }
+
+            let inverted_index_option = InvertedIndexOption {
+                lenient: lenient.unwrap_or_default(),
+                operator: operator.unwrap_or_default(),
+                fuzziness,
+            };
+
+            return Ok(Some(inverted_index_option));
+        }
+        Ok(None)
     }
 
     fn resolve_search_function(
@@ -2314,6 +2404,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         column_refs: Vec<(BoundColumnRef, Option<F32>)>,
         query_text: &String,
+        inverted_index_option: Option<InvertedIndexOption>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if column_refs.is_empty() {
             return Err(ErrorCode::SemanticError(
@@ -2400,6 +2491,7 @@ impl<'a> TypeChecker<'a> {
             query_fields,
             query_text: query_text.to_string(),
             has_score: false,
+            inverted_index_option,
         };
 
         self.bind_context

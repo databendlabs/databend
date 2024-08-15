@@ -71,6 +71,20 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+/// Search option for search functions.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InvertedIndexOption {
+    /// Fuzzy query match terms within Levenshtein distance
+    /// https://en.wikipedia.org/wiki/Levenshtein_distance
+    /// For example if fuzziness is 1, search query if `fox`,
+    /// the term `box` will be matched.
+    pub fuzziness: Option<u8>,
+    /// Operator: true is AND, false is OR, default is OR.
+    pub operator: bool,
+    /// Parse a query leniently, ignore invalid query, default is false.
+    pub lenient: bool,
+}
+
 /// Information about inverted index.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InvertedIndexInfo {
@@ -90,8 +104,10 @@ pub struct InvertedIndexInfo {
     pub query_fields: Vec<(String, Option<F32>)>,
     /// The search query text with query syntax.
     pub query_text: String,
-    /// whether search with score function
+    /// whether search with score function.
     pub has_score: bool,
+    /// optional search option, like fuzziness, lenient, ..
+    pub inverted_index_option: Option<InvertedIndexOption>,
 }
 
 /// Extras is a wrapper for push down items.
