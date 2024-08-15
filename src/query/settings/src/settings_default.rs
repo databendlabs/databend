@@ -541,6 +541,12 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_experimental_procedure", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
+                    mode: SettingMode::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
