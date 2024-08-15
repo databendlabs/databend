@@ -40,8 +40,6 @@ pub struct GrantObjectVisibilityChecker {
     granted_udfs: HashSet<String>,
     granted_write_stages: HashSet<String>,
     granted_read_stages: HashSet<String>,
-    granted_dictionaries: HashSet<(String, String, String)>,
-    granted_dictionaries_id: HashSet<(String, u64, u64)>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -63,8 +61,6 @@ impl GrantObjectVisibilityChecker {
         let mut granted_databases_id = HashSet::new();
         let mut extra_databases_id = HashSet::new();
         let mut granted_tables_id = HashSet::new();
-        let mut granted_dictionaries = HashSet::new();
-        let mut granted_dictionaries_id = HashSet::new();
 
         let mut grant_sets: Vec<&UserGrantSet> = vec![&user.grants];
         for role in available_roles {
@@ -201,8 +197,6 @@ impl GrantObjectVisibilityChecker {
             granted_udfs,
             granted_write_stages,
             granted_read_stages,
-            granted_dictionaries,
-            granted_dictionaries_id,
         }
     }
 
@@ -355,22 +349,6 @@ impl GrantObjectVisibilityChecker {
         {
             return true;
         }
-
-        if self.granted_dictionaries.contains(&(
-            catalog.to_string(),
-            database.to_string(),
-            dict.to_string(),
-        )) {
-            return true;
-        }
-
-        if self
-            .granted_dictionaries_id
-            .contains(&(catalog.to_string(), db_id, dict_id))
-        {
-            return true;
-        }
-
         false
     }
 }
