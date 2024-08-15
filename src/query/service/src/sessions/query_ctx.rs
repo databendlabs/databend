@@ -36,8 +36,8 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_base::JoinHandle;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -1327,7 +1327,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_session_id(&self) -> String {
-        todo!()
+        self.shared.session.id.clone()
     }
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool {

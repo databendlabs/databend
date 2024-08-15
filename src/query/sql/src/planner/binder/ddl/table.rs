@@ -482,6 +482,11 @@ impl Binder {
                 let _ = options.insert("TRANSIENT".to_owned(), "T".to_owned());
             }
             TableType::Temporary => {
+                if engine != Engine::Fuse {
+                    return Err(ErrorCode::BadArguments(
+                        "Temporary table is only supported for FUSE engine",
+                    ));
+                }
                 let _ = options.insert(OPT_KEY_TEMP_PREFIX.to_string(), self.ctx.get_session_id());
             }
         };

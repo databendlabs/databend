@@ -521,6 +521,7 @@ pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new
     r.insert(OPT_KEY_RANDOM_SEED);
 
     r.insert("transient");
+    r.insert(OPT_KEY_TEMP_PREFIX);
     r
 });
 
